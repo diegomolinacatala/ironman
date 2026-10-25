@@ -1,0 +1,151 @@
+# Supabase CLI configuration for Rebufo.
+# Reference: https://supabase.com/docs/guides/local-development/cli/config
+# Hosted project: `npx supabase link --project-ref <ref>` then `npx supabase config push`
+# (auth settings) and `npx supabase db push` (migrations).
+project_id = "rebufo"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+# Local email testing (OTP codes land here: http://127.0.0.1:54324).
+[local_smtp]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[auth]
+enabled = true
+# Native app: the custom scheme is the "site". Dev client uses rebufo-dev://.
+site_url = "rebufo://"
+additional_redirect_urls = [
+  "rebufo://**",
+  "rebufo-dev://**",
+  "exp://**",
+  "http://localhost:8081",
+  "http://127.0.0.1:8081",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 8
+
+[auth.rate_limit]
+# Emails per hour (OTP codes). Only effective with custom SMTP on the hosted project.
+email_sent = 30
+sms_sent = 30
+anonymous_users = 30
+token_refresh = 150
+sign_in_sign_ups = 30
+token_verifications = 30
+
+# Email OTP: the app asks for a 6-digit code (signInWithOtp + verifyOtp type 'email').
+# The magic-link / confirmation templates must print {{ .Token }} so the email shows the code.
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+secure_password_change = false
+max_frequency = "1m0s"
+otp_length = 6
+otp_expiry = 3600
+
+# Both templates print the 6-digit {{ .Token }} (new users get "confirmation", returning users "magic_link").
+[auth.email.template.magic_link]
+subject = "Tu código de Rebufo"
+content_path = "./supabase/templates/otp.html"
+
+[auth.email.template.confirmation]
+subject = "Tu código de Rebufo"
+content_path = "./supabase/templates/otp.html"
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+# Sign in with Apple (native, signInWithIdToken). client_id = comma-separated bundle ids, e.g.
+# "com.diegomolinacatala.rebufo,com.diegomolinacatala.rebufo.dev". The secret is only needed for
+# the web OAuth flow; native id-token sign-in works with the client ids alone.
+[auth.external.apple]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = false
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+inspector_port = 8083
+deno_version = 2
+
+[analytics]
+enabled = false
+
+# ---------------------------------------------------------------------------
+# Edge Functions
+# ---------------------------------------------------------------------------
+# Claude connector: authenticated by the secret token in the URL path (/mcp/u/<secret>).
+[functions.mcp]
+verify_jwt = false
+
+# ICS calendar feed: authenticated by the secret token in the URL path (/ics/<secret>.ics).
+[functions.ics]
+verify_jwt = false
+
+# Called by the database (pg_net trigger + pg_cron) with the secret key in the `apikey` header.
+[functions.push-dispatch]
+verify_jwt = false
+
+# Called by the app with the user's JWT.
+[functions.coach]
+verify_jwt = true
+
+# Sign in with Apple token revocation before account deletion. The function verifies the user JWT
+# itself (same pattern as garmin) and answers 503 apple_not_configured without the APPLE_* secrets.
+[functions.apple-revoke]
+verify_jwt = false
+
+# App (user JWT) for connect/disconnect/sync; pg_cron sends the secret key (apikey) for sync_all.
+# The platform JWT check rejects API keys, and Supabase's guidance for secret-key callers
+# (pg_cron, webhooks) is verify_jwt = false, so the function verifies the user JWT itself.
+[functions.garmin]
+verify_jwt = false
