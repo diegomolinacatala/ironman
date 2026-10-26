@@ -9,10 +9,9 @@ Orden: **1 Supabase → 2 Apple → 3 secretos de Apple en Supabase → 4 GitHub
 > **Estado (26-oct-2026):** hechos el paso 1 completo (proyecto `gganxjgvdbcwuahfrlvy`, migraciones,
 > configuración de login, SQL de una vez, `GARMIN_KEY_SECRET`, funciones desplegadas) y, del paso 4,
 > las variables `APPLE_TEAM_ID`, `EXPO_PUBLIC_SUPABASE_*` y los secretos `ASC_KEY_P8` / `ASC_KEY_ID` /
-> `ASC_ISSUER_ID`. Pasos 2, 3 y 5 hechos: la build 4 se firmó (App Group, HealthKit, push, Sign in
-> with Apple) y está en TestFlight (~30 min por build). Del paso 6, creado el grupo interno
-> «Road to Ironman» (recibe todas las builds) con Diego dentro. Pendiente: invitar al compañero y lo
-> de cada usuario en el iPhone.
+> `ASC_ISSUER_ID`. Pasos 2, 3, 5 y 6 hechos: la build 5 está en TestFlight y abre bien en el iPhone
+> (la 4 se cerraba al arrancar, ver ARCHITECTURE §14). Grupo interno «Road to Ironman» (recibe todas
+> las builds) con Diego y David. Pendiente: lo de cada usuario en el iPhone (pasos 7 y 8).
 >
 > **Login por email:** en el plan gratuito Supabase envía un **enlace** (no un código); la app lo
 > acepta (`roadtoironman://auth/callback`). Para recibir un código de 6 dígitos hace falta SMTP propio y
