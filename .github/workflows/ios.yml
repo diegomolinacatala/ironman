@@ -161,12 +161,22 @@ jobs:
           grep -q "com.apple.developer.healthkit" <(plutil -p "$summary") \
             || echo "::warning::La app se firmó sin HealthKit: activa la capacidad en el identificador de la app."
 
+      # Xcode deja el detalle de la firma (qué pidió a Apple y qué le contestó) fuera del proyecto.
+      - name: Logs de la firma
+        if: failure()
+        run: |
+          mkdir -p build/distribution-logs
+          find "$(getconf DARWIN_USER_TEMP_DIR)" -maxdepth 1 -name '*.xcdistributionlogs' \
+            -exec cp -R {} build/distribution-logs/ \; || true
+
       - name: Log de xcodebuild
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-log
-          path: build/xcodebuild.log
+          path: |
+            build/xcodebuild.log
+            build/distribution-logs/
           retention-days: 7
 
       - name: Borrar la clave

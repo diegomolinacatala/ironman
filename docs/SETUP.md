@@ -8,9 +8,11 @@ Orden: **1 Supabase → 2 Apple → 3 secretos de Apple en Supabase → 4 GitHub
 
 > **Estado (26-oct-2026):** hechos el paso 1 completo (proyecto `gganxjgvdbcwuahfrlvy`, migraciones,
 > configuración de login, SQL de una vez, `GARMIN_KEY_SECRET`, funciones desplegadas) y, del paso 4,
-> las variables `APPLE_TEAM_ID`, `EXPO_PUBLIC_SUPABASE_*` y los secretos `ASC_KEY_P8` / `ASC_KEY_ID`.
-> La primera build sin firmar en GitHub Actions compila (Xcode 26.6, ~35 min). Pendiente: paso 2
-> (Apple), `ASC_ISSUER_ID`, paso 3 y lo de cada usuario en el iPhone.
+> las variables `APPLE_TEAM_ID`, `EXPO_PUBLIC_SUPABASE_*` y los secretos `ASC_KEY_P8` / `ASC_KEY_ID` /
+> `ASC_ISSUER_ID`. Paso 3 hecho (secretos `APNS_*` y `APPLE_*` en Supabase). La build sin firmar
+> compila (Xcode 26.6, ~35 min). Paso 2 hecho salvo la asignación del App Group a los dos
+> identificadores (la primera build firmada falló por eso). Pendiente: eso, el paso 6 (TestFlight) y
+> lo de cada usuario en el iPhone.
 >
 > **Login por email:** en el plan gratuito Supabase envía un **enlace** (no un código); la app lo
 > acepta (`roadtoironman://auth/callback`). Para recibir un código de 6 dígitos hace falta SMTP propio y
@@ -98,6 +100,10 @@ En **developer.apple.com → Certificates, Identifiers & Profiles**:
    - **Sign In with Apple** (como *primary App ID*).
 4. **Identificador de los widgets:** otro *App ID* con *Bundle ID*
    `io.github.diegomolinacatala.ironman.ExpoWidgetsTarget` y solo **App Groups** (el mismo grupo).
+
+   Marcar *App Groups* no basta: en cada identificador hay que pulsar **Configure** en esa fila,
+   marcar el grupo → **Continue** → **Save** (arriba a la derecha) → **Confirm**. Al volver a
+   abrirlo, la fila dice *1 App Group*. La clave de la API no puede hacer esta asignación.
 5. **Clave para push y Sign in with Apple:** *Keys* → **+** → nombre `Road to Ironman` → marca
    **Apple Push Notifications service (APNs)** y **Sign in with Apple** (*Configure* → primary App ID
    `io.github.diegomolinacatala.ironman`) → *Register* → **descarga el `.p8`** (solo una vez) y apunta el
@@ -260,7 +266,8 @@ gh variable set EXPO_PUBLIC_PRIVACY_URL --body https://TU_URL
 | Síntoma | Solución |
 |---|---|
 | La app entra en modo demo | Faltan las variables `EXPO_PUBLIC_SUPABASE_*` en GitHub (paso 4). |
-| La build falla al firmar | Revisa que existan los identificadores del paso 2 con sus capacidades y que la clave de API tenga rol App Manager o Admin. |
+| La build falla al firmar con *"Authentication failed"* y *"No profiles for … were found"* | El App Group no está asignado a los identificadores (paso 2.4: *Configure* → grupo → *Save*). La clave de API no puede asignarlo y Xcode lo traduce en ese error. El artefacto `xcodebuild-log` trae los logs de la firma. |
+| La build falla al firmar (otro error) | Revisa que existan los identificadores del paso 2 con sus capacidades y que la clave de API sea de equipo con rol Admin. |
 | No llegan push | Revisa los secretos `APNS_*` (paso 3) y el SQL del paso 1.6. |
 | Widgets vacíos | Abre la app una vez; comprueba el App Group en ambos identificadores. |
 | Proyecto de Supabase "paused" | Plan gratis tras 7 días sin uso: *Restore*. |
