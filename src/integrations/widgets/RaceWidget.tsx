@@ -23,6 +23,8 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
+import { toPropertyList } from './plist';
+
 export interface RaceWidgetProps {
   /** null when there is no upcoming race. */
   raceName: string | null;
@@ -45,7 +47,8 @@ const RaceWidget = (props: RaceWidgetProps, environment: WidgetEnvironment) => {
   const paper = dark ? '#0D0F12' : '#F4F1EA';
   const muted = dark ? '#A3A6AD' : '#5E6066';
   const lime = '#D4FF3A';
-  const hasRace = props.raceName !== null && props.daysToRace !== null;
+  // `!= null`: null props are dropped before reaching the widget (see plist.ts), so they arrive missing.
+  const hasRace = props.raceName != null && props.daysToRace != null;
   const days = props.daysToRace ?? 0;
   const daysText = days === 0 ? '¡HOY!' : `${days}`;
   const unit = days === 1 ? 'día' : 'días';
@@ -121,12 +124,16 @@ const RaceWidget = (props: RaceWidgetProps, environment: WidgetEnvironment) => {
   );
 };
 
-export default createWidget<RaceWidgetProps>('RaceWidget', RaceWidget, {
-  raceName: null,
-  daysToRace: null,
-  raceDateLabel: '',
-  distanceLabel: '',
-  weekPercent: 0,
-  weekLabel: '',
-  linkBase: 'roadtoironman://',
-});
+export default createWidget<RaceWidgetProps>(
+  'RaceWidget',
+  RaceWidget,
+  toPropertyList({
+    raceName: null,
+    daysToRace: null,
+    raceDateLabel: '',
+    distanceLabel: '',
+    weekPercent: 0,
+    weekLabel: '',
+    linkBase: 'roadtoironman://',
+  }),
+);

@@ -12,6 +12,8 @@ import { HStack, Image, Text, VStack, type ImageProps } from '@expo/ui/swift-ui'
 import { containerBackground, font, frame, lineLimit, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
+import { toPropertyList } from './plist';
+
 type SymbolName = NonNullable<ImageProps['systemName']>;
 
 export interface NextWorkoutItem {
@@ -77,4 +79,8 @@ const NextWorkoutWidget = (props: NextWorkoutWidgetProps, environment: WidgetEnv
   );
 };
 
-export default createWidget<NextWorkoutWidgetProps>('NextWorkoutWidget', NextWorkoutWidget, { next: null, linkBase: 'roadtoironman://' });
+export default createWidget<NextWorkoutWidgetProps>(
+  'NextWorkoutWidget',
+  NextWorkoutWidget,
+  toPropertyList({ next: null, linkBase: 'roadtoironman://' }),
+);

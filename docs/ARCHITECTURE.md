@@ -558,3 +558,18 @@ Widget deep links: `rebufo://workout/<id>`, `rebufo://today`, `rebufo://together
 - **Push:** the app registers the raw APNs device token (`getDevicePushTokenAsync`); `push-dispatch`
   sends straight to APNs (HTTP/2, ES256 provider JWT from `APNS_KEY_ID` / `APNS_TEAM_ID` /
   `APNS_PRIVATE_KEY`, topic `APNS_TOPIC`), deleting tokens Apple reports as invalid.
+
+## 14. Launch crash in TestFlight build 4 (2026-10-26)
+
+- **Cause:** expo-widgets stores widget props in the App Group's `UserDefaults`, which only takes
+  property lists. A JS `null` reaches Swift as `NSNull`, and `UserDefaults` throws. `createWidget(…,
+  { next: null })` ran while `widgets/sync.ios.ts` was imported, so the app aborted on every launch.
+  Web and jest never run that file.
+- **Rule:** everything sent to a widget (initial props, `updateTimeline`, `updateSnapshot`) goes
+  through `toPropertyList` (`widgets/plist.ts`), which drops `null`/`undefined`. Widget layouts must
+  treat a missing key as no value (`!= null`, truthiness), never `!== null`.
+  `__tests__/widgetSync.test.ts` loads `sync.ios.ts` against a fake that rejects what `UserDefaults`
+  rejects.
+- **Fatal JS errors in release** no longer abort silently: `index.ts` (the app entry, replacing
+  `expo-router/entry`) installs `lib/fatalErrors.ts` before any app module loads. It shows an alert
+  with the message and the top of the stack. Development builds keep the red box.

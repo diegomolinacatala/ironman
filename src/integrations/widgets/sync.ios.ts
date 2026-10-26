@@ -15,7 +15,8 @@ import { Platform } from 'react-native';
 import { logger } from '@/lib/logger';
 
 import NextWorkoutWidget from './NextWorkoutWidget';
-import { buildWidgetTimelines, linkBaseFor, type WidgetTimelines } from './props';
+import { toPropertyList } from './plist';
+import { buildWidgetTimelines, linkBaseFor, type TimelineEntry, type WidgetTimelines } from './props';
 import RaceWidget from './RaceWidget';
 // Type-only (erased at build time): TS resolves './sync' to the shared stub's declarations.
 import type { SyncWidgetsInput } from './sync';
@@ -24,6 +25,11 @@ import TodayWidget from './TodayWidget';
 export type { SyncWidgetsInput } from './sync';
 
 let lastSignature: string | null = null;
+
+/** Native widget storage only takes property lists (see plist.ts). */
+function storable<T>(entries: TimelineEntry<T>[]): TimelineEntry<T>[] {
+  return entries.map((entry) => ({ date: entry.date, props: toPropertyList(entry.props) }));
+}
 
 function signatureOf(timelines: WidgetTimelines): string {
   // Dates of "now" entries change every call; compare the props and the later dates only.
@@ -48,9 +54,9 @@ export function syncWidgets(input: SyncWidgetsInput): void {
     );
     const signature = signatureOf(timelines);
     if (signature === lastSignature) return;
-    TodayWidget.updateTimeline(timelines.today);
-    RaceWidget.updateTimeline(timelines.race);
-    NextWorkoutWidget.updateTimeline(timelines.next);
+    TodayWidget.updateTimeline(storable(timelines.today));
+    RaceWidget.updateTimeline(storable(timelines.race));
+    NextWorkoutWidget.updateTimeline(storable(timelines.next));
     lastSignature = signature;
   } catch (error) {
     logger.warn('widgets: update failed', error);
@@ -67,27 +73,31 @@ export function clearWidgets(): void {
   if (Platform.OS !== 'ios') return;
   try {
     const linkBase = linkBaseFor(Constants.expoConfig?.scheme);
-    TodayWidget.updateSnapshot({
-      dateLabel: '',
-      today: [],
-      tomorrow: [],
-      next: null,
-      allDoneToday: false,
-      week: [],
-      weekPercent: 0,
-      weekSummary: 'Abre Road to Ironman para cargar tu semana',
-      linkBase,
-    });
-    RaceWidget.updateSnapshot({
-      raceName: null,
-      daysToRace: null,
-      raceDateLabel: '',
-      distanceLabel: '',
-      weekPercent: 0,
-      weekLabel: '',
-      linkBase,
-    });
-    NextWorkoutWidget.updateSnapshot({ next: null, linkBase });
+    TodayWidget.updateSnapshot(
+      toPropertyList({
+        dateLabel: '',
+        today: [],
+        tomorrow: [],
+        next: null,
+        allDoneToday: false,
+        week: [],
+        weekPercent: 0,
+        weekSummary: 'Abre Road to Ironman para cargar tu semana',
+        linkBase,
+      }),
+    );
+    RaceWidget.updateSnapshot(
+      toPropertyList({
+        raceName: null,
+        daysToRace: null,
+        raceDateLabel: '',
+        distanceLabel: '',
+        weekPercent: 0,
+        weekLabel: '',
+        linkBase,
+      }),
+    );
+    NextWorkoutWidget.updateSnapshot(toPropertyList({ next: null, linkBase }));
     lastSignature = null;
   } catch (error) {
     logger.warn('widgets: clear failed', error);

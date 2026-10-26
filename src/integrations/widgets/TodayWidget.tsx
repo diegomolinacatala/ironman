@@ -34,6 +34,8 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
+import { toPropertyList } from './plist';
+
 type SymbolName = NonNullable<ImageProps['systemName']>;
 
 export interface WidgetSessionItem {
@@ -274,14 +276,18 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
   );
 };
 
-export default createWidget<TodayWidgetProps>('TodayWidget', TodayWidget, {
-  dateLabel: '',
-  today: [],
-  tomorrow: [],
-  next: null,
-  allDoneToday: false,
-  week: [],
-  weekPercent: 0,
-  weekSummary: 'Abre Road to Ironman para cargar tu semana',
-  linkBase: 'roadtoironman://',
-});
+export default createWidget<TodayWidgetProps>(
+  'TodayWidget',
+  TodayWidget,
+  toPropertyList({
+    dateLabel: '',
+    today: [],
+    tomorrow: [],
+    next: null,
+    allDoneToday: false,
+    week: [],
+    weekPercent: 0,
+    weekSummary: 'Abre Road to Ironman para cargar tu semana',
+    linkBase: 'roadtoironman://',
+  }),
+);
