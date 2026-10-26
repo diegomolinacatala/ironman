@@ -9,10 +9,10 @@ Orden: **1 Supabase → 2 Apple → 3 secretos de Apple en Supabase → 4 GitHub
 > **Estado (26-oct-2026):** hechos el paso 1 completo (proyecto `gganxjgvdbcwuahfrlvy`, migraciones,
 > configuración de login, SQL de una vez, `GARMIN_KEY_SECRET`, funciones desplegadas) y, del paso 4,
 > las variables `APPLE_TEAM_ID`, `EXPO_PUBLIC_SUPABASE_*` y los secretos `ASC_KEY_P8` / `ASC_KEY_ID` /
-> `ASC_ISSUER_ID`. Paso 3 hecho (secretos `APNS_*` y `APPLE_*` en Supabase). La build sin firmar
-> compila (Xcode 26.6, ~35 min). Paso 2 hecho salvo la asignación del App Group a los dos
-> identificadores (la primera build firmada falló por eso). Pendiente: eso, el paso 6 (TestFlight) y
-> lo de cada usuario en el iPhone.
+> `ASC_ISSUER_ID`. Pasos 2, 3 y 5 hechos: la build 4 se firmó (App Group, HealthKit, push, Sign in
+> with Apple) y está en TestFlight (~30 min por build). Del paso 6, creado el grupo interno
+> «Road to Ironman» (recibe todas las builds) con Diego dentro. Pendiente: invitar al compañero y lo
+> de cada usuario en el iPhone.
 >
 > **Login por email:** en el plan gratuito Supabase envía un **enlace** (no un código); la app lo
 > acepta (`roadtoironman://auth/callback`). Para recibir un código de 6 dígitos hace falta SMTP propio y
@@ -208,14 +208,15 @@ ejecución y lo arreglo.
 1. La build aparece en App Store Connect → la app → **TestFlight** tras 10–15 min de procesado.
 2. **Tu compañero:** *Usuarios y acceso* → **+** → su email → rol **Developer** o **Marketing**, acceso
    solo a esta app. Él acepta el email.
-3. *TestFlight* → *Internal Testing* → crea un grupo con distribución automática y añadíos los dos.
+3. *TestFlight* → *Internal Testing* → grupo **Road to Ironman** (ya creado, con distribución
+   automática y Diego dentro) → *Testers* → **+** → añade a tu compañero.
 4. Instalad **TestFlight** desde la App Store y aceptad la invitación.
 
 ---
 
 ## 7. En el iPhone (cada uno, ≈10 min)
 
-1. Abre la app → entra con **Apple** o con tu email (llega un código de 6 dígitos).
+1. Abre la app → entra con **Apple** o con tu email (llega un enlace: ábrelo desde el iPhone).
 2. Onboarding: nombre, @usuario, deportes, horas por semana, franjas y carrera objetivo.
 3. Permisos que quieras: notificaciones, calendario (solo horas ocupadas) y Salud.
 4. **Salud:** en Garmin Connect activa *Apple Salud*; luego en la app **Yo → Conexiones → Apple Salud**.
