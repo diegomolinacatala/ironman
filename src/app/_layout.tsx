@@ -50,6 +50,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="sign-in" />
         <Stack.Screen name="verify" options={{ ...header, title: '' }} />
+        <Stack.Screen name="auth/callback" options={{ gestureEnabled: false }} />
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
 
         <Stack.Screen name="workout/[id]" options={{ ...header, title: 'Entreno' }} />

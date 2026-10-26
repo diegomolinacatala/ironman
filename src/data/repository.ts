@@ -106,6 +106,11 @@ export interface AuthApi {
   /** Sends a 6-digit code by email (Supabase OTP). */
   sendEmailCode(email: string): Promise<void>;
   verifyEmailCode(email: string, code: string): Promise<AuthSession>;
+  /**
+   * Completes the sign-in from the link in the email (PKCE `code` received on
+   * roadtoironman://auth/callback). Free Supabase projects send a link, not a code.
+   */
+  completeEmailLink(code: string): Promise<AuthSession>;
   /** Native Sign in with Apple (iOS). Throws 'unavailable' elsewhere. */
   signInWithApple(): Promise<AuthSession>;
   signOut(): Promise<void>;

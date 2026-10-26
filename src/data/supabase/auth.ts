@@ -3,6 +3,8 @@
  */
 import { isAuthError, type Session, type SupabaseClient } from '@supabase/supabase-js';
 
+import * as Linking from 'expo-linking';
+
 import { logger } from '@/lib/logger';
 
 import { RepositoryError, type AuthApi, type AuthSession } from '../repository';
@@ -14,6 +16,16 @@ import { unregisterStoredPushToken } from './pushToken';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_RE = /^\d{6}$/;
+
+/** Where the sign-in email link lands: roadtoironman://auth/callback (localhost URL on web). */
+export function emailRedirectUrl(): string {
+  try {
+    return Linking.createURL('auth/callback');
+  } catch {
+    // No Expo manifest (tests, bare contexts): fall back to the app's fixed scheme.
+    return 'roadtoironman://auth/callback';
+  }
+}
 
 export function toAuthSession(session: Session | null): AuthSession | null {
   if (!session) return null;
@@ -91,8 +103,21 @@ export function createSupabaseAuth(client: SupabaseClient): AuthApi {
     async sendEmailCode(email) {
       const clean = email.trim().toLowerCase();
       if (!EMAIL_RE.test(clean)) throw new RepositoryError('validation', 'Ese email no parece válido.');
-      const { error } = await client.auth.signInWithOtp({ email: clean, options: { shouldCreateUser: true } });
+      const { error } = await client.auth.signInWithOtp({
+        email: clean,
+        options: { shouldCreateUser: true, emailRedirectTo: emailRedirectUrl() },
+      });
       if (error) throw authError(error, 'No hemos podido enviarte el código.');
+    },
+
+    async completeEmailLink(code) {
+      const clean = code.trim();
+      if (!clean) throw new RepositoryError('validation', 'El enlace no es válido. Pide uno nuevo.');
+      const { data, error } = await client.auth.exchangeCodeForSession(clean);
+      if (error) throw authError(error, 'El enlace ha caducado o ya se usó. Pide uno nuevo.');
+      const session = toAuthSession(data.session);
+      if (!session) throw new RepositoryError('unknown', 'No se ha podido iniciar sesión. Inténtalo de nuevo.');
+      return session;
     },
 
     async verifyEmailCode(email, code) {

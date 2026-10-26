@@ -86,14 +86,16 @@ max_frequency = "1m0s"
 otp_length = 6
 otp_expiry = 3600
 
-# Both templates print the 6-digit {{ .Token }} (new users get "confirmation", returning users "magic_link").
-[auth.email.template.magic_link]
-subject = "Tu código de Road to Ironman"
-content_path = "./supabase/templates/otp.html"
-
-[auth.email.template.confirmation]
-subject = "Tu código de Road to Ironman"
-content_path = "./supabase/templates/otp.html"
+# Custom templates (6-digit {{ .Token }}) need a custom SMTP provider on the free plan. Without it
+# Supabase's default email sends a sign-in LINK, which the app handles (roadtoironman://auth/callback).
+# After configuring SMTP (Authentication → SMTP) you can enable these:
+# [auth.email.template.magic_link]
+# subject = "Tu código de Road to Ironman"
+# content_path = "./supabase/templates/otp.html"
+#
+# [auth.email.template.confirmation]
+# subject = "Tu código de Road to Ironman"
+# content_path = "./supabase/templates/otp.html"
 
 [auth.sms]
 enable_signup = false

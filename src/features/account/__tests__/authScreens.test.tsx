@@ -16,6 +16,7 @@ const mockRouter = {
 const mockAuth = {
   sendEmailCode: jest.fn(async (_email: string) => undefined),
   verifyEmailCode: jest.fn(async (_email: string, _code: string) => ({ userId: 'u1', email: 'demo@roadtoironman.app' })),
+  completeEmailLink: jest.fn(async (_code: string) => ({ userId: 'u1', email: 'demo@roadtoironman.app' })),
   signInWithApple: jest.fn(async () => ({ userId: 'u1', email: null })),
 };
 

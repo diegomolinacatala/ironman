@@ -58,6 +58,9 @@ function authClient(options: { session?: unknown; responses?: FakeResponses; inv
     getSession: jest.fn(async () => ({ data: { session }, error: null })),
     onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
     signInWithOtp: jest.fn(async () => ({ data: {}, error: null })),
+    exchangeCodeForSession: jest.fn(async (code: string) =>
+      code === 'good-code' ? { data: { session }, error: null } : { data: { session: null }, error: { message: 'invalid' } },
+    ),
     verifyOtp: jest.fn(async () => ({ data: { session }, error: null })),
     signInWithIdToken: jest.fn(async () => ({ data: { session }, error: null })),
     updateUser: jest.fn(async () => ({ data: {}, error: null })),
@@ -90,12 +93,25 @@ describe('Supabase auth', () => {
     const api = createSupabaseAuth(client);
     await expect(api.sendEmailCode('no-email')).rejects.toMatchObject({ code: 'validation' });
     await api.sendEmailCode(' Diego@Example.com ');
-    expect(auth.signInWithOtp).toHaveBeenCalledWith({ email: 'diego@example.com', options: { shouldCreateUser: true } });
+    expect(auth.signInWithOtp).toHaveBeenCalledWith({
+      email: 'diego@example.com',
+      options: { shouldCreateUser: true, emailRedirectTo: 'roadtoironman://auth/callback' },
+    });
     await expect(api.verifyEmailCode('diego@example.com', '12')).rejects.toMatchObject({ code: 'validation' });
     const session = await api.verifyEmailCode('diego@example.com', '123 456');
     expect(auth.verifyOtp).toHaveBeenCalledWith({ email: 'diego@example.com', token: '123456', type: 'email' });
     expect(session).toEqual({ userId: 'me', email: EMAIL_SESSION.user.email });
     expect(await api.getSession()).toEqual({ userId: 'me', email: EMAIL_SESSION.user.email });
+  });
+
+  it('completes the sign-in from the email link (PKCE code)', async () => {
+    const { client, auth } = authClient();
+    const api = createSupabaseAuth(client);
+    await expect(api.completeEmailLink('  ')).rejects.toMatchObject({ code: 'validation' });
+    const session = await api.completeEmailLink('good-code');
+    expect(auth.exchangeCodeForSession).toHaveBeenCalledWith('good-code');
+    expect(session).toEqual({ userId: 'me', email: EMAIL_SESSION.user.email });
+    await expect(api.completeEmailLink('expired')).rejects.toBeTruthy();
   });
 
   it('signs in with Apple using a hashed nonce and stores the full name once', async () => {

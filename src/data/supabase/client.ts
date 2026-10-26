@@ -45,6 +45,8 @@ export function getSupabaseClient(): SupabaseClient {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      // Email links come back as roadtoironman://auth/callback?code=… and are exchanged on this device.
+      flowType: 'pkce',
     },
   });
   bindAppStateRefresh(client);

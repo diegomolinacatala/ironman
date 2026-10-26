@@ -31,6 +31,8 @@ export function createDemoAuth(store: DemoStore): AuthApi {
       return signInAs(email.trim().toLowerCase());
     },
 
+    completeEmailLink: () => signInAs('diego@roadtoironman.app'),
+
     signInWithApple: () => signInAs('diego@privaterelay.appleid.com'),
 
     async signOut() {

@@ -60,7 +60,7 @@ export default function VerifyScreen() {
     try {
       await auth.sendEmailCode(email);
       cooldown.restart();
-      setNotice('Te hemos enviado un código nuevo.');
+      setNotice('Te hemos enviado un correo nuevo.');
     } catch (err) {
       logger.warn('resend code failed', err);
       setError(authErrorMessage(err, 'No pudimos reenviar el código.'));
@@ -90,10 +90,11 @@ export default function VerifyScreen() {
           Revisa tu correo
         </Text>
         <Text variant="display" accessibilityRole="header">
-          Mete el código
+          Revisa tu correo
         </Text>
         <Text variant="callout" color="textMuted">
-          Lo hemos enviado a <Text variant="bodyStrong">{email}</Text>. Si no aparece, mira en spam.
+          Lo hemos enviado a <Text variant="bodyStrong">{email}</Text>. Abre el enlace desde este iPhone y entrarás
+          directamente; si el correo trae un código de 6 dígitos, escríbelo aquí. Si no aparece, mira en spam.
         </Text>
       </View>
       <CodeInput ref={inputRef} value={code} onChange={onChange} error={error} editable={!verifying} />
