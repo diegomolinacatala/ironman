@@ -6,6 +6,16 @@ TestFlight, igual que Tasks (`.github/workflows/ios.yml`). No hace falta cuenta 
 Orden: **1 Supabase → 2 Apple → 3 secretos de Apple en Supabase → 4 GitHub → 5 primera build →
 6 TestFlight → 7 en el iPhone → 8 Garmin y Claude → 9 política de privacidad.**
 
+> **Estado (26-oct-2026):** hechos el paso 1 completo (proyecto `gganxjgvdbcwuahfrlvy`, migraciones,
+> configuración de login, SQL de una vez, `GARMIN_KEY_SECRET`, funciones desplegadas) y, del paso 4,
+> las variables `APPLE_TEAM_ID`, `EXPO_PUBLIC_SUPABASE_*` y los secretos `ASC_KEY_P8` / `ASC_KEY_ID`.
+> La primera build sin firmar en GitHub Actions compila (Xcode 26.6, ~35 min). Pendiente: paso 2
+> (Apple), `ASC_ISSUER_ID`, paso 3 y lo de cada usuario en el iPhone.
+>
+> **Login por email:** en el plan gratuito Supabase envía un **enlace** (no un código); la app lo
+> acepta (`roadtoironman://auth/callback`). Para recibir un código de 6 dígitos hace falta SMTP propio y
+> descomentar las plantillas en `supabase/config.toml`.
+
 > Antes de nada, para probar sin servidor: `npm install` y `npm run web` (modo demo en el navegador).
 
 ---
