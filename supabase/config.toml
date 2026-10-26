@@ -1,8 +1,8 @@
-# Supabase CLI configuration for Rebufo.
+# Supabase CLI configuration for Road to Ironman.
 # Reference: https://supabase.com/docs/guides/local-development/cli/config
 # Hosted project: `npx supabase link --project-ref <ref>` then `npx supabase config push`
 # (auth settings) and `npx supabase db push` (migrations).
-project_id = "rebufo"
+project_id = "road-to-ironman"
 
 [api]
 enabled = true
@@ -50,11 +50,10 @@ file_size_limit = "10MiB"
 
 [auth]
 enabled = true
-# Native app: the custom scheme is the "site". Dev client uses rebufo-dev://.
-site_url = "rebufo://"
+# Native app: the custom scheme is the "site".
+site_url = "roadtoironman://"
 additional_redirect_urls = [
-  "rebufo://**",
-  "rebufo-dev://**",
+  "roadtoironman://**",
   "exp://**",
   "http://localhost:8081",
   "http://127.0.0.1:8081",
@@ -89,11 +88,11 @@ otp_expiry = 3600
 
 # Both templates print the 6-digit {{ .Token }} (new users get "confirmation", returning users "magic_link").
 [auth.email.template.magic_link]
-subject = "Tu código de Rebufo"
+subject = "Tu código de Road to Ironman"
 content_path = "./supabase/templates/otp.html"
 
 [auth.email.template.confirmation]
-subject = "Tu código de Rebufo"
+subject = "Tu código de Road to Ironman"
 content_path = "./supabase/templates/otp.html"
 
 [auth.sms]
@@ -101,7 +100,7 @@ enable_signup = false
 enable_confirmations = false
 
 # Sign in with Apple (native, signInWithIdToken). client_id = comma-separated bundle ids, e.g.
-# "com.diegomolinacatala.rebufo,com.diegomolinacatala.rebufo.dev". The secret is only needed for
+# "io.github.diegomolinacatala.ironman". The secret is only needed for
 # the web OAuth flow; native id-token sign-in works with the client ids alone.
 [auth.external.apple]
 enabled = true

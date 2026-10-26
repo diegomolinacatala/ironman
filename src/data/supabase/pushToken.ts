@@ -1,5 +1,5 @@
 /**
- * Detaches this device's Expo push token from the signed-in account before it
+ * Detaches this device's APNs push token from the signed-in account before it
  * signs out or is deleted, so the old account's pushes stop reaching a phone
  * that someone else may now hold. Best effort: never blocks sign-out.
  */

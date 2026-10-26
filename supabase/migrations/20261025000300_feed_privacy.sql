@@ -1,4 +1,4 @@
--- Rebufo — feed privacy hardening.
+-- Road to Ironman — feed privacy hardening.
 --
 -- 1. activity_events and kudos are no longer readable or writable by clients. Stored payloads are
 --    written at event time, so a direct `select` ignored later visibility changes (a friend who

@@ -8,7 +8,7 @@ import { Button, ErrorNotice, Icon, Text, haptics, radius, space, useTheme } fro
 import { formatRelativeTime } from './format';
 import { IntegrationCard } from './IntegrationCard';
 import { toPermissionState } from './PermissionRow';
-import { CALENDAR_PRIVACY_NOTE } from './privacyPolicy';
+import { calendarPrivacyNote } from './privacyPolicy';
 
 interface DeviceCalendar {
   id: string;
@@ -57,7 +57,7 @@ export function CalendarCard() {
       <View style={styles.privacy}>
         <Icon name="lock" size={14} color={permission === 'granted' ? colors.success : colors.textFaint} />
         <Text variant="caption" color="textMuted" style={styles.flex}>
-          {CALENDAR_PRIVACY_NOTE}
+          {calendarPrivacyNote()}
         </Text>
       </View>
       {isWeb ? (

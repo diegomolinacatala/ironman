@@ -5,8 +5,12 @@ import { Text, fonts, space, useTheme } from '@/ui';
 
 const VALUE_POINTS = ['Planifica tu semana', 'Reorganiza imprevistos', 'Cuadra quedadas'] as const;
 
-const MIN_WORDMARK = 64;
-const MAX_WORDMARK = 132;
+/** "IRONMAN" is 7 condensed caps: ~23 % of the width keeps it on one line on a 320 pt phone. */
+const WORDMARK_RATIO = 0.235;
+const MIN_WORDMARK = 56;
+const MAX_WORDMARK = 120;
+/** "ROAD TO" kicker relative to the wordmark size. */
+const KICKER_RATIO = 0.3;
 
 export interface BrandHeroProps {
   /** Safe-area top inset (the hero bleeds under the status bar). */
@@ -14,13 +18,15 @@ export interface BrandHeroProps {
 }
 
 /**
- * Sign-in hero: ink panel, slanted "REBUFO" wordmark over a lime slash,
- * speed stripes and the three value points. Always ink, also in dark mode.
+ * Sign-in hero: ink panel, a tracked "ROAD TO" kicker over a big slanted
+ * "IRONMAN" wordmark on a lime slash, speed stripes and the three value
+ * points. Always ink, also in dark mode.
  */
 export function BrandHero({ topInset }: BrandHeroProps) {
   const { colors, isDark } = useTheme();
   const { width } = useWindowDimensions();
-  const wordmark = Math.max(MIN_WORDMARK, Math.min(MAX_WORDMARK, Math.round(Math.min(width, 720) * 0.27)));
+  const wordmark = Math.max(MIN_WORDMARK, Math.min(MAX_WORDMARK, Math.round(Math.min(width, 720) * WORDMARK_RATIO)));
+  const kicker = Math.round(wordmark * KICKER_RATIO);
   const ink = isDark ? colors.bgElevated : colors.inverseBg;
   const paper = isDark ? colors.text : colors.inverseText;
 
@@ -30,16 +36,34 @@ export function BrandHero({ topInset }: BrandHeroProps) {
       <Text variant="overline" style={{ color: colors.accent }}>
         Triatlón · Entreno social
       </Text>
-      <View style={styles.wordmarkWrap} accessible accessibilityRole="header" accessibilityLabel="Rebufo">
-        <View style={[styles.slash, { backgroundColor: colors.accent, height: wordmark * 0.34, bottom: wordmark * 0.06 }]} />
+      <View style={styles.wordmarkWrap} accessible accessibilityRole="header" accessibilityLabel="Road to Ironman">
         <Text
           allowFontScaling={false}
           style={[
-            styles.wordmark,
-            { color: paper, fontSize: wordmark, lineHeight: wordmark * 0.96, fontFamily: fonts.displayHeavy },
+            styles.kicker,
+            {
+              color: paper,
+              fontSize: kicker,
+              lineHeight: Math.round(kicker * 1.1),
+              letterSpacing: Math.round(kicker * 0.32),
+              fontFamily: fonts.displayHeavy,
+            },
           ]}>
-          REBUFO
+          ROAD TO
         </Text>
+        <View>
+          <View style={[styles.slash, { backgroundColor: colors.accent, height: wordmark * 0.34, bottom: wordmark * 0.06 }]} />
+          <Text
+            allowFontScaling={false}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={[
+              styles.wordmark,
+              { color: paper, fontSize: wordmark, lineHeight: wordmark * 0.96, fontFamily: fonts.displayHeavy },
+            ]}>
+            IRONMAN
+          </Text>
+        </View>
       </View>
       <Text variant="title" style={{ color: paper }}>
         Entrena a rueda de tus amigos
@@ -83,7 +107,8 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 28,
   },
   stripes: { position: 'absolute', top: 0, right: -20 },
-  wordmarkWrap: { marginTop: space.xxl, alignSelf: 'flex-start', transform: [{ skewX: '-9deg' }] },
+  wordmarkWrap: { marginTop: space.xl, alignSelf: 'flex-start', maxWidth: '100%', transform: [{ skewX: '-9deg' }] },
+  kicker: { includeFontPadding: false, marginBottom: space.xxs, marginLeft: 2 },
   wordmark: { letterSpacing: -1, includeFontPadding: false },
   slash: { position: 'absolute', left: -space.lg, right: -space.sm },
   points: { gap: space.sm, marginTop: space.sm },

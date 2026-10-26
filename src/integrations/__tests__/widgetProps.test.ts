@@ -52,7 +52,7 @@ function input(overrides: Partial<WidgetDataInput> = {}): WidgetDataInput {
     races: [race],
     jointSessions: [joint],
     profile: null,
-    linkBase: 'rebufo://',
+    linkBase: 'roadtoironman://',
     ...overrides,
   };
 }
@@ -68,7 +68,7 @@ describe('buildWidgetProps', () => {
     expect(today.today[1]?.time).toBe('13:00');
     expect(today.today[1]?.duration).toBe("30'");
     expect(today.allDoneToday).toBe(false);
-    expect(today.linkBase).toBe('rebufo://');
+    expect(today.linkBase).toBe('roadtoironman://');
   });
 
   test('today widget: week strip and progress', () => {
@@ -135,9 +135,9 @@ describe('buildWidgetTimelines', () => {
 
 describe('helpers', () => {
   test('linkBaseFor uses the app scheme', () => {
-    expect(linkBaseFor('rebufo-dev')).toBe('rebufo-dev://');
-    expect(linkBaseFor(['rebufo', 'other'])).toBe('rebufo://');
-    expect(linkBaseFor(undefined)).toBe('rebufo://');
+    expect(linkBaseFor('roadtoironman-dev')).toBe('roadtoironman-dev://');
+    expect(linkBaseFor(['roadtoironman', 'other'])).toBe('roadtoironman://');
+    expect(linkBaseFor(undefined)).toBe('roadtoironman://');
   });
 
   test('partnerLabel ignores me and declined participants', () => {

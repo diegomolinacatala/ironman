@@ -1,4 +1,4 @@
-# Edge Functions de Rebufo
+# Edge Functions de Road to Ironman
 
 Funciones de Supabase (Deno 2) que dan servicio a la app. Toda la lógica vive en módulos puros de
 `_shared/**` (sin globals de Deno, probados con `node --test`); cada `index.ts` solo lee el entorno,
@@ -6,17 +6,20 @@ crea el cliente de Supabase y conecta las piezas.
 
 | Función | URL (`https://<ref>.supabase.co/functions/v1/…`) | Autenticación | `verify_jwt` |
 |---|---|---|---|
-| `coach` | `POST /coach` con un `CoachRequest` | JWT del usuario | `true` |
+| `coach` (opcional, **desactivada por defecto**) | `POST /coach` con un `CoachRequest` | JWT del usuario | `true` |
 | `mcp` | `POST /mcp/u/<secreto>` (conector "Conecta tu Claude") | secreto personal en la ruta (scope `mcp`) | `false` |
 | `ics` | `GET /ics/<secreto>.ics` (suscripción `webcal://`) | secreto personal en la ruta (scope `ics`) | `false` |
 | `push-dispatch` | `POST /push-dispatch` (trigger `pg_net` + barrido `pg_cron`) | clave secreta del servidor en `apikey` | `false` |
 | `garmin` | `POST /garmin` con `{ action }` | JWT del usuario (`connect`, `disconnect`, `sync`) · clave secreta en `apikey` (`sync_all`) | `false` (el JWT se verifica en el código) |
 | `apple-revoke` | `POST /apple-revoke` con `{ authorizationCode }` | JWT del usuario | `false` (el JWT se verifica en el código) |
 
+El coach con IA dentro de la app está apagado por defecto: la función `coach` sigue en el repositorio
+(dormida) pero no se despliega ni necesita `ANTHROPIC_API_KEY` hasta que se active.
+
 `supabase/config.toml` (lo mantiene el agente de base de datos):
 
 ```toml
-[functions.coach]
+[functions.coach]          # solo si se activa el coach con IA
 verify_jwt = true
 
 [functions.mcp]
@@ -42,21 +45,35 @@ Los inyecta Supabase automáticamente: `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` (o
 
 | Secreto | Obligatorio | Para qué |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | No (sin él `coach` responde `503 {error:'ai_unavailable'}` y la app usa el motor de reglas) | Coach con IA (Claude `claude-opus-5-5`). |
+| `APNS_KEY_ID` | Sí para las notificaciones push (sin los tres `APNS_*` obligatorios no se envía nada: cada notificación queda con `push_error = 'apns_not_configured'` y la función lo avisa una vez en los logs) | Key ID de la clave `.p8` con "Apple Push Notifications service (APNs)" activado. |
+| `APNS_TEAM_ID` | Igual que arriba | Team ID de Apple Developer (10 caracteres). |
+| `APNS_PRIVATE_KEY` | Igual que arriba | Contenido del `.p8` (PEM `-----BEGIN PRIVATE KEY-----…`). Se aceptan saltos de línea reales o escritos como `\n`. |
+| `APNS_TOPIC` | No (por defecto `io.github.diegomolinacatala.ironman`) | Bundle id de la app (cabecera `apns-topic`). |
+| `APNS_HOST` | No (por defecto `api.push.apple.com`) | Pon `api.sandbox.push.apple.com` para probar con builds de desarrollo (Xcode/dev client): sus tokens son de sandbox. Los tokens del otro entorno reciben `400 BadDeviceToken` y se borran. |
 | `GARMIN_KEY_SECRET` | Sí para Garmin (≥ 16 caracteres; mejor 48 bytes aleatorios) | Cifrar con AES-GCM-256 (clave derivada con HKDF-SHA-256) la Personal API Key de cada usuario. **No lo cambies**: las claves guardadas dejarían de descifrarse y habría que reconectar Garmin. |
-| `EXPO_ACCESS_TOKEN` | No | Solo si activas "Enhanced Security for Push" en Expo. |
 | `GARMIN_PERSONAL_API_BASE_URL` | No | Sustituir `https://personal.connectapi.garmin.com` (pruebas). |
-| `APPLE_TEAM_ID` | Sí para revocar Apple al borrar la cuenta (sin los cuatro `APPLE_*`, `apple-revoke` responde `503 apple_not_configured` y la app borra la cuenta igualmente) | Team ID de Apple Developer (10 caracteres). |
-| `APPLE_KEY_ID` | Igual que arriba | Key ID de la clave de Sign in with Apple (*Certificates, IDs & Profiles › Keys*, con "Sign in with Apple" activado para el App ID). |
-| `APPLE_PRIVATE_KEY` | Igual que arriba | Contenido del `.p8` (PEM `-----BEGIN PRIVATE KEY-----…`). Se aceptan saltos de línea reales o escritos como `\n`. |
-| `APPLE_CLIENT_ID` | Igual que arriba | Bundle id de la app de producción (p. ej. `com.diegomolinacatala.rebufo`). Si pones una lista separada por comas se usa la primera. |
+| `APPLE_TEAM_ID` | Sí para revocar Apple al borrar la cuenta (sin los cuatro `APPLE_*`, `apple-revoke` responde `503 apple_not_configured` y la app borra la cuenta igualmente) | Team ID de Apple Developer (el mismo que `APNS_TEAM_ID`). |
+| `APPLE_KEY_ID` | Igual que arriba | Key ID de la clave con "Sign in with Apple" activado para el App ID. |
+| `APPLE_PRIVATE_KEY` | Igual que arriba | Contenido del `.p8` (mismo formato que `APNS_PRIVATE_KEY`). |
+| `APPLE_CLIENT_ID` | Igual que arriba | Bundle id de la app: `io.github.diegomolinacatala.ironman`. Si pones una lista separada por comas se usa la primera. |
+| `ANTHROPIC_API_KEY` | No (opcional; **solo** si se activa el coach con IA y se despliega `coach`) | Coach con IA (Claude `claude-opus-5-5`). Sin él `coach` responde `503 {error:'ai_unavailable'}` y la app usa el motor de reglas. |
+
+**Una sola clave de Apple para push y Sign in with Apple.** En *Certificates, Identifiers & Profiles ›
+Keys › +* crea una clave y marca a la vez **Apple Push Notifications service (APNs)** (entorno
+*Sandbox & Production*; restricción *Team Scoped* o el topic `io.github.diegomolinacatala.ironman`) y
+**Sign in with Apple** (App ID principal `io.github.diegomolinacatala.ironman`). Descarga el `.p8`
+(solo se puede una vez) y usa el mismo contenido y el mismo Key ID en `APNS_PRIVATE_KEY`/`APNS_KEY_ID`
+y en `APPLE_PRIVATE_KEY`/`APPLE_KEY_ID`. Si prefieres claves separadas, cada par de variables acepta la
+suya. El App ID necesita además las capacidades *Push Notifications* y *Sign in with Apple*.
 
 ```bash
-npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+npx supabase secrets set APNS_KEY_ID=XYZ987WVU1 APNS_TEAM_ID=ABCDE12345
+npx supabase secrets set APNS_PRIVATE_KEY="$(cat AuthKey_XYZ987WVU1.p8)"
+npx supabase secrets set APNS_HOST=api.sandbox.push.apple.com      # opcional, solo para builds de desarrollo
 npx supabase secrets set GARMIN_KEY_SECRET="$(openssl rand -base64 48)"
-npx supabase secrets set EXPO_ACCESS_TOKEN=...        # opcional
-npx supabase secrets set APPLE_TEAM_ID=ABCDE12345 APPLE_KEY_ID=XYZ987WVU1 APPLE_CLIENT_ID=com.diegomolinacatala.rebufo
+npx supabase secrets set APPLE_TEAM_ID=ABCDE12345 APPLE_KEY_ID=XYZ987WVU1 APPLE_CLIENT_ID=io.github.diegomolinacatala.ironman
 npx supabase secrets set APPLE_PRIVATE_KEY="$(cat AuthKey_XYZ987WVU1.p8)"
+npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...             # opcional, solo con el coach con IA
 npx supabase secrets list
 ```
 
@@ -66,8 +83,8 @@ npx supabase secrets list
 npx supabase login
 npx supabase link --project-ref <ref>
 npx supabase db push                       # migraciones (RPC svc_* que usan estas funciones)
-npx supabase functions deploy --use-api    # todas las funciones
-npx supabase functions deploy mcp --use-api   # o una concreta
+npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
+npx supabase functions deploy coach --use-api    # solo si se activa el coach con IA
 ```
 
 Cada función tiene su `deno.json` (`nodeModulesDir: "none"`) para que Deno no use el
@@ -78,7 +95,7 @@ Cada función tiene su `deno.json` (`nodeModulesDir: "none"`) para que Deno no u
 
 Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" }`.
 
-- **coach** — `POST` `CoachRequest` → `202 { jobId }`. El resultado se escribe en `coach_jobs`
+- **coach** (desactivada por defecto) — `POST` `CoachRequest` → `202 { jobId }`. El resultado se escribe en `coach_jobs`
   (`status` `done` con `reply`, `proposal_id`, `engine: 'ai'`, o `error` con mensaje). Errores: `401`,
   `400`, `403 consent_required` (el usuario no ha aceptado enviar sus datos a Anthropic:
   `profiles.ai_consent_at` es null), `429` (30 trabajos/24 h, reservados de forma atómica con
@@ -104,15 +121,27 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
   - `{ action: 'disconnect' }` → `{ provider, state: 'disconnected', …, ok: true }` (borra la clave).
   - `{ action: 'sync_all' }` (solo con `apikey` secreta, para `pg_cron`) → resumen `{ users, ok, expired, failed, skipped }`.
 - **ics** — `text/calendar` con `VTIMEZONE` Europe/Madrid, entrenos de −14 a +56 días (los saltados no
-  salen) y quedadas confirmadas sin entreno enlazado. UID estable por entreno (`workout-<id>@rebufo.app`).
-- **push-dispatch** — reclama las notificaciones sin enviar de las últimas 24 h (`pushed_at`), envía a
-  Expo en lotes de 100, respeta `notification_prefs.social` (tipos `friend_request`, `friend_accepted`,
-  `friend_completed`, `kudos`), guarda `push_error` y borra tokens `DeviceNotRegistered`. Ante fallos
-  temporales de Expo devuelve las notificaciones a la cola para el siguiente barrido. Recibos (sin
-  tablas nuevas, en la memoria del isolate): tras responder consulta `getReceipts` de los tickets
-  enviados (y de los pendientes de llamadas anteriores) y borra los tokens con `DeviceNotRegistered`;
-  los demás errores van a `push_error`. En el barrido de `pg_cron` (`{"action":"sweep"}`) borra
-  además los tokens que no se han visto en 90 días (`last_seen_at`).
+  salen) y quedadas confirmadas sin entreno enlazado. UID estable por entreno (`workout-<id>@roadtoironman.app`).
+- **push-dispatch** — reclama las notificaciones sin enviar de las últimas 24 h (`pushed_at`) y las
+  envía directamente a Apple (APNs, HTTP/2): `POST https://api.push.apple.com/3/device/<token>` por
+  cada dispositivo iOS del usuario (`push_tokens.platform = 'ios'`, token APNs en hexadecimal de
+  `getDevicePushTokenAsync`), con 8 peticiones en paralelo como máximo. Cabeceras:
+  `authorization: bearer <JWT ES256 {alg, kid} + {iss: team id, iat}>` (se reutiliza 40 min),
+  `apns-topic`, `apns-push-type: alert`, `apns-priority: 10` y `apns-collapse-id: <id de la
+  notificación>`. Cuerpo: `{ aps: { alert: { title, body }, sound: 'default', 'thread-id': <tipo> },
+  url, notificationId, type, …, body: { los mismos datos } }` (expo-notifications expone `body` como
+  `content.data` en iOS). Respeta `notification_prefs.social` (tipos `friend_request`,
+  `friend_accepted`, `friend_completed`, `kudos`). Respuestas de APNs:
+  - `200` en algún dispositivo → enviada (`push_error` null);
+  - `410`, o `400` `BadDeviceToken` / `DeviceTokenNotForTopic` / `Unregistered` → se borra ese token;
+  - `403` (`InvalidProviderToken`, `ExpiredProviderToken`…) → `push_error`, se descarta el JWT en caché
+    y el resto del lote vuelve a la cola para el siguiente barrido;
+  - `429`, `5xx`, error de red o timeout → vuelve a la cola (`pushed_at` null) para el siguiente barrido;
+  - otros `4xx` → `push_error` (`APNs <estado> <motivo>`);
+  - sin `APNS_*` → `push_error = 'apns_not_configured'` (no lanza error).
+
+  En el barrido de `pg_cron` (`{"action":"sweep"}`) borra además los tokens que no se han visto en
+  90 días (`last_seen_at`).
 
 ## "Conecta tu Claude" (MCP)
 
@@ -162,7 +191,9 @@ aplica la misma regla y responde `already_logged`. Un `401` marca la integració
 ```bash
 npm run test:functions        # node --test "supabase/functions/**/*.test.ts" (Node 24, TS nativo)
 cd supabase/functions
-npx --yes deno@2.9.6 check --config coach/deno.json coach/index.ts   # igual para mcp, ics, push-dispatch, garmin, apple-revoke
+for fn in mcp ics push-dispatch garmin apple-revoke coach; do
+  npx --yes deno@2.9.6 check --config "$fn/deno.json" "$fn/index.ts"
+done
 ```
 
 ## Estructura
@@ -173,8 +204,8 @@ _shared/
   planning/   contexto de planificación, carga, fases, validación de cambios, huecos, export a Garmin
   mcp/        protocolo JSON-RPC dual-era, guardas HTTP y las 8 herramientas
   coach/      prompt del entrenador, salida estructurada, trabajo en segundo plano, capa HTTP
-  ics/ push/ garmin/   feed iCalendar, envío Expo y recibos, integración Garmin
-  apple/      client_secret ES256 y revocación de Sign in with Apple
+  ics/ push/ garmin/   feed iCalendar, envío a APNs, integración Garmin
+  apple/      JWT ES256 con la clave .p8, client_secret y revocación de Sign in with Apple
   db/rows.ts  filas de Postgres → tipos (puro)
   platform/   adaptadores supabase-js y SDK de Anthropic (no se cargan en los tests)
   testing/    dobles de prueba en memoria

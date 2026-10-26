@@ -75,7 +75,7 @@ export function clearWidgets(): void {
       allDoneToday: false,
       week: [],
       weekPercent: 0,
-      weekSummary: 'Abre Rebufo para cargar tu semana',
+      weekSummary: 'Abre Road to Ironman para cargar tu semana',
       linkBase,
     });
     RaceWidget.updateSnapshot({

@@ -5,9 +5,9 @@ import { Icon, Text, radius, space, useTheme } from '@/ui';
 import { useCopy } from './useCopy';
 
 export const CLAUDE_PROMPTS: readonly string[] = [
-  'Planifica mi semana en Rebufo con mis datos de Garmin y mis huecos',
+  'Planifica mi semana en Road to Ironman con mis datos de Garmin y mis huecos',
   'Hoy he jugado al pádel 90’ a tope, reorganiza mi semana',
-  'Guarda en Rebufo mi VFC, Body Battery y Training Readiness de Garmin de hoy',
+  'Guarda en Road to Ironman mi VFC, Body Battery y Training Readiness de Garmin de hoy',
   'Sube a mi Garmin los entrenos de mañana',
 ];
 

@@ -64,7 +64,7 @@ export const logLifeEventTool: RegisteredTool = defineTool({
       affectedWorkouts: affected,
       next: 'Para adaptar el plan, usa propose_plan_changes con los ids de affectedWorkouts.',
       ...(HEALTH_KINDS.has(args.kind)
-        ? { safety: 'Rebufo no es un servicio médico: si el dolor es intenso, empeora o no mejora en 7-10 días, consulta a un médico o fisioterapeuta.' }
+        ? { safety: 'Road to Ironman no es un servicio médico: si el dolor es intenso, empeora o no mejora en 7-10 días, consulta a un médico o fisioterapeuta.' }
         : {}),
     });
   },

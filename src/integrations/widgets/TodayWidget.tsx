@@ -74,7 +74,7 @@ export interface TodayWidgetProps {
   weekPercent: number;
   /** "3/6 sesiones · 4h 10' de 6h" */
   weekSummary: string;
-  /** "rebufo://" (dev builds: "rebufo-dev://"). */
+  /** "roadtoironman://" — see `linkBaseFor` in props.ts. */
   linkBase: string;
 }
 
@@ -282,6 +282,6 @@ export default createWidget<TodayWidgetProps>('TodayWidget', TodayWidget, {
   allDoneToday: false,
   week: [],
   weekPercent: 0,
-  weekSummary: 'Abre Rebufo para cargar tu semana',
-  linkBase: 'rebufo://',
+  weekSummary: 'Abre Road to Ironman para cargar tu semana',
+  linkBase: 'roadtoironman://',
 });

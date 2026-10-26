@@ -1,9 +1,9 @@
--- Rebufo — local development seed (`npx supabase db reset`). NEVER run on production.
+-- Road to Ironman — local development seed (`npx supabase db reset`). NEVER run on production.
 --
 -- Two flatmates, accepted friends, with races, two weeks of workouts, busy blocks (clases),
 -- a pádel imprevisto, check-ins/metrics and a pending quedada invite from Álex to Diego.
 -- Sign in locally with email OTP (codes appear in http://127.0.0.1:54324):
---   diego@rebufo.test · alex@rebufo.test
+--   diego@roadtoironman.test · alex@roadtoironman.test
 -- Dates are relative to the current week so the seed never goes stale.
 
 -- ---------------------------------------------------------------------------
@@ -15,20 +15,20 @@ insert into auth.users (
   confirmation_token, recovery_token, email_change_token_new, email_change
 ) values
   ('00000000-0000-0000-0000-000000000000', '11111111-1111-4111-8111-111111111111',
-   'authenticated', 'authenticated', 'diego@rebufo.test', '', now(),
+   'authenticated', 'authenticated', 'diego@roadtoironman.test', '', now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Diego"}', now(), now(), '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '22222222-2222-4222-8222-222222222222',
-   'authenticated', 'authenticated', 'alex@rebufo.test', '', now(),
+   'authenticated', 'authenticated', 'alex@roadtoironman.test', '', now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Álex"}', now(), now(), '', '', '', '')
 on conflict (id) do nothing;
 
 insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
 values
   ('11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111',
-   '{"sub":"11111111-1111-4111-8111-111111111111","email":"diego@rebufo.test","email_verified":true}',
+   '{"sub":"11111111-1111-4111-8111-111111111111","email":"diego@roadtoironman.test","email_verified":true}',
    'email', now(), now(), now()),
   ('22222222-2222-4222-8222-222222222222', '22222222-2222-4222-8222-222222222222',
-   '{"sub":"22222222-2222-4222-8222-222222222222","email":"alex@rebufo.test","email_verified":true}',
+   '{"sub":"22222222-2222-4222-8222-222222222222","email":"alex@roadtoironman.test","email_verified":true}',
    'email', now(), now(), now())
 on conflict (provider_id, provider) do nothing;
 

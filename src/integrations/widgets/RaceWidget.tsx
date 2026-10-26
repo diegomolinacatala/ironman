@@ -128,5 +128,5 @@ export default createWidget<RaceWidgetProps>('RaceWidget', RaceWidget, {
   distanceLabel: '',
   weekPercent: 0,
   weekLabel: '',
-  linkBase: 'rebufo://',
+  linkBase: 'roadtoironman://',
 });

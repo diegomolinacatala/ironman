@@ -11,7 +11,7 @@
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const CIPHER_VERSION = 'v1';
-const HKDF_SALT = 'rebufo.integration-credentials.v1';
+const HKDF_SALT = 'rti.integration-credentials.v1';
 
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');

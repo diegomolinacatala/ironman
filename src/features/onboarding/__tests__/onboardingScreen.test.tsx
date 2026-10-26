@@ -71,7 +71,7 @@ describe('onboarding', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Saltar' }));
     expect(screen.getByText('Tu próxima carrera')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Saltar' }));
-    expect(screen.getByText('Que Rebufo trabaje por ti')).toBeTruthy();
+    expect(screen.getByText('Que Road to Ironman trabaje por ti')).toBeTruthy();
     await pressNext();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Empezar a entrenar' }));

@@ -5,10 +5,11 @@
  */
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 import { StorageKeys } from '@/lib/storage';
 
-import { cancelLocalNotifications, registerForPush, rescheduleLocalNotifications } from '../notifications';
+import { apnsTokenFrom, cancelLocalNotifications, registerForPush, rescheduleLocalNotifications } from '../notifications';
 import { createSerialQueue } from '../notifications/serial';
 import { prefs, workout } from './fixtures';
 
@@ -21,9 +22,13 @@ interface Scheduled {
   content: { data: Record<string, unknown> };
 }
 
+const APNS_TOKEN = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
 let mockStore: Scheduled[] = [];
 let mockPermission: () => Promise<{ status: string }> = async () => ({ status: 'granted' });
+let mockIsDevice = true;
 const mockDismissAll = jest.fn(async () => undefined);
+const mockDeviceToken = jest.fn(async (): Promise<{ type: string; data: unknown }> => ({ type: 'ios', data: APNS_TOKEN }));
 
 jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { DATE: 'date', DAILY: 'daily' },
@@ -38,12 +43,16 @@ jest.mock('expo-notifications', () => ({
   getPermissionsAsync: () => mockPermission(),
   requestPermissionsAsync: async () => ({ status: 'granted' }),
   dismissAllNotificationsAsync: () => mockDismissAll(),
-  getExpoPushTokenAsync: async () => ({ data: 'ExponentPushToken[abc]' }),
+  getDevicePushTokenAsync: () => mockDeviceToken(),
   setNotificationHandler: () => undefined,
   setNotificationCategoryAsync: async () => undefined,
 }));
-jest.mock('expo-device', () => ({ isDevice: true }));
-jest.mock('expo-constants', () => ({ __esModule: true, default: { easConfig: { projectId: 'project-1' }, expoConfig: {} } }));
+jest.mock('expo-device', () => ({
+  __esModule: true,
+  get isDevice() {
+    return mockIsDevice;
+  },
+}));
 
 const TODAY = '2026-10-26';
 
@@ -68,7 +77,9 @@ function profileInput() {
 beforeEach(async () => {
   mockStore = [];
   mockPermission = async () => ({ status: 'granted' });
+  mockIsDevice = true;
   jest.clearAllMocks();
+  jest.restoreAllMocks();
   await AsyncStorage.clear();
 });
 
@@ -138,13 +149,55 @@ describe('registerForPush', () => {
       }),
     };
     expect(await registerForPush(repo as never)).toBeNull();
-    expect(await AsyncStorage.getItem(StorageKeys.pushToken)).toBe(JSON.stringify('ExponentPushToken[abc]'));
+    expect(await AsyncStorage.getItem(StorageKeys.pushToken)).toBe(JSON.stringify(APNS_TOKEN));
   });
 
-  test('registers the token server-side and keeps it in StorageKeys.pushToken', async () => {
+  test('registers the raw APNs device token server-side and keeps it in StorageKeys.pushToken', async () => {
     const repo = { registerPushToken: jest.fn(async (_token: string, _platform: string) => undefined) };
-    expect(await registerForPush(repo as never)).toBe('ExponentPushToken[abc]');
-    expect(repo.registerPushToken).toHaveBeenCalledWith('ExponentPushToken[abc]', 'ios');
-    expect(await AsyncStorage.getItem(StorageKeys.pushToken)).toBe(JSON.stringify('ExponentPushToken[abc]'));
+    expect(await registerForPush(repo as never)).toBe(APNS_TOKEN);
+    expect(mockDeviceToken).toHaveBeenCalledTimes(1);
+    expect(repo.registerPushToken).toHaveBeenCalledWith(APNS_TOKEN, 'ios');
+    expect(await AsyncStorage.getItem(StorageKeys.pushToken)).toBe(JSON.stringify(APNS_TOKEN));
+  });
+
+  test('skips simulators without asking for a token', async () => {
+    mockIsDevice = false;
+    const repo = { registerPushToken: jest.fn(async () => undefined) };
+    expect(await registerForPush(repo as never)).toBeNull();
+    expect(mockDeviceToken).not.toHaveBeenCalled();
+    expect(repo.registerPushToken).not.toHaveBeenCalled();
+  });
+
+  test.each(['android', 'web'] as const)('skips %s without asking for a token', async (os) => {
+    jest.replaceProperty(Platform, 'OS', os);
+    const repo = { registerPushToken: jest.fn(async () => undefined) };
+    expect(await registerForPush(repo as never)).toBeNull();
+    expect(mockDeviceToken).not.toHaveBeenCalled();
+    expect(repo.registerPushToken).not.toHaveBeenCalled();
+  });
+
+  test('does not register when permission is denied', async () => {
+    mockPermission = async () => ({ status: 'denied' });
+    const repo = { registerPushToken: jest.fn(async () => undefined) };
+    expect(await registerForPush(repo as never)).toBeNull();
+    expect(mockDeviceToken).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(StorageKeys.pushToken)).toBeNull();
+  });
+
+  test('ignores an unexpected token without storing or registering it', async () => {
+    mockDeviceToken.mockResolvedValueOnce({ type: 'android', data: 'fcm-token' });
+    const repo = { registerPushToken: jest.fn(async () => undefined) };
+    expect(await registerForPush(repo as never)).toBeNull();
+    expect(repo.registerPushToken).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(StorageKeys.pushToken)).toBeNull();
+  });
+});
+
+describe('apnsTokenFrom', () => {
+  test('accepts iOS hex tokens (normalised to lower case) and rejects anything else', () => {
+    expect(apnsTokenFrom({ type: 'ios', data: ` ${APNS_TOKEN.toUpperCase()} ` })).toBe(APNS_TOKEN);
+    expect(apnsTokenFrom({ type: 'ios', data: 'ExponentPushToken[abc]' })).toBeNull();
+    expect(apnsTokenFrom({ type: 'ios', data: '' })).toBeNull();
+    expect(apnsTokenFrom({ type: 'android', data: APNS_TOKEN })).toBeNull();
   });
 });

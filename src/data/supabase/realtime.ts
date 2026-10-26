@@ -55,7 +55,7 @@ export function subscribeRealtime(ctx: SupabaseCtx, onChange: (topic: ChangeTopi
     .userId()
     .then((me) => {
       if (closed) return;
-      const next = ctx.client.channel(`rebufo:${me}:${Date.now().toString(36)}`);
+      const next = ctx.client.channel(`rti:${me}:${Date.now().toString(36)}`);
       Object.keys(OWN_TABLE_TOPICS).forEach((table) => {
         next.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${me}` }, (payload) =>
           emit(table, payload),

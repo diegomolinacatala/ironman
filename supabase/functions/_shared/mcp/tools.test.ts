@@ -4,9 +4,9 @@ import { silentLogger } from '../log.ts';
 import { emptyState, fakeStore, fixedNow, FRIEND, OTHER_USER, USER, workout } from '../testing/fakes.ts';
 import type { FakeState } from '../testing/fakes.ts';
 import type { ToolResult } from './tool.ts';
-import { createRebufoRegistry } from './tools/index.ts';
+import { createToolRegistry } from './tools/index.ts';
 
-const registry = createRebufoRegistry();
+const registry = createToolRegistry();
 
 async function run(state: FakeState, name: string, args: unknown, applyFailed = false): Promise<ToolResult> {
   const tool = registry.get(name);

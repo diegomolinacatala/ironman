@@ -3,6 +3,8 @@
  */
 import type { ProposalKind, ProposalSource } from '@/domain/types';
 
+import { isAiCoachEnabled } from './aiCoachFlag';
+
 export { proposalStatusLabel } from '@/domain/labels';
 
 export function proposalSourceLabel(source: ProposalSource): string {
@@ -45,6 +47,7 @@ export type EngineConsent = 'not_needed' | 'needed' | 'given' | 'declined';
 /**
  * Which engine the coach screen advertises.
  * - demo backend → rules engine, always.
+ * - AI coach switched off (EXPO_PUBLIC_AI_COACH) → rules engine, always.
  * - Supabase without permission for the AI → rules (or a heads-up that we will ask).
  * - Supabase → Claude, unless the last answer fell back to the rules.
  */
@@ -52,12 +55,20 @@ export function engineInfo(
   mode: 'supabase' | 'demo',
   lastEngine: EngineKind | null,
   consent: EngineConsent = 'given',
+  aiEnabled: boolean = isAiCoachEnabled(),
 ): EngineInfo {
   if (mode === 'demo') {
     return {
       kind: 'rules',
       label: 'Reglas',
       explanation: 'Modo demo: el motor de reglas planifica en tu móvil, sin conexión ni IA.',
+    };
+  }
+  if (!aiEnabled) {
+    return {
+      kind: 'rules',
+      label: 'Reglas',
+      explanation: 'Tu coach planifica con reglas de entrenamiento: tus horas, tu carga y tu fase de temporada.',
     };
   }
   if (consent === 'declined') {

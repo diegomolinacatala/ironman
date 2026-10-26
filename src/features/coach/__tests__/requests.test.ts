@@ -1,7 +1,13 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 
 import { engineInfo, proposalKindLabel, proposalSourceLabel, proposalStatusLabel, thinkingLines, changeCountLabel } from '../labels';
 import { MAX_MESSAGE_LENGTH, QUICK_ACTIONS, chatRequest, quickActionRequest, requestFromParams, requestKey } from '../requests';
+
+// EXPO_PUBLIC_AI_COACH: these engine/consent tests run with the in-app AI coach switched on.
+jest.mock('@/lib/env', () => {
+  const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
+  return { ...actual, env: { ...actual.env, aiCoachEnabled: true } };
+});
 
 // 2026-10-25 is a Sunday: current week starts Monday 2026-10-19.
 const TODAY = '2026-10-25';
@@ -79,6 +85,16 @@ describe('labels', () => {
     expect(engineInfo('supabase', null)).toMatchObject({ kind: 'ai', label: 'IA · Claude' });
     expect(engineInfo('supabase', 'rules').kind).toBe('rules');
     expect(engineInfo('supabase', 'ai').kind).toBe('ai');
+  });
+
+  test('with the AI coach switched off the badge is always the rules engine, without Claude or Anthropic', () => {
+    for (const consent of ['needed', 'given', 'declined', 'not_needed'] as const) {
+      for (const last of [null, 'ai', 'rules'] as const) {
+        const info = engineInfo('supabase', last, consent, false);
+        expect(info).toMatchObject({ kind: 'rules', label: 'Reglas' });
+        expect(info.explanation).not.toMatch(/Anthropic|Claude|IA/);
+      }
+    }
   });
 
   test('proposal labels', () => {

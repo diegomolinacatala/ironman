@@ -76,7 +76,7 @@ function sportsOverlap(a: Sport, b: Sport): boolean {
 /**
  * True when `candidate` is already in the plan: same external id, or a completed
  * workout (e.g. synced from Garmin) on the same day, same sport, similar duration
- * and start time. Prevents Garmin → Health → Rebufo double imports.
+ * and start time. Prevents Garmin → Health → Road to Ironman double imports.
  * A still-planned 'healthkit:<uuid>' row is NOT a duplicate but an orphan to finish.
  */
 export function isLikelyDuplicate(candidate: ImportCandidate, existing: readonly Workout[]): boolean {

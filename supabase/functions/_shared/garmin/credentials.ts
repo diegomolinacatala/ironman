@@ -35,7 +35,7 @@ export interface CredentialStore {
 }
 
 export const EXPIRED_MESSAGE =
-  'Tu clave de Garmin ha caducado o se ha revocado. Crea una nueva en Garmin Connect (Ajustes › Personal API) y vuelve a conectarla en Rebufo.';
+  'Tu clave de Garmin ha caducado o se ha revocado. Crea una nueva en Garmin Connect (Ajustes › Personal API) y vuelve a conectarla en Road to Ironman.';
 
 export const cipherContext = (userId: UUID): string => `${PROVIDER}:${userId}`;
 

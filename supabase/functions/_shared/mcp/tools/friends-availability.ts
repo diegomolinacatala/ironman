@@ -93,7 +93,7 @@ export const getFriendsAvailabilityTool: RegisteredTool = defineTool({
       weekEnd: to,
       timezone: tz,
       friends: blocks,
-      note: friends.length === 0 ? 'El usuario aún no tiene amigos aceptados en Rebufo.' : undefined,
+      note: friends.length === 0 ? 'El usuario aún no tiene amigos aceptados en Road to Ironman.' : undefined,
     });
   },
 });

@@ -70,7 +70,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
   {
     id: 'permissions',
     overline: 'Permisos',
-    title: 'Que Rebufo trabaje por ti',
+    title: 'Que Road to Ironman trabaje por ti',
     subtitle: 'Todo es opcional y puedes activarlo después en Yo → Conexiones.',
     optional: true,
   },

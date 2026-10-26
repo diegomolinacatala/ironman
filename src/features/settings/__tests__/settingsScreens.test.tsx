@@ -12,6 +12,8 @@ import type { CreatedToken, PersonalToken, Profile } from '@/domain/types';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockState: { mode: 'demo' | 'supabase'; tokens: PersonalToken[] } = { mode: 'supabase', tokens: [] };
+/** EXPO_PUBLIC_AI_COACH: off by default, as in the app. */
+const mockEnvFlags = { aiCoachEnabled: false };
 
 const mockProfile: Profile = {
   id: 'u1',
@@ -71,6 +73,14 @@ jest.mock(
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetString(text) }));
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn(async () => ({ type: 'opened' })) }));
+jest.mock('@/lib/env', () => {
+  const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
+  // A lazy getter (not a spread, which would read it at import time) so each test can flip the flag.
+  return Object.defineProperty({ ...actual }, 'env', {
+    enumerable: true,
+    get: () => ({ ...actual.env, aiCoachEnabled: mockEnvFlags.aiCoachEnabled }),
+  });
+});
 
 jest.mock('@/data/context', () => ({
   useAuth: () => ({ session: { userId: 'u1', email: null }, isLoading: false, auth: {}, mode: mockState.mode }),
@@ -124,6 +134,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockState.mode = 'supabase';
   mockState.tokens = [];
+  mockEnvFlags.aiCoachEnabled = false;
 });
 
 describe('Conecta tu Claude', () => {
@@ -142,6 +153,24 @@ describe('Conecta tu Claude', () => {
     await render(<ConnectClaudeScreen />);
     expect(screen.getByText(/Conectar tu Claude necesita el servidor/)).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Revocar' })).toHaveLength(1);
+  });
+
+  test('with the AI coach off there is no comparison with it and no Anthropic consent link', async () => {
+    await render(<ConnectClaudeScreen />);
+    expect(screen.getByText(/ponle de nombre Road to Ironman/)).toBeTruthy();
+    expect(screen.queryByText('¿Y el Coach IA de la app?')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abrir el Coach IA' })).toBeNull();
+    expect(screen.queryByText(/Coach IA/)).toBeNull();
+    expect(screen.queryByText(/Anthropic/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: /Privacidad/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/privacy');
+  });
+
+  test('with the AI coach on it still explains the difference', async () => {
+    mockEnvFlags.aiCoachEnabled = true;
+    await render(<ConnectClaudeScreen />);
+    expect(screen.getByText('¿Y el Coach IA de la app?')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Privacidad y Coach IA/ })).toBeTruthy();
   });
 });
 
@@ -172,10 +201,18 @@ describe('Conexiones', () => {
 
   test('calendar copy is accurate and the privacy summary is one tap away', async () => {
     await render(<IntegrationsScreen />);
-    expect(screen.getByText(/el Coach IA solo recibe las horas ocupadas, nunca los títulos/)).toBeTruthy();
+    expect(screen.getByText(/tu plan solo usa las horas ocupadas, nunca los títulos/)).toBeTruthy();
     expect(screen.queryByText(/nunca salen de tu cuenta/)).toBeNull();
+    expect(screen.queryByText(/Coach IA|Anthropic/)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: /Cómo usamos estos datos/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/privacy');
+  });
+
+  test('with the AI coach on, the calendar and Salud copy say what the Coach IA receives', async () => {
+    mockEnvFlags.aiCoachEnabled = true;
+    await render(<IntegrationsScreen />);
+    expect(screen.getByText(/el Coach IA solo recibe las horas ocupadas, nunca los títulos/)).toBeTruthy();
+    expect(screen.getByText(/se envía a Anthropic para planificar/)).toBeTruthy();
   });
 
   test('Garmin is disabled in demo mode', async () => {

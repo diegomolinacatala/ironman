@@ -1,12 +1,12 @@
 /**
  * Invisible component mounted once in the root layout. When the user is signed
  * in and onboarded (native only):
- * - registers the Expo push token (once per signed-in account),
+ * - registers the APNs device push token (once per signed-in account),
  * - routes notification taps to `data.url` (also on cold start),
  * - on mount / foreground (throttled 10 min): Apple Salud + calendar syncs,
  *   only for what THIS account enabled on this device,
  * - keeps local notifications and widgets in sync with the plan.
- * Widget deep links (rebufo://workout/<id>, rebufo://today) are handled by
+ * Widget deep links (roadtoironman://workout/<id>, roadtoironman://today) are handled by
  * Expo Router itself. Whenever there is no session (sign-out, deletion, revoked
  * session at launch) it clears local notifications and widgets.
  */

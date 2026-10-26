@@ -1,5 +1,5 @@
 /**
- * Rebufo design tokens — "race-day hi-vis on ink & paper".
+ * Road to Ironman design tokens — "race-day hi-vis on ink & paper".
  *
  * - Light mode: warm paper background, ink text, hi-vis lime for the primary
  *   action and "today"/"together" highlights.

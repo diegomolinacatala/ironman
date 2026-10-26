@@ -1,4 +1,4 @@
--- Rebufo — AI coach: explicit consent + atomic daily rate limit.
+-- Road to Ironman — AI coach: explicit consent + atomic daily rate limit.
 
 -- ---------------------------------------------------------------------------
 -- AI consent. Null = the user has not agreed (or withdrew) to send their data to the AI provider

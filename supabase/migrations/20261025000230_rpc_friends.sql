@@ -1,4 +1,4 @@
--- Rebufo — friends, profile search and the masked friend calendar.
+-- Road to Ironman — friends, profile search and the masked friend calendar.
 
 -- ---------------------------------------------------------------------------
 -- Usernames

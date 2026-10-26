@@ -1,4 +1,4 @@
--- Rebufo — private helpers, generic triggers and the sign-up hook.
+-- Road to Ironman — private helpers, generic triggers and the sign-up hook.
 --
 -- Conventions for every function in this project:
 -- * `security definer` functions live in schema `private` (not exposed by the Data API) or are

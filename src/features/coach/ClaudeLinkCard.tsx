@@ -11,7 +11,7 @@ export function ClaudeLinkCard() {
       variant="flat"
       padding="md"
       onPress={() => router.push('/settings/claude')}
-      accessibilityLabel="Usa tu propio Claude. Conecta tu Claude, que ya lee tu Garmin, para que planifique dentro de Rebufo.">
+      accessibilityLabel="Usa tu propio Claude. Conecta tu Claude, que ya lee tu Garmin, para que planifique en Road to Ironman.">
       <View style={styles.row}>
         <View style={[styles.glyph, { backgroundColor: colors.surfaceAlt }]}>
           <Icon name="link" size={18} color={colors.text} />

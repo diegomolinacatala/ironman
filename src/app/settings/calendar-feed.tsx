@@ -48,7 +48,7 @@ export default function CalendarFeedScreen() {
         ))}
       </View>
       {mode === 'demo' ? (
-        <DemoBanner message="La suscripción necesita el servidor de Rebufo (Supabase): en la demo la URL generada es de ejemplo y no funcionará." />
+        <DemoBanner message="La suscripción necesita el servidor de Road to Ironman (Supabase): en la demo la URL generada es de ejemplo y no funcionará." />
       ) : null}
       <StepCard number={1} title="Genera tu enlace" done={Boolean(webcal)}>
         {webcal ? (
@@ -74,7 +74,7 @@ export default function CalendarFeedScreen() {
       </StepCard>
       <StepCard number={2} title="Suscríbete">
         <Text variant="callout" color="textMuted">
-          Pulsa “Añadir a Calendario” y confirma “Suscribirse”. Es de solo lectura: los cambios se hacen en Rebufo.
+          Pulsa “Añadir a Calendario” y confirma “Suscribirse”. Es de solo lectura: los cambios se hacen en Road to Ironman.
         </Text>
       </StepCard>
       <SectionHeader title="Enlaces activos" />

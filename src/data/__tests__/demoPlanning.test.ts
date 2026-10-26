@@ -87,7 +87,7 @@ describe('demo wellness & nutrition', () => {
 
   it('registers push tokens and updates proposal status', async () => {
     const repo = await signedInRepo();
-    await repo.registerPushToken('ExponentPushToken[demo]', 'ios');
+    await repo.registerPushToken('deadbeef00', 'ios');
     expect((await repo.store.read()).pushTokens).toHaveLength(1);
     const [proposal] = await repo.listProposals('pending');
     await repo.setProposalStatus(proposal?.id ?? '', 'discarded');

@@ -5,12 +5,23 @@ import type { CoachRequest, PlanProposal } from '@/domain/types';
 
 import type { SupabaseCtx } from '../supabase/base';
 import { COACH_NOTICES, createCoachRequester, parseJobId } from '../supabase/coach';
+import { createSupabaseRepository } from '../supabase/SupabaseRepository';
 import type { RulesCoachRepo } from '../demo/rulesCoach';
+import { fakeClient } from './supabaseFake';
 
 const mockRunRulesCoach = jest.fn();
 jest.mock('../demo/rulesCoach', () => ({
   runRulesCoach: (...args: unknown[]) => mockRunRulesCoach(...args),
 }));
+jest.mock('@react-native-async-storage/async-storage', () =>
+  jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+// `env` is read on every request, so each test can flip the AI coach flag.
+jest.mock('@/lib/env', () => {
+  const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
+  return { ...actual, env: { ...actual.env, aiCoachEnabled: true } };
+});
+const mockEnv = jest.requireMock<{ env: { aiCoachEnabled: boolean } }>('@/lib/env').env;
 
 // Repository failures are logged as warnings by design; keep test output clean.
 beforeAll(() => {
@@ -68,6 +79,7 @@ const repo = { getProposal: jest.fn(async () => PROPOSAL) } as unknown as RulesC
 const fastDeps = { repo, today: () => '2026-10-25', sleep: async () => undefined, pollIntervalMs: 2000, maxWaitMs: 6000 };
 
 beforeEach(() => {
+  mockEnv.aiCoachEnabled = true;
   mockRunRulesCoach.mockReset();
   mockRunRulesCoach.mockImplementation(async (_repo: unknown, _req: unknown, opts: { notice?: string }) => ({
     reply: `${opts.notice ?? ''} reglas`,
@@ -76,7 +88,34 @@ beforeEach(() => {
   }));
 });
 
-describe('Supabase requestCoach', () => {
+describe('Supabase requestCoach with the AI coach off (default)', () => {
+  beforeEach(() => {
+    mockEnv.aiCoachEnabled = false;
+  });
+
+  it('answers with the rules engine without invoking the coach function or polling jobs', async () => {
+    const ctx = fakeCtx({ data: { jobId: 'job' }, error: null }, [{ status: 'done', engine: 'ai' }]);
+    const response = await createCoachRequester({ ...fastDeps, ctx })(REQUEST);
+    expect(response.engine).toBe('rules');
+    expect(response.reply).toBe(' reglas');
+    expect(mockRunRulesCoach).toHaveBeenCalledWith(repo, REQUEST, { today: '2026-10-25' });
+    expect(ctx.client.functions.invoke).not.toHaveBeenCalled();
+    expect(ctx.client.from).not.toHaveBeenCalled();
+  });
+
+  it('SupabaseRepository.requestCoach never calls an edge function nor coach_jobs', async () => {
+    const { client, calls } = fakeClient({});
+    const repository = createSupabaseRepository({ client, now: () => new Date('2026-10-25T10:00:00.000Z') });
+    const chat: CoachRequest = { mode: 'chat', weekStart: '2026-10-26', message: 'Me duele la rodilla' };
+    const response = await repository.requestCoach(chat);
+    expect(response.engine).toBe('rules');
+    expect(client.functions.invoke).not.toHaveBeenCalled();
+    expect(calls.some((call) => call.target === 'coach_jobs')).toBe(false);
+    expect(mockRunRulesCoach).toHaveBeenCalledWith(expect.anything(), chat, { today: '2026-10-25' });
+  });
+});
+
+describe('Supabase requestCoach with the AI coach on', () => {
   it('polls the job and returns the AI proposal', async () => {
     const ctx = fakeCtx({ data: { jobId: 'job' }, error: null }, [
       { status: 'running' },

@@ -1,7 +1,7 @@
--- Rebufo — push token cleanup on sign-out + friend request deep link.
+-- Road to Ironman — push token cleanup on sign-out + friend request deep link.
 
 -- ---------------------------------------------------------------------------
--- Removes this device's Expo push token when it belongs to the caller (sign-out / account
+-- Removes this device's APNs token when it belongs to the caller (sign-out / account
 -- deletion), so the signed-out account's pushes stop reaching the device. A token registered
 -- by someone else is left untouched.
 -- ---------------------------------------------------------------------------

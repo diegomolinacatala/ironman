@@ -109,11 +109,11 @@ describe('Supabase inbox & social RPCs', () => {
     await repo.markNotificationsRead('all');
     await repo.markNotificationsRead(['a']);
     await repo.markNotificationsRead([]);
-    await repo.registerPushToken('ExponentPushToken[x]', 'ios');
+    await repo.registerPushToken('deadbeef02', 'ios');
     expect(calls.map((c) => [c.target, c.args[0]])).toEqual([
       ['rpc:mark_notifications_read', { p_ids: null }],
       ['rpc:mark_notifications_read', { p_ids: ['a'] }],
-      ['rpc:register_push_token', { p_token: 'ExponentPushToken[x]', p_platform: 'ios' }],
+      ['rpc:register_push_token', { p_token: 'deadbeef02', p_platform: 'ios' }],
     ]);
   });
 

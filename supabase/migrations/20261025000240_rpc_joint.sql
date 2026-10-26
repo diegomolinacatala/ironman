@@ -1,4 +1,4 @@
--- Rebufo — joint sessions ("quedadas"): propose / respond / cancel / list.
+-- Road to Ironman — joint sessions ("quedadas"): propose / respond / cancel / list.
 -- Every participant who accepted gets a linked workout (workouts.joint_session_id, source 'joint'),
 -- so quedadas show up in both calendars and re-planners treat them as fixed.
 

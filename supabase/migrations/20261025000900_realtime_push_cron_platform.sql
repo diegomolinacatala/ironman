@@ -1,4 +1,4 @@
--- Rebufo — Supabase platform wiring (skipped by the PGlite tests).
+-- Road to Ironman — Supabase platform wiring (skipped by the PGlite tests).
 --
 -- Every block checks that what it needs exists; otherwise it only raises a NOTICE, so
 -- `supabase db push` never fails on a project where an extension is not enabled yet.
@@ -121,12 +121,12 @@ begin
     return 'pg_cron no está activado: actívalo y ejecuta de nuevo select private.schedule_platform_jobs();';
   end if;
   execute $q$select cron.schedule(
-    'rebufo-garmin-sync',
+    'rti-garmin-sync',
     '30 5,8 * * *',
     $cmd$select private.invoke_edge_function('garmin', '{"action":"sync_all"}'::jsonb)$cmd$
   )$q$;
   execute $q$select cron.schedule(
-    'rebufo-push-sweep',
+    'rti-push-sweep',
     '*/5 * * * *',
     $cmd$select private.invoke_edge_function('push-dispatch', '{"action":"sweep"}'::jsonb)$cmd$
   )$q$;

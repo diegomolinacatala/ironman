@@ -4,29 +4,21 @@ import { base64UrlDecode } from '../crypto.ts';
 import { silentLogger } from '../log.ts';
 import { createRateLimiter } from '../mcp/token-gate.ts';
 import { USER } from '../testing/fakes.ts';
-import { APPLE_AUDIENCE, appleConfigFromEnv, clientSecretClaims, CLIENT_SECRET_TTL_SEC, pemToDer, signClientSecret } from './client-secret.ts';
+import { decodeJwtPart as decodePart, generateTestP8 as testKey, verifyEs256 } from '../testing/p8.ts';
+import { APPLE_AUDIENCE, appleConfigFromEnv, clientSecretClaims, CLIENT_SECRET_TTL_SEC, signClientSecret } from './client-secret.ts';
 import type { AppleConfig } from './client-secret.ts';
 import { handleAppleRevokeHttp } from './http.ts';
 import type { AppleRevokeDeps } from './http.ts';
+import { pemToDer } from './jwt.ts';
 import { APPLE_REVOKE_URL, APPLE_TOKEN_URL, revocableToken, revokeWithAuthorizationCode } from './revoke.ts';
 
-const decoder = new TextDecoder();
 const NOW_SEC = 1_793_000_000;
-
-async function testKey(): Promise<{ pem: string; publicKey: CryptoKey }> {
-  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  const der = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
-  const b64 = btoa(String.fromCharCode(...der));
-  const lines = b64.match(/.{1,64}/g) ?? [];
-  return { pem: `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`, publicKey: pair.publicKey };
-}
+const BUNDLE_ID = 'io.github.diegomolinacatala.ironman';
 
 async function config(): Promise<{ config: AppleConfig; publicKey: CryptoKey }> {
   const { pem, publicKey } = await testKey();
-  return { config: { teamId: 'TEAM123456', keyId: 'KEY1234567', privateKey: pem, clientId: 'com.diegomolinacatala.rebufo' }, publicKey };
+  return { config: { teamId: 'TEAM123456', keyId: 'KEY1234567', privateKey: pem, clientId: BUNDLE_ID }, publicKey };
 }
-
-const decodePart = (part: string): Record<string, unknown> => JSON.parse(decoder.decode(base64UrlDecode(part))) as Record<string, unknown>;
 
 test('client secret claims follow Apple rules (iss team, sub bundle id, aud appleid, short exp)', () => {
   const claims = clientSecretClaims({ teamId: 'TEAM123456', clientId: 'com.x.app' }, NOW_SEC + 0.7);
@@ -39,11 +31,9 @@ test('signClientSecret produces an ES256 JWT verifiable with the public key', as
   const jwt = await signClientSecret(cfg, NOW_SEC);
   const [header, payload, signature] = jwt.split('.');
   assert.deepEqual(decodePart(header), { alg: 'ES256', kid: 'KEY1234567' });
-  assert.equal(decodePart(payload).sub, 'com.diegomolinacatala.rebufo');
-  const raw = base64UrlDecode(signature);
-  assert.equal(raw.length, 64, 'raw r||s, not DER');
-  const valid = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, publicKey, raw, new TextEncoder().encode(`${header}.${payload}`));
-  assert.equal(valid, true);
+  assert.equal(decodePart(payload).sub, BUNDLE_ID);
+  assert.equal(base64UrlDecode(signature).length, 64, 'raw r||s, not DER');
+  assert.equal(await verifyEs256(jwt, publicKey), true);
 });
 
 test('the .p8 key is accepted with escaped newlines (as pasted into secrets)', async () => {
@@ -74,7 +64,7 @@ test('revokeWithAuthorizationCode exchanges the code and revokes the refresh tok
   assert.deepEqual(seen.map((s) => s.url), [APPLE_TOKEN_URL, APPLE_REVOKE_URL]);
   assert.equal(seen[0].form.get('grant_type'), 'authorization_code');
   assert.equal(seen[0].form.get('code'), 'c0de');
-  assert.equal(seen[0].form.get('client_id'), 'com.diegomolinacatala.rebufo');
+  assert.equal(seen[0].form.get('client_id'), BUNDLE_ID);
   assert.equal(seen[1].form.get('token'), 'rt');
   assert.equal(seen[1].form.get('token_type_hint'), 'refresh_token');
   assert.equal(seen[1].form.get('client_secret')?.split('.').length, 3);

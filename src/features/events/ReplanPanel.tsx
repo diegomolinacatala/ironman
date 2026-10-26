@@ -5,6 +5,7 @@ import { formatDayLabel, formatTime, todayISO } from '@/domain/dates';
 import type { LifeEvent } from '@/domain/types';
 import { Button, Card, Icon, Text, space, useTheme } from '@/ui';
 
+import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { closeModal } from '@/features/workouts/ModalClose';
 
 import { lifeEventIcon } from './kinds';
@@ -65,7 +66,7 @@ export function ReplanPanel({ event }: { event: LifeEvent }) {
         accessibilityHint="Propuesta instantánea con el motor de reglas, sin conexión"
       />
       <Button
-        label="Pedir al coach IA"
+        label={isAiCoachEnabled() ? 'Pedir al coach IA' : 'Pedir al coach'}
         icon="coach"
         variant="secondary"
         size="lg"

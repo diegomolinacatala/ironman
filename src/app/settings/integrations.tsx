@@ -1,3 +1,4 @@
+import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { CalendarCard } from '@/features/settings/CalendarCard';
 import { GarminCard } from '@/features/settings/GarminCard';
 import { HealthCard } from '@/features/settings/HealthCard';
@@ -16,7 +17,10 @@ export default function IntegrationsScreen() {
         <GarminCard />
         <HealthCard />
         <CalendarCard />
-        <PrivacyLinkRow title="Cómo usamos estos datos" subtitle="Quién los ve y qué recibe el Coach IA" />
+        <PrivacyLinkRow
+          title="Cómo usamos estos datos"
+          subtitle={isAiCoachEnabled() ? 'Quién los ve y qué recibe el Coach IA' : 'Quién los ve y para qué los usamos'}
+        />
       </Screen>
     </KeyboardAvoider>
   );

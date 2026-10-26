@@ -1,6 +1,6 @@
-# Rebufo — Architecture & build contract
+# Road to Ironman — Architecture & build contract
 
-> "Ir a rebufo": training in the slipstream of a friend.
+> Formerly "Rebufo" (renamed 2026-10-26; see §13).
 > iOS app (Expo SDK 58 / React Native 0.88 / React 19.3, Expo Router) + Supabase backend.
 > UI language: **Spanish (Spain)**. Code, comments, identifiers: English.
 
@@ -31,7 +31,8 @@ Two flatmates (and later a few friends) training for triathlon:
    push (invites, proposals ready, friend accepted…), iOS widgets (expo-widgets), ICS calendar feed.
 
 Feature names in UI: **Quedadas** (joint sessions), **Huecos** (common free slots), **Imprevistos**
-(life events). Never use "Ironman"/"70.3" (trademarks): say "Distancia completa", "Media distancia".
+(life events). Race distances: "Distancia completa", "Media distancia" (never "70.3"); "Ironman" only
+in the app name.
 
 ---
 
@@ -228,7 +229,7 @@ findOpportunities(input: { range: DateRange; myWorkouts: Workout[]; friendItems:
   Key = `env.supabaseKey` (publishable). Edge functions called with `supabase.functions.invoke`.
 - `supabase/mappers.ts`: snake_case rows ↔ domain types (pure, unit-tested).
 - `SupabaseRepository` implements every method using tables (RLS) and the RPCs in §7.
-  `requestCoach`: invoke `coach` → `{ jobId }` (HTTP 202) → poll `coach_jobs` row every 2 s
+  `requestCoach` (only when `env.aiCoachEnabled`, otherwise straight to the rules engine — §13): invoke `coach` → `{ jobId }` (HTTP 202) → poll `coach_jobs` row every 2 s
   (max 170 s) → load proposal → `CoachResponse`. If the function answers 503 `ai_unavailable`
   (no API key) or fails, fall back to the domain rules engine locally, store the proposal with
   `createProposal({ source: 'rules' })` and return `engine: 'rules'`.
@@ -406,7 +407,7 @@ your `verify_jwt` needs in your report (expected: coach/garmin = true … see be
 | `coach` | user JWT (`verify_jwt=true`) | `POST CoachRequest` → `202 {jobId}`; inserts `coach_jobs`, runs Claude in `EdgeRuntime.waitUntil`, writes `plan_proposals` (source `ai_coach`) + job result. `503 {error:'ai_unavailable'}` when `ANTHROPIC_API_KEY` missing. Rate limit 30 jobs/user/day (`429`). |
 | `mcp` | path token, `verify_jwt=false` | `POST /mcp/u/<secret>` Streamable HTTP, stateless JSON responses, dual-era (2025-03-26…2025-11-25 with `initialize`, and 2026-07-28 `_meta`/`server/discover`), GET/DELETE → 405. Resolve user via `svc_resolve_token(sha256(secret),'mcp')`. Never log the path. |
 | `ics` | path token, `verify_jwt=false` | `GET /ics/<secret>.ics` → `text/calendar` (VTIMEZONE Europe/Madrid), workouts −14..+56 days + confirmed quedadas; all-day events when no start time. |
-| `push-dispatch` | secret key (`verify_jwt=false`, check `apikey` == secret) | Sends unsent `notifications` (last 24 h) via Expo Push API (`EXPO_ACCESS_TOKEN` optional), respects `notification_prefs.social` for social types, marks `pushed_at`/`push_error`, deletes `DeviceNotRegistered` tokens. |
+| `push-dispatch` | secret key (`verify_jwt=false`, check `apikey` == secret) | Sends unsent `notifications` (last 24 h) straight to APNs (see §13), respects `notification_prefs.social` for social types, marks `pushed_at`/`push_error`, deletes tokens Apple rejects. |
 | `apple-revoke` | `verify_jwt=false`, user JWT verified in code | `POST {authorizationCode}` → exchanges it at Apple and revokes the token (SIWA account deletion); `503 apple_not_configured` without `APPLE_*` secrets. |
 | `garmin` | `verify_jwt=false`; user JWT verified in code for `connect/disconnect/sync`; secret key for `sync_all` (pg_cron) | Garmin **Personal API** (`docs/research/04` §3.2): exchange key → JWT, pull dailies/sleep/HRV/body battery/activities, upsert `daily_metrics (source 'garmin')`, match activities to planned workouts (complete them) or insert completed unplanned workouts (`source 'garmin'`, `external_id 'garmin:<id>'`). Key encrypted AES-GCM with `GARMIN_KEY_SECRET` (env). Defensive parsing; never log keys. |
 
@@ -496,7 +497,8 @@ Widget deep links: `rebufo://workout/<id>`, `rebufo://today`, `rebufo://together
 - Web preview must work (demo mode): guard native-only APIs with `Platform.OS`.
 - **Trademarks:** TSS/CTL/ATL/TSB/IF are TrainingPeaks terms. Code may use them internally, but the
   UI says **Carga** (load), **Forma física** (fitness/CTL), **Fatiga** (ATL), **Frescura** (form/TSB).
-  Never "Ironman"/"70.3" in UI.
+  "Ironman" appears only in the app name ("Road to Ironman", owner's decision, private TestFlight use);
+  race distances stay generic ("Media distancia", "Distancia completa"), never "70.3" or the M-Dot logo.
 
 ---
 
@@ -536,3 +538,23 @@ Widget deep links: `rebufo://workout/<id>`, `rebufo://today`, `rebufo://together
 - **Navigation:** root `unstable_settings.anchor = '(tabs)'` (deep links always have a way back); tab-path notification
   taps use `router.navigate`; friend_request links to `/together`; new `/privacy` screen (also linked from sign-in).
 - **OTA:** `runtimeVersion.policy = 'fingerprint'`.
+
+---
+
+## 13. Changes on 2026-10-26 (rename, no AI coach, no EAS)
+
+- **Name:** "Road to Ironman"; bundle id `io.github.diegomolinacatala.ironman`, App Group
+  `group.io.github.diegomolinacatala.ironman`, widget extension `….ExpoWidgetsTarget`, URL scheme
+  `roadtoironman://`. Internal storage/notification ids use the `rti.` prefix.
+- **In-app AI coach off:** `env.aiCoachEnabled` (EXPO_PUBLIC_AI_COACH=1) gates every AI path. Off:
+  `requestCoach` runs the local rules engine without calling the `coach` function; the UI shows no
+  consent sheet, AI badge or Anthropic copy. The `coach` function and `ai_consent_at` stay for later.
+  "Conecta tu Claude" (MCP, the user's own subscription) is unaffected.
+- **Builds:** no EAS/Expo services. `.github/workflows/ios.yml` runs on a GitHub macOS runner:
+  `npm ci` → typecheck + jest → `npx expo prebuild --platform ios --clean` → unsigned archive →
+  ad-hoc entitlements (`scripts/ios/sign-archive.sh`) → export + upload to TestFlight with the App Store
+  Connect API key (automatic cloud signing). Build number = workflow run number (`IOS_BUILD_NUMBER`).
+  `EXPO_PUBLIC_*` values come from repository variables. expo-updates / expo-dev-client removed.
+- **Push:** the app registers the raw APNs device token (`getDevicePushTokenAsync`); `push-dispatch`
+  sends straight to APNs (HTTP/2, ES256 provider JWT from `APNS_KEY_ID` / `APNS_TEAM_ID` /
+  `APNS_PRIVATE_KEY`, topic `APNS_TOPIC`), deleting tokens Apple reports as invalid.

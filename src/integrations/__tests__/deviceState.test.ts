@@ -66,7 +66,7 @@ describe('per-account device state', () => {
   test('legacy device-wide keys are dropped, namespaced ones are kept', async () => {
     await AsyncStorage.setItem(StorageKeys.healthEnabled, 'true');
     await AsyncStorage.setItem(StorageKeys.calendarIds, '["cal-1"]');
-    await AsyncStorage.setItem(StorageKeys.pushToken, '"ExponentPushToken[x]"');
+    await AsyncStorage.setItem(StorageKeys.pushToken, '"deadbeef02"');
     await setHealthEnabled(ANA, true);
 
     await removeLegacyDeviceKeys();

@@ -1,9 +1,14 @@
 /**
- * AI coach over the `coach` edge function: POST → 202 { jobId } → poll the
- * `coach_jobs` row every 2 s (max 170 s) → load the proposal. Falls back to
- * the local rules engine when AI is unavailable or anything fails.
+ * Coach for the Supabase backend. With the AI coach OFF (`env.aiCoachEnabled`,
+ * the default) it is simply the local rules engine: no edge function, no
+ * `coach_jobs`, nothing leaves the device for Anthropic.
+ *
+ * With it ON: `coach` edge function POST → 202 { jobId } → poll the
+ * `coach_jobs` row every 2 s (max 130 s) → load the proposal. Falls back to
+ * the local rules engine (with a notice) when AI is unavailable or anything fails.
  */
 import type { CoachRequest, CoachResponse, ISODate, UUID } from '@/domain/types';
+import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
 import { RepositoryError, type Repository } from '../repository';
@@ -109,6 +114,8 @@ export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) =
     runRulesCoach(deps.repo, request, { today: deps.today(), notice });
 
   return async (request) => {
+    // AI coach off (default): the rules engine IS the coach, so no notice.
+    if (!env.aiCoachEnabled) return runRulesCoach(deps.repo, request, { today: deps.today() });
     const started = await startJob(deps.ctx, request);
     if ('notice' in started) return fallback(request, started.notice);
     const job = await pollJob(deps, started.jobId);

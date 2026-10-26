@@ -34,7 +34,7 @@ describe('groupNotifications', () => {
 describe('notificationHref', () => {
   test('follows internal urls and app-scheme links only', () => {
     expect(notificationHref(notification({ data: { url: '/joint/123' } }))).toBe('/joint/123');
-    expect(notificationHref(notification({ data: { url: 'rebufo://workout/9' } }))).toBe('/workout/9');
+    expect(notificationHref(notification({ data: { url: 'roadtoironman://workout/9' } }))).toBe('/workout/9');
     expect(notificationHref(notification({ data: { url: 'https://evil.example/x', jointSessionId: 'j7' } }))).toBe('/joint/j7');
     expect(notificationHref(notification({ data: { url: '//evil.example' } }))).toBeNull();
   });
@@ -50,7 +50,7 @@ describe('notificationHref', () => {
   test('friend requests open Juntos (where Aceptar/Rechazar live), also for old rows linking the inbox', () => {
     expect(notificationHref(notification({ type: 'friend_request', data: { url: '/together' } }))).toBe('/together');
     expect(notificationHref(notification({ type: 'friend_request', data: { url: '/notifications' } }))).toBe('/together');
-    expect(notificationHref(notification({ type: 'friend_request', data: { url: 'rebufo://notifications' } }))).toBe('/together');
+    expect(notificationHref(notification({ type: 'friend_request', data: { url: 'roadtoironman://notifications' } }))).toBe('/together');
     expect(notificationHref(notification({ type: 'joint_cancelled', data: { url: '/notifications/' } }))).toBeNull();
   });
 
@@ -63,8 +63,9 @@ describe('notificationHref', () => {
   });
 
   test('toInternalPath rejects bare scheme roots', () => {
-    expect(toInternalPath('rebufo://')).toBeNull();
-    expect(toInternalPath('rebufo-dev://together')).toBe('/together');
+    expect(toInternalPath('roadtoironman://')).toBeNull();
+    expect(toInternalPath('roadtoironman://together')).toBe('/together');
+    expect(toInternalPath('otherapp://together')).toBeNull();
   });
 });
 

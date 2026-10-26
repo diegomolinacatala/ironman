@@ -122,11 +122,11 @@ export function buildCalendar(events: readonly IcsEvent[], name: string): string
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Rebufo//Plan de entrenamiento//ES',
+    'PRODID:-//Road to Ironman//Plan de entrenamiento//ES',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(name)}`,
-    `X-WR-CALDESC:${escapeText('Tus entrenos y quedadas planificados en Rebufo')}`,
+    `X-WR-CALDESC:${escapeText('Tus entrenos y quedadas planificados en Road to Ironman')}`,
     `X-WR-TIMEZONE:${ICS_TZID}`,
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
     'X-PUBLISHED-TTL:PT1H',

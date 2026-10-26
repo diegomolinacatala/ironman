@@ -11,8 +11,8 @@ import { errorInfo } from '../log.ts';
 import type { RateLimiter } from '../mcp/token-gate.ts';
 import { object, string } from '../schema.ts';
 import type { UUID } from '../types.ts';
-import { importApplePrivateKey } from './client-secret.ts';
 import type { AppleConfig } from './client-secret.ts';
+import { importP8PrivateKey } from './jwt.ts';
 import { revokeWithAuthorizationCode } from './revoke.ts';
 import type { FetchFn } from './revoke.ts';
 
@@ -38,7 +38,7 @@ const NOT_CONFIGURED = 'La revocación de Iniciar sesión con Apple no está con
 async function usableConfig(deps: AppleRevokeDeps): Promise<AppleConfig | null> {
   if (!deps.config) return null;
   try {
-    await importApplePrivateKey(deps.config.privateKey);
+    await importP8PrivateKey(deps.config.privateKey);
     return deps.config;
   } catch (error) {
     deps.logger.error('apple private key unusable', errorInfo(error));

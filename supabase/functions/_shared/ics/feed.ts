@@ -10,7 +10,7 @@ import type { IcsEvent } from './format.ts';
 
 export const ICS_PAST_DAYS = 14;
 export const ICS_FUTURE_DAYS = 56;
-const UID_DOMAIN = 'rebufo.app';
+const UID_DOMAIN = 'roadtoironman.app';
 
 function partnerNames(session: JointSession | undefined, userId: UUID): string[] {
   if (!session) return [];
@@ -28,7 +28,7 @@ function workoutDescription(w: Workout, partners: readonly string[]): string {
     w.status === 'completed' && c
       ? `Hecho: ${formatDuration(c.durationMin ?? w.durationMin)}${c.avgHr ? ` · FC media ${c.avgHr}` : ''}${c.rpe ? ` · RPE ${c.rpe}` : ''}`
       : null,
-    'Plan de Rebufo',
+    'Plan de Road to Ironman',
   ]
     .filter((line): line is string => Boolean(line))
     .join('\n');
@@ -64,7 +64,7 @@ export function jointEvent(s: JointSession, userId: UUID, stamp: Date): IcsEvent
     uid: `joint-${s.id}@${UID_DOMAIN}`,
     stamp,
     summary: `${s.title} (${sportLabel(s.sport)})${partners.length ? ` · con ${partners.join(', ')}` : ''}`,
-    description: [`Quedada · ${formatDuration(s.durationMin)} · ${intensityLabel(s.intensity)}`, 'Plan de Rebufo'].join('\n'),
+    description: [`Quedada · ${formatDuration(s.durationMin)} · ${intensityLabel(s.intensity)}`, 'Plan de Road to Ironman'].join('\n'),
     date: s.date,
     startTime: s.startTime,
     durationMin: s.durationMin,
@@ -94,5 +94,5 @@ export function buildIcsFeed(input: FeedInput): string {
     ...visible.map((w) => workoutEvent(w, input.jointSessions, input.userId, input.now)),
     ...extraJoint.map((s) => jointEvent(s, input.userId, input.now)),
   ].sort((a, b) => (a.date + (a.startTime ?? '')).localeCompare(b.date + (b.startTime ?? '')));
-  return buildCalendar(events, input.calendarName ?? 'Rebufo');
+  return buildCalendar(events, input.calendarName ?? 'Road to Ironman');
 }

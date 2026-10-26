@@ -1,5 +1,5 @@
 /**
- * Garmin `activityType.typeKey` → Rebufo sport. Racket and team sports
+ * Garmin `activityType.typeKey` → app sport. Racket and team sports
  * (pádel, tenis, fútbol…) map to 'other'. Returns null for activities that are
  * not training (walks, transitions between triathlon legs, meditation).
  */

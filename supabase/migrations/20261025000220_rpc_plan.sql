@@ -1,4 +1,4 @@
--- Rebufo — apply_plan_changes: server-side mirror of src/domain/changes.ts.
+-- Road to Ironman — apply_plan_changes: server-side mirror of src/domain/changes.ts.
 --
 -- PlanChange JSON (camelCase, as in src/domain/types.ts):
 --   { op: 'add',    workout: WorkoutDraft, reason }

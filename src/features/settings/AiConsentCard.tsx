@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { formatConsentDate } from '@/features/coach/aiConsent';
 import { AiSharedDataList } from '@/features/coach/AiSharedDataList';
 import { useAiConsent } from '@/features/coach/useAiConsent';
@@ -10,10 +11,12 @@ import { SwitchRow } from './SwitchRow';
 
 export const AI_CONSENT_TITLE = 'Coach IA: compartir datos con Anthropic';
 
-/** Grants or withdraws the Coach IA consent (`profile.aiConsentAt`). */
+/** Grants or withdraws the Coach IA consent (`profile.aiConsentAt`). Renders nothing with the AI coach off. */
 export function AiConsentCard() {
   const consent = useAiConsent();
   const [error, setError] = useState<string | null>(null);
+
+  if (!isAiCoachEnabled()) return null;
 
   if (consent.state === 'not_needed') {
     return (

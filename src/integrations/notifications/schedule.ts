@@ -92,13 +92,13 @@ function workoutReminder(w: Workout, prefs: NotificationPrefs, now: Date): Notif
     start == null ? `Hoy toca: ${w.title}` : lead === 0 ? `Empieza: ${w.title}` : `${w.title} en ${leadLabel(lead)}`;
   const body = start == null ? details(w) : `${formatTime(w.startTime)} · ${details(w)}`;
   return {
-    id: `rebufo.workout.${w.id}`,
+    id: `rti.workout.${w.id}`,
     kind: 'workout_reminder',
     title,
     body,
     url: `/workout/${w.id}`,
     categoryId: 'workout',
-    threadId: 'rebufo.workouts',
+    threadId: 'rti.workouts',
     trigger: { type: 'date', date: fireAt },
   };
 }
@@ -121,25 +121,25 @@ function morningSummary(workouts: readonly Workout[], date: ISODate, minutes: nu
   if (fireAt.getTime() <= now.getTime()) return null;
   const text = summaryText(sessionsOn(workouts, date));
   return {
-    id: `rebufo.morning.${date}`,
+    id: `rti.morning.${date}`,
     kind: 'morning_summary',
     ...text,
     url: '/today',
     categoryId: 'summary',
-    threadId: 'rebufo.summary',
+    threadId: 'rti.summary',
     trigger: { type: 'date', date: fireAt },
   };
 }
 
 function eveningCheckin(minutes: number): NotificationSpec {
   return {
-    id: 'rebufo.checkin.daily',
+    id: 'rti.checkin.daily',
     kind: 'evening_checkin',
     title: '¿Qué tal el día?',
     body: 'Cuéntame cómo estás (sueño, fatiga, estrés) y ajusto tu plan. Son 20 segundos.',
     url: '/checkin',
     categoryId: 'checkin',
-    threadId: 'rebufo.checkin',
+    threadId: 'rti.checkin',
     trigger: { type: 'daily', hour: Math.floor(minutes / 60), minute: minutes % 60 },
   };
 }
@@ -157,13 +157,13 @@ function weeklyPlanReminders(today: ISODate, now: Date, count: number): Notifica
     .filter(({ fireAt }) => fireAt.getTime() > now.getTime())
     .slice(0, count)
     .map(({ sunday, fireAt }) => ({
-      id: `rebufo.weekly.${sunday}`,
+      id: `rti.weekly.${sunday}`,
       kind: 'weekly_plan' as const,
       title: 'Planifica tu semana',
       body: 'Echa un vistazo a la semana que viene y cuadra entrenos con tus amigos.',
       url: `/week?week=${addDays(sunday, 1)}`,
       categoryId: 'weekly' as const,
-      threadId: 'rebufo.weekly',
+      threadId: 'rti.weekly',
       trigger: { type: 'date' as const, date: fireAt },
     }));
 }

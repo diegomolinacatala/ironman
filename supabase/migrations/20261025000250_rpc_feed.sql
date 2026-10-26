@@ -1,4 +1,4 @@
--- Rebufo — social feed, kudos, notification inbox helpers and push tokens.
+-- Road to Ironman — social feed, kudos, notification inbox helpers and push tokens.
 
 -- Own + friends' events, newest first. Masking is re-applied at read time so a later change of
 -- visibility is respected: 'busy' friends show no workouts, 'summary' friends show no titles.
@@ -56,7 +56,7 @@ begin
 end;
 $$;
 
--- Upserts an Expo push token and (re)assigns it to the caller.
+-- Upserts an APNs device token and (re)assigns it to the caller.
 create or replace function public.register_push_token(p_token text, p_platform text)
 returns void
 language plpgsql

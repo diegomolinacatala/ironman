@@ -50,7 +50,7 @@ export const logDailyMetricsTool: RegisteredTool = defineTool({
   name: 'log_daily_metrics',
   title: 'Guardar métricas diarias de Garmin',
   description: [
-    'Guarda en Rebufo un resumen diario de bienestar leído de Garmin (VFC/HRV en ms, FC en reposo en lpm, horas y puntuación de sueño, Body Battery, Training Readiness, VO2max, pasos, estrés medio, estado de entrenamiento).',
+    'Guarda en Road to Ironman un resumen diario de bienestar leído de Garmin (VFC/HRV en ms, FC en reposo en lpm, horas y puntuación de sueño, Body Battery, Training Readiness, VO2max, pasos, estrés medio, estado de entrenamiento).',
     'Se fusiona con lo que ya hubiera para ese día: los campos que no envíes se conservan. Úsala con los datos reales del conector de Garmin; no inventes valores.',
     'Hasta 31 días por llamada; fechas de los últimos 365 días.',
   ].join(' '),

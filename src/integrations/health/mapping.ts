@@ -1,5 +1,5 @@
 /**
- * Pure helpers that turn Apple Health (HealthKit) samples into Rebufo domain
+ * Pure helpers that turn Apple Health (HealthKit) samples into Road to Ironman domain
  * data. No React Native / HealthKit imports here so everything is unit-testable.
  *
  * Raw numeric values mirror `WorkoutActivityType` and `CategoryValueSleepAnalysis`

@@ -24,7 +24,7 @@ export const DEVICE_STATE_KEYS: readonly DeviceStateKey[] = [
   'calendarLastSync',
 ];
 
-/** AsyncStorage key of `key` for `userId` ("rebufo.health.enabled.user.<id>"). */
+/** AsyncStorage key of `key` for `userId` ("rti.health.enabled.user.<id>"). */
 export function userScopedKey(key: DeviceStateKey, userId: string): string {
   if (!userId) throw new Error('userScopedKey: missing user id');
   return `${StorageKeys[key]}.user.${userId}`;

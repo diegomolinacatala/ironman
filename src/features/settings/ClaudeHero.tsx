@@ -23,15 +23,15 @@ export function ClaudeHero() {
         Tu Claude ya lee tu Garmin.{'\n'}Ahora también tu semana.
       </Text>
       <Text variant="callout" style={{ color: paper, opacity: 0.8 }}>
-        Conéctalo a Rebufo y podrá leer tu plan, tus huecos y tus imprevistos, y proponerte cambios. Tú los apruebas aquí,
+        Conéctalo a Road to Ironman y podrá leer tu plan, tus huecos y tus imprevistos, y proponerte cambios. Tú los apruebas aquí,
         uno a uno.
       </Text>
-      <View style={styles.flow} accessible accessibilityLabel="Garmin, tu Claude y Rebufo conectados">
+      <View style={styles.flow} accessible accessibilityLabel="Garmin, tu Claude y tu plan de Road to Ironman conectados">
         <FlowNode icon="watch" label="Garmin" paper={paper} />
         <Icon name="chevronRight" size={14} color={colors.accent} />
         <FlowNode icon="sparkles" label="Tu Claude" paper={paper} />
         <Icon name="move" size={14} color={colors.accent} />
-        <FlowNode icon="week" label="Rebufo" paper={paper} />
+        <FlowNode icon="week" label="Tu plan" paper={paper} />
       </View>
     </View>
   );

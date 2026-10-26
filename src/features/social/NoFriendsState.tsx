@@ -16,14 +16,14 @@ const POINTS = [
   { icon: 'lock', text: 'Tú decides qué ven: todo, solo deporte y duración, o solo ocupado/libre.' },
 ] as const;
 
-/** Empty Juntos: what "ir a rebufo" means + share my username. */
+/** Empty Juntos: what training together gives you + share my username. */
 export function NoFriendsState({ username, pendingOutgoing, onAdd }: NoFriendsStateProps) {
   const { colors } = useTheme();
   const invite = useInviteActions(username);
   return (
     <View style={[styles.box, { borderColor: colors.border, backgroundColor: colors.surface }]}>
       <Text variant="overline" color="accentInk">
-        Ir a rebufo
+        Entrena con amigos
       </Text>
       <Text variant="title">Entrenar acompañado es más fácil</Text>
       <View style={styles.points}>

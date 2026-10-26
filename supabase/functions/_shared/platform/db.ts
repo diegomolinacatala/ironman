@@ -12,7 +12,7 @@ export type Db = SupabaseClient;
 export function createAdminClient(url: string, serviceKey: string): Db {
   return createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    global: { headers: { 'x-client-info': 'rebufo-edge/0.1.0' } },
+    global: { headers: { 'x-client-info': 'road-to-ironman-edge/0.1.0' } },
   });
 }
 

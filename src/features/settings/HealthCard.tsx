@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { useHealthIntegration } from '@/integrations/hooks';
 import { errorMessage, logger } from '@/lib/logger';
 import { Button, ErrorNotice, Text, space } from '@/ui';
@@ -32,7 +33,7 @@ export function HealthCard() {
   const disable = async () => {
     const ok = await confirmAction({
       title: '¿Desactivar Apple Salud?',
-      message: 'Dejaremos de leer Salud. Para quitar el permiso del todo: Ajustes → Salud → Acceso a datos → Rebufo.',
+      message: 'Dejaremos de leer Salud. Para quitar el permiso del todo: Ajustes → Salud → Acceso a datos → Road to Ironman.',
       confirmLabel: 'Desactivar',
       destructive: true,
     });
@@ -42,12 +43,13 @@ export function HealthCard() {
   return (
     <IntegrationCard icon="health" title="Apple Salud" status={status}>
       <Text variant="callout" color="textMuted">
-        Si en Garmin Connect activas “Apple Salud”, tus entrenos, sueño y pulso pasan a Salud y Rebufo los lee aquí,
-        en el móvil: marcamos como hechos los entrenos que coincidan.
+        Si en Garmin Connect activas “Apple Salud”, tus entrenos, sueño y pulso pasan a Salud y Road to Ironman los lee
+        aquí, en el móvil: marcamos como hechos los entrenos que coincidan.
       </Text>
       <Text variant="caption" color="textMuted">
         Ojo: la VFC y el VO2máx de Garmin no llegan por Salud. Para eso usa la conexión de Garmin o pídele a tu Claude que
-        los guarde. Si das permiso al Coach IA, un resumen de estas métricas se envía a Anthropic para planificar.
+        los guarde.
+        {isAiCoachEnabled() ? ' Si das permiso al Coach IA, un resumen de estas métricas se envía a Anthropic para planificar.' : ''}
       </Text>
       {!health.available ? (
         <Text variant="caption" color="textMuted">

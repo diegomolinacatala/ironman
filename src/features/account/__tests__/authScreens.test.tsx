@@ -15,7 +15,7 @@ const mockRouter = {
 
 const mockAuth = {
   sendEmailCode: jest.fn(async (_email: string) => undefined),
-  verifyEmailCode: jest.fn(async (_email: string, _code: string) => ({ userId: 'u1', email: 'demo@rebufo.app' })),
+  verifyEmailCode: jest.fn(async (_email: string, _code: string) => ({ userId: 'u1', email: 'demo@roadtoironman.app' })),
   signInWithApple: jest.fn(async () => ({ userId: 'u1', email: null })),
 };
 
@@ -24,7 +24,7 @@ jest.mock('expo-router', () => ({
   get router() {
     return mockRouter;
   },
-  useLocalSearchParams: () => ({ email: 'diego@rebufo.app' }),
+  useLocalSearchParams: () => ({ email: 'diego@roadtoironman.app' }),
 }));
 
 jest.mock(
@@ -43,11 +43,11 @@ beforeEach(() => {
 describe('sign-in', () => {
   test('sends the email code and navigates to verify', async () => {
     await render(<SignInScreen />);
-    await fireEvent.changeText(screen.getByPlaceholderText('tu@email.com'), ' Diego@Rebufo.app ');
+    await fireEvent.changeText(screen.getByPlaceholderText('tu@email.com'), ' Diego@RoadToIronman.app ');
     await fireEvent.press(screen.getByRole('button', { name: 'Recibir código' }));
-    await waitFor(() => expect(mockAuth.sendEmailCode).toHaveBeenCalledWith('diego@rebufo.app'));
+    await waitFor(() => expect(mockAuth.sendEmailCode).toHaveBeenCalledWith('diego@roadtoironman.app'));
     await waitFor(() =>
-      expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/verify', params: { email: 'diego@rebufo.app' } }),
+      expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/verify', params: { email: 'diego@roadtoironman.app' } }),
     );
   });
 
@@ -55,14 +55,14 @@ describe('sign-in', () => {
     await render(<SignInScreen />);
     expect(screen.getByText('Modo demo: sin servidor, datos de ejemplo')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Entrar en modo demo' }));
-    await waitFor(() => expect(mockAuth.verifyEmailCode).toHaveBeenCalledWith('demo@rebufo.app', '000000'));
+    await waitFor(() => expect(mockAuth.verifyEmailCode).toHaveBeenCalledWith('demo@roadtoironman.app', '000000'));
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
   });
 
   test('shows an inline error when sending fails', async () => {
     mockAuth.sendEmailCode.mockRejectedValueOnce(new Error('Servidor caído'));
     await render(<SignInScreen />);
-    await fireEvent.changeText(screen.getByPlaceholderText('tu@email.com'), 'diego@rebufo.app');
+    await fireEvent.changeText(screen.getByPlaceholderText('tu@email.com'), 'diego@roadtoironman.app');
     await fireEvent.press(screen.getByRole('button', { name: 'Recibir código' }));
     expect(await screen.findByText('Servidor caído')).toBeTruthy();
     expect(mockRouter.push).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe('verify', () => {
   test('auto-submits when six digits are typed', async () => {
     await render(<VerifyScreen />);
     await fireEvent.changeText(screen.getByLabelText('Código de 6 dígitos'), '12a3456');
-    await waitFor(() => expect(mockAuth.verifyEmailCode).toHaveBeenCalledWith('diego@rebufo.app', '123456'));
+    await waitFor(() => expect(mockAuth.verifyEmailCode).toHaveBeenCalledWith('diego@roadtoironman.app', '123456'));
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/'));
   });
 

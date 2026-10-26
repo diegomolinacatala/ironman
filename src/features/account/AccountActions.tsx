@@ -93,7 +93,7 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
         />
       </Card>
       <Text variant="caption" color="textFaint" align="center">
-        Rebufo {appVersion()}
+        Road to Ironman {appVersion()}
         {isDemo ? ' · modo demo' : ''}
       </Text>
     </View>

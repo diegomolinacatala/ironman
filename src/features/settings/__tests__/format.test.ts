@@ -67,8 +67,8 @@ describe('format helpers', () => {
   });
 
   test('isPlausibleEmail', () => {
-    expect(isPlausibleEmail('diego@rebufo.app')).toBe(true);
-    expect(isPlausibleEmail('diego@rebufo')).toBe(false);
+    expect(isPlausibleEmail('diego@roadtoironman.app')).toBe(true);
+    expect(isPlausibleEmail('diego@roadtoironman')).toBe(false);
     expect(isPlausibleEmail('di ego@x.com')).toBe(false);
   });
 });

@@ -77,7 +77,7 @@ export function createPushStore(db: Db, now: () => Date = () => new Date()): Pus
       unwrap(await db.from('notifications').update({ pushed_at: null }).in('id', ids), 'release notifications');
     },
     async listTokens(userIds) {
-      const rows = rowsOf(await db.from('push_tokens').select('token,user_id').in('user_id', userIds), 'push tokens');
+      const rows = rowsOf(await db.from('push_tokens').select('token,user_id').in('user_id', userIds).eq('platform', 'ios'), 'push tokens');
       return rows.map(asRow).map((r) => ({ token: String(r.token), userId: String(r.user_id) }));
     },
     async socialPrefs(userIds) {

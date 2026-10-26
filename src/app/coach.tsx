@@ -65,7 +65,7 @@ export default function CoachScreen() {
   const today = todayISO();
   const { draft, markHandled } = useRouteDraft(params, today);
   const [composer, setComposer] = useState('');
-  const info = engineInfo(mode, chat.lastEngine, gate.consent);
+  const info = engineInfo(mode, chat.lastEngine, gate.consent, gate.aiEnabled);
   const busy = chat.isSending || !chat.isLoaded;
 
   const clear = async () => {
@@ -135,7 +135,7 @@ export default function CoachScreen() {
           />
         </View>
       </KeyboardAvoidingView>
-      <AiConsentSheet {...gate.sheet} />
+      {gate.aiEnabled ? <AiConsentSheet {...gate.sheet} /> : null}
     </Screen>
   );
 }

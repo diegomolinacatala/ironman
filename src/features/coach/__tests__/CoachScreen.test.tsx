@@ -10,6 +10,8 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
+/** EXPO_PUBLIC_AI_COACH: the consent/AI tests run with the in-app AI coach switched on. */
+const mockEnvFlags = { aiCoachEnabled: true };
 const mockState: { mode: 'demo' | 'supabase'; userId: string; params: Record<string, string>; consentAt: string | null } = {
   mode: 'supabase',
   userId: 'u0',
@@ -31,6 +33,14 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockState.params,
 }));
 jest.mock('expo-router/react-navigation', () => ({ useHeaderHeight: () => 0 }));
+jest.mock('@/lib/env', () => {
+  const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
+  // A lazy getter (not a spread, which would read it at import time) so each test can flip the flag.
+  return Object.defineProperty({ ...actual }, 'env', {
+    enumerable: true,
+    get: () => ({ ...actual.env, aiCoachEnabled: mockEnvFlags.aiCoachEnabled }),
+  });
+});
 jest.mock(
   'react-native-safe-area-context',
   () => (jest.requireActual('react-native-safe-area-context/jest/mock') as { default: object }).default,
@@ -57,6 +67,7 @@ beforeEach(async () => {
   mockState.mode = 'supabase';
   mockState.params = {};
   mockState.consentAt = '2026-10-01T10:00:00.000Z';
+  mockEnvFlags.aiCoachEnabled = true;
 });
 
 jest.setTimeout(30000);
@@ -135,5 +146,40 @@ describe('Coach', () => {
     expect(await screen.findByText(/Puedes salir: la respuesta te esperará aquí/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Planifica mi semana' })).toBeDisabled();
     expect(mockCoach).toHaveBeenCalledTimes(1);
+  });
+
+  test('with the AI coach on, the badge names Claude', async () => {
+    await render(<CoachScreen />);
+    expect(await screen.findByText('IA · Claude')).toBeTruthy();
+  });
+});
+
+describe('Coach with the AI coach switched off (default)', () => {
+  beforeEach(() => {
+    mockEnvFlags.aiCoachEnabled = false;
+    mockCoach.mockImplementation(async () => ({ reply: 'Hecho', proposal: null, engine: 'rules' }));
+  });
+
+  test('sends at once with no consent sheet, even without stored consent', async () => {
+    mockState.consentAt = null;
+    await render(<CoachScreen />);
+    await pressQuickAction('Planifica mi semana');
+    await waitFor(() => expect(mockCoach).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('¿Compartimos tus datos con Anthropic?')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Aceptar y continuar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Activar IA' })).toBeNull();
+    expect(mockUpdateProfile).not.toHaveBeenCalled();
+  });
+
+  test('presents itself as the rules coach, never mentions Anthropic and keeps "Usa tu propio Claude"', async () => {
+    mockState.consentAt = null;
+    await render(<CoachScreen />);
+    expect(await screen.findByText('Reglas')).toBeTruthy();
+    expect(screen.queryByText('IA · Claude')).toBeNull();
+    expect(screen.queryByText(/Anthropic/)).toBeNull();
+    expect(screen.queryByLabelText(/Anthropic/)).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: /Usa tu propio Claude/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/claude');
   });
 });

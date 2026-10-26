@@ -1,32 +1,30 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
 /**
- * Expo app config. Values that differ per developer/account come from env:
+ * Expo app config. The iOS project is generated from this file (`npx expo prebuild`) on the
+ * GitHub Actions Mac that builds and uploads to TestFlight (.github/workflows/ios.yml).
+ * Values that differ per account come from env:
  * - APP_BUNDLE_ID: iOS bundle identifier registered in your Apple Developer account.
- * - APP_VARIANT=development: separate dev-client app that can live next to the TestFlight one.
- * - EXPO_PUBLIC_EAS_PROJECT_ID: set after `npx eas-cli@latest init` (enables push + OTA updates).
+ * - APPLE_TEAM_ID: Apple Developer team (signing).
+ * - IOS_BUILD_NUMBER: CFBundleVersion; CI uses the workflow run number so every upload is unique.
  */
-const IS_DEV = process.env.APP_VARIANT === 'development';
-const BASE_BUNDLE_ID = process.env.APP_BUNDLE_ID ?? 'com.diegomolinacatala.rebufo';
-const BUNDLE_ID = IS_DEV ? `${BASE_BUNDLE_ID}.dev` : BASE_BUNDLE_ID;
+const APP_NAME = 'Road to Ironman';
+const BUNDLE_ID = process.env.APP_BUNDLE_ID ?? 'io.github.diegomolinacatala.ironman';
 const APP_GROUP = `group.${BUNDLE_ID}`;
-const EAS_PROJECT_ID = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+const SCHEME = 'roadtoironman';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: IS_DEV ? 'Rebufo Dev' : 'Rebufo',
-  slug: 'rebufo',
-  owner: process.env.EXPO_OWNER,
+  name: APP_NAME,
+  slug: 'road-to-ironman',
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
-  scheme: IS_DEV ? 'rebufo-dev' : 'rebufo',
+  scheme: SCHEME,
   userInterfaceStyle: 'automatic',
-  // Changes automatically whenever native code/config changes, so OTA updates never reach an incompatible binary.
-  runtimeVersion: { policy: 'fingerprint' },
-  ...(EAS_PROJECT_ID ? { updates: { url: `https://u.expo.dev/${EAS_PROJECT_ID}` } } : {}),
   ios: {
     bundleIdentifier: BUNDLE_ID,
+    buildNumber: process.env.IOS_BUILD_NUMBER ?? '1',
     supportsTablet: false,
     usesAppleSignIn: true,
     appleTeamId: process.env.APPLE_TEAM_ID,
@@ -37,7 +35,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   android: {
-    package: BUNDLE_ID.replace(/-/g, '_'),
+    package: BUNDLE_ID,
     adaptiveIcon: {
       backgroundColor: '#15171A',
       foregroundImage: './assets/images/android-icon-foreground.png',
@@ -67,12 +65,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-apple-authentication',
     '@react-native-community/datetimepicker',
     'expo-sharing',
-    ['expo-notifications', { color: '#D4FF3A' }],
+    // TestFlight/App Store builds talk to the production APNs gateway.
+    ['expo-notifications', { color: '#D4FF3A', mode: 'production' }],
     [
       'expo-calendar',
       {
         calendarPermission:
-          'Rebufo lee tus calendarios (clases, trabajo…) para saber cuándo estás ocupado y planificar tus entrenos en huecos libres. Tus amigos solo ven “ocupado”, nunca el título, y el Coach IA solo recibe las horas ocupadas.',
+          'Road to Ironman lee tus calendarios (clases, trabajo…) para saber cuándo estás ocupado y planificar tus entrenos en huecos libres. Tus amigos solo ven “ocupado”, nunca el título.',
         remindersPermission: false,
       },
     ],
@@ -80,7 +79,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       '@kingstinct/react-native-healthkit',
       {
         NSHealthShareUsageDescription:
-          'Rebufo lee tus entrenos y su frecuencia cardiaca, sueño, VFC, pulso en reposo, VO2máx y pasos (los que tu reloj sincroniza con Salud) para marcar sesiones como hechas y ajustar tu plan. Solo si lo autorizas, el Coach IA (Anthropic) recibe un resumen para proponerte cambios.',
+          'Road to Ironman lee tus entrenos y su frecuencia cardiaca, sueño, VFC, pulso en reposo, VO2máx y pasos (los que tu reloj sincroniza con Salud) para marcar sesiones como hechas y ajustar tu plan.',
         NSHealthUpdateUsageDescription: false,
         background: false,
       },
@@ -127,6 +126,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   extra: {
     appGroup: APP_GROUP,
-    ...(EAS_PROJECT_ID ? { eas: { projectId: EAS_PROJECT_ID } } : {}),
   },
 });

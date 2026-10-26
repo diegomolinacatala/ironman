@@ -14,7 +14,7 @@ import { logger } from '@/lib/logger';
 
 import { CipherUnavailableError, createEncryptedStorage, type KeyValueStore, type SessionCipher } from './encryptedStorage';
 
-export const SESSION_KEY_NAME = 'rebufo.session.aesKey';
+export const SESSION_KEY_NAME = 'rti.session.aesKey';
 
 const KEY_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,

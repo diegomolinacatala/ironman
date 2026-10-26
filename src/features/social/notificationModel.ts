@@ -47,7 +47,7 @@ export function unreadCount(items: readonly AppNotification[] | undefined): numb
   return (items ?? []).filter((n) => n.readAt === null).length;
 }
 
-const APP_SCHEME = /^rebufo(-dev)?:\/\//;
+const APP_SCHEME = /^roadtoironman:\/\//;
 
 /** Only in-app paths are followed (never external URLs coming from data). */
 export function toInternalPath(url: string): string | null {

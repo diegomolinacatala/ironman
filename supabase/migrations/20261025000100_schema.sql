@@ -1,4 +1,4 @@
--- Rebufo — core schema (tables only).
+-- Road to Ironman — core schema (tables only).
 -- RLS policies, RPCs and triggers live in later migrations.
 -- Conventions: snake_case columns, text + CHECK instead of enums (easier to evolve),
 -- every user-owned row has user_id → profiles(id) ON DELETE CASCADE.

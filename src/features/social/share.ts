@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 export type ShareOutcome = 'shared' | 'copied' | 'dismissed';
 
 export function inviteMessage(username: string): string {
-  return `¡Entrena conmigo en Rebufo! Búscame como @${username}`;
+  return `¡Entrena conmigo en Road to Ironman! Búscame como @${username}`;
 }
 
 export async function copyText(text: string): Promise<boolean> {
@@ -34,7 +34,7 @@ async function shareOnWeb(message: string): Promise<ShareOutcome> {
   const nav = (globalThis as { navigator?: WebNavigatorShare }).navigator;
   if (nav && typeof nav.share === 'function') {
     try {
-      await nav.share({ text: message, title: 'Rebufo' });
+      await nav.share({ text: message, title: 'Road to Ironman' });
       return 'shared';
     } catch (error) {
       if (isAbortError(error)) return 'dismissed';

@@ -1,4 +1,4 @@
--- Rebufo — personal tokens (Claude connector / ICS feed), integration status, account deletion.
+-- Road to Ironman — personal tokens (Claude connector / ICS feed), integration status, account deletion.
 --
 -- Token secrets: 'rb_' || 64 hex chars (two random UUIDs without dashes). Only
 -- encode(sha256(convert_to(secret, 'UTF8')), 'hex') is stored; the plain secret is returned once.

@@ -1,4 +1,4 @@
--- Rebufo — function privileges (runs after every function is defined).
+-- Road to Ironman — function privileges (runs after every function is defined).
 --
 -- Postgres grants EXECUTE to PUBLIC by default (and legacy Supabase projects also grant it to
 -- anon/authenticated): start from nothing for our own functions, then open the public API.

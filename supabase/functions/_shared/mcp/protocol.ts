@@ -5,7 +5,7 @@
  * - modern era 2026-07-28 (per-request `_meta`, mirrored headers, server/discover).
  */
 
-export const SERVER_INFO = { name: 'rebufo', title: 'Rebufo', version: '0.1.0' } as const;
+export const SERVER_INFO = { name: 'road-to-ironman', title: 'Road to Ironman', version: '0.1.0' } as const;
 
 export const MODERN_VERSIONS = ['2026-07-28'] as const;
 export const LEGACY_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;

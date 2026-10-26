@@ -75,7 +75,7 @@ export const proposePlanChangesTool: RegisteredTool = defineTool({
       changes,
       model: 'claude (conector MCP)',
     });
-    const base = { proposalId, weekStart, changes: changes.length, appLink: `rebufo://proposal/${proposalId}` };
+    const base = { proposalId, weekStart, changes: changes.length, appLink: `roadtoironman://proposal/${proposalId}` };
     if (!args.apply_now) {
       return toolOk({ ...base, status: 'pending', message: 'Propuesta guardada. El usuario la revisará y aceptará en la app.' });
     }

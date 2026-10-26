@@ -1,4 +1,4 @@
--- Rebufo — notification + feed triggers.
+-- Road to Ironman — notification + feed triggers.
 -- Notifications are the in-app inbox and the push outbox (push-dispatch sends rows with pushed_at null).
 -- data.url is an Expo Router path the app opens on tap.
 

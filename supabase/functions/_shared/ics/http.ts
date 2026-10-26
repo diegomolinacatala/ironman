@@ -40,14 +40,14 @@ export async function handleIcsHttp(req: Request, deps: IcsDeps): Promise<Respon
       deps.reader.listWorkouts(userId, from, to),
       deps.reader.listJointSessions(userId, from, to),
     ]);
-    const body = buildIcsFeed({ userId, workouts, jointSessions, now, calendarName: 'Rebufo' });
+    const body = buildIcsFeed({ userId, workouts, jointSessions, now, calendarName: 'Road to Ironman' });
     deps.logger.info('ics served', { events: workouts.length });
     return new Response(req.method === 'HEAD' ? null : body, {
       status: 200,
       headers: {
         'Content-Type': 'text/calendar; charset=utf-8',
         'Cache-Control': 'private, max-age=300',
-        'Content-Disposition': 'inline; filename="rebufo.ics"',
+        'Content-Disposition': 'inline; filename="road-to-ironman.ics"',
       },
     });
   } catch (error) {

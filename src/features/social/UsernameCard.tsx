@@ -32,7 +32,7 @@ export function UsernameCard({ username }: { username: string }) {
         </View>
       </Pressable>
       <Text variant="caption" color="inverseText" style={styles.dim}>
-        Pásaselo a tus amigos para que te encuentren en Rebufo.
+        Pásaselo a tus amigos para que te encuentren en Road to Ironman.
       </Text>
       <Button
         label="Compartir invitación"

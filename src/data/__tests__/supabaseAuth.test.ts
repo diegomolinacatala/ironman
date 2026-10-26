@@ -38,7 +38,7 @@ const EMAIL_SESSION = { user: { id: 'me', email: 'abc123@privaterelay.appleid.co
 const APPLE_SESSION = {
   user: { ...EMAIL_SESSION.user, app_metadata: { provider: 'apple', providers: ['apple'] }, identities: [] },
 };
-const PUSH_TOKEN = 'ExponentPushToken[device-1]';
+const PUSH_TOKEN = 'deadbeef01';
 
 type InvokeResult = { data: unknown; error: unknown };
 

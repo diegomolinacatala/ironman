@@ -1,7 +1,7 @@
 /**
  * Puts the Coach IA consent sheet in front of the first AI request.
  *
- * - Demo or consent already given → the request is sent at once.
+ * - AI coach switched off, demo or consent already given → the request is sent at once.
  * - Supabase without consent → the sheet opens; "Aceptar" stores
  *   `aiConsentAt` and sends, "Seguir sin IA" sends anyway (the coach function
  *   answers 403 and the rules engine replies), closing sends nothing.
@@ -9,12 +9,16 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
+import { isAiCoachEnabled } from './aiCoachFlag';
+import type { AiConsentState } from './aiConsent';
 import type { AiConsentSheetProps } from './AiConsentSheet';
 import type { EngineConsent } from './labels';
 import type { PreparedRequest } from './requests';
 import { useAiConsent } from './useAiConsent';
 
 export interface ConsentGate {
+  /** False when the AI coach is switched off: no sheet, nothing is asked. */
+  aiEnabled: boolean;
   consent: EngineConsent;
   /** Sends now or asks first; `onSent` runs once the request has actually been sent. */
   submit: (prepared: PreparedRequest, onSent?: () => void) => void;
@@ -28,13 +32,19 @@ interface Waiting {
   onSent?: () => void;
 }
 
+function gateState(aiEnabled: boolean, consent: AiConsentState, declined: boolean): EngineConsent {
+  if (!aiEnabled) return 'not_needed';
+  return consent === 'needed' && declined ? 'declined' : consent;
+}
+
 export function useConsentGate(send: (prepared: PreparedRequest) => boolean): ConsentGate {
+  const aiEnabled = isAiCoachEnabled();
   const consent = useAiConsent();
   const [visible, setVisible] = useState(false);
   const [waiting, setWaiting] = useState<Waiting | null>(null);
   const [declined, setDeclined] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const state: EngineConsent = consent.state === 'needed' && declined ? 'declined' : consent.state;
+  const state = gateState(aiEnabled, consent.state, declined);
 
   const dispatch = (next: Waiting | null) => {
     if (next && send(next.prepared)) next.onSent?.();
@@ -67,6 +77,7 @@ export function useConsentGate(send: (prepared: PreparedRequest) => boolean): Co
   };
 
   return {
+    aiEnabled,
     consent: state,
     submit: (prepared, onSent) => {
       if (state === 'needed') {
@@ -78,12 +89,13 @@ export function useConsentGate(send: (prepared: PreparedRequest) => boolean): Co
       dispatch({ prepared, onSent });
     },
     open: () => {
+      if (!aiEnabled) return;
       setWaiting(null);
       setError(null);
       setVisible(true);
     },
     sheet: {
-      visible,
+      visible: aiEnabled && visible,
       saving: consent.saving,
       error,
       onAccept: () => void accept(),

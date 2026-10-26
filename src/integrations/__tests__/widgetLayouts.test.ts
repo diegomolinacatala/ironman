@@ -61,14 +61,14 @@ function containerBackgroundOf(element: FakeElement): FakeModifier | undefined {
 const nextItem = { id: 'w1', title: 'Series 6x1000', sport: 'run', sportLabel: 'Carrera', when: 'Hoy 18:30', duration: "50'", partner: '' };
 
 const nextVariants: NextWorkoutWidgetProps[] = [
-  { next: nextItem, linkBase: 'rebufo://' },
-  { next: null, linkBase: 'rebufo://' },
+  { next: nextItem, linkBase: 'roadtoironman://' },
+  { next: null, linkBase: 'roadtoironman://' },
 ];
 
 const raceVariants: RaceWidgetProps[] = [
-  { raceName: 'Media de Valencia', daysToRace: 12, raceDateLabel: 'dom 8 nov', distanceLabel: 'Media distancia', weekPercent: 40, weekLabel: "2h de 5h", linkBase: 'rebufo://' },
-  { raceName: 'Media de Valencia', daysToRace: 0, raceDateLabel: 'dom 8 nov', distanceLabel: 'Media distancia', weekPercent: 0, weekLabel: '', linkBase: 'rebufo://' },
-  { raceName: null, daysToRace: null, raceDateLabel: '', distanceLabel: '', weekPercent: 0, weekLabel: '', linkBase: 'rebufo://' },
+  { raceName: 'Media de Valencia', daysToRace: 12, raceDateLabel: 'dom 8 nov', distanceLabel: 'Media distancia', weekPercent: 40, weekLabel: "2h de 5h", linkBase: 'roadtoironman://' },
+  { raceName: 'Media de Valencia', daysToRace: 0, raceDateLabel: 'dom 8 nov', distanceLabel: 'Media distancia', weekPercent: 0, weekLabel: '', linkBase: 'roadtoironman://' },
+  { raceName: null, daysToRace: null, raceDateLabel: '', distanceLabel: '', weekPercent: 0, weekLabel: '', linkBase: 'roadtoironman://' },
 ];
 
 const todayVariants: TodayWidgetProps[] = [
@@ -81,9 +81,9 @@ const todayVariants: TodayWidgetProps[] = [
     week: [{ letter: 'L', day: '26', isToday: true, sports: ['run'], done: false }],
     weekPercent: 20,
     weekSummary: '0/1 sesiones',
-    linkBase: 'rebufo://',
+    linkBase: 'roadtoironman://',
   },
-  { dateLabel: '', today: [], tomorrow: [], next: null, allDoneToday: false, week: [], weekPercent: 0, weekSummary: '', linkBase: 'rebufo://' },
+  { dateLabel: '', today: [], tomorrow: [], next: null, allDoneToday: false, week: [], weekPercent: 0, weekSummary: '', linkBase: 'roadtoironman://' },
 ];
 
 const cases: { name: string; module: string; families: string[]; variants: unknown[]; lockScreen: string[] }[] = [

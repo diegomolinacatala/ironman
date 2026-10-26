@@ -106,7 +106,7 @@ export function useHealthIntegration(): HealthIntegration {
     if (!available) throw new Error('Apple Salud no está disponible en este dispositivo.');
     if (!userId) throw new Error(SIGNED_OUT_MESSAGE);
     const ok = await requestHealthPermissions();
-    if (!ok) throw new Error('No se pudo pedir acceso a Apple Salud. Revisa Ajustes > Salud > Rebufo.');
+    if (!ok) throw new Error('No se pudo pedir acceso a Apple Salud. Revisa Ajustes > Salud > Road to Ironman.');
     await setHealthEnabled(userId, true);
     setEnabled(true);
     // Connected even if the first import fails (offline…): AppEffects retries on the next foreground.

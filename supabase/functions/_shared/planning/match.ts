@@ -3,7 +3,7 @@
  * workout: same day, compatible sport (brick ↔ bike/run), duration within
  * 50–150 % of the plan, closest start time (then closest duration).
  *
- * Plus duplicate detection: the same activity often reaches Rebufo twice
+ * Plus duplicate detection: the same activity often reaches the app twice
  * (Garmin Connect → Apple Health → app, and Garmin Personal API / Claude
  * bridge → server). `findCompletedLookalike` spots a workout that is already
  * completed with the same activity, so it is not imported a second time.

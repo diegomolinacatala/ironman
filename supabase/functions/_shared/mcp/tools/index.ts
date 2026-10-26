@@ -1,4 +1,4 @@
-/** The 8 Rebufo MCP tools, in a stable order (better client and prompt caching). */
+/** The 8 Road to Ironman MCP tools, in a stable order (better client and prompt caching). */
 import { createRegistry } from '../tool.ts';
 import type { ToolRegistry } from '../tool.ts';
 import { getFriendsAvailabilityTool } from './friends-availability.ts';
@@ -10,7 +10,7 @@ import { getPlanForDeviceTool } from './plan-for-device.ts';
 import { getPlanningContextTool } from './planning-context.ts';
 import { proposePlanChangesTool } from './propose-plan-changes.ts';
 
-export const REBUFO_TOOLS = [
+export const MCP_TOOLS = [
   getPlanningContextTool,
   getFriendsAvailabilityTool,
   proposePlanChangesTool,
@@ -21,6 +21,6 @@ export const REBUFO_TOOLS = [
   manageRaceTool,
 ] as const;
 
-export function createRebufoRegistry(): ToolRegistry {
-  return createRegistry(REBUFO_TOOLS);
+export function createToolRegistry(): ToolRegistry {
+  return createRegistry(MCP_TOOLS);
 }

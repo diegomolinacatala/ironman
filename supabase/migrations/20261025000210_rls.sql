@@ -1,4 +1,4 @@
--- Rebufo — table privileges + row level security.
+-- Road to Ironman — table privileges + row level security.
 --
 -- Privileges are reset first so the result does not depend on whether the project auto-exposes
 -- new tables to the Data API roles (legacy) or not (current Supabase default): anon gets nothing,

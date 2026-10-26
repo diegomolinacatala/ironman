@@ -8,7 +8,7 @@ const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !=
 
 function emit(level: Level, message: string, context?: unknown): void {
   if (!isDev && (level === 'debug' || level === 'info')) return;
-  const line = `[rebufo] ${message}`;
+  const line = `[rti] ${message}`;
   /* eslint-disable no-console */
   if (level === 'error') console.error(line, context ?? '');
   else if (level === 'warn') console.warn(line, context ?? '');

@@ -12,7 +12,7 @@ import { isPlausibleEmail } from '@/features/settings/format';
 import { logger } from '@/lib/logger';
 import { Button, Divider, ErrorNotice, Text, TextField, haptics, space, useTheme } from '@/ui';
 
-const DEMO_EMAIL = 'demo@rebufo.app';
+const DEMO_EMAIL = 'demo@roadtoironman.app';
 const DEMO_CODE = '000000';
 
 type Busy = 'email' | 'apple' | 'demo' | null;

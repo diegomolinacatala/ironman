@@ -10,7 +10,7 @@ import { useSignedOutCleanup } from '../effects/useSignedOutCleanup';
 
 const mockCancel = jest.fn(async () => undefined);
 const mockClearWidgets = jest.fn(() => undefined);
-const mockRegister = jest.fn(async (_repo: unknown) => 'ExponentPushToken[abc]');
+const mockRegister = jest.fn(async (_repo: unknown) => 'deadbeef03');
 
 jest.mock('../notifications', () => ({
   cancelLocalNotifications: () => mockCancel(),

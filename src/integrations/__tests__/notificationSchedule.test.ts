@@ -30,7 +30,7 @@ describe('buildSchedule', () => {
     expect(dateOf(reminder)).toEqual(new Date(2026, 9, 26, 18, 0));
     expect(reminder?.title).toBe('Series 6x1000 en 30 min');
     expect(reminder?.url).toBe('/workout/w1');
-    expect(reminder?.id).toBe('rebufo.workout.w1');
+    expect(reminder?.id).toBe('rti.workout.w1');
     expect(reminder?.categoryId).toBe('workout');
   });
 

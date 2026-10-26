@@ -1,19 +1,21 @@
 /**
- * Privacidad: summary of docs/PRIVACY.md, the Coach IA consent switch and a
- * link to the full policy (EXPO_PUBLIC_PRIVACY_URL).
+ * Privacidad: summary of docs/PRIVACY.md, the Coach IA consent switch (only while
+ * the in-app AI coach is switched on) and a link to the full policy (EXPO_PUBLIC_PRIVACY_URL).
  */
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { AiConsentCard } from '@/features/settings/AiConsentCard';
-import { PRIVACY_POLICY_URL, PRIVACY_SUMMARY, openPrivacyPolicy } from '@/features/settings/privacyPolicy';
+import { PRIVACY_POLICY_URL, openPrivacyPolicy, privacySummary } from '@/features/settings/privacyPolicy';
 import { PrivacySummarySection } from '@/features/settings/PrivacySummary';
 import { Button, ErrorNotice, Screen, SectionHeader, Text, space } from '@/ui';
 
 export default function PrivacyScreen() {
   const [error, setError] = useState<string | null>(null);
+  const aiEnabled = isAiCoachEnabled();
   // Coach IA switch goes right after "Quién más los ve" (which points to it).
-  const [uses, sharing, ...rest] = PRIVACY_SUMMARY;
+  const [uses, sharing, ...rest] = privacySummary(aiEnabled);
 
   const openPolicy = async () => {
     setError(null);
@@ -28,10 +30,12 @@ export default function PrivacyScreen() {
       </Text>
       {uses ? <PrivacySummarySection section={uses} /> : null}
       {sharing ? <PrivacySummarySection section={sharing} /> : null}
-      <View>
-        <SectionHeader title="Coach IA" />
-        <AiConsentCard />
-      </View>
+      {aiEnabled ? (
+        <View>
+          <SectionHeader title="Coach IA" />
+          <AiConsentCard />
+        </View>
+      ) : null}
       {rest.map((section) => (
         <PrivacySummarySection key={section.title} section={section} />
       ))}

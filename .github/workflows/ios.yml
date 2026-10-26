@@ -1,0 +1,174 @@
+name: iOS
+
+# Compila la app de iPhone en un Mac de GitHub y la sube a TestFlight (el mismo sistema que Tasks).
+# El proyecto de Xcode no está en el repo: lo genera `npx expo prebuild` a partir de app.config.ts.
+# Sin las claves de App Store Connect solo comprueba que compila; con ellas firma y sube.
+#
+# Secretos del repo (Settings → Secrets and variables → Actions):
+#   ASC_KEY_P8      contenido del .p8 de la clave de API de App Store Connect
+#   ASC_KEY_ID      Key ID de esa clave
+#   ASC_ISSUER_ID   Issuer ID (App Store Connect → Usuarios y acceso → Integraciones)
+# Variables del repo:
+#   APPLE_TEAM_ID              Team ID de tu cuenta de Apple Developer
+#   EXPO_PUBLIC_SUPABASE_URL   https://<ref>.supabase.co
+#   EXPO_PUBLIC_SUPABASE_KEY   sb_publishable_…
+#   EXPO_PUBLIC_PRIVACY_URL    (opcional) URL pública de la política de privacidad
+#   APP_BUNDLE_ID              (opcional) por defecto io.github.diegomolinacatala.ironman
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - assets/**
+      - app.config.ts
+      - package.json
+      - package-lock.json
+      - scripts/ios/**
+      - .github/workflows/ios.yml
+  workflow_dispatch:
+  schedule:
+    # Las compilaciones de TestFlight caducan a los 90 días: una nueva el día 1 de cada dos meses.
+    - cron: '0 6 1 */2 *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 75
+    env:
+      HAS_SIGNING: ${{ secrets.ASC_KEY_P8 != '' && secrets.ASC_KEY_ID != '' && secrets.ASC_ISSUER_ID != '' && vars.APPLE_TEAM_ID != '' }}
+      SHOULD_UPLOAD: ${{ github.ref == 'refs/heads/main' || github.event_name != 'push' }}
+      APP_BUNDLE_ID: ${{ vars.APP_BUNDLE_ID || 'io.github.diegomolinacatala.ironman' }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      # Número de build único por ejecución (App Store Connect rechaza números repetidos).
+      IOS_BUILD_NUMBER: ${{ github.run_number }}
+      # Se incrustan en el JavaScript al compilar (son públicas: la clave es la "publishable").
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_KEY }}
+      EXPO_PUBLIC_PRIVACY_URL: ${{ vars.EXPO_PUBLIC_PRIVACY_URL }}
+      ARCHIVE: ${{ github.workspace }}/build/App.xcarchive
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tipos y tests
+        run: |
+          npx tsc --noEmit
+          npx jest --ci
+
+      - name: Aviso si falta Supabase
+        if: vars.EXPO_PUBLIC_SUPABASE_URL == '' || vars.EXPO_PUBLIC_SUPABASE_KEY == ''
+        run: echo "::warning::Sin EXPO_PUBLIC_SUPABASE_URL/KEY la app arrancará en modo demo."
+
+      - name: Elegir Xcode
+        run: bash scripts/ios/select-xcode.sh
+
+      # Genera ios/ (app + extensión de widgets, HealthKit, App Group…) e instala los pods.
+      - name: Generar el proyecto de Xcode
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Localizar workspace y esquema
+        id: project
+        run: bash scripts/ios/detect-project.sh >> "$GITHUB_OUTPUT"
+
+      - name: Compilar sin firmar
+        if: env.HAS_SIGNING != 'true' || env.SHOULD_UPLOAD != 'true'
+        run: |
+          bash scripts/ios/xcodebuild.sh -workspace "${{ steps.project.outputs.workspace }}" \
+            -scheme "${{ steps.project.outputs.scheme }}" -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build/derived \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Clave de App Store Connect
+        if: env.HAS_SIGNING == 'true' && env.SHOULD_UPLOAD == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+
+      # Se archiva sin firmar (firmar aquí exigiría iPhones registrados). La firma de distribución
+      # la pone la exportación, con el certificado que Apple gestiona en la nube.
+      - name: Archivar
+        if: env.HAS_SIGNING == 'true' && env.SHOULD_UPLOAD == 'true'
+        run: |
+          bash scripts/ios/xcodebuild.sh -workspace "${{ steps.project.outputs.workspace }}" \
+            -scheme "${{ steps.project.outputs.scheme }}" -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      # La exportación copia los entitlements de la firma de cada binario: sin esto la app perdería
+      # HealthKit, Sign in with Apple y el App Group que comparte con los widgets.
+      - name: Entitlements en el archivo
+        if: env.HAS_SIGNING == 'true' && env.SHOULD_UPLOAD == 'true'
+        run: bash scripts/ios/sign-archive.sh "$ARCHIVE" "${{ steps.project.outputs.scheme }}"
+
+      - name: Firmar y subir a TestFlight
+        if: env.HAS_SIGNING == 'true' && env.SHOULD_UPLOAD == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          bash scripts/ios/xcodebuild.sh -exportArchive -archivePath "$ARCHIVE" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      # Lo que se firmó de verdad: sin el App Group los widgets no ven los entrenos.
+      - name: Comprobar la firma subida
+        if: env.HAS_SIGNING == 'true' && env.SHOULD_UPLOAD == 'true'
+        run: |
+          summary=build/export/DistributionSummary.plist
+          if [ ! -f "$summary" ]; then
+            echo "::warning::No hay DistributionSummary.plist para comprobar los entitlements."
+            exit 0
+          fi
+          plutil -p "$summary"
+          groups=$(grep -c "group.$APP_BUNDLE_ID" <(plutil -p "$summary") || true)
+          if [ "$groups" -lt 2 ]; then
+            echo "::warning::La app o los widgets se firmaron sin el App Group: los widgets no verán los entrenos."
+          fi
+          grep -q "com.apple.developer.healthkit" <(plutil -p "$summary") \
+            || echo "::warning::La app se firmó sin HealthKit: activa la capacidad en el identificador de la app."
+
+      - name: Log de xcodebuild
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: build/xcodebuild.log
+          retention-days: 7
+
+      - name: Borrar la clave
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

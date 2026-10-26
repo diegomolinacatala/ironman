@@ -1,5 +1,5 @@
 /**
- * Core domain model for Rebufo.
+ * Core domain model for Road to Ironman.
  *
  * This module is PURE TypeScript: no React, React Native or Expo imports, so it
  * can be shared by the app, the demo repository and unit tests.

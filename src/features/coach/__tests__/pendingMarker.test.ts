@@ -1,10 +1,16 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, jest, test } from '@jest/globals';
 
 import { aiConsentState, formatConsentDate } from '../aiConsent';
 import { parseStoredConversation, serializeConversation } from '../conversationStorage';
 import { engineInfo } from '../labels';
 import { findAnsweredProposal, parseCoachRequest, parsePendingMarker, pendingRemainingMs } from '../pendingMarker';
 import { makeProposal } from './fixtures';
+
+// EXPO_PUBLIC_AI_COACH: these engine/consent tests run with the in-app AI coach switched on.
+jest.mock('@/lib/env', () => {
+  const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
+  return { ...actual, env: { ...actual.env, aiCoachEnabled: true } };
+});
 
 const STARTED = '2026-10-25T10:00:00.000Z';
 

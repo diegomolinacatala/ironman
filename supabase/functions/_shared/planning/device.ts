@@ -127,9 +127,9 @@ function garminWorkout(w: Workout, sport: Exclude<Sport, 'brick' | 'rest'>, dura
   const seconds = Math.round((stepsDuration(steps) || durationMin) * 60);
   return {
     workoutName: `${w.title}${suffix}`.slice(0, 60),
-    description: [w.description, `Rebufo · ${intensityLabel(w.intensity)} · ${formatDuration(durationMin)}`].filter(Boolean).join('\n').slice(0, 1000),
+    description: [w.description, `Road to Ironman · ${intensityLabel(w.intensity)} · ${formatDuration(durationMin)}`].filter(Boolean).join('\n').slice(0, 1000),
     sport: garminSport,
-    workoutProvider: 'Rebufo',
+    workoutProvider: 'Road to Ironman',
     workoutSourceId: w.id,
     estimatedDurationInSecs: seconds,
     segments: [

@@ -4,15 +4,15 @@ import { logger } from './logger';
 
 /** Namespaced keys for device-local preferences (never server state). */
 export const StorageKeys = {
-  demoDb: 'rebufo.demo.db.v1',
-  demoSession: 'rebufo.demo.session.v1',
-  healthEnabled: 'rebufo.health.enabled',
-  healthLastSync: 'rebufo.health.lastSync',
-  healthImported: 'rebufo.health.imported.v1',
-  calendarIds: 'rebufo.calendar.ids',
-  calendarLastSync: 'rebufo.calendar.lastSync',
-  pushToken: 'rebufo.push.token',
-  coachHistory: 'rebufo.coach.history',
+  demoDb: 'rti.demo.db.v1',
+  demoSession: 'rti.demo.session.v1',
+  healthEnabled: 'rti.health.enabled',
+  healthLastSync: 'rti.health.lastSync',
+  healthImported: 'rti.health.imported.v1',
+  calendarIds: 'rti.calendar.ids',
+  calendarLastSync: 'rti.calendar.lastSync',
+  pushToken: 'rti.push.token',
+  coachHistory: 'rti.coach.history',
 } as const;
 
 export async function readJson<T>(key: string, fallback: T): Promise<T> {

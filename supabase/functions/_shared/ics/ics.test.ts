@@ -75,9 +75,11 @@ test('feed: VTIMEZONE, stable UIDs, timed and all-day events, partners, CRLF', (
   assert.ok(ics.startsWith('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n'));
   assert.ok(ics.endsWith('END:VCALENDAR\r\n'));
   assert.ok(!/[^\r]\n/.test(ics), 'only CRLF line breaks');
-  assert.match(ics, /X-WR-CALNAME:Rebufo/);
+  assert.match(ics, /X-WR-CALNAME:Road to Ironman\r\n/);
+  assert.match(ics, /PRODID:-\/\/Road to Ironman\/\/Plan de entrenamiento\/\/ES\r\n/);
+  assert.match(ics, /Plan de Road to Ironman/);
   assert.match(ics, /BEGIN:VTIMEZONE\r\nTZID:Europe\/Madrid/);
-  assert.match(ics, /UID:workout-w1@rebufo\.app/);
+  assert.match(ics, /UID:workout-w1@roadtoironman\.app/);
   assert.match(ics, /DTSTART;TZID=Europe\/Madrid:20261027T070000\r\nDTEND;TZID=Europe\/Madrid:20261027T075000/);
   assert.match(ics, /SUMMARY:Rodaje\\; suave\\, Z2 \(Carrera\)/);
   assert.match(ics, /DTSTART;VALUE=DATE:20261028\r\nDTEND;VALUE=DATE:20261029/);
@@ -85,7 +87,7 @@ test('feed: VTIMEZONE, stable UIDs, timed and all-day events, partners, CRLF', (
   assert.match(ics, /LOCATION:Casa de Campo/);
   assert.ok(!ics.includes('Saltado'), 'skipped workouts are hidden');
   assert.match(ics, /SUMMARY:✓ Hecho/);
-  assert.match(ics, /UID:joint-55555555-5555-4555-8555-555555555555@rebufo\.app/);
+  assert.match(ics, /UID:joint-55555555-5555-4555-8555-555555555555@roadtoironman\.app/);
   assert.equal((ics.match(/BEGIN:VEVENT/g) ?? []).length, 5);
   for (const line of ics.split('\r\n')) assert.ok(octets(line) <= 75);
 });

@@ -7,7 +7,7 @@ import { handleMcpHttp } from './endpoint.ts';
 import type { McpEndpointDeps } from './endpoint.ts';
 import { createRateLimiter } from './token-gate.ts';
 import { MCP_INSTRUCTIONS } from './instructions.ts';
-import { createRebufoRegistry } from './tools/index.ts';
+import { createToolRegistry } from './tools/index.ts';
 
 const SECRET = `rb_${'0123456789abcdef'.repeat(4)}`;
 const URL_OK = `https://ref.supabase.co/functions/v1/mcp/u/${SECRET}`;
@@ -18,7 +18,7 @@ async function deps(overrides: Partial<McpEndpointDeps> = {}): Promise<McpEndpoi
   return {
     resolveUserId: async (hash) => (hash === validHash ? USER : null),
     toolContext: (userId) => ({ userId, store, now: fixedNow, logger: silentLogger }),
-    tools: createRebufoRegistry(),
+    tools: createToolRegistry(),
     instructions: MCP_INSTRUCTIONS,
     rateLimiter: createRateLimiter({ limit: 100, windowMs: 60_000 }),
     logger: silentLogger,
@@ -55,7 +55,7 @@ test('legacy initialize echoes a supported version and negotiates down otherwise
     assert.equal(r.status, 200);
     assert.equal(result(r).protocolVersion, expected);
     assert.deepEqual(result(r).capabilities, { tools: { listChanged: false } });
-    assert.equal((result(r).serverInfo as { name: string }).name, 'rebufo');
+    assert.equal((result(r).serverInfo as { name: string }).name, 'road-to-ironman');
     assert.equal(typeof result(r).instructions, 'string');
     assert.equal(r.headers.get('mcp-session-id'), null, 'stateless: no session id');
   }

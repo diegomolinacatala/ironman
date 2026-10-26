@@ -90,7 +90,7 @@ function byPgCode(pg: PgLikeError): { code: RepositoryErrorCode; message: string
     case 'PGRST202':
     case '42883':
     case '42P01':
-      return { code: 'unavailable', message: 'El servidor no está actualizado. Avisa a quien gestiona Rebufo.' };
+      return { code: 'unavailable', message: 'El servidor no está actualizado. Avisa a quien gestiona Road to Ironman.' };
     default:
       return null;
   }

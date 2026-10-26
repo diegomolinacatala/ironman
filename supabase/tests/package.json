@@ -1,5 +1,5 @@
 {
-  "name": "rebufo-db-tests",
+  "name": "road-to-ironman-db-tests",
   "private": true,
   "type": "module",
   "description": "PGlite tests for supabase/migrations. Run from the repo root: npm run test:db"

@@ -49,7 +49,7 @@ describe('Ha surgido algo', () => {
     expect(await screen.findByText('¿Reorganizamos tu semana?')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Reorganizar (reglas)' }));
     expect(mockRun).toHaveBeenCalledTimes(1);
-    await fireEvent.press(screen.getByRole('button', { name: 'Pedir al coach IA' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Pedir al coach' }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/coach?mode=replan&lifeEventId=new-1');
   });
 

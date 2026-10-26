@@ -1,4 +1,4 @@
-# Rebufo — producto (resumen de la investigación y alcance del MVP)
+# Road to Ironman — producto (resumen de la investigación y alcance del MVP)
 
 Resumen ejecutivo de `docs/research/01..05`. Fecha: 25-oct-2026.
 
@@ -29,12 +29,13 @@ Resumen ejecutivo de `docs/research/01..05`. Fecha: 25-oct-2026.
 
 ## 3. Decisiones clave
 
-- **Nombre**: *Rebufo* (ir a rueda). "Tandem" está cogido en la App Store y "Ironman"/"70.3" son
-  marcas registradas que su dueño defiende activamente.
+- **Nombre**: *Road to Ironman* (elegido el 26-oct-2026; antes "Rebufo"). "IRONMAN" es una marca
+  registrada que su dueño defiende: válido para uso privado en TestFlight; si se publica en la App
+  Store podría haber que cambiarlo. Bundle id neutro (`io.github.diegomolinacatala.ironman`).
 - **Claude**: Anthropic no permite que apps de terceros usen el login de tu suscripción. Por eso:
   (a) **Conecta tu Claude** = la app expone un servidor MCP personal que añades en claude.ai (usa tu
-  suscripción); (b) **Coach IA** dentro de la app con la API de Anthropic (clave del desarrollador);
-  (c) **motor de reglas** que funciona siempre, sin conexión.
+  suscripción); (b) **motor de reglas** que funciona siempre, sin conexión. El **Coach IA** dentro de
+  la app (API de Anthropic) está construido pero **desactivado** por decisión del 26-oct-2026.
 - **Garmin**: Garmin reabrió su programa de desarrolladores el 21-oct-2026. La **Personal API**
   (oficial, gratis, clave por usuario, solo lectura) da sueño, VFC, Body Battery y actividades desde
   el día 1. Para **enviar entrenos al reloj** hace falta el nivel *Starter* (gratis, con solicitud):
@@ -48,8 +49,8 @@ Resumen ejecutivo de `docs/research/01..05`. Fecha: 25-oct-2026.
 - Cuenta (email con código / Apple), onboarding con disponibilidad, umbrales y primera carrera.
 - Semana y Hoy: sesiones planificadas/completadas, cumplimiento, totales, fase de entrenamiento,
   cuenta atrás, readiness (check-in + métricas), consejos de alimentación por sesión.
-- Imprevistos → propuesta de re-plan (reglas o Coach IA) → diff aceptable uno a uno.
-- Coach: plan semanal, reorganizar, chat; Conecta tu Claude (MCP con 8 herramientas).
+- Imprevistos → propuesta de re-plan (motor de reglas o tu Claude) → diff aceptable uno a uno.
+- Coach de reglas: plan semanal y reorganizar; Conecta tu Claude (MCP con 8 herramientas).
 - Carreras A/B/C, periodización automática hacia la carrera A, gráfica de carga, volumen por deporte.
 - Juntos: amigos, privacidad (todo / resumen / solo ocupado), comparar semanas, huecos comunes,
   oportunidades, quedadas con invitación y aceptación, feed con kudos, avisos.

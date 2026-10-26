@@ -17,7 +17,7 @@ export interface WidgetDataInput {
   races: readonly Race[];
   jointSessions: readonly JointSession[];
   profile: Profile | null;
-  /** "rebufo://" — see `linkBaseFor`. */
+  /** "roadtoironman://" — see `linkBaseFor`. */
   linkBase: string;
 }
 
@@ -41,9 +41,9 @@ export interface WidgetTimelines {
 const WEEKDAY_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const;
 const MAX_WEEK_SPORTS = 3;
 const NEXT_LOOKAHEAD_DAYS = 7;
-const DEFAULT_SCHEME = 'rebufo';
+const DEFAULT_SCHEME = 'roadtoironman';
 
-/** Deep-link prefix from the app scheme (`Constants.expoConfig.scheme`), "rebufo://" by default. */
+/** Deep-link prefix from the app scheme (`Constants.expoConfig.scheme`), "roadtoironman://" by default. */
 export function linkBaseFor(scheme: unknown): string {
   const first = Array.isArray(scheme) ? scheme[0] : scheme;
   return `${typeof first === 'string' && first ? first : DEFAULT_SCHEME}://`;

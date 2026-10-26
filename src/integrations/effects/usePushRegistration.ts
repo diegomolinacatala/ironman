@@ -1,5 +1,5 @@
 /**
- * Registers the Expo push token once per signed-in account. Signing out forgets
+ * Registers the APNs device push token once per signed-in account. Signing out forgets
  * who was registered, so the same account signing back in registers again (the
  * data layer unregisters the token on sign-out).
  */

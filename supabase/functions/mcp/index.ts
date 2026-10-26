@@ -5,13 +5,13 @@
 import { handleMcpHttp } from '../_shared/mcp/endpoint.ts';
 import { createRateLimiter } from '../_shared/mcp/token-gate.ts';
 import { MCP_INSTRUCTIONS } from '../_shared/mcp/instructions.ts';
-import { createRebufoRegistry } from '../_shared/mcp/tools/index.ts';
+import { createToolRegistry } from '../_shared/mcp/tools/index.ts';
 import { resolveToken } from '../_shared/platform/db.ts';
 import { createPlanningStore } from '../_shared/platform/planning-store.ts';
 import { edgeContext, misconfigured, systemNow } from '../_shared/platform/runtime.ts';
 
 const { db, logger } = edgeContext('mcp', (name) => Deno.env.get(name));
-const tools = createRebufoRegistry();
+const tools = createToolRegistry();
 const rateLimiter = createRateLimiter({ limit: 120, windowMs: 60_000, globalLimit: 1200 });
 const store = db ? createPlanningStore(db, systemNow) : null;
 

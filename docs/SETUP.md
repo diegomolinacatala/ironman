@@ -1,252 +1,256 @@
-# Puesta en marcha de Rebufo (de cero a TestFlight)
+# Puesta en marcha de Road to Ironman (de cero a TestFlight)
 
-Guía paso a paso para tenerlo funcionando en vuestros iPhones. Todo se hace desde **Windows**: las
-builds de iOS se compilan en los Mac de EAS (Expo) en la nube.
+Todo se hace desde **Windows**. La app de iPhone la compila un **Mac de GitHub Actions** y la sube a
+TestFlight, igual que Tasks (`.github/workflows/ios.yml`). No hace falta cuenta de Expo.
 
-> Orden recomendado: **0 → 1** (probar ya, sin servidor) → **2** (backend) → **3** (app conectada) →
-> **4** (TestFlight) → **5–7** (Claude, Garmin, extras).
+Orden: **1 Supabase → 2 Apple → 3 secretos de Apple en Supabase → 4 GitHub → 5 primera build →
+6 TestFlight → 7 en el iPhone → 8 Garmin y Claude → 9 política de privacidad.**
 
----
-
-## 0. Requisitos
-
-| Qué | Para qué | Coste |
-|---|---|---|
-| Node 24 (ya lo tienes) | Herramientas | — |
-| Cuenta de **Expo** (expo.dev) | Builds en la nube (EAS) y push | Gratis (15 builds iOS/mes) |
-| **Apple Developer** (ya lo tienes) | Firmar la app y TestFlight | 99 €/año |
-| Proyecto de **Supabase** (supabase.com) | Base de datos, login, funciones | Gratis (se pausa tras 7 días sin uso) |
-| API key de **Anthropic** (console.anthropic.com) | Solo para el "Coach IA" dentro de la app | Pago por uso (céntimos por plan) |
-| Claude **Pro/Max** de cada uno | "Conecta tu Claude" (usa vuestra suscripción) | Lo que ya pagáis |
-| Clave **Garmin Personal API** de cada uno | Métricas de Garmin automáticas | Gratis |
+> Antes de nada, para probar sin servidor: `npm install` y `npm run web` (modo demo en el navegador).
 
 ---
 
-## 1. Probar ya en el navegador (modo demo, sin servidor)
+## 1. Supabase (≈25 min)
 
-```bash
-npm install
-```
-
-```bash
-npm run web
-```
-
-Sin variables de Supabase la app arranca en **modo demo**: datos de ejemplo (tú = Diego, tu
-compañero = Álex), todo funciona en local y el coach usa el motor de reglas. Cualquier código de
-email vale para entrar.
-
-Tests y comprobaciones:
-
-```bash
-npm run test:all
-```
-
----
-
-## 2. Backend en Supabase
-
-### 2.1 Crear el proyecto
-1. supabase.com → *New project* → región **EU (Frankfurt o París)**.
-2. *Project Settings → API keys*: copia la **URL** y la **publishable key** (`sb_publishable_…`).
-   La **secret key** (`sb_secret_…`) NO va en la app, solo en el servidor.
-
-### 2.2 Subir el esquema y la configuración
+1. **Proyecto:** supabase.com → *New project* → nombre `road-to-ironman`, región **West EU (Paris)** o
+   **Central EU (Frankfurt)**. Guarda la contraseña de la base de datos.
+2. **Claves** (*Project Settings → API Keys*): apunta la **Project URL** (`https://XXXX.supabase.co`,
+   `XXXX` es el *project ref*), la **publishable key** (`sb_publishable_…`) y la **secret key**
+   (`sb_secret_…`, solo para el servidor).
+3. **Conectar el repo** (en la carpeta del proyecto; el segundo pide la contraseña):
 
 ```bash
 npx supabase login
 ```
 
 ```bash
-npx supabase link --project-ref TU_REF
+npx supabase link --project-ref XXXX
 ```
+
+4. **Base de datos** (tablas, permisos, funciones SQL):
 
 ```bash
 npx supabase db push
 ```
 
+5. **Login con Apple y correo con código.** Crea `supabase/.env` (no se sube a git) con:
+
+```
+SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID=io.github.diegomolinacatala.ironman
+```
+
+y sube la configuración de autenticación (incluye la plantilla del email con el código de 6 dígitos):
+
 ```bash
 npx supabase config push
 ```
 
-### 2.3 Una sola vez en el *SQL Editor* (tareas programadas y push)
+6. **Una sola vez, en el SQL Editor** (push al crearse un aviso y tareas programadas):
 
 ```sql
 create extension if not exists pg_net with schema extensions;
 create extension if not exists pg_cron;
-select vault.create_secret('https://TU_REF.supabase.co', 'project_url');
-select vault.create_secret('sb_secret_XXXXXXXX', 'secret_key');
+select vault.create_secret('https://XXXX.supabase.co', 'project_url');
+select vault.create_secret('sb_secret_TU_CLAVE', 'secret_key');
 select private.schedule_platform_jobs();
 ```
 
-Esto activa el envío de push al crearse un aviso y programa las tareas (sincronización Garmin a las
-06:30 y 09:30, barrido de push cada 5 min). Sin este paso todo lo demás funciona, pero no llegan push.
-
-### 2.4 Secretos de las funciones
-
-```bash
-npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-... EXPO_ACCESS_TOKEN=token_de_expo
-```
+7. **Clave que cifra las claves de Garmin** (Git Bash; no la cambies nunca después):
 
 ```bash
 npx supabase secrets set GARMIN_KEY_SECRET="$(openssl rand -base64 48)"
 ```
 
-- `ANTHROPIC_API_KEY`: opcional. Sin ella el Coach IA usa el motor de reglas. Cada usuario debe dar
-  su permiso en la app antes de que se envíe nada a Anthropic.
-- `GARMIN_KEY_SECRET`: cifra las claves de Garmin guardadas. **No lo cambies** después (habría que
-  reconectar Garmin). El segundo comando funciona en Git Bash.
-- `EXPO_ACCESS_TOKEN`: expo.dev → *Account settings → Access tokens* (activa "Enhanced push security").
-
-**Revocar Sign in with Apple al borrar la cuenta** (lo pide Apple): en developer.apple.com →
-*Keys* crea una clave con *Sign in with Apple*, descarga el `.p8` y guarda:
+8. **Desplegar las funciones del servidor** (sin Docker):
 
 ```bash
-npx supabase secrets set APPLE_TEAM_ID=XXXXXXXXXX APPLE_KEY_ID=YYYYYYYYYY APPLE_CLIENT_ID=com.diegomolinacatala.rebufo
+npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
 ```
 
-```bash
-npx supabase secrets set APPLE_PRIVATE_KEY="$(cat AuthKey_YYYYYYYYYY.p8)"
-```
+9. *Recomendado:* *Authentication → Emails → SMTP* con un proveedor propio (p. ej. Resend, gratis): el
+   correo por defecto de Supabase solo envía unos pocos emails por hora.
 
-### 2.5 Desplegar las funciones (sin Docker)
-
-```bash
-npx supabase functions deploy --use-api
-```
-
-### 2.6 Login
-- *Authentication → Providers → Email*: activado. La plantilla con el **código de 6 dígitos**
-  (`supabase/templates/otp.html`) se sube con `npx supabase config push`.
-- El correo por defecto de Supabase tiene límites muy bajos: para invitar a amigos configura un SMTP
-  propio (*Authentication → SMTP*, p. ej. Resend).
-- **Sign in with Apple** (recomendado en iOS): antes de `config push`, crea `supabase/.env` (no se sube
-  a git) con `SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID=com.diegomolinacatala.rebufo,com.diegomolinacatala.rebufo.dev`
-  (o añádelos en *Providers → Apple → Client IDs*). Para el login nativo no hace falta secreto.
+> En el plan gratuito, un proyecto sin uso durante 7 días se pausa: *Restore* en el dashboard.
 
 ---
 
-## 3. Conectar la app al backend
+## 2. Apple Developer y App Store Connect (≈30 min)
 
-Crea `.env.local` en la raíz (no se sube a git):
+En **developer.apple.com → Certificates, Identifiers & Profiles**:
 
-```bash
-EXPO_PUBLIC_SUPABASE_URL=https://TU_REF.supabase.co
-EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_...
-```
+1. **Team ID:** *Membership details* → apúntalo.
+2. **App Group:** *Identifiers* → **+** → *App Groups* → `group.io.github.diegomolinacatala.ironman`.
+3. **Identificador de la app:** *Identifiers* → **+** → *App IDs* → *App* → descripción
+   `Road to Ironman`, *Bundle ID* explícito `io.github.diegomolinacatala.ironman`. Marca:
+   - **App Groups** → *Configure* → el grupo del paso 2.
+   - **HealthKit**.
+   - **Push Notifications**.
+   - **Sign In with Apple** (como *primary App ID*).
+4. **Identificador de los widgets:** otro *App ID* con *Bundle ID*
+   `io.github.diegomolinacatala.ironman.ExpoWidgetsTarget` y solo **App Groups** (el mismo grupo).
+5. **Clave para push y Sign in with Apple:** *Keys* → **+** → nombre `Road to Ironman` → marca
+   **Apple Push Notifications service (APNs)** y **Sign in with Apple** (*Configure* → primary App ID
+   `io.github.diegomolinacatala.ironman`) → *Register* → **descarga el `.p8`** (solo una vez) y apunta el
+   **Key ID**. Si ya tienes una clave de APNs (p. ej. la de Tasks) sirve para las push de todas tus
+   apps; entonces crea una clave solo con *Sign in with Apple* para esta app.
 
-Si quieres otro bundle id: `APP_BUNDLE_ID=com.tunombre.rebufo` (cámbialo antes de la primera build).
-Cuando publiques la política de privacidad, añade `EXPO_PUBLIC_PRIVACY_URL=https://…` para que la
-pantalla *Privacidad* de la app enlace a ella.
+En **appstoreconnect.apple.com**:
 
----
+6. **Crear la app:** *Apps* → **+** → *Nueva app* → iOS, nombre `Road to Ironman`, idioma principal
+   **Español (España)**, bundle ID `io.github.diegomolinacatala.ironman`, SKU `road-to-ironman`.
+   Si el nombre está cogido en la App Store usa una variante (p. ej. `Road to Ironman · Tri`): en la
+   pantalla del iPhone se seguirá viendo "Road to Ironman".
+7. **Clave de API de App Store Connect** (la que usa GitHub para subir las builds): si conservas el
+   `.p8` de la de Tasks, reutilízalo (mismo Key ID e Issuer ID). Si no: *Usuarios y acceso* →
+   *Integraciones* → *App Store Connect API* → *Claves de equipo* → **+** → rol **App Manager** →
+   descarga el `.p8` y apunta **Key ID** e **Issuer ID**.
 
-## 4. Builds con EAS y TestFlight
-
-```bash
-npx eas-cli@latest login
-```
-
-```bash
-npx eas-cli@latest init
-```
-
-`init` crea el proyecto en expo.dev y te da un **projectId**: añádelo a `.env.local` como
-`EXPO_PUBLIC_EAS_PROJECT_ID=...` (activa push y actualizaciones OTA).
-
-Variables para las builds en la nube (una vez por variable):
-
-```bash
-npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_SUPABASE_URL --value https://TU_REF.supabase.co --visibility plaintext
-```
-
-```bash
-npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_SUPABASE_KEY --value sb_publishable_... --visibility plaintext
-```
-
-```bash
-npx eas-cli@latest env:create --environment production --name EXPO_PUBLIC_EAS_PROJECT_ID --value TU_PROJECT_ID --visibility plaintext
-```
-
-(Si tu versión de la CLI usa `env:set`, el comando es el mismo cambiando el verbo.)
-
-**Primera build de producción — hazla interactiva** (te pedirá tu Apple ID + 2FA para crear
-certificados, el App Group de los widgets, HealthKit y push):
-
-```bash
-npx eas-cli@latest build -p ios --profile production --auto-submit
-```
-
-En ~30–60 min la build sube a App Store Connect y aparece en **TestFlight** (10–15 min de procesado).
-
-**Política de privacidad**: App Store Connect la pide (la app usa Apple Salud). Rellena y publica
-`docs/PRIVACY.md` (GitHub Pages, Notion…) y pega la URL en *App Store Connect → App → Privacidad de la app*.
-
-**Añadir a tu compañero como tester interno** (sin revisión de Apple):
-1. App Store Connect → *Usuarios y acceso* → `+` → su email → rol **Developer** (o Marketing),
-   acceso solo a esta app.
-2. Él acepta la invitación por email.
-3. App → *TestFlight* → *Internal Testing* → crea un grupo con distribución automática → añádelo.
-4. Instala **TestFlight** en su iPhone y acepta.
-
-Para más amigos: grupo **externo** con enlace público (la primera build pasa una revisión ligera).
-
-**Actualizaciones rápidas sin build** (solo cambios de JS):
-
-```bash
-npx eas-cli@latest update --channel production --environment production --message "cambios"
-```
-
-Cambios en permisos, widgets, plugins o librerías nativas → nueva build. La versión de runtime se calcula
-sola (`fingerprint`), así que una actualización OTA nunca llega a una build con código nativo distinto.
+> "IRONMAN" es una marca registrada. Para TestFlight interno (vosotros y amigos invitados) no hay
+> problema; si algún día la publicáis en la App Store, Apple podría pedir cambiar el nombre.
 
 ---
 
-## 5. Conecta tu Claude (cada uno el suyo)
+## 3. Secretos de Apple en Supabase (≈5 min)
 
-1. En la app: **Yo → Conecta tu Claude → Generar URL**. Cópiala (es como una contraseña).
-2. En **claude.ai** (web o escritorio): *Ajustes → Conectores → Añadir conector personalizado* →
-   pega la URL → autenticación **sin inicio de sesión**.
-3. En un chat activa **Rebufo** y tu conector de **Garmin** y pide, por ejemplo:
-   - "Planifica mi semana en Rebufo con mis datos de Garmin y mis huecos."
-   - "Hoy he jugado al pádel 90' a tope, reorganiza mi semana."
-   - "Guarda en Rebufo mi VFC, Body Battery y Training Readiness de Garmin de hoy."
-4. Los cambios llegan a la app como **propuesta** (notificación) y los aceptas uno a uno.
+Desde la carpeta donde tengas el `.p8` del paso 2.5 (Git Bash). Push:
 
-Si la URL se filtra: revócala en la app y genera otra (edita la URL del conector en claude.ai).
+```bash
+npx supabase secrets set APNS_TEAM_ID=TU_TEAM_ID APNS_KEY_ID=TU_KEY_ID APNS_TOPIC=io.github.diegomolinacatala.ironman
+```
 
----
+```bash
+npx supabase secrets set APNS_PRIVATE_KEY="$(cat AuthKey_TU_KEY_ID.p8)"
+```
 
-## 6. Garmin
+Sign in with Apple (revocar el acceso al borrar la cuenta; misma clave si la creaste con ambas casillas):
 
-- **Personal API (oficial, desde oct-2026)**: cada uno crea su clave en
-  https://connect.garmin.com/app/settings/personalApiToken (elige caducidad de 1 año) y la pega en
-  **Yo → Conexiones → Garmin**. Rebufo descarga sueño, VFC, Body Battery, FC en reposo y actividades
-  cada mañana y marca los entrenos como hechos.
-- **Apple Salud**: en Garmin Connect activa la sincronización con Salud y en Rebufo
-  **Conexiones → Apple Salud**. Aporta entrenos, sueño y FC (no VFC ni VO2max).
-- **Enviar entrenos al reloj**: hoy vía vuestro Claude (herramienta `get_plan_for_device` + vuestro
-  conector Garmin). Para hacerlo directo desde la app hay que pedir el nivel **Starter** del Garmin
-  Connect Developer Program (gratis, con revisión): ver `docs/research/04-integracion-garmin.md`.
+```bash
+npx supabase secrets set APPLE_TEAM_ID=TU_TEAM_ID APPLE_KEY_ID=TU_KEY_ID APPLE_CLIENT_ID=io.github.diegomolinacatala.ironman
+```
+
+```bash
+npx supabase secrets set APPLE_PRIVATE_KEY="$(cat AuthKey_TU_KEY_ID.p8)"
+```
+
+Guarda los `.p8` en un sitio seguro fuera del repo.
 
 ---
 
-## 7. Widgets y notificaciones
+## 4. GitHub (≈10 min)
 
-- Widgets: mantén pulsada la pantalla de inicio → `+` → **Rebufo** → *Hoy*, *Cuenta atrás* o (en la
-  pantalla de bloqueo) *Próximo entreno*.
-- Notificaciones: recordatorios de sesión, parte de la mañana, check-in por la noche y aviso del
-  domingo para planificar (configurables en **Yo → Notificaciones**). Las invitaciones a quedadas y
-  las propuestas de cambios llegan como push.
+1. **Subir el código** a `github.com/diegomolinacatala/ironman` y crear `main` (te lo puedo hacer yo).
+2. **Secretos y variables del repo** (en la carpeta del proyecto, con `gh` ya autenticado; o en la web:
+   *Settings → Secrets and variables → Actions*). Secretos, con la clave de API del paso 2.7:
+
+```bash
+gh secret set ASC_KEY_P8 < AuthKey_TU_ASC_KEY_ID.p8
+```
+
+```bash
+gh secret set ASC_KEY_ID --body TU_ASC_KEY_ID
+```
+
+```bash
+gh secret set ASC_ISSUER_ID --body TU_ISSUER_ID
+```
+
+Variables:
+
+```bash
+gh variable set APPLE_TEAM_ID --body TU_TEAM_ID
+```
+
+```bash
+gh variable set EXPO_PUBLIC_SUPABASE_URL --body https://XXXX.supabase.co
+```
+
+```bash
+gh variable set EXPO_PUBLIC_SUPABASE_KEY --body sb_publishable_TU_CLAVE
+```
+
+3. **Minutos de Mac:** el repo `ironman` es **privado**. El plan gratis de GitHub da unos 200 minutos
+   de Mac al mes (unas 6 builds). Si lo haces **público** (como Tasks) son ilimitados.
 
 ---
+
+## 5. Primera build (≈40 min, solo esperar)
+
+Cada push a `main` que toque la app lanza la build. También a mano:
+
+```bash
+gh workflow run ios.yml --ref main
+```
+
+Sigue el progreso en la pestaña **Actions** del repo. El workflow genera el proyecto de Xcode,
+compila, firma con tu clave de App Store Connect y sube a TestFlight. Si falla, pásame el enlace de la
+ejecución y lo arreglo.
+
+---
+
+## 6. TestFlight (≈10 min)
+
+1. La build aparece en App Store Connect → la app → **TestFlight** tras 10–15 min de procesado.
+2. **Tu compañero:** *Usuarios y acceso* → **+** → su email → rol **Developer** o **Marketing**, acceso
+   solo a esta app. Él acepta el email.
+3. *TestFlight* → *Internal Testing* → crea un grupo con distribución automática y añadíos los dos.
+4. Instalad **TestFlight** desde la App Store y aceptad la invitación.
+
+---
+
+## 7. En el iPhone (cada uno, ≈10 min)
+
+1. Abre la app → entra con **Apple** o con tu email (llega un código de 6 dígitos).
+2. Onboarding: nombre, @usuario, deportes, horas por semana, franjas y carrera objetivo.
+3. Permisos que quieras: notificaciones, calendario (solo horas ocupadas) y Salud.
+4. **Salud:** en Garmin Connect activa *Apple Salud*; luego en la app **Yo → Conexiones → Apple Salud**.
+5. **Amigos:** **Juntos → Añadir** → busca el @usuario del otro.
+6. **Widgets:** mantén pulsada la pantalla de inicio → **+** → Road to Ironman.
+
+---
+
+## 8. Garmin y tu Claude (cada uno)
+
+- **Garmin:** en la web de Garmin Connect, `connect.garmin.com/app/settings/personalApiToken` → crea una
+  clave de **1 año** → pégala en **Yo → Conexiones → Garmin**. Se sincroniza sola por la mañana.
+- **Conecta tu Claude** (usa tu suscripción de claude.ai, sin coste extra):
+  1. En la app: **Yo → Conecta tu Claude → Generar URL** y cópiala (es como una contraseña).
+  2. En claude.ai (web o escritorio): *Ajustes → Conectores → Añadir conector personalizado* → pega la
+     URL → **sin inicio de sesión**. En el plan gratuito solo cabe 1 conector personalizado.
+  3. En un chat activa **Road to Ironman** y tu conector de **Garmin**. Ejemplos:
+     "Planifica mi semana en Road to Ironman con mis datos de Garmin y mis huecos" ·
+     "Hoy he jugado al pádel 90' a tope, reorganiza mi semana".
+  4. Los cambios llegan como **propuesta** (notificación) y los aceptas en la app.
+
+---
+
+## 9. Política de privacidad (≈15 min)
+
+1. Rellena `docs/PRIVACY.md` (nombre, email de contacto, fecha) y publícala (página pública de Notion o
+   GitHub Pages).
+2. Pega la URL en App Store Connect → *Privacidad de la app*.
+3. Para que la pantalla *Privacidad* de la app enlace a ella:
+
+```bash
+gh variable set EXPO_PUBLIC_PRIVACY_URL --body https://TU_URL
+```
+
+(Entra en la siguiente build.)
+
+---
+
+## Opcional
+
+- **Coach IA dentro de la app** (Claude API, pago por uso): desactivado. Para activarlo hace falta
+  `ANTHROPIC_API_KEY` en Supabase, desplegar la función `coach` y la variable `EXPO_PUBLIC_AI_COACH=1`.
+- **Garmin "Starter"** (gratis, con solicitud en developer.garmin.com): permitiría enviar los entrenos
+  directamente al reloj desde la app.
 
 ## Problemas frecuentes
 
 | Síntoma | Solución |
 |---|---|
-| La app entra en modo demo en TestFlight | Faltan `EXPO_PUBLIC_SUPABASE_*` en el entorno `production` de EAS. |
-| El proyecto de Supabase está "paused" | Plan gratis tras 7 días sin uso: *Restore* en el dashboard. |
-| Widgets vacíos | Abre la app una vez; si cambiaste el bundle id, reinstala. |
-| No llegan push | Comprueba `EXPO_ACCESS_TOKEN`, el `projectId` y los secretos de Vault (§2.3). |
-| Coach IA responde "modo reglas" | Falta `ANTHROPIC_API_KEY` en los secretos de Supabase. |
+| La app entra en modo demo | Faltan las variables `EXPO_PUBLIC_SUPABASE_*` en GitHub (paso 4). |
+| La build falla al firmar | Revisa que existan los identificadores del paso 2 con sus capacidades y que la clave de API tenga rol App Manager o Admin. |
+| No llegan push | Revisa los secretos `APNS_*` (paso 3) y el SQL del paso 1.6. |
+| Widgets vacíos | Abre la app una vez; comprueba el App Group en ambos identificadores. |
+| Proyecto de Supabase "paused" | Plan gratis tras 7 días sin uso: *Restore*. |

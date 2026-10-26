@@ -69,7 +69,7 @@ export function GenerateUrlStep({ generator, isDemo }: { generator: TokenGenerat
 
 const CONNECTOR_STEPS = [
   'Abre claude.ai (web o escritorio) → Ajustes → Conectores.',
-  'Pulsa “Añadir conector personalizado”, ponle de nombre Rebufo y pega tu URL.',
+  'Pulsa “Añadir conector personalizado”, ponle de nombre Road to Ironman y pega tu URL.',
   'Deja la autenticación como “sin inicio de sesión” y guarda.',
 ] as const;
 
@@ -100,7 +100,7 @@ export function UseItStep() {
   return (
     <StepCard number={3} title="Úsalo en un chat">
       <Text variant="callout" color="textMuted">
-        En el chat, en “+ → Conectores”, activa Rebufo y tu conector de Garmin. Luego pide, por ejemplo:
+        En el chat, en “+ → Conectores”, activa Road to Ironman y tu conector de Garmin. Luego pide, por ejemplo:
       </Text>
       <PromptList />
       <Text variant="caption" color="textMuted">
@@ -110,7 +110,7 @@ export function UseItStep() {
   );
 }
 
-/** How "Tu Claude" differs from the in-app Coach IA. */
+/** How "Tu Claude" differs from the in-app Coach IA. Only shown while the AI coach is switched on. */
 export function CoachDifferenceCard() {
   return (
     <Card padding="lg" variant="tinted">
@@ -127,7 +127,7 @@ export function CoachDifferenceCard() {
         <View style={styles.flex}>
           <Text variant="bodyStrong">Coach IA</Text>
           <Text variant="caption" color="textMuted">
-            Dentro de Rebufo, sin salir de la app: replanes rápidos tras un imprevisto. Sin conexión usa reglas.
+            Dentro de la app, sin salir de ella: replanes rápidos tras un imprevisto. Sin conexión usa reglas.
           </Text>
         </View>
       </View>

@@ -77,4 +77,4 @@ const NextWorkoutWidget = (props: NextWorkoutWidgetProps, environment: WidgetEnv
   );
 };
 
-export default createWidget<NextWorkoutWidgetProps>('NextWorkoutWidget', NextWorkoutWidget, { next: null, linkBase: 'rebufo://' });
+export default createWidget<NextWorkoutWidgetProps>('NextWorkoutWidget', NextWorkoutWidget, { next: null, linkBase: 'roadtoironman://' });

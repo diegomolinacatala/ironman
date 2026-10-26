@@ -1,16 +1,14 @@
 /**
- * Notifications: permissions, Expo push registration and the local schedule
- * (reminders, morning summary, evening check-in, Sunday planning).
+ * Notifications: permissions, APNs push registration (iOS devices only) and the
+ * local schedule (reminders, morning summary, evening check-in, Sunday planning).
  * Web: everything is a safe no-op.
  */
-import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import type { Repository } from '@/data/repository';
 import type { ISODate, Profile, Workout } from '@/domain/types';
-import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { StorageKeys, writeJson } from '@/lib/storage';
 
@@ -82,39 +80,40 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 }
 
-function easProjectId(): string | null {
-  const fromEas = Constants.easConfig?.projectId;
-  const extra: unknown = Constants.expoConfig?.extra;
-  const eas = extra && typeof extra === 'object' ? (extra as Record<string, unknown>).eas : undefined;
-  const fromExtra = eas && typeof eas === 'object' ? (eas as Record<string, unknown>).projectId : undefined;
-  const candidates = [fromEas, fromExtra, env.easProjectId];
-  const id = candidates.find((v): v is string => typeof v === 'string' && v.length > 0);
-  return id ?? null;
+/** APNs device tokens are hex strings (length not guaranteed by Apple). */
+const APNS_TOKEN_PATTERN = /^[0-9a-f]+$/i;
+
+/** The raw APNs token from `getDevicePushTokenAsync`, or null when it is not one. */
+export function apnsTokenFrom(deviceToken: Notifications.DevicePushToken): string | null {
+  if (deviceToken.type !== 'ios' || typeof deviceToken.data !== 'string') return null;
+  const token = deviceToken.data.trim();
+  return APNS_TOKEN_PATTERN.test(token) ? token.toLowerCase() : null;
 }
 
 /**
- * Gets the Expo push token and stores it server-side. Asks for permission only
- * when it was never asked. Returns null (without throwing) on web, simulators,
- * missing EAS project id, denied permission or network errors.
+ * Gets this iPhone's raw APNs device token (the `push-dispatch` function sends
+ * straight to Apple, no Expo push service) and stores it server-side. Asks for
+ * permission only when it was never asked. Returns null (without throwing) on
+ * web, Android, simulators, denied permission, an unexpected token or network
+ * errors.
  *
  * The token is saved in `StorageKeys.pushToken` BEFORE the server call so the
  * data layer can always unregister it on sign-out / account deletion (deleting
  * a token that never got registered is a harmless no-op).
  */
 export async function registerForPush(repo: Repository): Promise<string | null> {
-  if (!isNative || !Device.isDevice) return null;
-  const projectId = easProjectId();
-  if (!projectId) {
-    logger.info('notifications: no EAS projectId, push disabled (run eas init)');
-    return null;
-  }
+  if (Platform.OS !== 'ios' || !Device.isDevice) return null;
   try {
     let status = await getNotificationPermission();
     if (status === 'undetermined') status = (await requestNotificationPermission()) ? 'granted' : 'denied';
     if (status !== 'granted') return null;
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = apnsTokenFrom(await Notifications.getDevicePushTokenAsync());
+    if (!token) {
+      logger.warn('notifications: unexpected device push token, push disabled');
+      return null;
+    }
     await writeJson(StorageKeys.pushToken, token);
-    await repo.registerPushToken(token, Platform.OS === 'ios' ? 'ios' : 'android');
+    await repo.registerPushToken(token, 'ios');
     return token;
   } catch (error) {
     logger.warn('notifications: push registration failed', error);
