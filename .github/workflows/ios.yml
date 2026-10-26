@@ -169,6 +169,9 @@ jobs:
           mkdir -p build/distribution-logs
           find "$(getconf DARWIN_USER_TEMP_DIR)" -maxdepth 1 -name '*.xcdistributionlogs' \
             -exec cp -R {} build/distribution-logs/ \; || true
+          # The repo is public: the logs carry App Store Connect bearer tokens (valid for minutes).
+          find build/distribution-logs -type f -exec \
+            sed -i '' -E 's/(Bearer )[A-Za-z0-9._-]+/\1<redacted>/g' {} + || true
 
       - name: Log de xcodebuild
         if: failure()
