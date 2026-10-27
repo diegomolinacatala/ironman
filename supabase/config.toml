@@ -150,3 +150,12 @@ verify_jwt = false
 # (pg_cron, webhooks) is verify_jwt = false, so the function verifies the user JWT itself.
 [functions.garmin]
 verify_jwt = false
+
+# v2 morning briefing ("Informe de hoy"): called by the app with the user's JWT. verify_jwt = false
+# like garmin: the function verifies the JWT in code (userIdFromJwt) and answers JSON errors.
+[functions.briefing]
+verify_jwt = false
+
+# v2 meal photo analysis (Claude vision): user JWT verified in code, same pattern as briefing.
+[functions.meal]
+verify_jwt = false

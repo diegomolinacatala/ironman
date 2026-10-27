@@ -122,7 +122,7 @@ describe('Supabase requestCoach with the AI coach on', () => {
       { status: 'done', reply: '¡Hecho!', proposal_id: 'p1', engine: 'ai' },
     ]);
     const response = await createCoachRequester({ ...fastDeps, ctx })(REQUEST);
-    expect(response).toEqual({ reply: '¡Hecho!', proposal: PROPOSAL, engine: 'ai' });
+    expect(response).toEqual({ reply: '¡Hecho!', proposal: PROPOSAL, engine: 'ai', memory: [], lifeEvent: null });
     expect(mockRunRulesCoach).not.toHaveBeenCalled();
   });
 

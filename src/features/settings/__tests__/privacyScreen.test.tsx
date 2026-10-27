@@ -53,7 +53,7 @@ describe('Privacidad', () => {
   test('summarises the policy and turns the Coach IA consent on', async () => {
     await render(<PrivacyScreen />);
     for (const section of privacySummary(true)) expect(screen.getByText(section.title)).toBeTruthy();
-    expect(screen.getByText('Anthropic (Coach IA)')).toBeTruthy();
+    expect(screen.getByText('Cloudflare (Coach IA)')).toBeTruthy();
     const toggle = screen.getByRole('switch', { name: AI_CONSENT_TITLE });
     expect(toggle.props.value).toBe(false);
     await fireEvent(toggle, 'valueChange', true);
@@ -68,7 +68,7 @@ describe('Privacidad', () => {
     await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith({ aiConsentAt: null }));
   });
 
-  test('the demo explains that nothing is sent to Anthropic', async () => {
+  test('the demo explains that nothing is sent to the AI provider', async () => {
     mockState.mode = 'demo';
     await render(<PrivacyScreen />);
     expect(screen.getByText(/En modo demo el coach usa el motor de reglas/)).toBeTruthy();
@@ -91,7 +91,7 @@ describe('Privacidad with the AI coach switched off (default)', () => {
     await render(<PrivacyScreen />);
     for (const section of privacySummary(false)) expect(screen.getByText(section.title)).toBeTruthy();
     expect(screen.queryByText('Coach IA')).toBeNull();
-    expect(screen.queryByText('Anthropic (Coach IA)')).toBeNull();
+    expect(screen.queryByText('Cloudflare (Coach IA)')).toBeNull();
     expect(screen.queryByRole('switch', { name: AI_CONSENT_TITLE })).toBeNull();
     expect(screen.getByText('Tu propio Claude')).toBeTruthy();
     expect(screen.getAllByText(/Anthropic/)).toHaveLength(1);
@@ -99,10 +99,10 @@ describe('Privacidad with the AI coach switched off (default)', () => {
 
   test('the summary drops the Coach IA point', () => {
     const titles = privacySummary(false).flatMap((section) => section.points.map((point) => point.title));
-    expect(titles).not.toContain('Anthropic (Coach IA)');
+    expect(titles).not.toContain('Cloudflare (Coach IA)');
     expect(titles).toContain('Tu propio Claude');
     expect(privacySummary(true).flatMap((section) => section.points.map((point) => point.title))).toContain(
-      'Anthropic (Coach IA)',
+      'Cloudflare (Coach IA)',
     );
   });
 });

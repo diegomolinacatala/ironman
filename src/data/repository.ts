@@ -14,6 +14,7 @@ import type {
   AppNotification,
   ApplyResult,
   BusyBlock,
+  Briefing,
   BusyBlockDraft,
   CheckinDraft,
   CoachRequest,
@@ -30,6 +31,8 @@ import type {
   JointSessionDraft,
   LifeEvent,
   LifeEventDraft,
+  MealAnalysis,
+  MealAnalysisInput,
   MetricsDraft,
   NutritionDraft,
   NutritionLog,
@@ -50,6 +53,7 @@ import type {
   WorkoutDraft,
   WorkoutPatch,
   CompletedData,
+  ISODate,
 } from '@/domain/types';
 
 export type RepositoryMode = 'supabase' | 'demo';
@@ -93,7 +97,8 @@ export type ChangeTopic =
   | 'notifications'
   | 'proposals'
   | 'profile'
-  | 'integrations';
+  | 'integrations'
+  | 'briefings';
 
 export interface AuthSession {
   userId: UUID;
@@ -170,6 +175,22 @@ export interface Repository {
   listNutrition(range: DateRange): Promise<NutritionLog[]>;
   createNutrition(draft: NutritionDraft): Promise<NutritionLog>;
   deleteNutrition(id: UUID): Promise<void>;
+  /**
+   * Estimates a meal from a photo and/or a description (Claude vision via the `meal` edge
+   * function). Never throws for "AI unavailable": falls back to a rough local estimate with
+   * `engine: 'rules'` and `confidence: 'low'`. Throws RepositoryError for auth/validation/network.
+   */
+  analyzeMeal(input: MealAnalysisInput): Promise<MealAnalysis>;
+
+  // Morning briefing -----------------------------------------------------------
+  /** The stored briefing of `date` (server-side, written by the `briefing` function), or null. */
+  getBriefing(date: ISODate): Promise<Briefing | null>;
+  /**
+   * Generates (or returns today's cached) briefing: refreshes Garmin first when stale, then
+   * Claude writes it. `refresh` forces a new one. Falls back to a local template
+   * (`engine: 'rules'`) when the AI is unavailable, so it only throws for auth/network errors.
+   */
+  generateBriefing(date: ISODate, opts?: { refresh?: boolean }): Promise<Briefing>;
 
   // Social -------------------------------------------------------------------
   searchProfiles(query: string): Promise<PublicProfile[]>;

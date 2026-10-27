@@ -41,7 +41,8 @@ export function seedProfiles(createdAt: ISODateTime): Profile[] {
     visibility: 'full',
     coachNotes:
       'Estudiante de máster: clases de lunes a viernes de 9 a 14 h. Juego al pádel con los del máster algunas semanas. Molestias de cintilla iliotibial en 2025: cuidado con subir el volumen de carrera de golpe. Como de todo; intento llegar a 1,6 g/kg de proteína.',
-    onboardedAt: createdAt,
+    // Like the v2 migration (`onboarded_at = null`): the demo athlete goes through the new onboarding once.
+    onboardedAt: null,
     aiConsentAt: null,
   };
   const alex: Profile = {

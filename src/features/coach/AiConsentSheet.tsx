@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, ErrorNotice, IconButton, Text, radius, space, useTheme } from '@/ui';
 
-import { AI_PROVIDER, AI_TERMS_NOTE } from './aiConsent';
+import { AI_PROVIDER, AI_PROVIDER_DETAIL, AI_TERMS_NOTE } from './aiConsent';
 import { AiSharedDataList } from './AiSharedDataList';
 
 export interface AiConsentSheetProps {
@@ -49,7 +49,7 @@ export function AiConsentSheet({ visible, saving, error, onAccept, onDecline, on
           </View>
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <Text variant="callout">
-              {`Para proponerte cambios, el Coach IA envía a ${AI_PROVIDER} (la empresa que crea Claude) un resumen de:`}
+              {`Para entender lo que le cuentas, leer tus comidas y preparar tu informe, el Coach IA envía a ${AI_PROVIDER_DETAIL} un resumen de:`}
             </Text>
             <AiSharedDataList />
             <Text variant="caption" color="textMuted">

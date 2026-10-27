@@ -8,6 +8,7 @@ import { Button, ErrorNotice, Icon, Text, haptics, radius, space, useTheme } fro
 import { formatRelativeTime } from './format';
 import { IntegrationCard } from './IntegrationCard';
 import { toPermissionState } from './PermissionRow';
+import { TRAINING_CALENDAR_TITLE } from '../onboarding/calendarModel';
 import { calendarPrivacyNote } from './privacyPolicy';
 
 interface DeviceCalendar {
@@ -50,7 +51,7 @@ export function CalendarCard() {
   };
 
   return (
-    <IntegrationCard icon="week" title="Calendario del iPhone" status={status}>
+    <IntegrationCard icon="week" title="Tu agenda" status={status}>
       <Text variant="callout" color="textMuted">
         Leemos tus clases, trabajo y planes para no plantarte un entreno encima y para encontrar huecos con tus amigos.
       </Text>
@@ -98,14 +99,16 @@ export function CalendarCard() {
   );
 }
 
-interface CalendarListProps {
+export interface CalendarListProps {
   calendars: readonly DeviceCalendar[];
   selectedIds: readonly string[];
   onToggle: (id: string) => void;
 }
 
-function CalendarList({ calendars, selectedIds, onToggle }: CalendarListProps) {
+export function CalendarList({ calendars: all, selectedIds, onToggle }: CalendarListProps) {
   const { colors } = useTheme();
+  // Our own training calendar is written by us, never read back as busy time.
+  const calendars = all.filter((c) => c.title !== TRAINING_CALENDAR_TITLE);
   if (calendars.length === 0) {
     return (
       <Text variant="caption" color="textMuted">

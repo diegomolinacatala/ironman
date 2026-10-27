@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { daysInRange, startOfWeek, todayISO, weekRange } from '@/domain/dates';
+import { addDays, daysInRange, isoWeekNumber, startOfWeek, todayISO, weekRange } from '@/domain/dates';
 import type { ISODate, Workout } from '@/domain/types';
+import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { DaySection } from '@/features/week/DaySection';
 import { PhaseLine } from '@/features/week/PhaseLine';
 import { usePlanWeek } from '@/features/week/usePlanWeek';
@@ -17,6 +18,13 @@ import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
 import { errorMessage } from '@/lib/logger';
 import { Button, EmptyState, ErrorNotice, Loading, Screen, space } from '@/ui';
 
+/** "Esta semana" / "Semana que viene" / "Semana 45". */
+function weekOverline(weekStart: ISODate, currentWeekStart: ISODate): string {
+  if (weekStart === currentWeekStart) return 'Esta semana';
+  if (weekStart === addDays(currentWeekStart, 7)) return 'Semana que viene';
+  return `Semana ${isoWeekNumber(weekStart)}`;
+}
+
 export default function WeekScreen() {
   const params = useLocalSearchParams<{ week?: string }>();
   const currentWeekStart = startOfWeek(todayISO());
@@ -25,6 +33,7 @@ export default function WeekScreen() {
   const planner = usePlanWeek();
   const actions = useWorkoutActions();
   const sheet = useActionSheet();
+  const bottomPadding = useTabBottomPadding();
   const partner = (w: Workout) => partnerNameFor(w, data.jointSessions, data.myId);
 
   const openActions = (w: Workout) =>
@@ -47,10 +56,11 @@ export default function WeekScreen() {
 
   return (
     <Screen
-      overline="Plan semanal"
-      title="Semana"
+      overline={weekOverline(weekStart, currentWeekStart)}
+      title="Plan"
       onRefresh={() => void data.refresh()}
-      refreshing={data.isRefreshing}>
+      refreshing={data.isRefreshing}
+      contentStyle={bottomPadding != null ? { paddingBottom: bottomPadding } : undefined}>
       <WeekSwitcher weekStart={weekStart} currentWeekStart={currentWeekStart} onChange={(week) => router.setParams({ week })} />
       <PhaseLine info={data.phase} />
       {data.isLoading ? <Loading label="Cargando la semana" /> : null}

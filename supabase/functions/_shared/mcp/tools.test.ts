@@ -115,6 +115,26 @@ test('log_daily_metrics upserts only provided fields with Garmin attribution', a
   assert.equal(outOfRange.isError, true);
 });
 
+test('log_daily_metrics accepts sleep stages and start/end (normalized to UTC instants)', async () => {
+  const state = emptyState();
+  const r = await run(state, 'log_daily_metrics', {
+    days: [{ date: '2026-10-24', sleep_deep_min: 82, sleep_rem_min: 95, sleep_start: '2026-10-23T23:10:00+02:00', sleep_end: '2026-10-24T06:40:00+02:00' }],
+  });
+  assert.equal(r.isError, undefined, text(r));
+  const row = state.metricUpserts[0].rows[0];
+  assert.equal(row.sleepDeepMin, 82);
+  assert.equal(row.sleepRemMin, 95);
+  assert.equal(row.sleepStart, '2026-10-23T21:10:00.000Z');
+  assert.equal(row.sleepEnd, '2026-10-24T04:40:00.000Z');
+  assert.equal('sleepLightMin' in row, false);
+  const backwards = await run(state, 'log_daily_metrics', { days: [{ date: '2026-10-24', sleep_start: '2026-10-24T07:00:00Z', sleep_end: '2026-10-23T22:00:00Z' }] });
+  assert.equal(backwards.isError, true);
+  const garbage = await run(state, 'log_daily_metrics', { days: [{ date: '2026-10-24', sleep_start: 'anoche' }] });
+  assert.equal(garbage.isError, true);
+  const tooLong = await run(state, 'log_daily_metrics', { days: [{ date: '2026-10-24', sleep_awake_min: 2000 }] });
+  assert.equal(tooLong.isError, true);
+});
+
 test('log_completed_activity completes the matching planned workout, else creates one, without duplicates', async () => {
   const state = emptyState();
   state.workouts.push(workout({ id: PLANNED_ID, date: '2026-10-24', sport: 'run', durationMin: 50, startTime: '08:00' }));

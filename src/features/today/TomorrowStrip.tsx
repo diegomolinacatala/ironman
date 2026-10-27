@@ -13,7 +13,7 @@ export function TomorrowStrip({ date, workouts }: { date: ISODate; workouts: Wor
   const training = workouts.filter((w) => w.sport !== 'rest');
   return (
     <View style={styles.root}>
-      <SectionHeader title={`Mañana · ${formatDayShort(date)}`} action={{ label: 'Ver semana', onPress: () => router.push('/week') }} />
+      <SectionHeader title={`Mañana · ${formatDayShort(date)}`} action={{ label: 'Ver plan', onPress: () => router.push('/week') }} />
       {training.length === 0 ? (
         <Card variant="tinted" padding="md">
           <View style={styles.row}>

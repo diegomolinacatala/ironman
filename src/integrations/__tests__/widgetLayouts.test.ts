@@ -8,6 +8,7 @@
  */
 import { describe, expect, jest, test } from '@jest/globals';
 
+import type { BriefingWidgetProps } from '../widgets/BriefingWidget';
 import type { NextWorkoutWidgetProps } from '../widgets/NextWorkoutWidget';
 import type { RaceWidgetProps } from '../widgets/RaceWidget';
 import type { TodayWidgetProps } from '../widgets/TodayWidget';
@@ -28,7 +29,7 @@ interface FakeElement {
   props: { modifiers?: FakeModifier[]; [key: string]: unknown };
 }
 
-type Layout = (props: unknown, environment: { widgetFamily: string; colorScheme: string }) => FakeElement;
+type Layout = (props: unknown, environment: { widgetFamily: string; colorScheme: string; date?: Date }) => FakeElement;
 
 /**
  * Identifiers the serialised layout references resolve to fakes: `_jsx`/`_jsxs`
@@ -86,7 +87,21 @@ const todayVariants: TodayWidgetProps[] = [
   { dateLabel: '', today: [], tomorrow: [], next: null, allDoneToday: false, week: [], weekPercent: 0, weekSummary: '', linkBase: 'roadtoironman://' },
 ];
 
+const briefingVariants: (BriefingWidgetProps | { linkBase: string })[] = [
+  { date: '2026-10-27', headline: 'Has dormido bien: hoy toca rodaje suave', linkBase: 'roadtoironman://' },
+  { date: '', headline: '', linkBase: 'roadtoironman://' },
+  // What reaches the widget once plist.ts dropped empty values.
+  { linkBase: 'roadtoironman://' },
+];
+
 const cases: { name: string; module: string; families: string[]; variants: unknown[]; lockScreen: string[] }[] = [
+  {
+    name: 'BriefingWidget',
+    module: '../widgets/BriefingWidget',
+    families: ['accessoryRectangular', 'accessoryCircular', 'accessoryInline', 'systemSmall'],
+    variants: briefingVariants,
+    lockScreen: ['accessoryRectangular', 'accessoryCircular', 'accessoryInline'],
+  },
   { name: 'NextWorkoutWidget', module: '../widgets/NextWorkoutWidget', families: ['accessoryRectangular', 'accessoryInline'], variants: nextVariants, lockScreen: ['accessoryRectangular', 'accessoryInline'] },
   { name: 'RaceWidget', module: '../widgets/RaceWidget', families: ['systemSmall', 'accessoryCircular', 'accessoryInline'], variants: raceVariants, lockScreen: ['accessoryCircular', 'accessoryInline'] },
   { name: 'TodayWidget', module: '../widgets/TodayWidget', families: ['systemSmall', 'systemMedium', 'systemLarge'], variants: todayVariants, lockScreen: [] },
@@ -112,5 +127,24 @@ describe.each(cases)('$name', ({ module, families, variants, lockScreen }) => {
       const root = layout(props, { widgetFamily: family, colorScheme: 'light' });
       expect(root.props.modifiers?.some((m) => m.modifier === 'widgetURL')).toBe(true);
     }
+  });
+});
+
+describe('BriefingWidget content', () => {
+  const layout = loadLayout('../widgets/BriefingWidget');
+  const headline = 'Has dormido bien: hoy toca rodaje suave';
+  const props: BriefingWidgetProps = { date: '2026-10-27', headline, linkBase: 'roadtoironman://' };
+
+  test('shows the headline on its own day and the call to action afterwards', () => {
+    const sameDay = layout(props, { widgetFamily: 'accessoryInline', colorScheme: 'light', date: new Date(2026, 9, 27, 9, 0) });
+    expect(sameDay.props.children).toBe(headline);
+    const nextDay = layout(props, { widgetFamily: 'accessoryInline', colorScheme: 'light', date: new Date(2026, 9, 28, 0, 0) });
+    expect(nextDay.props.children).toBe('Informe de hoy · escúchalo');
+  });
+
+  test('opens the briefing and plays it', () => {
+    const root = layout(props, { widgetFamily: 'accessoryRectangular', colorScheme: 'light', date: new Date(2026, 9, 27, 9, 0) });
+    const link = root.props.modifiers?.find((m) => m.modifier === 'widgetURL');
+    expect(link?.args[0]).toBe('roadtoironman://briefing?play=1');
   });
 });

@@ -2,16 +2,18 @@
  * Structured output of the AI coach: a flat, all-required-but-nullable change
  * shape (structured outputs need every property listed and no numeric bounds),
  * converted to camelCase `PlanChange` and re-validated with the strict schema.
+ * v2 adds `memory` (facts to remember) and `life_event` (imprevisto to log);
+ * both are validated on their own so a bad one never discards the reply.
  */
 import { planChangeSchema } from '../planning/changes.ts';
-import { array, boolean, enumOf, integer, nullable, object, string, toStructuredOutputSchema } from '../schema.ts';
-import type { Infer } from '../schema.ts';
-import { INTENSITIES, SPORTS } from '../types.ts';
+import { array, boolean, enumOf, intEnum, integer, nullable, object, string, toStructuredOutputSchema } from '../schema.ts';
+import type { Infer, Schema } from '../schema.ts';
+import { BODY_AREAS, INTENSITIES, LIFE_EVENT_KINDS, SPORTS } from '../types.ts';
 import type { PlanChange, WorkoutDraft } from '../types.ts';
 
 export const MAX_COACH_CHANGES = 30;
 
-const flatChange = object({
+const flatChangeShape = {
   op: enumOf(['add', 'update', 'move', 'delete'] as const),
   workoutId: nullable(string({ description: 'Id del entreno (update/move/delete) o null (add).' })),
   reason: string({ description: 'Motivo en una frase.' }),
@@ -24,16 +26,65 @@ const flatChange = object({
   distanceM: nullable(integer()),
   intensity: nullable(enumOf(INTENSITIES)),
   isKey: nullable(boolean()),
+};
+
+const flatChange = object(flatChangeShape);
+/** Same shape, but extra keys from weaker models are ignored instead of rejecting the change. */
+const lenientFlatChange = object(flatChangeShape, undefined, { stripUnknown: true });
+
+/** Defaults for the nullable fields some open models leave out. */
+const CHANGE_DEFAULTS: Record<string, unknown> = {
+  workoutId: null,
+  reason: '',
+  date: null,
+  startTime: null,
+  sport: null,
+  title: null,
+  description: null,
+  durationMin: null,
+  distanceM: null,
+  intensity: null,
+  isKey: null,
+};
+
+/** Imprevisto the coach wants to log (validated later against today's date). */
+export const lifeEventOutputSchema = object({
+  kind: enumOf(LIFE_EVENT_KINDS),
+  title: string({ min: 1, description: 'Título corto en español ("Molestia en la rodilla", "Viaje a Bilbao").' }),
+  start_date: string({ format: 'date', description: 'YYYY-MM-DD.' }),
+  end_date: nullable(string({ format: 'date', description: 'YYYY-MM-DD o null si es un solo día.' })),
+  severity: intEnum([1, 2, 3] as const, '1 leve, 2 moderado, 3 serio.'),
+  body_area: nullable(enumOf(BODY_AREAS, 'Solo para lesiones o molestias.')),
+  notes: nullable(string()),
 });
+
+export type LifeEventOutput = Infer<typeof lifeEventOutputSchema>;
+
+/** Publishes the strict JSON Schema but accepts any value at runtime (checked by the caller). */
+function deferred<T>(schema: Schema<T>): Schema<unknown> {
+  return { json: schema.json, parse: (input) => ({ ok: true, value: input }) };
+}
 
 export const coachOutputSchema = object({
   reply: string({ min: 1, description: 'Respuesta al atleta en español.' }),
   summary: string({ description: 'Resumen de una línea de la propuesta.' }),
   changes: array(flatChange),
+  memory: array(string(), { description: '0-3 hechos o preferencias duraderas del atleta (≤ 140 caracteres cada uno).' }),
+  life_event: deferred(nullable(lifeEventOutputSchema)),
 });
 
-export type CoachOutput = Infer<typeof coachOutputSchema>;
 type FlatChange = Infer<typeof flatChange>;
+
+export interface CoachOutput {
+  reply: string;
+  summary: string;
+  changes: FlatChange[];
+  memory: string[];
+  /** Validated later (toLifeEventInsert); anything here is untrusted. */
+  life_event: unknown;
+  /** Changes whose shape was unusable (counted as dropped in the reply). */
+  malformedChanges: number;
+}
 
 /** JSON Schema sent as `output_config.format.schema`. */
 export const COACH_OUTPUT_JSON_SCHEMA = toStructuredOutputSchema(coachOutputSchema.json) as Record<string, unknown>;
@@ -89,7 +140,23 @@ export function toPlanChanges(flat: readonly FlatChange[]): ConvertedChanges {
   return { changes, rejected };
 }
 
-/** Parses the model text (JSON) and validates its shape. */
+function parseChanges(raw: unknown): { changes: FlatChange[]; malformed: number } {
+  if (raw === undefined || raw === null) return { changes: [], malformed: 0 };
+  if (!Array.isArray(raw)) return { changes: [], malformed: 1 };
+  const parsed = raw.map((item) =>
+    lenientFlatChange.parse(typeof item === 'object' && item !== null && !Array.isArray(item) ? { ...CHANGE_DEFAULTS, ...item } : item, ''),
+  );
+  return {
+    changes: parsed.flatMap((p) => (p.ok ? [p.value] : [])),
+    malformed: parsed.filter((p) => !p.ok).length,
+  };
+}
+
+/**
+ * Parses the model text (JSON). Degrades gracefully for weaker models: only a non-empty
+ * `reply` is mandatory; malformed changes are dropped (and counted), `summary` defaults to
+ * '', `memory` keeps only strings and `life_event` is checked later. Null → bad output.
+ */
 export function parseCoachOutput(text: string): CoachOutput | null {
   let value: unknown;
   try {
@@ -97,6 +164,17 @@ export function parseCoachOutput(text: string): CoachOutput | null {
   } catch {
     return null;
   }
-  const parsed = coachOutputSchema.parse(value, '');
-  return parsed.ok ? parsed.value : null;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const reply = typeof v.reply === 'string' ? v.reply.trim() : '';
+  if (!reply) return null;
+  const { changes, malformed } = parseChanges(v.changes);
+  return {
+    reply,
+    summary: typeof v.summary === 'string' ? v.summary.trim() : '',
+    changes,
+    memory: Array.isArray(v.memory) ? v.memory.filter((m): m is string => typeof m === 'string') : [],
+    life_event: v.life_event ?? null,
+    malformedChanges: malformed,
+  };
 }

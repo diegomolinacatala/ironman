@@ -185,9 +185,42 @@ describe('table mappers round-trip (domain → row → domain)', () => {
       steps: 12000,
       stressAvg: 25,
       trainingStatus: 'Productivo',
+      sleepDeepMin: 82,
+      sleepLightMin: 250,
+      sleepRemMin: 104,
+      sleepAwakeMin: 18,
+      sleepStart: '2026-10-24T21:40:00.000Z',
+      sleepEnd: '2026-10-25T05:15:00.000Z',
     };
     const { userId, ...draft } = metrics;
-    expect(rowToMetrics(metricsDraftToRow(draft, userId))).toEqual(metrics);
+    const row = metricsDraftToRow(draft, userId);
+    expect(row).toMatchObject({ sleep_deep_min: 82, sleep_rem_min: 104, sleep_start: '2026-10-24T21:40:00.000Z' });
+    expect(rowToMetrics(row)).toEqual(metrics);
+  });
+
+  it('metrics without sleep detail (HealthKit) leave the v2 columns untouched', () => {
+    const draft = {
+      date: '2026-10-25',
+      source: 'healthkit',
+      hrvMs: 60,
+      restingHr: 50,
+      sleepHours: 7,
+      sleepScore: null,
+      bodyBattery: null,
+      trainingReadiness: null,
+      vo2max: null,
+      steps: 9000,
+      stressAvg: null,
+      trainingStatus: null,
+    } as const;
+    const row = metricsDraftToRow(draft, ME);
+    expect(Object.keys(row).some((k) => k.startsWith('sleep_') && k !== 'sleep_hours' && k !== 'sleep_score')).toBe(false);
+    expect(rowToMetrics(row)).toMatchObject({ sleepDeepMin: null, sleepStart: null, sleepEnd: null });
+    expect(metricsDraftToRow({ ...draft, sleepDeepMin: 2000.4, sleepAwakeMin: -3, sleepRemMin: null }, ME)).toMatchObject({
+      sleep_deep_min: 1440,
+      sleep_awake_min: 0,
+      sleep_rem_min: null,
+    });
   });
 
   it('nutrition', () => {

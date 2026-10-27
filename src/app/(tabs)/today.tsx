@@ -1,97 +1,83 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
+import { StyleSheet } from 'react-native';
 
 import { isoWeekNumber } from '@/domain/dates';
 import type { Workout } from '@/domain/types';
+import { needsInlineAccessory } from '@/features/accessory/coachActions';
+import { CoachAccessory } from '@/features/accessory/CoachAccessory';
+import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
+import { BriefingCard } from '@/features/briefing/BriefingCard';
+import { Appear } from '@/features/today/Appear';
 import { Banners } from '@/features/today/Banners';
-import { BellButton } from '@/features/today/BellButton';
-import { DayStatusCard } from '@/features/today/DayStatusCard';
-import { HeroSession } from '@/features/today/HeroSession';
+import { MealsStrip } from '@/features/today/MealsStrip';
 import { RaceChip } from '@/features/today/RaceChip';
-import { ReadinessCard } from '@/features/today/ReadinessCard';
-import { planForToday, todayHeadline } from '@/features/today/selectors';
+import { TodayHeader } from '@/features/today/TodayHeader';
+import { TodaySessionSection } from '@/features/today/TodaySessionSection';
+import { dateLine, greeting } from '@/features/today/todayModel';
 import { TomorrowStrip } from '@/features/today/TomorrowStrip';
 import { useTodayData } from '@/features/today/useTodayData';
+import { useActionSheet } from '@/features/workouts/actionSheet';
 import { CompleteSheet } from '@/features/workouts/CompleteSheet';
-import { partnerNameFor } from '@/features/workouts/draft';
-import { FUELING_MIN_DURATION, FuelingHint } from '@/features/workouts/FuelingHint';
 import { MoveSheet } from '@/features/workouts/MoveSheet';
 import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
-import { WorkoutCard } from '@/features/workouts/WorkoutCard';
-import { errorMessage } from '@/lib/logger';
-import { Button, ErrorNotice, Loading, Screen, SectionHeader, Stack } from '@/ui';
+import { Screen, space } from '@/ui';
 
+/**
+ * Hoy (v2): greeting, race chip, the "Informe de hoy" hero, today's session, today's meals and
+ * tomorrow. Talking to the coach lives in the tab-bar accessory.
+ */
 export default function TodayScreen() {
   const data = useTodayData();
   const actions = useWorkoutActions();
+  const sheet = useActionSheet();
+  const bottomPadding = useTabBottomPadding();
   const [completing, setCompleting] = useState<Workout | null>(null);
   const [moving, setMoving] = useState<Workout | null>(null);
   const { today } = data;
-  const plan = planForToday(data.todayWorkouts, today);
-  const partner = (w: Workout) => partnerNameFor(w, data.jointSessions, data.myId);
+
+  const openMore = (workout: Workout) =>
+    sheet.open({
+      title: workout.title,
+      actions: [
+        { label: 'Mover a otro día', icon: 'move', onPress: () => setMoving(workout) },
+        { label: 'Saltar', icon: 'skip', onPress: () => void actions.skip(workout) },
+      ],
+    });
 
   return (
     <Screen
-      overline={`${todayHeadline(today)} · Semana ${isoWeekNumber(today)}`}
-      title="Hoy"
-      headerRight={<BellButton unread={data.unread} />}
       onRefresh={() => void data.refresh()}
-      refreshing={data.isRefreshing}>
-      {data.racesReady ? <RaceChip race={data.race} phase={data.phase} today={today} /> : null}
+      refreshing={data.isRefreshing}
+      contentStyle={bottomPadding != null ? { paddingBottom: bottomPadding } : undefined}>
+      <Appear index={0} style={styles.header}>
+        <TodayHeader
+          greeting={greeting(data.displayName)}
+          dateLine={`${dateLine(today)} · Semana ${isoWeekNumber(today)}`}
+          unread={data.unread}
+        />
+        {data.racesReady ? <RaceChip race={data.race} phase={data.phase} today={today} /> : null}
+      </Appear>
+      {needsInlineAccessory() ? (
+        <Appear index={1}>
+          <CoachAccessory placement="regular" surface="card" />
+        </Appear>
+      ) : null}
       <Banners invites={data.invites} proposals={data.proposals} today={today} />
 
-      {data.isLoading ? <Loading label="Cargando tu día" /> : null}
-      {data.error ? <ErrorNotice message={errorMessage(data.error)} onRetry={() => void data.refresh()} /> : null}
-
+      <Appear index={2}>
+        <BriefingCard date={today} />
+      </Appear>
+      <Appear index={3}>
+        <TodaySessionSection data={data} busy={actions.busy} onComplete={setCompleting} onMore={openMore} />
+      </Appear>
+      <Appear index={4}>
+        <MealsStrip date={today} meals={data.meals} />
+      </Appear>
       {!data.isLoading && !data.error ? (
-        <>
-          {plan.hero ? (
-            <HeroSession
-              workout={plan.hero}
-              partnerName={partner(plan.hero)}
-              onOpen={() => router.push(`/workout/${plan.hero?.id ?? ''}`)}
-              onComplete={() => setCompleting(plan.hero)}
-              onSkip={() => {
-                if (plan.hero) void actions.skip(plan.hero);
-              }}
-              onMove={() => setMoving(plan.hero)}
-              busy={actions.busy}
-            />
-          ) : (
-            <DayStatusCard kind={plan.isRestDay ? 'rest' : 'done'} today={today} />
-          )}
-          {plan.hero && plan.hero.durationMin >= FUELING_MIN_DURATION ? <FuelingHint workout={plan.hero} /> : null}
-          {plan.others.length > 0 ? (
-            <Stack gap="sm">
-              <SectionHeader title={plan.hero ? 'También hoy' : 'Hoy'} />
-              {plan.others.map((w) => (
-                <WorkoutCard
-                  key={w.id}
-                  workout={w}
-                  compact
-                  today={today}
-                  partnerName={partner(w)}
-                  onPress={() => router.push(`/workout/${w.id}`)}
-                />
-              ))}
-            </Stack>
-          ) : null}
-        </>
+        <Appear index={5}>
+          <TomorrowStrip date={data.tomorrow} workouts={data.tomorrowWorkouts} />
+        </Appear>
       ) : null}
-
-      <ReadinessCard readiness={data.readiness} hasCheckin={data.checkin != null} />
-
-      <Button
-        label="Ha surgido algo"
-        icon="bolt"
-        variant="secondary"
-        size="lg"
-        fullWidth
-        onPress={() => router.push(`/event/edit?date=${today}`)}
-        accessibilityHint="Apunta un imprevisto: pádel, lesión, trabajo, viaje… y reorganiza tu semana"
-      />
-
-      {!data.isLoading && !data.error ? <TomorrowStrip date={data.tomorrow} workouts={data.tomorrowWorkouts} /> : null}
 
       {completing ? (
         <CompleteSheet key={completing.id} workout={completing} visible onClose={() => setCompleting(null)} />
@@ -110,6 +96,11 @@ export default function TodayScreen() {
           }}
         />
       ) : null}
+      {sheet.element}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { gap: space.md },
+});

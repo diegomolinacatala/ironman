@@ -1,13 +1,15 @@
 /**
- * Coach for the Supabase backend. With the AI coach OFF (`env.aiCoachEnabled`,
- * the default) it is simply the local rules engine: no edge function, no
- * `coach_jobs`, nothing leaves the device for Anthropic.
+ * Coach for the Supabase backend. With the AI OFF (`env.aiCoachEnabled` false,
+ * EXPO_PUBLIC_AI_COACH=0) it is simply the local rules engine: no edge function, no
+ * `coach_jobs`, nothing leaves the device for the AI provider.
  *
- * With it ON: `coach` edge function POST → 202 { jobId } → poll the
- * `coach_jobs` row every 2 s (max 130 s) → load the proposal. Falls back to
- * the local rules engine (with a notice) when AI is unavailable or anything fails.
+ * With it ON: `coach` edge function POST (the request, incl. `channel`) →
+ * 202 { jobId } → poll the `coach_jobs` row every 2 s (max 130 s) → load the
+ * proposal, the saved memory lines and the logged life event (`extras`).
+ * Falls back to the local rules engine (with a notice) when AI is unavailable
+ * or anything fails.
  */
-import type { CoachRequest, CoachResponse, ISODate, UUID } from '@/domain/types';
+import type { CoachRequest, CoachResponse, ISODate, LifeEvent, UUID } from '@/domain/types';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
@@ -15,8 +17,10 @@ import { RepositoryError, type Repository } from '../repository';
 import { runRulesCoach, type RulesCoachRepo } from '../demo/rulesCoach';
 import { run, type SupabaseCtx } from './base';
 import { functionErrorInfo, isNetworkError } from './errors';
+import { rowToLifeEvent } from './mappers';
+import { EMPTY_COACH_EXTRAS, parseCoachExtras, type CoachExtras } from './mappersAi';
 import { asString, isRecord, pick } from './narrow';
-import type { CoachJobRow } from './rows';
+import type { CoachJobRow, LifeEventRow } from './rows';
 
 export const COACH_POLL_INTERVAL_MS = 2_000;
 /** Server job deadline is 110 s (Edge wall clock 150 s); stop polling shortly after. */
@@ -28,7 +32,7 @@ export const COACH_NOTICES = {
   failed: 'El coach IA no ha podido responder; te respondo con el motor de reglas.',
   timeout: 'El coach IA está tardando demasiado; mientras, aquí tienes la propuesta del motor de reglas.',
   consentRequired:
-    'Para usar el coach IA primero tienes que darnos tu permiso para enviar tus datos a Anthropic. Mientras, te respondo con el motor de reglas.',
+    'Para usar el coach IA primero tienes que darnos tu permiso para que la IA lea tus datos. Mientras, te respondo con el motor de reglas.',
 } as const;
 
 export interface CoachDeps {
@@ -103,10 +107,41 @@ async function pollJob(deps: CoachDeps, jobId: UUID): Promise<CoachJobRow | null
   return null;
 }
 
+/**
+ * `coach_jobs.extras` (v2) is read once the job is done, apart from the poll:
+ * a failure here only loses the memory chips, never the coach answer.
+ */
+async function readExtras(ctx: SupabaseCtx, jobId: UUID): Promise<CoachExtras> {
+  try {
+    const row = await run<{ extras?: unknown } | null>(
+      'coachJobExtras',
+      ctx.client.from('coach_jobs').select('extras').eq('id', jobId).maybeSingle(),
+    );
+    return parseCoachExtras(row?.extras);
+  } catch (error) {
+    logger.warn('coach job extras unavailable', error instanceof RepositoryError ? error.code : error);
+    return EMPTY_COACH_EXTRAS;
+  }
+}
+
+async function readLifeEvent(ctx: SupabaseCtx, id: UUID): Promise<LifeEvent | null> {
+  try {
+    const row = await run<LifeEventRow | null>('coachLifeEvent', ctx.client.from('life_events').select('*').eq('id', id).maybeSingle());
+    return row ? rowToLifeEvent(row) : null;
+  } catch (error) {
+    logger.warn('coach life event unavailable', error instanceof RepositoryError ? error.code : error);
+    return null;
+  }
+}
+
 async function jobToResponse(deps: CoachDeps, job: CoachJobRow): Promise<CoachResponse> {
-  const proposal = job.proposal_id ? await deps.repo.getProposal(job.proposal_id) : null;
+  const [proposal, extras] = await Promise.all([
+    job.proposal_id ? deps.repo.getProposal(job.proposal_id) : Promise.resolve(null),
+    readExtras(deps.ctx, job.id),
+  ]);
+  const lifeEvent = extras.lifeEventId ? await readLifeEvent(deps.ctx, extras.lifeEventId) : null;
   const reply = job.reply?.trim() || proposal?.summary || 'Listo. Revisa la propuesta.';
-  return { reply, proposal, engine: job.engine === 'rules' ? 'rules' : 'ai' };
+  return { reply, proposal, engine: job.engine === 'rules' ? 'rules' : 'ai', memory: extras.memory, lifeEvent };
 }
 
 export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) => Promise<CoachResponse> {
@@ -114,7 +149,7 @@ export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) =
     runRulesCoach(deps.repo, request, { today: deps.today(), notice });
 
   return async (request) => {
-    // AI coach off (default): the rules engine IS the coach, so no notice.
+    // AI off (EXPO_PUBLIC_AI_COACH=0): the rules engine IS the coach, so no notice.
     if (!env.aiCoachEnabled) return runRulesCoach(deps.repo, request, { today: deps.today() });
     const started = await startJob(deps.ctx, request);
     if ('notice' in started) return fallback(request, started.notice);

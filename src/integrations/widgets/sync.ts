@@ -11,6 +11,8 @@ export interface SyncWidgetsInput {
   jointSessions: JointSession[];
   profile: Profile | null;
   today: ISODate;
+  /** Today's morning briefing ("Informe de hoy" widget), null until generated. */
+  briefing: { date: ISODate; headline: string } | null;
 }
 
 export function syncWidgets(_input: SyncWidgetsInput): void {

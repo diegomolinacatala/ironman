@@ -16,6 +16,11 @@ export function daysLabel(days: number): string {
 }
 
 /** Race-bib style countdown to the next race + current training phase. */
+/** "Media distancia · Triatlón de Valencia", without repeating the distance when the name already has it. */
+export function chipTitle(name: string, distance: string): string {
+  return name.toLowerCase().includes(distance.toLowerCase()) ? name : `${distance} · ${name}`;
+}
+
 export function RaceChip({ race, phase, today }: { race: Race | null; phase: PhaseInfo | null; today: ISODate }) {
   const theme = useTheme();
   const { colors } = theme;
@@ -48,7 +53,7 @@ export function RaceChip({ race, phase, today }: { race: Race | null; phase: Pha
       <Icon name="flag" size={16} color={ink.accent} />
       <View style={styles.texts}>
         <Text variant="overline" style={{ color: ink.text }} numberOfLines={1}>
-          {`${raceDistanceLabel(race.distance)} · ${race.name}`}
+          {chipTitle(race.name, raceDistanceLabel(race.distance))}
         </Text>
       </View>
       <Text variant="metricSmall" style={{ color: ink.accent }}>

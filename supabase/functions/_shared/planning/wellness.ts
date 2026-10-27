@@ -29,9 +29,10 @@ export function mergeMetricsByDate(rows: readonly DailyMetrics[]): DailyMetrics[
       byDate.set(row.date, row);
       continue;
     }
-    const merged = Object.fromEntries(
-      Object.entries(prev).map(([k, v]) => [k, v ?? (row as unknown as Record<string, unknown>)[k] ?? null]),
-    ) as unknown as DailyMetrics;
+    const a = prev as unknown as Record<string, unknown>;
+    const b = row as unknown as Record<string, unknown>;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    const merged = Object.fromEntries([...keys].map((k) => [k, a[k] ?? b[k] ?? null])) as unknown as DailyMetrics;
     byDate.set(row.date, merged);
   }
   return [...byDate.values()];

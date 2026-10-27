@@ -321,9 +321,87 @@ export interface DailyMetrics {
   steps: number | null;
   stressAvg: number | null;
   trainingStatus: string | null;
+  /** Sleep stages of the night that ENDS on `date` (Garmin), minutes. */
+  sleepDeepMin?: number | null;
+  sleepLightMin?: number | null;
+  sleepRemMin?: number | null;
+  sleepAwakeMin?: number | null;
+  /** When that night's sleep started / ended (ISO instant). */
+  sleepStart?: ISODateTime | null;
+  sleepEnd?: ISODateTime | null;
 }
 
 export type MetricsDraft = Omit<DailyMetrics, 'userId'>;
+
+// ---------------------------------------------------------------------------
+// Morning briefing ("Informe de hoy")
+// ---------------------------------------------------------------------------
+
+export type SleepVerdict = 'great' | 'good' | 'fair' | 'poor' | 'unknown';
+
+/** Last night's sleep and recovery, as shown on the briefing (all optional: Garmin may lack some). */
+export interface SleepSnapshot {
+  hours: number | null;
+  score: number | null;
+  deepMin: number | null;
+  lightMin: number | null;
+  remMin: number | null;
+  awakeMin: number | null;
+  start: ISODateTime | null;
+  end: ISODateTime | null;
+  hrvMs: number | null;
+  /** Average HRV of the previous 7 nights (baseline), when known. */
+  hrvBaselineMs: number | null;
+  restingHr: number | null;
+  bodyBattery: number | null;
+}
+
+export interface Briefing {
+  date: ISODate;
+  /** ≤ 90 chars, for the lock-screen widget and the notification. */
+  headline: string;
+  sleepVerdict: SleepVerdict;
+  /** One sentence about last night. */
+  sleepSummary: string;
+  /** Text read aloud (Spanish, no markdown, numbers written for speech), ~45–90 s. */
+  script: string;
+  /** One actionable tip for the day. */
+  focus: string;
+  sleep: SleepSnapshot | null;
+  /** 'ai' = written by Claude on the server; 'rules' = local template (demo, offline, AI unavailable). */
+  engine: 'ai' | 'rules';
+  createdAt: ISODateTime;
+}
+
+// ---------------------------------------------------------------------------
+// Meal photo analysis
+// ---------------------------------------------------------------------------
+
+export interface MealAnalysisInput {
+  /** JPEG, base64 without the data: prefix, ≤ ~1.5 MB. Omit for a text-only description. */
+  imageBase64?: string;
+  /** What the athlete said or typed ("pasta con atún, un plato grande"). */
+  text?: string;
+  date: ISODate;
+  /** Local time of the meal, to guess the slot (breakfast, lunch…). */
+  time: ISOTime;
+}
+
+export interface MealAnalysis {
+  meal: MealSlot;
+  /** Short Spanish description ("Pasta con atún y tomate"). */
+  description: string;
+  /** Recognised items with rough portions ("Pasta cocida · 250 g"). */
+  items: string[];
+  kcal: number | null;
+  carbsG: number | null;
+  proteinG: number | null;
+  fatG: number | null;
+  confidence: 'high' | 'medium' | 'low';
+  /** One short tip related to today's training, or null. */
+  tip: string | null;
+  engine: 'ai' | 'rules';
+}
 
 // ---------------------------------------------------------------------------
 // Nutrition
@@ -398,7 +476,7 @@ export interface Profile {
   /** Free text the coach should always know (diet, preferences, history). */
   coachNotes: string | null;
   onboardedAt: ISODateTime | null;
-  /** When the user explicitly agreed to send their training/health context to Anthropic (Coach IA). */
+  /** When the user explicitly agreed to send their training/health context to the AI provider (Coach IA: Cloudflare Workers AI). */
   aiConsentAt: ISODateTime | null;
   createdAt: ISODateTime;
 }
@@ -600,6 +678,8 @@ export interface CoachRequest {
   lifeEventId?: UUID;
   /** Consider aligning sessions with these friends. */
   friendIds?: UUID[];
+  /** 'voice' when `message` is a speech transcript (may contain recognition errors). */
+  channel?: 'voice' | 'text';
 }
 
 export interface CoachResponse {
@@ -609,6 +689,10 @@ export interface CoachResponse {
   proposal: PlanProposal | null;
   /** 'ai' when Claude answered, 'rules' when the deterministic engine did (offline/demo/fallback). */
   engine: 'ai' | 'rules';
+  /** Preferences/facts the coach saved to `profile.coachNotes` from this message ("Prefiere nadar por la mañana"). */
+  memory: string[];
+  /** Imprevisto the coach logged from this message (injury, illness, travel…), or null. */
+  lifeEvent: LifeEvent | null;
 }
 
 // ---------------------------------------------------------------------------

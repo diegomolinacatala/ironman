@@ -23,7 +23,9 @@ const WORKOUT_COLS =
 const PROFILE_COLS = 'id,username,display_name,sports,level,thresholds,availability,visibility,notification_prefs,timezone,coach_notes';
 const RACE_COLS = 'id,name,date,distance,priority,location,goal,notes';
 const EVENT_COLS = 'id,kind,title,start_date,end_date,start_time,duration_min,severity,body_area,notes';
-const METRIC_COLS = 'date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status';
+const METRIC_COLS =
+  'date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status,' +
+  'sleep_deep_min,sleep_light_min,sleep_rem_min,sleep_awake_min,sleep_start,sleep_end';
 
 const METRIC_FIELDS: Record<string, string> = {
   hrvMs: 'hrv_ms',
@@ -36,6 +38,12 @@ const METRIC_FIELDS: Record<string, string> = {
   steps: 'steps',
   stressAvg: 'stress_avg',
   trainingStatus: 'training_status',
+  sleepDeepMin: 'sleep_deep_min',
+  sleepLightMin: 'sleep_light_min',
+  sleepRemMin: 'sleep_rem_min',
+  sleepAwakeMin: 'sleep_awake_min',
+  sleepStart: 'sleep_start',
+  sleepEnd: 'sleep_end',
 };
 
 function metricsRow(userId: UUID, source: string, m: MetricsUpsert, nowIso: string): Record<string, unknown> {

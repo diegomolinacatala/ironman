@@ -228,6 +228,62 @@ export interface DailyMetrics {
   steps: number | null;
   stressAvg: number | null;
   trainingStatus: string | null;
+  /** Sleep stages of the night that ENDS on `date` (Garmin), minutes. */
+  sleepDeepMin?: number | null;
+  sleepLightMin?: number | null;
+  sleepRemMin?: number | null;
+  sleepAwakeMin?: number | null;
+  /** When that night's sleep started / ended (ISO instant). */
+  sleepStart?: ISODateTime | null;
+  sleepEnd?: ISODateTime | null;
+}
+
+export type SleepVerdict = 'great' | 'good' | 'fair' | 'poor' | 'unknown';
+export const SLEEP_VERDICTS: readonly SleepVerdict[] = ['great', 'good', 'fair', 'poor', 'unknown'];
+
+/** Last night's sleep and recovery, as shown on the briefing (all optional: Garmin may lack some). */
+export interface SleepSnapshot {
+  hours: number | null;
+  score: number | null;
+  deepMin: number | null;
+  lightMin: number | null;
+  remMin: number | null;
+  awakeMin: number | null;
+  start: ISODateTime | null;
+  end: ISODateTime | null;
+  hrvMs: number | null;
+  /** Average HRV of the previous 7 nights (baseline), when known. */
+  hrvBaselineMs: number | null;
+  restingHr: number | null;
+  bodyBattery: number | null;
+}
+
+export interface Briefing {
+  date: ISODate;
+  headline: string;
+  sleepVerdict: SleepVerdict;
+  sleepSummary: string;
+  script: string;
+  focus: string;
+  sleep: SleepSnapshot | null;
+  engine: 'ai' | 'rules';
+  createdAt: ISODateTime;
+}
+
+export const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack', 'pre', 'during', 'post'] as const;
+export type MealSlot = (typeof MEAL_SLOTS)[number];
+
+export interface MealAnalysis {
+  meal: MealSlot;
+  description: string;
+  items: string[];
+  kcal: number | null;
+  carbsG: number | null;
+  proteinG: number | null;
+  fatG: number | null;
+  confidence: 'high' | 'medium' | 'low';
+  tip: string | null;
+  engine: 'ai' | 'rules';
 }
 
 export interface NutritionLog {
@@ -314,6 +370,14 @@ export interface CoachRequest {
   history?: CoachMessage[];
   lifeEventId?: UUID;
   friendIds?: UUID[];
+  /** 'voice' when `message` is a speech transcript (may contain recognition errors). */
+  channel?: 'voice' | 'text';
+}
+
+/** `coach_jobs.extras`: what the coach remembered and the imprevisto it logged. */
+export interface CoachJobExtras {
+  memory: string[];
+  lifeEventId: UUID | null;
 }
 
 export interface SyncResult {

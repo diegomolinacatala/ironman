@@ -10,6 +10,7 @@ import {
   LIFE_EVENT_KINDS,
   RACE_DISTANCES,
   RACE_PRIORITIES,
+  SLEEP_VERDICTS,
   SPORTS,
   WORKOUT_SOURCES,
   WORKOUT_STATUSES,
@@ -28,6 +29,8 @@ import type {
   NutritionLog,
   Profile,
   Race,
+  SleepSnapshot,
+  SleepVerdict,
   Thresholds,
   Workout,
   WorkoutStep,
@@ -48,6 +51,11 @@ const numOrNull = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 const dateStr = (v: unknown): string => str(v).slice(0, 10);
+/** timestamptz (PostgREST string or Date) → ISO instant, null when absent or invalid. */
+const instantOrNull = (v: unknown): string | null => {
+  const ms = v instanceof Date ? v.getTime() : typeof v === 'string' && v ? Date.parse(v) : NaN;
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+};
 
 function oneOf<T extends string>(values: readonly T[], v: unknown, fallback: T): T {
   return typeof v === 'string' && (values as readonly string[]).includes(v) ? (v as T) : fallback;
@@ -148,6 +156,12 @@ export function mapMetrics(raw: unknown): DailyMetrics {
     steps: numOrNull(r.steps),
     stressAvg: numOrNull(r.stress_avg),
     trainingStatus: strOrNull(r.training_status),
+    sleepDeepMin: numOrNull(r.sleep_deep_min),
+    sleepLightMin: numOrNull(r.sleep_light_min),
+    sleepRemMin: numOrNull(r.sleep_rem_min),
+    sleepAwakeMin: numOrNull(r.sleep_awake_min),
+    sleepStart: instantOrNull(r.sleep_start),
+    sleepEnd: instantOrNull(r.sleep_end),
   };
 }
 
@@ -256,4 +270,51 @@ export function assembleJointSessions(sessions: readonly unknown[], participants
     status: oneOf(['proposed', 'confirmed', 'cancelled'] as const, s.status, 'proposed'),
     participants: bySession.get(str(s.id)) ?? [],
   }));
+}
+
+/** `briefings.sleep` jsonb (camelCase SleepSnapshot) → snapshot; null when absent or not an object. */
+export function mapSleepSnapshot(raw: unknown): SleepSnapshot | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Row;
+  return {
+    hours: numOrNull(r.hours),
+    score: numOrNull(r.score),
+    deepMin: numOrNull(r.deepMin),
+    lightMin: numOrNull(r.lightMin),
+    remMin: numOrNull(r.remMin),
+    awakeMin: numOrNull(r.awakeMin),
+    start: instantOrNull(r.start),
+    end: instantOrNull(r.end),
+    hrvMs: numOrNull(r.hrvMs),
+    hrvBaselineMs: numOrNull(r.hrvBaselineMs),
+    restingHr: numOrNull(r.restingHr),
+    bodyBattery: numOrNull(r.bodyBattery),
+  };
+}
+
+export interface BriefingRow {
+  date: string;
+  headline: string;
+  sleepVerdict: SleepVerdict;
+  sleepSummary: string;
+  script: string;
+  focus: string;
+  sleep: SleepSnapshot | null;
+  model: string | null;
+  createdAt: string;
+}
+
+export function mapBriefing(raw: unknown): BriefingRow {
+  const r = asRow(raw);
+  return {
+    date: dateStr(r.date),
+    headline: str(r.headline),
+    sleepVerdict: oneOf(SLEEP_VERDICTS, r.sleep_verdict, 'unknown'),
+    sleepSummary: str(r.sleep_summary),
+    script: str(r.script),
+    focus: str(r.focus),
+    sleep: mapSleepSnapshot(r.sleep),
+    model: strOrNull(r.model),
+    createdAt: instantOrNull(r.created_at) ?? str(r.created_at),
+  };
 }

@@ -78,6 +78,13 @@ export interface MetricsUpsert {
   steps?: number;
   stressAvg?: number;
   trainingStatus?: string;
+  /** Sleep stages (minutes) and start/end instants of the night that ends on `date`. */
+  sleepDeepMin?: number;
+  sleepLightMin?: number;
+  sleepRemMin?: number;
+  sleepAwakeMin?: number;
+  sleepStart?: ISODateTime;
+  sleepEnd?: ISODateTime;
   raw: Record<string, unknown>;
 }
 

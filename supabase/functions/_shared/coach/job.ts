@@ -1,6 +1,7 @@
 /**
  * Background part of the coach: context → Claude (structured output) →
- * validated changes → plan_proposals (source 'ai_coach') → coach_jobs done.
+ * validated changes → plan_proposals (source 'ai_coach') → memory lines in
+ * coach_notes + logged imprevisto → coach_jobs done (with `extras`).
  * Any failure (including the overall deadline) ends the job with status
  * 'error' and a Spanish message, so the app can fall back to the rules engine.
  */
@@ -13,6 +14,7 @@ import type { PlanningContext } from '../planning/context.ts';
 import type { PlanningReader } from '../planning/store.ts';
 import type { CoachRequest, PlanChange, ProposalKind, UUID } from '../types.ts';
 import { COACH_DEADLINE_MS, startDeadline, timeoutError, withDeadline } from './deadline.ts';
+import { applyCoachExtras } from './extras.ts';
 import { buildCoachMessages } from './messages.ts';
 import type { FriendWeek } from './messages.ts';
 import { COACH_OUTPUT_JSON_SCHEMA, parseCoachOutput, toPlanChanges } from './output.ts';
@@ -120,6 +122,7 @@ async function generate(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal):
   const messages = buildCoachMessages(job.request, context, { lifeEvent, friends });
   const response = await withDeadline(
     deps.claude.generate({
+      userId: job.userId,
       system: COACH_SYSTEM_PROMPT,
       messages,
       effort: job.request.mode === 'chat' ? 'low' : 'medium',
@@ -154,7 +157,9 @@ export async function runCoachJob(deps: CoachJobDeps, job: CoachJob): Promise<vo
     checkStop(response);
     const output = parseCoachOutput(response.text);
     if (!output) throw new CoachAiError('bad_output', 'La respuesta del coach no tenía el formato esperado. Inténtalo de nuevo.');
-    const { changes, dropped } = await withDeadline(validateAgainstPlan(deps, job, context, output.changes), deadline.signal);
+    const validated = await withDeadline(validateAgainstPlan(deps, job, context, output.changes), deadline.signal);
+    const changes = validated.changes;
+    const dropped = validated.dropped + output.malformedChanges;
     // Past the deadline the app has already fallen back: do not add a competing proposal.
     if (deadline.signal.aborted) throw timeoutError();
     const proposalId =
@@ -168,9 +173,14 @@ export async function runCoachJob(deps: CoachJobDeps, job: CoachJob): Promise<vo
             model: response.model,
           })
         : null;
-    const finished = await deps.store.finishJob(job.userId, job.jobId, { reply: finalReply(output.reply, dropped, proposalId !== null), proposalId });
+    const extras = await withDeadline(applyCoachExtras(deps, job.userId, job.request, output, context, log), deadline.signal);
+    const finished = await deps.store.finishJob(job.userId, job.jobId, {
+      reply: finalReply(output.reply, dropped, proposalId !== null),
+      proposalId,
+      extras,
+    });
     if (!finished) log.warn('coach job was no longer running when it finished', { proposalId });
-    log.info('coach job done', { ms: Date.now() - started, changes: changes.length, dropped });
+    log.info('coach job done', { ms: Date.now() - started, changes: changes.length, dropped, memory: extras.memory.length, lifeEvent: extras.lifeEventId !== null });
   } catch (error) {
     await markFailed(deps, job, log, error);
   } finally {

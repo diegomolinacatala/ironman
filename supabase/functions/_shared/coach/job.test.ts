@@ -5,7 +5,7 @@ import { fakeStore, fixedNow, USER } from '../testing/fakes.ts';
 import { claudeReturning, coachJob as job, runningRecorder, stateWithWeek } from '../testing/coach-fakes.ts';
 import { COACH_DEADLINE_MS, isAbortLike, TIMEOUT_MESSAGE, withDeadline } from './deadline.ts';
 import { runCoachJob } from './job.ts';
-import { CoachAiError } from './ports.ts';
+import { CoachAiError, messageText } from './ports.ts';
 import type { ClaudePort, ClaudeRequest, ClaudeResponse } from './ports.ts';
 import { billedTokens } from './usage.ts';
 
@@ -20,7 +20,7 @@ test('the AI context never includes busy-block titles (only start/end)', async (
     { reader: fakeStore(state), store: rec.store, claude: claudeReturning({ text: emptyOutput }, seen), now: fixedNow, logger: silentLogger },
     job({ mode: 'plan_week' }),
   );
-  const sent = seen[0].messages.map((m) => m.content).join('\n');
+  const sent = seen[0].messages.map(messageText).join('\n');
   assert.ok(sent.includes('"busy":[{"date":"2026-10-27","start":"09:00","end":"10:00"}]'));
   assert.ok(!sent.includes('Psicólogo'));
 });

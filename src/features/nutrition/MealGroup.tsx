@@ -1,9 +1,10 @@
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 
 import { mealLabel } from '@/domain/labels';
 import type { NutritionLog, UUID } from '@/domain/types';
 import { formatDecimal } from '@/features/progress/format';
-import { Card, Divider, IconButton, Text, space } from '@/ui';
+import { mealPhotoUri } from '@/integrations/camera/mealPhoto';
+import { Card, Divider, IconButton, Text, radius, space, useTheme } from '@/ui';
 
 import type { SlotGroup } from './nutritionModel';
 
@@ -23,6 +24,25 @@ export interface MealGroupProps {
   onDelete: (log: NutritionLog) => void;
 }
 
+const THUMB = 48;
+
+/** Photo of the entry taken with "+ Foto" (kept only on this phone). */
+function MealThumb({ id }: { id: UUID }) {
+  const { colors } = useTheme();
+  const uri = mealPhotoUri(id);
+  if (!uri) return null;
+  return (
+    <Image
+      source={{ uri }}
+      testID={`meal-photo-${id}`}
+      accessibilityIgnoresInvertColors
+      accessible={false}
+      resizeMode="cover"
+      style={[styles.thumb, { backgroundColor: colors.surfaceAlt }]}
+    />
+  );
+}
+
 /** One meal slot ("Desayuno") with its entries. */
 export function MealGroup({ group, deletingId, onDelete }: MealGroupProps) {
   return (
@@ -37,6 +57,7 @@ export function MealGroup({ group, deletingId, onDelete }: MealGroupProps) {
             <View key={log.id}>
               {i > 0 ? <Divider /> : null}
               <View style={[styles.row, deletingId === log.id && styles.deleting]}>
+                <MealThumb id={log.id} />
                 <View style={styles.text}>
                   <Text variant="body">{log.description}</Text>
                   {macros ? (
@@ -66,4 +87,5 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.sm, paddingVertical: space.xs },
   text: { flex: 1, gap: 2 },
   deleting: { opacity: 0.4 },
+  thumb: { width: THUMB, height: THUMB, borderRadius: radius.sm },
 });

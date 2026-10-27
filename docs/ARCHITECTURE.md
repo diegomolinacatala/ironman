@@ -573,3 +573,36 @@ Widget deep links: `rebufo://workout/<id>`, `rebufo://today`, `rebufo://together
 - **Fatal JS errors in release** no longer abort silently: `index.ts` (the app entry, replacing
   `expo-router/entry`) installs `lib/fatalErrors.ts` before any app module loads. It shows an alert
   with the message and the top of the stack. Development builds keep the red box.
+
+## 15. v2 "tu coach de bolsillo" (2026-10-27)
+
+The product contract is `docs/V2.md`; this section lists what changed in the architecture.
+
+- **Navigation:** three tabs (Hoy, Plan = `week`, Tú = `me`) plus an iOS 26 `NativeTabs.BottomAccessory`
+  (`features/accessory`) that opens `/talk` (voice coach) and `/meal?source=camera`. Juntos and Progreso
+  moved to root stack routes `/together` and `/progress`. New modals: `/briefing` (`?play=1` reads it
+  aloud), `/talk` (fullScreenModal), `/meal` (`?source=camera|library|text`). `/coach` only redirects to
+  `/talk` (prefill only).
+- **Onboarding** (`features/onboarding`): forced, resumable step machine (bienvenida → objetivo → Garmin →
+  Claude → calendario → informe → plan). The v2 migration resets `profiles.onboarded_at`, so existing users
+  go through it once. Claude counts as connected when the `mcp` token created there has `lastUsedAt`.
+- **In-app AI is ON** (`env.aiCoachEnabled`, `EXPO_PUBLIC_AI_COACH=0` disables) and costs nothing: the
+  `coach`, `briefing` and `meal` functions use **Cloudflare Workers AI** through `cloudflare/ai` (see V2 §3,
+  *AI provider*). `_shared/ai/provider.ts` picks Workers AI → Claude (optional) → none; the Workers port
+  (`_shared/platform/workers-ai.ts`) implements the same `ClaudePort`. Consent copy names Cloudflare.
+- **New tables/columns:** `briefings` (select-own, server writes), `daily_metrics.sleep_*` (stages,
+  start/end), `coach_jobs.extras` (`memory`, `lifeEventId`). Coach memory lines are appended to
+  `profiles.coach_notes`; an imprevisto the coach detects is inserted into `life_events`.
+- **Data layer:** `analyzeMeal`, `getBriefing`, `generateBriefing`. Every AI path falls back locally
+  (`domain/briefing.ts` template, `domain/mealEstimate.ts`); a fallback briefing is cached on the device
+  per user/date until a server one exists.
+- **Integrations:** on-device speech-to-text (`integrations/speech/useVoiceInput`, expo-speech-recognition,
+  es-ES) and text-to-speech (`useSpeaker`, expo-speech, best Spanish voice, audio background mode); meal
+  photos (`integrations/camera/mealPhoto`, downscaled JPEG, private copy in the app's documents); the
+  **training calendar** (`integrations/calendar/trainingCalendar`): planned workouts of [today − 1, today + 21]
+  written to a "Road to Ironman" calendar with an alarm, never read back as busy time; the
+  `BriefingWidget` lock-screen widget → `roadtoironman://briefing?play=1`; the morning notification opens
+  `/briefing?play=1`; foreground Garmin sync when the last one is older than 60 min.
+- **Tests:** `jest.setup.ts` replaces `react-native-reanimated` with `src/test/reanimatedMock.tsx` (its own
+  mock needs the native worklets runtime). Worker tests: `node --test "cloudflare/ai/src/**/*.test.mts"`.
+

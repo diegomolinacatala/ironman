@@ -42,7 +42,7 @@ import {
   type WorkoutPatch,
 } from '@/domain/types';
 
-import { asNumber, compact, isRecord, oneOf, oneOfOr, timeFromDb } from './narrow';
+import { asNumber, asString, compact, isRecord, oneOf, oneOfOr, timeFromDb } from './narrow';
 import { parseAvailability, parseCompleted, parseNotificationPrefs, parsePlanChanges, parseSteps, parseThresholds } from './parsers';
 import type {
   BusyBlockRow,
@@ -465,7 +465,17 @@ export function rowToMetrics(row: MetricsRow): DailyMetrics {
     steps: asNumber(row.steps),
     stressAvg: asNumber(row.stress_avg),
     trainingStatus: row.training_status,
+    sleepDeepMin: asNumber(row.sleep_deep_min),
+    sleepLightMin: asNumber(row.sleep_light_min),
+    sleepRemMin: asNumber(row.sleep_rem_min),
+    sleepAwakeMin: asNumber(row.sleep_awake_min),
+    sleepStart: asString(row.sleep_start),
+    sleepEnd: asString(row.sleep_end),
   };
+}
+
+function minutesOrNull(value: number | null | undefined): number | null | undefined {
+  return value == null ? value : Math.min(1440, Math.max(0, Math.round(value)));
 }
 
 export function metricsDraftToRow(draft: MetricsDraft, userId: string): MetricsRow {
@@ -483,6 +493,15 @@ export function metricsDraftToRow(draft: MetricsDraft, userId: string): MetricsR
     steps: draft.steps == null ? null : Math.round(draft.steps),
     stress_avg: draft.stressAvg,
     training_status: draft.trainingStatus,
+    // Sleep detail only when the source has it (HealthKit drafts leave these undefined → columns untouched).
+    ...compact({
+      sleep_deep_min: minutesOrNull(draft.sleepDeepMin),
+      sleep_light_min: minutesOrNull(draft.sleepLightMin),
+      sleep_rem_min: minutesOrNull(draft.sleepRemMin),
+      sleep_awake_min: minutesOrNull(draft.sleepAwakeMin),
+      sleep_start: draft.sleepStart,
+      sleep_end: draft.sleepEnd,
+    }),
   };
 }
 

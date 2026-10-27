@@ -9,10 +9,12 @@ import { todayISO } from '@/domain/dates';
 import type { Repository } from '../repository';
 import { createSupabaseAuth } from './auth';
 import { createCtx } from './base';
+import { briefingApi } from './briefingApi';
 import { getSupabaseClient } from './client';
 import { createCoachRequester } from './coach';
 import { inboxApi } from './inboxApi';
 import { integrationsApi } from './integrationsApi';
+import { mealApi } from './mealApi';
 import { planningApi } from './planningApi';
 import { profileApi } from './profileApi';
 import { subscribeRealtime } from './realtime';
@@ -38,6 +40,7 @@ export function createSupabaseRepository(options: SupabaseRepositoryOptions = {}
     ...socialApi(ctx),
     ...inboxApi(ctx),
     ...integrationsApi(ctx),
+    ...mealApi(ctx),
   };
 
   const requestCoach = createCoachRequester({ ctx, repo: data, today: () => todayISO(now()) });
@@ -46,6 +49,7 @@ export function createSupabaseRepository(options: SupabaseRepositoryOptions = {}
     mode: 'supabase',
     auth: createSupabaseAuth(client),
     ...data,
+    ...briefingApi({ ctx, repo: data }),
     requestCoach,
     subscribe: (onChange) => subscribeRealtime(ctx, onChange),
   };

@@ -1,0 +1,12 @@
+{
+  "name": "ironman-ai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Free AI proxy for Road to Ironman (Cloudflare Workers AI). No dependencies: deploy with npx wrangler deploy.",
+  "scripts": {
+    "deploy": "npx wrangler deploy",
+    "test": "node --test \"src/**/*.test.mts\"",
+    "typecheck": "npx tsc -p tsconfig.json"
+  }
+}

@@ -6,13 +6,13 @@ import { emptyState, fakeStore, fixedNow, USER, workout } from '../testing/fakes
 import type { FakeState } from '../testing/fakes.ts';
 import { createGarminApi, GARMIN_TOKEN_PATH, GarminApiError } from './api.ts';
 import type { GarminApi } from './api.ts';
-import { cipherContext, EXPIRED_MESSAGE } from './credentials.ts';
+import { cipherContext, EXPIRED_MESSAGE, syncWithCredential } from './credentials.ts';
 import type { CredentialStore, GarminCredential } from './credentials.ts';
 import { handleGarminHttp } from './http.ts';
 import type { GarminHttpDeps } from './http.ts';
 import { mergeDayParts, parseActivities, parseBodyBattery, parseDailySummaries, parseHrv, parseSleepSummaries } from './parse.ts';
 import { garminSport } from './sports.ts';
-import { planActivityImport, syncGarminUser } from './sync.ts';
+import { FIRST_SYNC_DAYS, planActivityImport, SYNC_DAYS, syncGarminUser, toMetricRows } from './sync.ts';
 
 const part = (o: unknown): string => base64UrlEncode(new TextEncoder().encode(JSON.stringify(o)));
 const JWT = `${part({ alg: 'ES256' })}.${part({ exp: 1893456000, sub: 'garmin-user' })}.sig`;
@@ -256,4 +256,71 @@ test('auth: user actions need the JWT, sync_all needs the server key, missing se
   assert.deepEqual(await all.json(), { users: 0, ok: 0, expired: 0, failed: 0, skipped: 0 });
   assert.equal((await handleGarminHttp(post({ action: 'sync' }), garminDeps(emptyState(), store, api, { keySecret: undefined }))).status, 503);
   assert.equal((await handleGarminHttp(post({ action: 'explode' }), garminDeps(emptyState(), store, api))).status, 400);
+});
+
+test('sleep summaries carry stages (minutes) and start/end instants of the night', () => {
+  const payload = [
+    {
+      dailySleepDTO: {
+        calendarDate: '2026-10-24',
+        sleepTimeSeconds: 26400,
+        deepSleepSeconds: 4860,
+        lightSleepSeconds: 15000,
+        remSleepSeconds: 5400,
+        awakeSleepSeconds: 780,
+        sleepStartTimestampGMT: Date.UTC(2026, 9, 23, 21, 10),
+        sleepEndTimestampGMT: Date.UTC(2026, 9, 24, 4, 50),
+        sleepStartTimestampLocal: Date.UTC(2026, 9, 23, 23, 10),
+      },
+    },
+  ];
+  assert.deepEqual(parseSleepSummaries(payload), [
+    {
+      date: '2026-10-24',
+      sleepHours: 7.3,
+      sleepDeepMin: 81,
+      sleepLightMin: 250,
+      sleepRemMin: 90,
+      sleepAwakeMin: 13,
+      sleepStart: '2026-10-23T21:10:00.000Z',
+      sleepEnd: '2026-10-24T04:50:00.000Z',
+    },
+  ]);
+  const rows = toMetricRows(parseSleepSummaries(payload), '2026-10-24T10:00:00.000Z');
+  assert.equal(rows[0].sleepDeepMin, 81, 'stages reach the metrics upsert');
+  assert.equal(rows[0].sleepEnd, '2026-10-24T04:50:00.000Z');
+});
+
+test('sleep start/end fall back to local timestamps (user zone) and drop inconsistent windows', () => {
+  const local = parseSleepSummaries(
+    { dailySleepDTO: { calendarDate: '2026-10-24', sleepStartTimestampLocal: '2026-10-23T23:10:00.0', sleepEndTimestampLocal: Date.UTC(2026, 9, 24, 6, 50) } },
+    'Europe/Madrid',
+  );
+  assert.equal(local[0].sleepStart, '2026-10-23T21:10:00.000Z', 'CEST wall clock → UTC');
+  assert.equal(local[0].sleepEnd, '2026-10-24T04:50:00.000Z');
+  const backwards = parseSleepSummaries({
+    dailySleepDTO: { calendarDate: '2026-10-24', sleepTimeSeconds: 25200, sleepStartTimestampGMT: Date.UTC(2026, 9, 24, 5), sleepEndTimestampGMT: Date.UTC(2026, 9, 23, 22) },
+  });
+  assert.deepEqual(backwards, [{ date: '2026-10-24', sleepHours: 7 }]);
+  const absurd = parseSleepSummaries({ dailySleepDTO: { calendarDate: '2026-10-24', deepSleepSeconds: 999999, remSleepSeconds: -60, awakeSleepSeconds: '600' } });
+  assert.deepEqual(absurd, [{ date: '2026-10-24', sleepAwakeMin: 10 }]);
+});
+
+test('the first sync after connecting covers 28 days; later syncs 14', async () => {
+  const seen: { url: string; init: RequestInit }[] = [];
+  const api = createGarminApi(fakeFetch(okGarmin, seen), 'https://garmin.test');
+  const sleepRange = (): string | null => {
+    const url = seen.filter((s) => s.url.includes('/sleep-service/')).pop()?.url ?? '';
+    return new URL(url).searchParams.get('startDate');
+  };
+  const { rec, store } = credentialStore();
+  await handleGarminHttp(post({ action: 'connect', apiKey: KEY }), garminDeps(emptyState(), store, api));
+  assert.equal(sleepRange(), '2026-09-27', `${FIRST_SYNC_DAYS} days back from 2026-10-24`);
+  assert.ok(seen.some((s) => s.url.includes('/activitylist-service/') && s.url.includes('limit=100')));
+  await handleGarminHttp(post({ action: 'sync' }), garminDeps(emptyState(), store, api));
+  assert.equal(sleepRange(), '2026-10-11', `${SYNC_DAYS} days back`);
+  const never = rec.current ? { ...rec.current, lastSyncAt: null } : null;
+  assert.ok(never);
+  await syncWithCredential({ api, store: fakeStore(emptyState()), credentials: store, keySecret: SECRET, now: fixedNow, logger: silentLogger }, never);
+  assert.equal(sleepRange(), '2026-09-27', 'a credential that never synced also gets 28 days');
 });

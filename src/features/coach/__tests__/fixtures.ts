@@ -1,4 +1,4 @@
-import type { PlanProposal, Workout } from '@/domain/types';
+import type { CoachResponse, LifeEvent, PlanProposal, Workout } from '@/domain/types';
 
 export function makeWorkout(overrides: Partial<Workout> = {}): Workout {
   return {
@@ -38,6 +38,28 @@ export function makeProposal(overrides: Partial<PlanProposal> = {}): PlanProposa
     status: 'pending',
     model: null,
     createdAt: '2026-10-25T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function makeCoachResponse(overrides: Partial<CoachResponse> = {}): CoachResponse {
+  return { reply: 'Hecho', proposal: null, engine: 'ai', memory: [], lifeEvent: null, ...overrides };
+}
+
+export function makeLifeEvent(overrides: Partial<LifeEvent> = {}): LifeEvent {
+  return {
+    id: 'e1',
+    userId: 'me',
+    kind: 'injury',
+    title: 'Esguince de tobillo',
+    startDate: '2026-10-27',
+    endDate: '2026-11-02',
+    startTime: null,
+    durationMin: null,
+    severity: 2,
+    bodyArea: 'ankle',
+    notes: null,
+    createdAt: '2026-10-27T10:00:00.000Z',
     ...overrides,
   };
 }

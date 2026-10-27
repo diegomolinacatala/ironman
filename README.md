@@ -1,15 +1,15 @@
 # Road to Ironman
 
-**Planifica tu camino al triatlón, y entrena con tus amigos.** App iOS para planificar el triatlón en pareja o en grupo pequeño:
-semana de entrenos, imprevistos que reorganizan el plan, coach con IA, conexión con *tu* Claude y
-con Garmin, y calendarios compartidos para cuadrar quedadas.
+**Tu coach de triatlón de bolsillo.** App iOS que lee tu Garmin, vive en tu calendario y se adapta a lo
+que le cuentas:
 
-- **Hoy / Semana** — plan semanal (lun–dom), cumplimiento por colores, totales, fase y cuenta atrás.
-- **Imprevistos** — pádel, fútbol, lesión, trabajo, estrés… → propuesta de cambios que aceptas uno a uno.
-- **Coach** — motor de reglas (siempre disponible, sin conexión) + **Conecta tu Claude** (tu propio Claude vía MCP).
-- **Juntos** — amigos, calendario compartido con privacidad, **huecos** comunes, **quedadas**, feed.
-- **Datos** — Garmin (Personal API oficial), Apple Salud, calendario del iPhone, check-in diario, nutrición.
-- **Widgets y notificaciones** — hoy/mañana, cuenta atrás, pantalla de bloqueo, recordatorios.
+- **Onboarding guiado** — conecta Garmin, Claude y tu calendario en unos minutos.
+- **Hoy** — informe de cada mañana (cómo has dormido y qué te toca, también en audio), tu entreno y tus comidas.
+- **Coach por voz** — cuéntale una lesión, un cambio de planes o una preferencia y ajusta tu plan.
+- **Fotos de comidas** — haz una foto y calcula lo que llevas.
+- **Calendario** — tus entrenos aparecen en el calendario del iPhone, con aviso.
+- **Widget** en la pantalla de bloqueo para escuchar el informe; **Conecta tu Claude** (MCP) para hablar de tu
+  plan desde claude.ai. La IA de la app es gratuita (Cloudflare Workers AI).
 
 ## Empezar
 
@@ -26,6 +26,7 @@ Sin backend arranca en **modo demo**. Para el backend, las builds (GitHub Action
 ## Documentación
 
 - [docs/SETUP.md](docs/SETUP.md) — puesta en marcha (Supabase, Apple, GitHub Actions, TestFlight, Claude, Garmin).
+- [docs/V2.md](docs/V2.md) — la v2 (coach de bolsillo): experiencia y contratos.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — arquitectura y contratos.
 - [docs/PRODUCT.md](docs/PRODUCT.md) — resumen de la investigación y alcance del MVP.
 - [docs/PRIVACY.md](docs/PRIVACY.md) — borrador de política de privacidad para App Store Connect.
@@ -35,7 +36,8 @@ Sin backend arranca en **modo demo**. Para el backend, las builds (GitHub Action
 ## Stack
 
 Expo SDK 58 · React Native 0.88 · Expo Router · TanStack Query · Supabase (Postgres + RLS, Auth,
-Edge Functions) · MCP (conector de Claude) · APNs · expo-widgets · HealthKit · EventKit · GitHub Actions.
+Edge Functions) · Cloudflare Workers AI · MCP (conector de Claude) · APNs · expo-widgets · HealthKit ·
+EventKit · reconocimiento y síntesis de voz en el iPhone · GitHub Actions.
 
 ## Scripts
 

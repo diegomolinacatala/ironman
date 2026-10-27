@@ -10,13 +10,24 @@
  * The push token is device-wide on purpose (`StorageKeys.pushToken`): the data
  * layer reads it on sign-out to unregister it.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import type { Repository } from '@/data/repository';
 import { logger } from '@/lib/logger';
 import { readJson, removeKey, StorageKeys, writeJson } from '@/lib/storage';
 
-export type DeviceStateKey = 'healthEnabled' | 'healthLastSync' | 'healthImported' | 'calendarIds' | 'calendarLastSync';
+type LegacyDeviceStateKey = 'healthEnabled' | 'healthLastSync' | 'healthImported' | 'calendarIds' | 'calendarLastSync';
 
-export const DEVICE_STATE_KEYS: readonly DeviceStateKey[] = [
+/** Keys that only ever existed per account (never device-wide), so there is nothing legacy to remove. */
+const SCOPED_ONLY_KEYS = {
+  /** "Añadir mis entrenos al calendario" settings + workout → event mapping (`calendar/trainingCalendarStore`). */
+  trainingCalendar: 'rti.trainingCalendar.v1',
+} as const;
+
+export type DeviceStateKey = LegacyDeviceStateKey | keyof typeof SCOPED_ONLY_KEYS;
+
+/** Keys that were device-wide before state was namespaced (see `removeLegacyDeviceKeys`). */
+export const DEVICE_STATE_KEYS: readonly LegacyDeviceStateKey[] = [
   'healthEnabled',
   'healthLastSync',
   'healthImported',
@@ -24,10 +35,14 @@ export const DEVICE_STATE_KEYS: readonly DeviceStateKey[] = [
   'calendarLastSync',
 ];
 
+function baseKey(key: DeviceStateKey): string {
+  return key === 'trainingCalendar' ? SCOPED_ONLY_KEYS.trainingCalendar : StorageKeys[key];
+}
+
 /** AsyncStorage key of `key` for `userId` ("rti.health.enabled.user.<id>"). */
 export function userScopedKey(key: DeviceStateKey, userId: string): string {
   if (!userId) throw new Error('userScopedKey: missing user id');
-  return `${StorageKeys[key]}.user.${userId}`;
+  return `${baseKey(key)}.user.${userId}`;
 }
 
 export function readUserJson<T>(key: DeviceStateKey, userId: string, fallback: T): Promise<T> {
@@ -36,6 +51,22 @@ export function readUserJson<T>(key: DeviceStateKey, userId: string, fallback: T
 
 export function writeUserJson(key: DeviceStateKey, userId: string, value: unknown): Promise<void> {
   return writeJson(userScopedKey(key, userId), value);
+}
+
+export function removeUserKey(key: DeviceStateKey, userId: string): Promise<void> {
+  return removeKey(userScopedKey(key, userId));
+}
+
+/** Accounts that have `key` stored on this device (e.g. to clean up after a sign-out we did not see). */
+export async function userIdsWithKey(key: DeviceStateKey): Promise<string[]> {
+  const prefix = `${baseKey(key)}.user.`;
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    return keys.filter((k) => k.startsWith(prefix) && k.length > prefix.length).map((k) => k.slice(prefix.length));
+  } catch (error) {
+    logger.warn('integrations: could not list stored keys', error);
+    return [];
+  }
 }
 
 /**

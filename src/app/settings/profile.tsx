@@ -1,7 +1,8 @@
+import { PrivacyCard } from '@/features/account/PrivacyCard';
 import { KeyboardAvoider } from '@/features/settings/KeyboardAvoider';
 import { ProfileForm } from '@/features/settings/ProfileForm';
 import { ProfileGate } from '@/features/settings/ProfileGate';
-import { Screen } from '@/ui';
+import { Screen, SectionHeader } from '@/ui';
 
 export default function ProfileSettingsScreen() {
   return (
@@ -10,6 +11,8 @@ export default function ProfileSettingsScreen() {
         {(profile) => (
           <Screen inSheet>
             <ProfileForm profile={profile} />
+            <SectionHeader title="Qué ven tus amigos" />
+            <PrivacyCard value={profile.visibility} />
           </Screen>
         )}
       </ProfileGate>

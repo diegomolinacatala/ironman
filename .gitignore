@@ -50,3 +50,6 @@ supabase/functions/.env
 supabase/.env*
 credentials.json
 *.ipa
+
+# Temporary AI worker secret (docs/SETUP.md §1.10)
+ai_secret.tmp

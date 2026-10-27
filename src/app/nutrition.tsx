@@ -13,15 +13,16 @@ import { MealGroup } from '@/features/nutrition/MealGroup';
 import { NutritionEntryForm } from '@/features/nutrition/NutritionEntryForm';
 import { dayTotals, fuelingSessions, groupBySlot } from '@/features/nutrition/nutritionModel';
 import { FormScreen } from '@/features/workouts/FormScreen';
+import { deleteMealPhoto } from '@/integrations/camera/mealPhoto';
 import { errorMessage, logger } from '@/lib/logger';
-import { Card, ErrorNotice, Icon, Loading, SectionHeader, Text, space, useTheme } from '@/ui';
+import { Button, Card, ErrorNotice, Icon, Loading, SectionHeader, Text, space, useTheme } from '@/ui';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function CoachNote() {
   const { colors } = useTheme();
   const ask = () =>
-    router.push(`/coach?mode=chat&message=${encodeURIComponent('¿Qué como antes del fondo largo de esta semana?')}`);
+    router.push(`/talk?message=${encodeURIComponent('¿Qué como antes del fondo largo de esta semana?')}`);
   return (
     <Card variant="tinted" tint={colors.surfaceAlt} padding="md" onPress={ask} accessibilityLabel="Tu coach lee este registro. Preguntarle qué comer antes del fondo largo.">
       <View style={styles.noteRow}>
@@ -73,6 +74,8 @@ export default function NutritionScreen() {
     setDeletingId(log.id);
     try {
       await remove.mutateAsync(log.id);
+      // The private photo goes with its entry; a leftover file is not worth an error.
+      await deleteMealPhoto(log.id).catch((err: unknown) => logger.warn('delete meal photo failed', err));
     } catch (err) {
       logger.warn('delete nutrition failed', err);
       setActionError(errorMessage(err, 'No se ha podido borrar la entrada.'));
@@ -95,7 +98,19 @@ export default function NutritionScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionHeader title="Lo que has comido" />
+        <View style={styles.headerRow}>
+          <View style={styles.flex}>
+            <SectionHeader title="Lo que has comido" />
+          </View>
+          <Button
+            label="+ Foto"
+            icon="camera"
+            variant="secondary"
+            size="sm"
+            accessibilityHint="Haz una foto de tu comida y calculo calorías y macros"
+            onPress={() => router.push(date === today ? '/meal?source=camera' : `/meal?source=camera&date=${date}`)}
+          />
+        </View>
         <NutritionEntryForm key={date} date={date} saving={create.isPending} onSubmit={add} />
         {actionError ? <ErrorNotice message={actionError} /> : null}
         {logs.isLoading ? <Loading label="Cargando el registro…" /> : null}
@@ -122,4 +137,5 @@ const styles = StyleSheet.create({
   section: { gap: space.md },
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   flex: { flex: 1, gap: 4 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
 });

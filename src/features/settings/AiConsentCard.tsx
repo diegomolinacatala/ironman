@@ -9,7 +9,7 @@ import { Card, ErrorNotice, Text, space } from '@/ui';
 
 import { SwitchRow } from './SwitchRow';
 
-export const AI_CONSENT_TITLE = 'Coach IA: compartir datos con Anthropic';
+export const AI_CONSENT_TITLE = 'Coach IA: compartir datos con Cloudflare';
 
 /** Grants or withdraws the Coach IA consent (`profile.aiConsentAt`). Renders nothing with the AI coach off. */
 export function AiConsentCard() {
@@ -23,7 +23,7 @@ export function AiConsentCard() {
       <Card padding="lg" style={styles.card}>
         <Text variant="bodyStrong">{AI_CONSENT_TITLE}</Text>
         <Text variant="caption" color="textMuted">
-          En modo demo el coach usa el motor de reglas en tu móvil: no se envía nada a Anthropic.
+          En modo demo el coach usa el motor de reglas en tu móvil: no se envía nada a Cloudflare.
         </Text>
       </Card>
     );
@@ -45,7 +45,7 @@ export function AiConsentCard() {
         subtitle={
           given
             ? `Activado${date ? ` desde el ${date}` : ''}. Si lo desactivas, el coach usará el motor de reglas.`
-            : 'Desactivado: el coach usa el motor de reglas y el Coach IA no envía nada a Anthropic.'
+            : 'Desactivado: el coach usa el motor de reglas y el Coach IA no envía nada a Cloudflare.'
         }
         value={given}
         disabled={consent.saving}
@@ -53,7 +53,7 @@ export function AiConsentCard() {
       />
       <View style={styles.details}>
         <Text variant="caption" color="textMuted">
-          Con el permiso activado, en cada petición enviamos a Anthropic:
+          Con el permiso activado, en cada petición enviamos a Cloudflare (Workers AI), que no lo guarda ni entrena con ello:
         </Text>
         <AiSharedDataList />
       </View>

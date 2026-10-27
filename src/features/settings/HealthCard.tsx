@@ -49,7 +49,7 @@ export function HealthCard() {
       <Text variant="caption" color="textMuted">
         Ojo: la VFC y el VO2máx de Garmin no llegan por Salud. Para eso usa la conexión de Garmin o pídele a tu Claude que
         los guarde.
-        {isAiCoachEnabled() ? ' Si das permiso al Coach IA, un resumen de estas métricas se envía a Anthropic para planificar.' : ''}
+        {isAiCoachEnabled() ? ' Si das permiso al Coach IA, un resumen de estas métricas se envía a Cloudflare (Workers AI) para planificar.' : ''}
       </Text>
       {!health.available ? (
         <Text variant="caption" color="textMuted">

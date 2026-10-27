@@ -37,3 +37,50 @@ export function atLocal(date: ISODate, minutes: number): Date {
 export function startOfLocalDate(date: ISODate): Date {
   return atLocal(date, 0);
 }
+
+/** True when `timeZone` is an IANA zone this JS engine knows ("Europe/Madrid"). */
+export function isValidTimeZone(timeZone: string | null | undefined): timeZone is string {
+  if (!timeZone) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone }).format(0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Offset (ms) of `timeZone` from UTC at `instant`: wall clock there minus UTC. */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(instant));
+  const part = (type: Intl.DateTimeFormatPartTypes): number => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour') % 24, part('minute'), part('second'));
+  return wall - (instant - (((instant % 1000) + 1000) % 1000));
+}
+
+/**
+ * Instant of wall-clock `date` + `minutes` in the IANA `timeZone` (the profile's zone),
+ * DST-safe. Falls back to the device's local time when the zone is missing or unknown
+ * to the engine.
+ */
+export function zonedDateTime(date: ISODate, minutes: number, timeZone: string | null | undefined): Date {
+  if (!isValidTimeZone(timeZone)) return atLocal(date, minutes);
+  try {
+    const [y, m, d] = date.split('-').map(Number);
+    const wallAsUtc = Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1, Math.floor(minutes / 60), minutes % 60);
+    const first = wallAsUtc - zoneOffsetMs(wallAsUtc, timeZone);
+    // Second pass: the offset at the real instant (differs across a DST change).
+    const instant = wallAsUtc - zoneOffsetMs(first, timeZone);
+    return Number.isFinite(instant) ? new Date(instant) : atLocal(date, minutes);
+  } catch {
+    return atLocal(date, minutes);
+  }
+}

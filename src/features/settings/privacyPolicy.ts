@@ -2,7 +2,7 @@
  * Privacy policy link (EXPO_PUBLIC_PRIVACY_URL) and the in-app summary of
  * docs/PRIVACY.md. Keep both in sync when the policy changes.
  *
- * The Coach IA (Anthropic) is only mentioned while the in-app AI coach is
+ * The Coach IA (Cloudflare Workers AI) is only mentioned while the in-app AI coach is
  * switched on (EXPO_PUBLIC_AI_COACH); the user's own Claude connector always is.
  */
 import * as WebBrowser from 'expo-web-browser';
@@ -91,8 +91,8 @@ const OPERATORS_POINT: PrivacyPoint = {
 /** Only listed when the in-app AI coach is switched on. */
 const AI_COACH_POINT: PrivacyPoint = {
   icon: 'sparkles',
-  title: 'Anthropic (Coach IA)',
-  text: 'Solo si das tu permiso, que puedes retirar abajo cuando quieras.',
+  title: 'Cloudflare (Coach IA)',
+  text: 'Solo si das tu permiso, que puedes retirar abajo cuando quieras. Workers AI no guarda lo que enviamos ni entrena con ello.',
 };
 
 const OWN_CLAUDE_POINT: PrivacyPoint = {
@@ -117,7 +117,7 @@ const YOUR_CHOICES: PrivacySectionContent = {
   ],
 };
 
-/** The three summary sections; "Quién más los ve" names Anthropic (Coach IA) only with the AI coach on. */
+/** The three summary sections; "Quién más los ve" names Cloudflare (Coach IA) only with the AI coach on. */
 export function privacySummary(aiEnabled: boolean = isAiCoachEnabled()): readonly PrivacySectionContent[] {
   const sharing: PrivacySectionContent = {
     title: 'Quién más los ve',

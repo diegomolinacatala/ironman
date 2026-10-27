@@ -1,10 +1,41 @@
-import { addDays, weekdayOf } from '@/domain/dates';
+import { addDays, minutesToTime, weekdayOf } from '@/domain/dates';
 import type { DailyCheckin, DailyMetrics, ISODate, NutritionLog, Score5, UUID } from '@/domain/types';
 
 import type { DemoClock } from '../db';
-import { localIso } from '../ids';
+import { createRandom, localIso } from '../ids';
 
 const DAYS = 28;
+/** Separate generator so the sleep detail does not shift the other seeded values. */
+const SLEEP_SEED = 20261027;
+
+export type SleepDetail = Pick<
+  DailyMetrics,
+  'sleepDeepMin' | 'sleepLightMin' | 'sleepRemMin' | 'sleepAwakeMin' | 'sleepStart' | 'sleepEnd'
+>;
+
+/**
+ * Plausible Garmin sleep stages and window for the night ending on `date`:
+ * deep 60–100', REM 80–120', awake 10–30', the rest light; wake-up around
+ * 07:00 on weekdays and 08:00 at the weekend.
+ */
+export function sleepDetail(date: ISODate, sleepHours: number, rand: () => number): SleepDetail {
+  const total = Math.round(sleepHours * 60);
+  const deep = Math.round(60 + rand() * 40);
+  const rem = Math.round(80 + rand() * 40);
+  const awake = Math.round(10 + rand() * 20);
+  const weekend = weekdayOf(date) >= 5;
+  const wake = (weekend ? 7 * 60 + 30 : 6 * 60 + 30) + Math.round(rand() * 60);
+  const end = localIso(date, minutesToTime(wake));
+  const start = new Date(Date.parse(end) - (total + awake) * 60_000).toISOString();
+  return {
+    sleepDeepMin: deep,
+    sleepLightMin: Math.max(0, total - deep - rem),
+    sleepRemMin: rem,
+    sleepAwakeMin: awake,
+    sleepStart: start,
+    sleepEnd: end,
+  };
+}
 
 function score(value: number): Score5 {
   return Math.min(5, Math.max(1, Math.round(value))) as Score5;
@@ -42,8 +73,9 @@ export function seedCheckins(userId: UUID, today: ISODate, rand: () => number): 
   });
 }
 
-/** 28 days of Garmin metrics ending today (HRV ~60–75 ms, RHR ~48–52). */
+/** 28 days of Garmin metrics ending today (HRV ~60–75 ms, RHR ~48–52, sleep stages). */
 export function seedMetrics(userId: UUID, today: ISODate, rand: () => number): DailyMetrics[] {
+  const sleepRand = createRandom(SLEEP_SEED);
   return Array.from({ length: DAYS }, (_, i) => {
     const date = addDays(today, -(DAYS - 1 - i));
     const trend = Math.sin(i / 4) * 3;
@@ -63,6 +95,7 @@ export function seedMetrics(userId: UUID, today: ISODate, rand: () => number): D
       steps: Math.round(7500 + rand() * 6500),
       stressAvg: Math.round(22 + rand() * 14),
       trainingStatus: i > DAYS - 8 ? 'Productivo' : 'Mantenimiento',
+      ...sleepDetail(date, sleepHours, sleepRand),
     };
   });
 }

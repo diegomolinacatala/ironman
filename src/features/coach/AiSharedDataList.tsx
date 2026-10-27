@@ -4,7 +4,7 @@ import { Icon, Text, space, useTheme } from '@/ui';
 
 import { AI_NEVER_SHARED, AI_SHARED_DATA } from './aiConsent';
 
-/** The data categories the Coach IA sends to Anthropic, plus what it never sends. */
+/** The data categories the Coach IA sends to the AI provider, plus what it never sends. */
 export function AiSharedDataList() {
   const { colors } = useTheme();
   return (

@@ -15,6 +15,10 @@
 | Datos de salud de **Apple Salud** (entrenos, sueño, frecuencia cardiaca, VFC, pasos) | Apple Salud, solo con tu permiso | Marcar entrenos como hechos y estimar tu recuperación |
 | Métricas de **Garmin** (sueño, VFC, Body Battery, actividades) | Tu clave personal de Garmin, solo si la conectas | Lo mismo que el anterior |
 | Horas ocupadas de tu **calendario** (inicio y fin; el título solo lo ves tú) | Calendario del iPhone, solo con tu permiso | Encontrar huecos para entrenar |
+| Tus entrenos, escritos en un calendario «Road to Ironman» de tu iPhone | La app, solo si lo activas | Que veas tus sesiones en tu calendario con un aviso antes |
+| Lo que le dices o escribes a tu coach (la voz se convierte en texto **en el iPhone**) | Tú | Entender lesiones, cambios de planes y preferencias, y ajustar tu plan |
+| Fotos de tus comidas (se guardan **solo en tu iPhone**) y lo que apuntas que comes | Tú | Estimar lo que comes y darte consejos para entrenar |
+| Informe de cada mañana (texto generado con tu sueño y tu plan del día) | La app | Contarte cómo has dormido y qué te toca; se lee en voz alta en el iPhone |
 | Token de notificaciones | Tu iPhone | Enviarte avisos |
 
 **No** vendemos datos, **no** hay publicidad y **no** usamos tus datos de salud para marketing.
@@ -26,6 +30,11 @@
 - **Encargados del tratamiento** que hacen funcionar el servicio:
   - Supabase (base de datos y autenticación, servidores en la UE).
   - Apple (envío de notificaciones push).
+  - **Cloudflare (Workers AI)**, solo si das tu permiso a la IA del coach: recibe un resumen de tu plan,
+    tu sueño y tus métricas, lo que le cuentas al coach y, cuando analizas una comida, la foto. Lo usa
+    solo para generar la respuesta: según Cloudflare, no guarda esas entradas ni salidas y no las usa
+    para entrenar modelos. Nunca le enviamos los títulos de tus eventos del calendario. Puedes retirar el
+    permiso en *Tú › Privacidad* y la app sigue funcionando con reglas automáticas.
 - **Tu propio Claude**, solo si tú creas el conector: lo que tu Claude lea o escriba en la app queda
   sujeto también a tu relación con Anthropic. La app no envía nada a Anthropic por su cuenta.
 
@@ -37,7 +46,7 @@ los encargados anteriores para prestarte el servicio. Puedes retirar el permiso 
 
 ## Conservación y borrado
 
-Conservamos tus datos mientras tengas cuenta. En **Yo > Borrar cuenta** eliminas tu cuenta y todos tus
+Conservamos tus datos mientras tengas cuenta. En **Tú > Borrar cuenta** eliminas tu cuenta y todos tus
 datos de forma inmediata e irreversible (si entraste con Apple, también revocamos el acceso de la app a
 tu Apple ID). Las claves de Garmin se guardan cifradas y se borran al desconectar.
 

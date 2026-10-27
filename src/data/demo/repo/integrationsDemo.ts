@@ -4,7 +4,9 @@ import { functionsBaseUrl } from '@/lib/env';
 import { RepositoryError, type Repository } from '../../repository';
 import { tokenUrl } from '../../supabase/mappersRpc';
 import type { DemoDb, DemoIntegration, DemoToken } from '../db';
-import { requireMe, type DemoDeps } from './common';
+import { createRandom } from '../ids';
+import { sleepDetail } from '../seed/wellness';
+import { pause, requireMe, type DemoDeps } from './common';
 
 type IntegrationMethods = Pick<
   Repository,
@@ -31,16 +33,18 @@ function stripToken(t: DemoToken): PersonalToken {
   return { id: t.id, scope: t.scope, label: t.label, prefix: t.prefix, createdAt: t.createdAt, lastUsedAt: t.lastUsedAt, revokedAt: t.revokedAt };
 }
 
-/** Today's simulated Garmin snapshot, derived from the latest stored day. */
+/** Today's simulated Garmin snapshot, derived from the latest stored day (sleep window of last night). */
 function simulatedMetrics(db: DemoDb, me: UUID, today: string): DailyMetrics {
   const latest = [...db.metrics].filter((m) => m.userId === me).sort((a, b) => b.date.localeCompare(a.date))[0];
+  const sleepHours = latest?.sleepHours ?? 7.2;
+  const seed = Number(today.replace(/-/g, ''));
   return {
     userId: me,
     date: today,
     source: 'garmin',
     hrvMs: latest?.hrvMs ?? 66,
     restingHr: latest?.restingHr ?? 50,
-    sleepHours: latest?.sleepHours ?? 7.2,
+    sleepHours,
     sleepScore: latest?.sleepScore ?? 78,
     bodyBattery: latest?.bodyBattery ?? 74,
     trainingReadiness: latest?.trainingReadiness ?? 70,
@@ -48,10 +52,12 @@ function simulatedMetrics(db: DemoDb, me: UUID, today: string): DailyMetrics {
     steps: latest?.steps ?? 9000,
     stressAvg: latest?.stressAvg ?? 28,
     trainingStatus: latest?.trainingStatus ?? 'Productivo',
+    ...sleepDetail(today, sleepHours, createRandom(seed)),
   };
 }
 
-function withSync(db: DemoDb, me: UUID, now: string, today: string): DemoDb {
+/** Simulated Garmin sync: today's metrics + `lastSyncAt` (also used by the demo briefing). */
+export function withSync(db: DemoDb, me: UUID, now: string, today: string): DemoDb {
   const metrics = simulatedMetrics(db, me, today);
   return {
     ...db,
@@ -60,15 +66,17 @@ function withSync(db: DemoDb, me: UUID, now: string, today: string): DemoDb {
   };
 }
 
-function garminMethods({ store }: DemoDeps): Pick<Repository, 'listIntegrations' | 'connectGarmin' | 'disconnectGarmin' | 'syncGarmin'> {
+function garminMethods({ store, delays }: DemoDeps): Pick<Repository, 'listIntegrations' | 'connectGarmin' | 'disconnectGarmin' | 'syncGarmin'> {
   return {
     async listIntegrations() {
       const me = await requireMe(store);
       return (await store.read()).integrations.filter((i) => i.userId === me).map(strip);
     },
+    /** Any non-empty key works in demo mode (the onboarding must be completable without a real Garmin). */
     async connectGarmin(apiKey: string, expiresAt: string | null) {
-      if (apiKey.trim().length < 16) throw new RepositoryError('validation', 'Pega la clave completa de la Personal API de Garmin.');
+      if (apiKey.trim().length === 0) throw new RepositoryError('validation', 'Pega la clave de la Personal API de Garmin.');
       const me = await requireMe(store);
+      await pause(delays.garminMs);
       return store.update((db, clock) => {
         const integration: DemoIntegration = { userId: me, provider: 'garmin_personal', state: 'connected', expiresAt, lastSyncAt: null, lastError: null };
         const next = withSync({ ...db, integrations: [...db.integrations.filter((i) => i.userId !== me), integration] }, me, clock.now, clock.today);
@@ -95,11 +103,33 @@ function garminMethods({ store }: DemoDeps): Pick<Repository, 'listIntegrations'
   };
 }
 
-function tokenMethods({ store }: DemoDeps): Pick<Repository, 'listTokens' | 'createToken' | 'revokeToken'> {
+/**
+ * Simulates claude.ai calling our MCP endpoint after the connector is added:
+ * an MCP token gets `lastUsedAt` once `connectorMs` have passed since it was created.
+ */
+function markConnectorUse(tokens: readonly DemoToken[], me: UUID, nowIso: string, connectorMs: number): DemoToken[] {
+  const now = Date.parse(nowIso);
+  return tokens.map((t) => {
+    if (t.userId !== me || t.scope !== 'mcp' || t.lastUsedAt !== null || t.revokedAt !== null) return t;
+    const usedAt = Date.parse(t.createdAt) + connectorMs;
+    return now >= usedAt ? { ...t, lastUsedAt: new Date(usedAt).toISOString() } : t;
+  });
+}
+
+function tokenMethods({ store, delays }: DemoDeps): Pick<Repository, 'listTokens' | 'createToken' | 'revokeToken'> {
   return {
     async listTokens() {
       const me = await requireMe(store);
-      return (await store.read()).tokens
+      const current = (await store.read()).tokens;
+      const due = markConnectorUse(current, me, store.clock().now, delays.connectorMs).some((t, i) => t !== current[i]);
+      // Only write (and persist) when a token just got "used": the onboarding polls this every 3 s.
+      const tokens = due
+        ? await store.update((db, clock) => {
+            const next = markConnectorUse(db.tokens, me, clock.now, delays.connectorMs);
+            return { db: { ...db, tokens: next }, result: next };
+          })
+        : current;
+      return tokens
         .filter((t) => t.userId === me)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .map(stripToken);

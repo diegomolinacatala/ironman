@@ -47,6 +47,8 @@ export interface RulesCoachOptions {
   today: ISODate;
   /** Prepended to the reply (e.g. why the AI coach was not used). */
   notice?: string;
+  /** The injury in the message is already logged as an imprevisto (demo coach). */
+  injuryLogged?: boolean;
 }
 
 export type Readiness = ReturnType<typeof computeReadiness>;
@@ -237,6 +239,9 @@ export function planForRequest(request: CoachRequest, ctx: CoachContext): PlanRe
   });
 }
 
+/** The rules engine neither saves preferences nor logs imprevistos by itself. */
+const NOTHING_REMEMBERED: Pick<CoachResponse, 'memory' | 'lifeEvent'> = { memory: [], lifeEvent: null };
+
 function withNotice(notice: string | undefined, text: string): string {
   return notice ? `${notice}\n\n${text}` : text;
 }
@@ -256,11 +261,12 @@ export async function runRulesCoach(
   const ctx = await loadCoachContext(repo, request, options.today);
   const plan = planForRequest(request, ctx);
   if (!plan) {
-    return { reply: withNotice(options.notice, buildChatReply({ message: request.message ?? '', ctx })), proposal: null, engine: 'rules' };
+    const reply = buildChatReply({ message: request.message ?? '', ctx, injuryLogged: options.injuryLogged });
+    return { reply: withNotice(options.notice, reply), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED };
   }
   if (plan.changes.length === 0) {
     const summary = plan.summary || 'Tu semana ya está bien encajada: no veo cambios necesarios.';
-    return { reply: withNotice(options.notice, summary), proposal: null, engine: 'rules' };
+    return { reply: withNotice(options.notice, summary), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED };
   }
   const proposal = await repo.createProposal({
     kind: KIND_BY_MODE[request.mode],
@@ -271,5 +277,5 @@ export async function runRulesCoach(
     model: null,
   });
   const reply = `${plan.summary}\n\n${changesSentence(plan.changes.length)}`;
-  return { reply: withNotice(options.notice, reply), proposal, engine: 'rules' };
+  return { reply: withNotice(options.notice, reply), proposal, engine: 'rules', ...NOTHING_REMEMBERED };
 }

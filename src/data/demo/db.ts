@@ -5,6 +5,7 @@
  */
 import type {
   AppNotification,
+  Briefing,
   BusyBlock,
   DailyCheckin,
   DailyMetrics,
@@ -25,7 +26,8 @@ import type {
   Workout,
 } from '@/domain/types';
 
-export const DEMO_DB_VERSION = 1;
+/** v2: sleep stages in the seed, `briefings`, Diego not onboarded (the v2 onboarding runs once). */
+export const DEMO_DB_VERSION = 2;
 
 export interface DemoFriendship {
   id: UUID;
@@ -76,6 +78,10 @@ export interface DemoIntegration extends IntegrationStatus {
   userId: UUID;
 }
 
+export interface DemoBriefing extends Briefing {
+  userId: UUID;
+}
+
 export interface DemoDb {
   version: number;
   /** "Today" when the data was seeded (all seed dates are relative to it). */
@@ -99,6 +105,7 @@ export interface DemoDb {
   proposals: PlanProposal[];
   tokens: DemoToken[];
   integrations: DemoIntegration[];
+  briefings: DemoBriefing[];
 }
 
 /** Clock + id factory injected into pure demo operations. */
@@ -117,7 +124,8 @@ export function isDemoDb(value: unknown): value is DemoDb {
     Array.isArray(db.profiles) &&
     Array.isArray(db.workouts) &&
     Array.isArray(db.jointSessions) &&
-    Array.isArray(db.notifications)
+    Array.isArray(db.notifications) &&
+    Array.isArray(db.briefings)
   );
 }
 

@@ -9,11 +9,12 @@ export const env = {
   /** Force the local demo backend even when Supabase is configured. */
   forceDemo: process.env.EXPO_PUBLIC_DEMO === '1',
   /**
-   * In-app AI coach (Claude API through the `coach` edge function). OFF by default: the coach uses
-   * the offline rules engine and nothing is sent to Anthropic. Turn on with EXPO_PUBLIC_AI_COACH=1
-   * (also needs ANTHROPIC_API_KEY in Supabase and the consent texts re-enabled).
+   * In-app AI (Claude API through the `coach`, `briefing` and `meal` edge functions). ON by default
+   * since v2 (voice coach, meal photos, morning briefing); EXPO_PUBLIC_AI_COACH=0 turns it off and
+   * every AI path falls back to the offline rules engine / local templates. The server also needs
+   * ANTHROPIC_API_KEY, and each user's consent (`profiles.ai_consent_at`, asked in onboarding).
    */
-  aiCoachEnabled: process.env.EXPO_PUBLIC_AI_COACH === '1',
+  aiCoachEnabled: process.env.EXPO_PUBLIC_AI_COACH !== '0',
 } as const;
 
 export const isBackendConfigured = Boolean(env.supabaseUrl && env.supabaseKey) && !env.forceDemo;

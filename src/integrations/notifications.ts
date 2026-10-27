@@ -1,6 +1,7 @@
 /**
  * Notifications: permissions, APNs push registration (iOS devices only) and the
- * local schedule (reminders, morning summary, evening check-in, Sunday planning).
+ * local schedule (reminders, "Tu informe de hoy" → /briefing?play=1, evening check-in,
+ * Sunday planning).
  * Web: everything is a safe no-op.
  */
 import * as Device from 'expo-device';
@@ -37,7 +38,9 @@ async function registerCategories(): Promise<void> {
     Notifications.setNotificationCategoryAsync('checkin', [
       { identifier: 'open', buttonTitle: 'Registrar', options: { opensAppToForeground: true } },
     ]),
-    Notifications.setNotificationCategoryAsync('summary', []),
+    Notifications.setNotificationCategoryAsync('summary', [
+      { identifier: 'open', buttonTitle: 'Escuchar', options: { opensAppToForeground: true } },
+    ]),
     Notifications.setNotificationCategoryAsync('weekly', []),
   ]);
 }

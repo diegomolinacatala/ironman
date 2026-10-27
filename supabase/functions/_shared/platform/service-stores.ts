@@ -1,5 +1,5 @@
-/** Coach, push and Garmin-credential stores over supabase-js (service role, user-scoped). */
-import type { CoachStore } from '../coach/ports.ts';
+/** Coach, AI usage, push and Garmin-credential stores over supabase-js (service role, user-scoped). */
+import type { AiUsageStore, CoachStore } from '../coach/ports.ts';
 import { asRow } from '../db/rows.ts';
 import type { CredentialStore, GarminCredential } from '../garmin/credentials.ts';
 import { PROVIDER } from '../garmin/credentials.ts';
@@ -8,6 +8,47 @@ import type { UUID } from '../types.ts';
 import { rowsOf, unwrap } from './db.ts';
 import type { Db } from './db.ts';
 import { createPlanningStore } from './planning-store.ts';
+
+async function getAiConsentAt(db: Db, userId: UUID): Promise<string | null> {
+  const data = unwrap(await db.from('profiles').select('ai_consent_at').eq('id', userId).maybeSingle(), 'ai consent');
+  const value = asRow(data).ai_consent_at;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+async function recordAiUsage(db: Db, userId: UUID, usage: Parameters<CoachStore['recordUsage']>[1]): Promise<void> {
+  unwrap(
+    await db.from('ai_usage').insert({
+      user_id: userId,
+      function_name: usage.functionName,
+      model: usage.model,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+    }),
+    'ai usage',
+  );
+}
+
+/** Consent + atomic ai_usage reservation for briefing and meal (svc_reserve_ai_call). */
+export function createAiUsageStore(db: Db): AiUsageStore {
+  return {
+    getAiConsentAt: (userId) => getAiConsentAt(db, userId),
+    async reserveCall(userId, functionName, limit) {
+      const data = unwrap(await db.rpc('svc_reserve_ai_call', { p_user: userId, p_function: functionName, p_limit: limit }), 'svc_reserve_ai_call');
+      const id = typeof data === 'number' ? data : typeof data === 'string' && /^\d+$/.test(data) ? Number(data) : null;
+      return id !== null && Number.isSafeInteger(id) ? id : null;
+    },
+    async completeCall(userId, usageId, usage) {
+      unwrap(
+        await db
+          .from('ai_usage')
+          .update({ model: usage.model.slice(0, 100), input_tokens: usage.inputTokens, output_tokens: usage.outputTokens })
+          .eq('id', usageId)
+          .eq('user_id', userId),
+        'complete ai usage',
+      );
+    },
+  };
+}
 
 export function createCoachStore(db: Db): CoachStore {
   const planning = createPlanningStore(db);
@@ -20,31 +61,27 @@ export function createCoachStore(db: Db): CoachStore {
     return rows.length > 0;
   };
   return {
-    async getAiConsentAt(userId) {
-      const data = unwrap(await db.from('profiles').select('ai_consent_at').eq('id', userId).maybeSingle(), 'ai consent');
-      const value = asRow(data).ai_consent_at;
-      return typeof value === 'string' && value.length > 0 ? value : null;
-    },
+    getAiConsentAt: (userId) => getAiConsentAt(db, userId),
     async reserveJob(userId, request, limit) {
       const data = unwrap(await db.rpc('svc_reserve_coach_job', { p_user: userId, p_request: request, p_limit: limit }), 'svc_reserve_coach_job');
       return typeof data === 'string' && data.length > 0 ? data : null;
     },
     finishJob: (userId, jobId, result) =>
-      closeJob(userId, jobId, { status: 'done', reply: result.reply, proposal_id: result.proposalId, engine: 'ai', error: null }, 'finish coach job'),
+      closeJob(
+        userId,
+        jobId,
+        { status: 'done', reply: result.reply, proposal_id: result.proposalId, engine: 'ai', error: null, extras: result.extras },
+        'finish coach job',
+      ),
     failJob: (userId, jobId, message) => closeJob(userId, jobId, { status: 'error', error: message.slice(0, 1000) }, 'fail coach job'),
-    async recordUsage(userId, usage) {
-      unwrap(
-        await db.from('ai_usage').insert({
-          user_id: userId,
-          function_name: usage.functionName,
-          model: usage.model,
-          input_tokens: usage.inputTokens,
-          output_tokens: usage.outputTokens,
-        }),
-        'ai usage',
-      );
-    },
+    recordUsage: (userId, usage) => recordAiUsage(db, userId, usage),
     insertProposal: planning.insertProposal,
+    async insertLifeEvent(userId, event) {
+      return (await planning.insertLifeEvent(userId, event)).id;
+    },
+    async updateCoachNotes(userId, notes) {
+      unwrap(await db.from('profiles').update({ coach_notes: notes.slice(0, 4000) }).eq('id', userId), 'coach notes');
+    },
   };
 }
 

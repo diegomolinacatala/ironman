@@ -77,7 +77,7 @@ describe('Semana', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Planificar semana' }));
     expect(mockPlan).toHaveBeenCalledWith(startOfWeek(todayISO()), mockData);
     // AI coach off by default (EXPO_PUBLIC_AI_COACH): the button is the plain rules coach.
-    await fireEvent.press(screen.getByRole('button', { name: 'Coach' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Coach IA' }));
     expect(mockRouter.push).toHaveBeenCalledWith(`/coach?mode=plan_week&weekStart=${startOfWeek(todayISO())}`);
   });
 

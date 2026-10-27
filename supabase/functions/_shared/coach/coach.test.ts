@@ -6,7 +6,7 @@ import { claudeReturning, coachJob as job, flat, PLANNED, runningRecorder, state
 import { runCoachJob } from './job.ts';
 import { buildCoachMessages } from './messages.ts';
 import { COACH_OUTPUT_JSON_SCHEMA, parseCoachOutput, toPlanChanges } from './output.ts';
-import { CoachAiError } from './ports.ts';
+import { CoachAiError, messageText } from './ports.ts';
 import type { ClaudeRequest, ClaudeResponse } from './ports.ts';
 import { COACH_SYSTEM_PROMPT } from './prompt.ts';
 import { parseCoachRequest } from './request.ts';
@@ -24,7 +24,7 @@ test('parseCoachRequest validates and normalizes the app request', () => {
 
 test('structured output schema has every property required and no numeric bounds', () => {
   const schema = COACH_OUTPUT_JSON_SCHEMA as { required: string[]; properties: { changes: { items: { required: string[]; additionalProperties: boolean } } } };
-  assert.deepEqual(schema.required, ['reply', 'summary', 'changes']);
+  assert.deepEqual(schema.required, ['reply', 'summary', 'changes', 'memory', 'life_event']);
   assert.equal(schema.properties.changes.items.required.length, 12);
   assert.equal(schema.properties.changes.items.additionalProperties, false);
   assert.ok(!JSON.stringify(schema).includes('minimum'));
@@ -44,7 +44,9 @@ test('flat changes convert to strict PlanChange and invalid ones are rejected', 
   assert.deepEqual(changes[2], { op: 'update', workoutId: PLANNED, patch: { durationMin: 40 }, reason: 'Motivo' });
   assert.deepEqual(rejected.map((r) => r.index), [3, 4]);
   assert.equal(parseCoachOutput('not json'), null);
-  assert.equal(parseCoachOutput(JSON.stringify({ reply: 'x' })), null);
+  // A reply alone is usable (weaker open models): no proposal, but the athlete gets an answer.
+  assert.deepEqual(parseCoachOutput(JSON.stringify({ reply: 'x' }))?.changes, []);
+  assert.equal(parseCoachOutput(JSON.stringify({ summary: 'x', changes: [] })), null);
 });
 
 test('messages put the context first and always end with a user turn', () => {
@@ -54,7 +56,7 @@ test('messages put the context first and always end with a user turn', () => {
     {},
   );
   assert.equal(msgs[0].role, 'user');
-  assert.match(msgs[0].content, /Contexto del atleta/);
+  assert.match(messageText(msgs[0]), /Contexto del atleta/);
   assert.equal(msgs[msgs.length - 1].role, 'user');
   assert.equal(msgs.length, 4);
   assert.ok(!COACH_SYSTEM_PROMPT.includes('2026'), 'system prompt stays static (cacheable)');

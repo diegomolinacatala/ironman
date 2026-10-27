@@ -42,6 +42,7 @@ const SERVICE_RPCS = [
   'svc_get_friend_week',
   'svc_list_friends',
   'svc_reserve_coach_job',
+  'svc_reserve_ai_call',
 ];
 
 describe('schema, privileges and sign-up', () => {

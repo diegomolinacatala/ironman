@@ -20,6 +20,7 @@ const requestSchema = object(
     history: optional(array(messageSchema, { max: 30 })),
     lifeEventId: optional(uuidSchema()),
     friendIds: optional(array(uuidSchema(), { max: 5 })),
+    channel: optional(enumOf(['voice', 'text'] as const)),
   },
   undefined,
   { stripUnknown: true },
@@ -40,6 +41,7 @@ export function parseCoachRequest(input: unknown): Result<CoachRequest> {
       ...(v.history && v.history.length ? { history: v.history.slice(-20) } : {}),
       ...(v.lifeEventId ? { lifeEventId: v.lifeEventId } : {}),
       ...(v.friendIds && v.friendIds.length ? { friendIds: [...new Set(v.friendIds)] } : {}),
+      ...(v.channel ? { channel: v.channel } : {}),
     },
   };
 }

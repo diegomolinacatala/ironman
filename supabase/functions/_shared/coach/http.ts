@@ -16,7 +16,7 @@ import { parseCoachRequest } from './request.ts';
 export const COACH_DAILY_LIMIT = 30;
 
 export const CONSENT_REQUIRED_MESSAGE =
-  'Para usar el coach con IA tienes que aceptar que enviemos tus datos de entrenamiento a Anthropic (Claude). Mientras tanto te propongo el plan automático.';
+  'Para usar el coach con IA tienes que aceptar que enviemos tus datos de entrenamiento a la IA del coach (Cloudflare Workers AI). Mientras tanto te propongo el plan automático.';
 
 export interface CoachHttpDeps {
   aiConfigured: boolean;

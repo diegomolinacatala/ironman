@@ -175,11 +175,23 @@ export function Avatar({ name, size = 36, color }: { name: string; size?: number
   );
 }
 
-export function ProgressBar({ value, color, height = 8 }: { value: number; color?: string; height?: number }) {
+export function ProgressBar({
+  value,
+  color,
+  height = 8,
+  accessibilityLabel,
+}: {
+  value: number;
+  color?: string;
+  height?: number;
+  accessibilityLabel?: string;
+}) {
   const { colors } = useTheme();
   const pct = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
   return (
     <View
+      accessible
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}
       style={{ height, borderRadius: height / 2, backgroundColor: colors.surfaceAlt, overflow: 'hidden' }}>

@@ -2,6 +2,8 @@
  * Device calendar (EventKit) → busy blocks. Uses the SDK 58 object API of
  * expo-calendar (legacy `*Async` functions would throw). Web: no-op.
  * The calendar selection is per account (see `./deviceState`).
+ * Our own "Road to Ironman" calendar (the workouts we write, see
+ * `calendar/trainingCalendar.ts`) is never listed nor read as busy time.
  */
 import * as Calendar from 'expo-calendar';
 import { Platform } from 'react-native';
@@ -12,6 +14,7 @@ import type { DateRange } from '@/domain/types';
 import { logger } from '@/lib/logger';
 
 import { mapEventsToBusyBlocks, rangeToWindow } from './calendar/mapping';
+import { getKnownTrainingCalendarIds, isTrainingCalendar } from './calendar/trainingCalendarStore';
 import { assertSessionUser, readUserJson, sessionUserId, writeUserJson } from './deviceState';
 
 export type PermissionState = 'granted' | 'denied' | 'undetermined';
@@ -52,9 +55,18 @@ export async function requestCalendarPermission(): Promise<boolean> {
   }
 }
 
+/** Event calendars the user can pick for busy time (never our own training calendar). */
+async function readableCalendars(): Promise<Calendar.ExpoCalendar[]> {
+  const [calendars, known] = await Promise.all([
+    Calendar.getCalendars(Calendar.EntityTypes.EVENT),
+    getKnownTrainingCalendarIds(),
+  ]);
+  return calendars.filter((c) => !isTrainingCalendar(c, known));
+}
+
 export async function listDeviceCalendars(): Promise<DeviceCalendar[]> {
   if (!isNative || (await getCalendarPermission()) !== 'granted') return [];
-  const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
+  const calendars = await readableCalendars();
   return calendars
     .map((c) => ({ id: c.id, title: c.title, color: c.color ?? null, source: c.source?.name ?? '' }))
     .sort((a, b) => a.source.localeCompare(b.source, 'es') || a.title.localeCompare(b.title, 'es'));
@@ -92,7 +104,7 @@ export async function syncCalendarBusy(repo: Repository, range: DateRange = defa
   if ((await getCalendarPermission()) !== 'granted') return { blocks: 0 };
 
   const selected = await getSelectedCalendarIds(userId);
-  const available = new Set((await Calendar.getCalendars(Calendar.EntityTypes.EVENT)).map((c) => c.id));
+  const available = new Set((await readableCalendars()).map((c) => c.id));
   const ids = selected.filter((id) => available.has(id));
   const window = rangeToWindow(range);
 

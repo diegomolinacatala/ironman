@@ -18,7 +18,8 @@ const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 const SETTLE_MS = 600;
 const RETRY_MS = 250;
 const MAX_RETRIES = 20;
-const TAB_PATH = /^\/(today|week|together|progress|me)\/?(?:[?#].*)?$/;
+/** Tab routes (v2: Hoy, Plan, Tú). `/together` and `/progress` live in the root stack now. */
+const TAB_PATH = /^\/(today|week|me)\/?(?:[?#].*)?$/;
 
 export function useNotificationRouting(ready: boolean): void {
   const navigation = useNavigationContainerRef();

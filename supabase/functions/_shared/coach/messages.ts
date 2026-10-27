@@ -57,8 +57,11 @@ export function buildCoachMessages(
   ];
   const contextMessage: ClaudeMessage = { role: 'user', content: parts.join('') };
   const history = (request.history ?? []).map((m) => ({ role: m.role, content: m.content }));
-  const finalText = request.message?.trim()
-    ? `Mensaje del atleta: ${request.message.trim()}`
-    : 'Sin mensaje adicional del atleta: aplica el modo indicado.';
+  const message = request.message?.trim();
+  const finalText = !message
+    ? 'Sin mensaje adicional del atleta: aplica el modo indicado.'
+    : request.channel === 'voice'
+      ? `Mensaje del atleta (dictado por voz: transcripción automática, puede tener errores de reconocimiento): ${message}`
+      : `Mensaje del atleta: ${message}`;
   return [contextMessage, ...history, { role: 'user', content: finalText }];
 }

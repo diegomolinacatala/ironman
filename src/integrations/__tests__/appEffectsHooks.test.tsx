@@ -11,12 +11,18 @@ import { useSignedOutCleanup } from '../effects/useSignedOutCleanup';
 const mockCancel = jest.fn(async () => undefined);
 const mockClearWidgets = jest.fn(() => undefined);
 const mockRegister = jest.fn(async (_repo: unknown) => 'deadbeef03');
+const mockClearMeals = jest.fn(async () => undefined);
+const mockClearCalendar = jest.fn(async (_userId: string | null) => undefined);
 
 jest.mock('../notifications', () => ({
   cancelLocalNotifications: () => mockCancel(),
   registerForPush: (repo: unknown) => mockRegister(repo),
 }));
 jest.mock('../widgets/sync', () => ({ clearWidgets: () => mockClearWidgets() }));
+jest.mock('../camera/mealPhoto', () => ({ clearMealPhotos: () => mockClearMeals() }));
+jest.mock('../calendar/trainingCalendarSync', () => ({
+  clearTrainingCalendarData: (userId: string | null) => mockClearCalendar(userId),
+}));
 
 const repo = {} as never;
 
@@ -29,6 +35,8 @@ describe('useSignedOutCleanup', () => {
     await renderHook(() => useSignedOutCleanup(true, null));
     expect(mockCancel).not.toHaveBeenCalled();
     expect(mockClearWidgets).not.toHaveBeenCalled();
+    expect(mockClearMeals).not.toHaveBeenCalled();
+    expect(mockClearCalendar).not.toHaveBeenCalled();
   });
 
   test('cleans up when the app starts without a session (revoked elsewhere)', async () => {
@@ -38,6 +46,9 @@ describe('useSignedOutCleanup', () => {
     await rerender({ isLoading: false, userId: null });
     expect(mockCancel).toHaveBeenCalledTimes(1);
     expect(mockClearWidgets).toHaveBeenCalledTimes(1);
+    // Nobody was seen signed in: every account's leftovers go.
+    expect(mockClearMeals).toHaveBeenCalledTimes(1);
+    expect(mockClearCalendar).toHaveBeenCalledWith(null);
   });
 
   test('cleans up on sign-out but never while signed in', async () => {
@@ -48,6 +59,8 @@ describe('useSignedOutCleanup', () => {
     await rerender({ userId: null });
     expect(mockCancel).toHaveBeenCalledTimes(1);
     expect(mockClearWidgets).toHaveBeenCalledTimes(1);
+    expect(mockClearMeals).toHaveBeenCalledTimes(1);
+    expect(mockClearCalendar).toHaveBeenCalledWith('user-ana');
   });
 });
 

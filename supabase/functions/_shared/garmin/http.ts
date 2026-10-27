@@ -1,6 +1,6 @@
 /**
  * `POST /garmin` with `{ action }`:
- * - connect {apiKey, expiresAt?} (user JWT): validate key with Garmin, encrypt, store, first sync.
+ * - connect {apiKey, expiresAt?} (user JWT): validate key with Garmin, encrypt, store, first sync (28 days).
  * - disconnect (user JWT): delete the stored key.
  * - sync (user JWT): sync now.
  * - sync_all (server secret key in `apikey`): scheduled sync of every connected user.
@@ -13,6 +13,7 @@ import { hasServiceKey } from '../secrets.ts';
 import type { UUID } from '../types.ts';
 import { GarminApiError } from './api.ts';
 import { encryptApiKey, statusOf, syncWithCredential } from './credentials.ts';
+import { FIRST_SYNC_DAYS } from './sync.ts';
 import type { CredentialSyncDeps } from './credentials.ts';
 
 export interface GarminHttpDeps extends Omit<CredentialSyncDeps, 'keySecret'> {
@@ -47,7 +48,8 @@ async function connect(deps: GarminHttpDeps & { keySecret: string }, userId: UUI
   await deps.credentials.saveCredential(userId, { ciphertext, keyExpiresAt: expiresAt });
   const saved = await deps.credentials.getCredential(userId);
   if (!saved) return errorResponse(500, 'internal', 'No se pudo guardar la clave de Garmin.');
-  const outcome = await syncWithCredential({ ...deps, keySecret: deps.keySecret }, saved);
+  // First sync after (re)connecting covers 28 days so sleep/HRV baselines are ready at once.
+  const outcome = await syncWithCredential({ ...deps, keySecret: deps.keySecret }, saved, { days: FIRST_SYNC_DAYS });
   return json({ ...outcome.status, sync: outcome.ok ? outcome.result : null });
 }
 

@@ -13,6 +13,10 @@ Orden: **1 Supabase → 2 Apple → 3 secretos de Apple en Supabase → 4 GitHub
 > (la 4 se cerraba al arrancar, ver ARCHITECTURE §14). Grupo interno «Road to Ironman» (recibe todas
 > las builds) con Diego y David. Pendiente: lo de cada usuario en el iPhone (pasos 7 y 8).
 >
+> **v2 (27-oct-2026):** IA gratis con Cloudflare Workers AI: worker `ironman-ai` desplegado
+> (`https://ironman-ai.<tu-subdominio>.workers.dev`) y secretos `AI_WORKER_URL` / `AI_WORKER_SECRET` en
+> Supabase. Garmin, Claude y el calendario se conectan desde el onboarding de la app (paso 8).
+>
 > **Login por email:** en el plan gratuito Supabase envía un **enlace** (no un código); la app lo
 > acepta (`roadtoironman://auth/callback`). Para recibir un código de 6 dígitos hace falta SMTP propio y
 > descomentar las plantillas en `supabase/config.toml`.
@@ -75,13 +79,34 @@ npx supabase secrets set GARMIN_KEY_SECRET="$(openssl rand -base64 48)"
 8. **Desplegar las funciones del servidor** (sin Docker):
 
 ```bash
-npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
+npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke coach briefing meal --use-api
 ```
 
 9. *Recomendado:* *Authentication → Emails → SMTP* con un proveedor propio (p. ej. Resend, gratis): el
    correo por defecto de Supabase solo envía unos pocos emails por hora.
 
 > En el plan gratuito, un proyecto sin uso durante 7 días se pausa: *Restore* en el dashboard.
+
+---
+
+### 1.10 IA gratuita (Cloudflare Workers AI)
+
+El coach, el informe de la mañana y las fotos de comidas usan modelos abiertos de Cloudflare con el
+plan gratuito (10.000 neuronas al día, compartidas con Tasks). Con la sesión de `wrangler` iniciada:
+
+```bash
+cd cloudflare/ai && npx wrangler deploy
+```
+
+```bash
+openssl rand -hex 32 > ai_secret.tmp && npx wrangler secret put AI_SHARED_SECRET < ai_secret.tmp
+```
+
+```bash
+npx supabase secrets set AI_WORKER_URL=https://ironman-ai.TU-SUBDOMINIO.workers.dev AI_WORKER_SECRET="$(cat cloudflare/ai/ai_secret.tmp)" && rm cloudflare/ai/ai_secret.tmp
+```
+
+Si se agota la cuota del día, la app sigue funcionando con su informe y su motor de reglas locales.
 
 ---
 
@@ -216,8 +241,8 @@ ejecución y lo arreglo.
 ## 7. En el iPhone (cada uno, ≈10 min)
 
 1. Abre la app → entra con **Apple** o con tu email (llega un enlace: ábrelo desde el iPhone).
-2. Onboarding: nombre, @usuario, deportes, horas por semana, franjas y carrera objetivo.
-3. Permisos que quieras: notificaciones, calendario (solo horas ocupadas) y Salud.
+2. El onboarding te guía paso a paso: objetivo, **Garmin**, **Claude**, **calendario**, hora del informe de
+   la mañana y tu primer plan (ver paso 8).
 4. **Salud:** en Garmin Connect activa *Apple Salud*; luego en la app **Yo → Conexiones → Apple Salud**.
 5. **Amigos:** **Juntos → Añadir** → busca el @usuario del otro.
 6. **Widgets:** mantén pulsada la pantalla de inicio → **+** → Road to Ironman.
@@ -225,6 +250,9 @@ ejecución y lo arreglo.
 ---
 
 ## 8. Garmin y tu Claude (cada uno)
+
+> Desde la v2 el onboarding hace esto contigo: abre la página de Garmin, pega la clave, copia el enlace de
+> Claude y comprueba en directo que Claude se ha conectado. Lo de abajo es por si lo haces a mano.
 
 - **Garmin:** en la web de Garmin Connect, `connect.garmin.com/app/settings/personalApiToken` → crea una
   clave de **1 año** → pégala en **Yo → Conexiones → Garmin**. Se sincroniza sola por la mañana.
@@ -256,8 +284,9 @@ gh variable set EXPO_PUBLIC_PRIVACY_URL --body https://TU_URL
 
 ## Opcional
 
-- **Coach IA dentro de la app** (Claude API, pago por uso): desactivado. Para activarlo hace falta
-  `ANTHROPIC_API_KEY` en Supabase, desplegar la función `coach` y la variable `EXPO_PUBLIC_AI_COACH=1`.
+- **IA de pago (Claude API)** en lugar de Cloudflare: solo si algún día quieres más calidad. Con
+  `ANTHROPIC_API_KEY` en Supabase y sin `AI_WORKER_*`, las funciones usan Claude. `EXPO_PUBLIC_AI_COACH=0`
+  apaga toda la IA de la app.
 - **Garmin "Starter"** (gratis, con solicitud en developer.garmin.com): permitiría enviar los entrenos
   directamente al reloj desde la app.
 

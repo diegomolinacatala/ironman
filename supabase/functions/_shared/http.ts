@@ -18,6 +18,7 @@ export type ErrorCode =
   | 'not_found'
   | 'method_not_allowed'
   | 'payload_too_large'
+  | 'too_large'
   | 'rate_limited'
   | 'consent_required'
   | 'ai_unavailable'

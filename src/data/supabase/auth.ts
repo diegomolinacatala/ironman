@@ -12,10 +12,22 @@ import { requestAppleCredential } from './apple';
 import { revokeAppleAuthorization } from './appleRevoke';
 import { runVoid } from './base';
 import { MESSAGES, isNetworkError } from './errors';
+import { clearLocalBriefings } from './localBriefings';
 import { unregisterStoredPushToken } from './pushToken';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_RE = /^\d{6}$/;
+
+/** Removes the account's device-only data (locally composed briefings: sleep data). Never throws. */
+async function clearDeviceData(client: SupabaseClient): Promise<void> {
+  try {
+    const { data } = await client.auth.getSession();
+    const userId = data.session?.user.id;
+    if (userId) await clearLocalBriefings(userId);
+  } catch (error) {
+    logger.warn('device data cleanup skipped', error);
+  }
+}
 
 /** Where the sign-in email link lands: roadtoironman://auth/callback (localhost URL on web). */
 export function emailRedirectUrl(): string {
@@ -148,6 +160,7 @@ export function createSupabaseAuth(client: SupabaseClient): AuthApi {
     async signOut() {
       // While the session is still valid: stop this device receiving the account's pushes.
       await unregisterStoredPushToken(client);
+      await clearDeviceData(client);
       const { error } = await client.auth.signOut();
       if (error) {
         logger.warn('global signOut failed, clearing local session', error.message);
@@ -160,6 +173,7 @@ export function createSupabaseAuth(client: SupabaseClient): AuthApi {
       await revokeAppleAuthorization(client);
       await unregisterStoredPushToken(client);
       await runVoid('deleteAccount', client.rpc('delete_my_account'), 'No se ha podido borrar la cuenta.');
+      await clearDeviceData(client);
       const { error } = await client.auth.signOut({ scope: 'local' });
       if (error) logger.warn('local signOut after delete failed', error.message);
     },

@@ -7,7 +7,7 @@ import { DEFAULT_TZ, todayIn } from '../dates.ts';
 import { errorInfo } from '../log.ts';
 import type { ISODate, ISODateTime, IntegrationStatus, SyncResult, UUID } from '../types.ts';
 import { GarminApiError } from './api.ts';
-import { syncGarminUser } from './sync.ts';
+import { FIRST_SYNC_DAYS, SYNC_DAYS, syncGarminUser } from './sync.ts';
 import type { GarminSyncDeps } from './sync.ts';
 
 export const PROVIDER = 'garmin_personal';
@@ -73,16 +73,22 @@ async function markState(
   return statusOf({ ...c, state, lastError, lastSyncAt: lastSyncAt ?? c.lastSyncAt });
 }
 
+export interface SyncOptions {
+  /** Days back to sync; default 28 for a credential that never synced, else 14. */
+  days?: number;
+}
+
 /** Decrypts the key, syncs and records the resulting state. Never throws for Garmin errors. */
-export async function syncWithCredential(deps: CredentialSyncDeps, c: GarminCredential): Promise<SyncOutcome> {
+export async function syncWithCredential(deps: CredentialSyncDeps, c: GarminCredential, options: SyncOptions = {}): Promise<SyncOutcome> {
   const now = deps.now();
+  const days = options.days ?? (c.lastSyncAt ? SYNC_DAYS : FIRST_SYNC_DAYS);
   const tz = (await deps.credentials.getTimezone(c.userId)) ?? DEFAULT_TZ;
   if (c.keyExpiresAt && c.keyExpiresAt < todayIn(tz, now)) {
     return { ok: false, code: 'expired', message: EXPIRED_MESSAGE, status: await markState(deps, c, 'expired', EXPIRED_MESSAGE) };
   }
   try {
     const apiKey = await decryptSecret(c.ciphertext, deps.keySecret, cipherContext(c.userId));
-    const result = await syncGarminUser(deps, { userId: c.userId, apiKey, timezone: tz });
+    const result = await syncGarminUser(deps, { userId: c.userId, apiKey, timezone: tz, days });
     return { ok: true, result, status: await markState(deps, c, 'connected', null, now.toISOString()) };
   } catch (error) {
     if (error instanceof GarminApiError && (error.status === 401 || error.status === 403)) {

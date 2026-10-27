@@ -1,21 +1,34 @@
 import { Redirect, Tabs } from 'expo-router';
+import { BottomTabBar, type BottomTabBarProps } from 'expo-router/tabs';
+import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/data/context';
+import { CoachAccessory } from '@/features/accessory/CoachAccessory';
 import { Icon, type IconName } from '@/ui/Icon';
-import { fonts, useTheme } from '@/ui/theme';
+import { fonts, space, useTheme } from '@/ui/theme';
 
 /**
- * Web-only tab layout (browser preview / demo). On iOS the native tab bar is
- * used (`_layout.tsx`); on web NativeTabs floats over the content, so we use a
- * classic bottom bar instead.
+ * Web-only tab layout (browser preview / demo). On iOS the native tab bar is used
+ * (`_layout.tsx`); on web NativeTabs floats over the content, so we use a classic bottom bar
+ * with the coach accessory floating just above it.
  */
 const TABS: { name: string; title: string; icon: IconName }[] = [
   { name: 'today', title: 'Hoy', icon: 'today' },
-  { name: 'week', title: 'Semana', icon: 'week' },
-  { name: 'together', title: 'Juntos', icon: 'together' },
-  { name: 'progress', title: 'Progreso', icon: 'progress' },
-  { name: 'me', title: 'Yo', icon: 'profile' },
+  { name: 'week', title: 'Plan', icon: 'week' },
+  { name: 'me', title: 'Tú', icon: 'profile' },
 ];
+
+function TabBarWithAccessory(props: BottomTabBarProps) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ backgroundColor: colors.bg }}>
+      <View style={styles.accessory}>
+        <CoachAccessory placement="regular" surface="floating" />
+      </View>
+      <BottomTabBar {...props} />
+    </View>
+  );
+}
 
 export default function TabsLayoutWeb() {
   const { colors } = useTheme();
@@ -23,6 +36,7 @@ export default function TabsLayoutWeb() {
   if (!isLoading && !session) return <Redirect href="/" />;
   return (
     <Tabs
+      tabBar={(props) => <TabBarWithAccessory {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.text,
@@ -44,3 +58,7 @@ export default function TabsLayoutWeb() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  accessory: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.sm },
+});

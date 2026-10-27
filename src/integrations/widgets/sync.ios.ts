@@ -1,5 +1,6 @@
 /**
- * iOS implementation: pushes fresh props to the widgets (expo-widgets).
+ * iOS implementation: pushes fresh props to the widgets (expo-widgets), including the
+ * "Informe de hoy" lock-screen widget (today's briefing headline).
  * Timelines include an entry at every midnight so "Hoy" rolls over even if the
  * app is not opened. Skips the native call when nothing changed so WidgetKit's
  * reload budget is not wasted.
@@ -14,6 +15,7 @@ import { Platform } from 'react-native';
 
 import { logger } from '@/lib/logger';
 
+import BriefingWidget from './BriefingWidget';
 import NextWorkoutWidget from './NextWorkoutWidget';
 import { toPropertyList } from './plist';
 import { buildWidgetTimelines, linkBaseFor, type TimelineEntry, type WidgetTimelines } from './props';
@@ -35,7 +37,12 @@ function signatureOf(timelines: WidgetTimelines): string {
   // Dates of "now" entries change every call; compare the props and the later dates only.
   const strip = <T>(entries: { date: Date; props: T }[]) =>
     entries.map((e, i) => ({ t: i === 0 ? 0 : e.date.getTime(), p: e.props }));
-  return JSON.stringify({ a: strip(timelines.today), b: strip(timelines.race), c: strip(timelines.next) });
+  return JSON.stringify({
+    a: strip(timelines.today),
+    b: strip(timelines.race),
+    c: strip(timelines.next),
+    d: strip(timelines.briefing),
+  });
 }
 
 export function syncWidgets(input: SyncWidgetsInput): void {
@@ -47,6 +54,7 @@ export function syncWidgets(input: SyncWidgetsInput): void {
         races: input.races,
         jointSessions: input.jointSessions,
         profile: input.profile,
+        briefing: input.briefing,
         linkBase: linkBaseFor(Constants.expoConfig?.scheme),
       },
       new Date(),
@@ -57,6 +65,7 @@ export function syncWidgets(input: SyncWidgetsInput): void {
     TodayWidget.updateTimeline(storable(timelines.today));
     RaceWidget.updateTimeline(storable(timelines.race));
     NextWorkoutWidget.updateTimeline(storable(timelines.next));
+    BriefingWidget.updateTimeline(storable(timelines.briefing));
     lastSignature = signature;
   } catch (error) {
     logger.warn('widgets: update failed', error);
@@ -98,6 +107,7 @@ export function clearWidgets(): void {
       }),
     );
     NextWorkoutWidget.updateSnapshot(toPropertyList({ next: null, linkBase }));
+    BriefingWidget.updateSnapshot(toPropertyList({ date: '', headline: '', linkBase }));
     lastSignature = null;
   } catch (error) {
     logger.warn('widgets: clear failed', error);

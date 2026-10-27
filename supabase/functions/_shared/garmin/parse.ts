@@ -3,8 +3,8 @@
  * and mirror Garmin Connect web, so every field is looked up on several
  * candidate paths and anything missing is simply skipped.
  */
-import { localParts, normalizeTime } from '../dates.ts';
-import type { ISODate, Sport } from '../types.ts';
+import { DEFAULT_TZ, localParts, normalizeTime, zonedToUtc } from '../dates.ts';
+import type { ISODate, ISODateTime, Sport } from '../types.ts';
 import { garminSport } from './sports.ts';
 
 export interface DayMetricsPart {
@@ -16,6 +16,13 @@ export interface DayMetricsPart {
   bodyBattery?: number;
   steps?: number;
   stressAvg?: number;
+  /** Sleep stages (minutes) and start/end instants of the night that ENDS on `date`. */
+  sleepDeepMin?: number;
+  sleepLightMin?: number;
+  sleepRemMin?: number;
+  sleepAwakeMin?: number;
+  sleepStart?: ISODateTime;
+  sleepEnd?: ISODateTime;
 }
 
 export interface GarminActivity {
@@ -100,7 +107,57 @@ export function parseDailySummaries(payload: unknown): DayMetricsPart[] {
   });
 }
 
-export function parseSleepSummaries(payload: unknown): DayMetricsPart[] {
+/** Seconds → whole minutes in 0..1440 (one night), else undefined. */
+function stageMinutes(obj: unknown, paths: readonly string[]): number | undefined {
+  const seconds = pickNumber(obj, paths);
+  if (seconds === null || seconds < 0) return undefined;
+  const minutes = Math.round(seconds / 60);
+  return minutes <= 1440 ? minutes : undefined;
+}
+
+const MIN_EPOCH_MS = Date.UTC(2000, 0, 1);
+const MAX_EPOCH_MS = Date.UTC(2100, 0, 1);
+
+/** Epoch ms (number or numeric string) or an ISO-like string without zone (read as UTC). */
+function utcMillis(v: unknown): number | null {
+  const n = toNumber(v);
+  if (n !== null) return n >= MIN_EPOCH_MS && n < MAX_EPOCH_MS ? n : null;
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(v)) return null;
+  const iso = /Z|[+-]\d{2}:?\d{2}$/.test(v) ? v : `${v.replace(' ', 'T')}Z`;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) && ms >= MIN_EPOCH_MS && ms < MAX_EPOCH_MS ? ms : null;
+}
+
+/** GMT timestamp first; otherwise the "local" one (wall clock encoded as UTC) converted with the user's zone. */
+function instantOf(dto: unknown, gmtPaths: readonly string[], localPaths: readonly string[], tz: string): number | null {
+  for (const p of gmtPaths) {
+    const ms = utcMillis(at(dto, p));
+    if (ms !== null) return ms;
+  }
+  for (const p of localPaths) {
+    const ms = utcMillis(at(dto, p));
+    if (ms === null) continue;
+    const wall = new Date(ms).toISOString();
+    return Date.parse(zonedToUtc(wall.slice(0, 10), wall.slice(11, 16), tz));
+  }
+  return null;
+}
+
+const MAX_NIGHT_MS = 20 * 3_600_000;
+
+/** Start/end of the night; both dropped unless 0 < end − start ≤ 20 h. */
+function sleepWindow(dto: unknown, tz: string): Pick<DayMetricsPart, 'sleepStart' | 'sleepEnd'> {
+  const start = instantOf(dto, ['sleepStartTimestampGMT', 'sleepStartTimestamp', 'startTimeGMT'], ['sleepStartTimestampLocal', 'startTimeLocal'], tz);
+  const end = instantOf(dto, ['sleepEndTimestampGMT', 'sleepEndTimestamp', 'endTimeGMT'], ['sleepEndTimestampLocal', 'endTimeLocal'], tz);
+  if (start === null || end === null || end <= start || end - start > MAX_NIGHT_MS) return {};
+  return { sleepStart: new Date(start).toISOString(), sleepEnd: new Date(end).toISOString() };
+}
+
+/**
+ * Daily sleep: duration, score, stages, start/end (dailySleepDTO), plus the resting HR and
+ * overnight HRV some payloads carry. `tz` converts "local" timestamps when no GMT one exists.
+ */
+export function parseSleepSummaries(payload: unknown, tz: string = DEFAULT_TZ): DayMetricsPart[] {
   const rows = isObj(payload) && isObj(payload.dailySleepDTO) ? [payload] : asRecords(payload, ['dailySleepSummaries', 'sleepSummaries', 'dailySleepDTOList', 'data', 'summaries']);
   return rows.flatMap((row) => {
     const dto = isObj(row.dailySleepDTO) ? row.dailySleepDTO : row;
@@ -113,6 +170,11 @@ export function parseSleepSummaries(payload: unknown): DayMetricsPart[] {
       sleepScore: inRange(pickNumber(dto, ['sleepScores.overall.value', 'overallSleepScore.value', 'sleepScore.value', 'overallSleepScore', 'sleepScore']), 0, 100),
       restingHr: inRange(pickNumber(row, ['restingHeartRate', 'dailySleepDTO.restingHeartRate']), 25, 120),
       hrvMs: inRange(pickNumber(row, ['avgOvernightHrv', 'dailySleepDTO.avgOvernightHrv']), 1, 300),
+      sleepDeepMin: stageMinutes(dto, ['deepSleepSeconds', 'deepSleepDurationSeconds', 'sleepLevels.deepSeconds']),
+      sleepLightMin: stageMinutes(dto, ['lightSleepSeconds', 'lightSleepDurationSeconds', 'sleepLevels.lightSeconds']),
+      sleepRemMin: stageMinutes(dto, ['remSleepSeconds', 'remSleepDurationSeconds', 'sleepLevels.remSeconds']),
+      sleepAwakeMin: stageMinutes(dto, ['awakeSleepSeconds', 'awakeDurationSeconds', 'awakeSeconds', 'sleepLevels.awakeSeconds']),
+      ...sleepWindow(dto, tz),
     });
   });
 }

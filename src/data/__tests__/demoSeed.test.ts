@@ -28,7 +28,8 @@ describe('demo seed (relative to today)', () => {
         { weekday: 4, start: '19:00', end: '21:30' },
       ]),
     );
-    expect(profile?.onboardedAt).not.toBeNull();
+    // v2: the demo athlete goes through the new onboarding once (like `onboarded_at = null` in the migration).
+    expect(profile?.onboardedAt).toBeNull();
     await repo.store.dispose();
   });
 
@@ -76,6 +77,14 @@ describe('demo seed (relative to today)', () => {
     expect(metrics).toHaveLength(28);
     expect(metrics.every((m) => (m.hrvMs ?? 0) >= 60 && (m.hrvMs ?? 0) <= 75)).toBe(true);
     expect(metrics.every((m) => (m.restingHr ?? 0) >= 48 && (m.restingHr ?? 0) <= 52)).toBe(true);
+    expect(metrics.every((m) => (m.sleepDeepMin ?? 0) >= 60 && (m.sleepDeepMin ?? 0) <= 100)).toBe(true);
+    expect(metrics.every((m) => (m.sleepRemMin ?? 0) >= 80 && (m.sleepRemMin ?? 0) <= 120)).toBe(true);
+    expect(metrics.every((m) => (m.sleepAwakeMin ?? 0) >= 10 && (m.sleepAwakeMin ?? 0) <= 30)).toBe(true);
+    const last = metrics[metrics.length - 1];
+    expect(last?.date).toBe(TODAY);
+    const minutes = (Date.parse(last?.sleepEnd ?? '') - Date.parse(last?.sleepStart ?? '')) / 60_000;
+    expect(minutes).toBe(Math.round((last?.sleepHours ?? 0) * 60) + (last?.sleepAwakeMin ?? 0));
+    expect(new Date(last?.sleepEnd ?? '').getHours()).toBeGreaterThanOrEqual(6);
     await repo.store.dispose();
   });
 

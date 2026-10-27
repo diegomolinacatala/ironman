@@ -3,7 +3,7 @@ import Svg, { Polygon } from 'react-native-svg';
 
 import { Text, fonts, space, useTheme } from '@/ui';
 
-const VALUE_POINTS = ['Planifica tu semana', 'Reorganiza imprevistos', 'Cuadra quedadas'] as const;
+const VALUE_POINTS = ['Lee tu Garmin', 'Vive en tu calendario', 'Le hablas y se adapta'] as const;
 
 /** "IRONMAN" is 7 condensed caps: ~23 % of the width keeps it on one line on a 320 pt phone. */
 const WORDMARK_RATIO = 0.235;
@@ -34,7 +34,7 @@ export function BrandHero({ topInset }: BrandHeroProps) {
     <View style={[styles.hero, { backgroundColor: ink, paddingTop: topInset + space.xl }]}>
       <SpeedStripes color={colors.accent} />
       <Text variant="overline" style={{ color: colors.accent }}>
-        Triatlón · Entreno social
+        Triatlón · Tu coach de bolsillo
       </Text>
       <View style={styles.wordmarkWrap} accessible accessibilityRole="header" accessibilityLabel="Road to Ironman">
         <Text
@@ -66,7 +66,7 @@ export function BrandHero({ topInset }: BrandHeroProps) {
         </View>
       </View>
       <Text variant="title" style={{ color: paper }}>
-        Entrena a rueda de tus amigos
+        Tu coach de bolsillo
       </Text>
       <View style={styles.points}>
         {VALUE_POINTS.map((point, index) => (

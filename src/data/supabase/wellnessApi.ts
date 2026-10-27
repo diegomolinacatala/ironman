@@ -9,9 +9,12 @@ import type {
   UUID,
 } from '@/domain/types';
 
-import type { Repository } from '../repository';
+import { logger } from '@/lib/logger';
+
+import { RepositoryError, type Repository } from '../repository';
 import { assertNutrition } from '../demo/validation';
 import { run, runOne, runVoid, type SupabaseCtx } from './base';
+import { isRecord } from './narrow';
 import {
   checkinDraftToRow,
   metricsDraftToRow,
@@ -32,6 +35,16 @@ type WellnessMethods = Pick<
   | 'createNutrition'
   | 'deleteNutrition'
 >;
+
+const METRICS_V1_COLUMNS =
+  'user_id,date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status';
+/** Everything but `raw` (large Garmin payload). The sleep_* columns come from the v2 migration. */
+export const METRICS_COLUMNS = `${METRICS_V1_COLUMNS},sleep_deep_min,sleep_light_min,sleep_rem_min,sleep_awake_min,sleep_start,sleep_end`;
+
+/** Postgres 42703 "column does not exist": the v2 migration is not applied yet. */
+export function isMissingColumn(error: unknown): boolean {
+  return error instanceof RepositoryError && isRecord(error.cause) && error.cause.code === '42703';
+}
 
 export function wellnessApi(ctx: SupabaseCtx): WellnessMethods {
   const { client } = ctx;
@@ -65,19 +78,29 @@ export function wellnessApi(ctx: SupabaseCtx): WellnessMethods {
     return rowToCheckin(row);
   }
 
-  async function listMetrics(range: DateRange): Promise<DailyMetrics[]> {
-    const me = await ctx.userId();
-    const rows = await run<MetricsRow[] | null>(
+  async function selectMetrics(me: UUID, range: DateRange, columns: string): Promise<MetricsRow[] | null> {
+    return run<MetricsRow[] | null>(
       'listMetrics',
       client
         .from('daily_metrics')
-        .select('user_id,date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status')
+        .select(columns)
         .eq('user_id', me)
         .gte('date', range.from)
         .lte('date', range.to)
         .order('date', { ascending: true }),
     );
-    return (rows ?? []).map(rowToMetrics);
+  }
+
+  async function listMetrics(range: DateRange): Promise<DailyMetrics[]> {
+    const me = await ctx.userId();
+    try {
+      return ((await selectMetrics(me, range, METRICS_COLUMNS)) ?? []).map(rowToMetrics);
+    } catch (error) {
+      // Keep the app working against a database without the v2 sleep columns.
+      if (!isMissingColumn(error)) throw error;
+      logger.warn('daily_metrics without v2 sleep columns');
+      return ((await selectMetrics(me, range, METRICS_V1_COLUMNS)) ?? []).map(rowToMetrics);
+    }
   }
 
   async function upsertMetrics(drafts: MetricsDraft[]): Promise<void> {

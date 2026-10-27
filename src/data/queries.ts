@@ -12,8 +12,10 @@ import type {
   CoachRequest,
   CompletedData,
   DateRange,
+  ISODate,
   JointSessionDraft,
   LifeEventDraft,
+  MealAnalysisInput,
   MetricsDraft,
   NutritionDraft,
   PlanChange,
@@ -55,6 +57,7 @@ export const qk = {
   proposal: (id: UUID) => ['proposal', id] as const,
   tokens: ['tokens'] as const,
   integrations: ['integrations'] as const,
+  briefing: (date: ISODate) => ['briefing', date] as const,
 };
 
 /** Root keys invalidated for each change topic. */
@@ -73,6 +76,7 @@ const TOPIC_KEYS: Record<ChangeTopic, readonly string[]> = {
   proposals: ['proposals', 'proposal'],
   profile: ['profile'],
   integrations: ['integrations'],
+  briefings: ['briefing'],
 };
 
 function useInvalidate() {
@@ -328,6 +332,37 @@ export function useDeleteNutrition() {
   return useRepoMutation((id: UUID) => repo.deleteNutrition(id), ['nutrition']);
 }
 
+/** Photo/description → estimated meal. Does not save anything: confirm, then `useCreateNutrition`. */
+export function useAnalyzeMeal() {
+  const repo = useRepository();
+  return useMutation({ mutationFn: (input: MealAnalysisInput) => repo.analyzeMeal(input) });
+}
+
+// ---------------------------------------------------------------------------
+// Morning briefing
+// ---------------------------------------------------------------------------
+
+/** Stored briefing of `date` (null until generated). */
+export function useBriefing(date: ISODate) {
+  const repo = useRepository();
+  return useQuery({ queryKey: qk.briefing(date), queryFn: () => repo.getBriefing(date), enabled: useSignedIn() });
+}
+
+/** Generates the briefing (refreshing Garmin first) and puts it in the `useBriefing(date)` cache. */
+export function useGenerateBriefing() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ date, refresh }: { date: ISODate; refresh?: boolean }) => repo.generateBriefing(date, { refresh }),
+    onSuccess: (briefing) => {
+      client.setQueryData(qk.briefing(briefing.date), briefing);
+      void client.invalidateQueries({ queryKey: ['metrics'] });
+      void client.invalidateQueries({ queryKey: ['workouts'] });
+      void client.invalidateQueries({ queryKey: qk.integrations });
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Social
 // ---------------------------------------------------------------------------
@@ -480,7 +515,8 @@ export function useSetProposalStatus() {
 /** Calls the AI coach; resulting proposal (if any) lands in the proposals cache. */
 export function useCoach() {
   const repo = useRepository();
-  return useRepoMutation((request: CoachRequest) => repo.requestCoach(request), ['proposals']);
+  // The coach may also save preferences (profile.coachNotes) and log an imprevisto.
+  return useRepoMutation((request: CoachRequest) => repo.requestCoach(request), ['proposals', 'profile', 'life_events']);
 }
 
 // ---------------------------------------------------------------------------

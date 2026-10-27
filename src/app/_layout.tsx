@@ -58,6 +58,12 @@ function RootNavigator() {
         <Stack.Screen name="event/edit" options={{ ...modal, title: 'Imprevisto' }} />
         <Stack.Screen name="checkin" options={{ ...modal, title: '¿Cómo estás hoy?' }} />
 
+        <Stack.Screen name="talk" options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
+        <Stack.Screen name="meal" options={{ ...modal, title: 'Comida' }} />
+        <Stack.Screen name="briefing" options={{ ...modal, title: 'Informe de hoy' }} />
+        <Stack.Screen name="together" options={{ ...header, title: 'Juntos' }} />
+        <Stack.Screen name="progress" options={{ ...header, title: 'Progreso' }} />
+
         <Stack.Screen name="coach" options={{ ...header, title: 'Coach' }} />
         <Stack.Screen name="proposal/[id]" options={{ ...modal, title: 'Propuesta' }} />
         <Stack.Screen name="races/index" options={{ ...header, title: 'Carreras' }} />

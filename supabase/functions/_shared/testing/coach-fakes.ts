@@ -1,7 +1,8 @@
 /** Test doubles for the coach (used only by *.test.ts). */
 import type { ClaudePort, ClaudeRequest, ClaudeResponse, CoachStore } from '../coach/ports.ts';
 import type { CoachJob } from '../coach/job.ts';
-import type { CoachRequest, ProposalDraft, UUID } from '../types.ts';
+import type { LifeEventInsert } from '../planning/store.ts';
+import type { CoachJobExtras, CoachRequest, ProposalDraft, UUID } from '../types.ts';
 import { emptyState, USER, workout } from './fakes.ts';
 import type { FakeState } from './fakes.ts';
 
@@ -13,6 +14,7 @@ interface JobRow {
   reply?: string;
   proposalId?: UUID | null;
   error?: string;
+  extras?: CoachJobExtras;
 }
 
 export interface Recorder {
@@ -21,6 +23,8 @@ export interface Recorder {
   proposals: ProposalDraft[];
   usage: { model: string; inputTokens: number; outputTokens: number }[];
   reservations: { request: CoachRequest; limit: number }[];
+  lifeEvents: LifeEventInsert[];
+  coachNotes: string[];
 }
 
 export interface RecorderOptions {
@@ -33,7 +37,15 @@ export interface RecorderOptions {
 /** In-memory CoachStore with the same "only while running" semantics as the real one. */
 export function recorder(opts: RecorderOptions = {}): Recorder {
   let used = opts.jobCount ?? 0;
-  const rec: Recorder = { jobs: [], proposals: [], usage: [], reservations: [], store: undefined as unknown as CoachStore };
+  const rec: Recorder = {
+    jobs: [],
+    proposals: [],
+    usage: [],
+    reservations: [],
+    lifeEvents: [],
+    coachNotes: [],
+    store: undefined as unknown as CoachStore,
+  };
   const close = (jobId: UUID, patch: Partial<JobRow>): boolean => {
     if (!rec.jobs.some((j) => j.id === jobId && j.status === 'running')) return false;
     rec.jobs = rec.jobs.map((j) => (j.id === jobId ? { ...j, ...patch } : j));
@@ -49,7 +61,8 @@ export function recorder(opts: RecorderOptions = {}): Recorder {
       rec.jobs.push({ id, status: 'running' });
       return id;
     },
-    finishJob: async (_u, jobId, result) => close(jobId, { status: 'done', reply: result.reply, proposalId: result.proposalId }),
+    finishJob: async (_u, jobId, result) =>
+      close(jobId, { status: 'done', reply: result.reply, proposalId: result.proposalId, extras: result.extras }),
     failJob: async (_u, jobId, message) => close(jobId, { status: 'error', error: message }),
     recordUsage: async (_u, usage) => {
       rec.usage.push({ model: usage.model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
@@ -57,6 +70,13 @@ export function recorder(opts: RecorderOptions = {}): Recorder {
     insertProposal: async (_u, draft) => {
       rec.proposals.push(draft);
       return 'proposal-1';
+    },
+    insertLifeEvent: async (_u, event) => {
+      rec.lifeEvents.push(event);
+      return `event-${rec.lifeEvents.length}`;
+    },
+    updateCoachNotes: async (_u, notes) => {
+      rec.coachNotes.push(notes);
     },
   };
   return rec;

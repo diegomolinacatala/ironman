@@ -30,7 +30,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     appleTeamId: process.env.APPLE_TEAM_ID,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
-      UIBackgroundModes: ['remote-notification'],
+      // 'audio': the morning briefing keeps playing when the screen locks.
+      UIBackgroundModes: ['remote-notification', 'audio'],
       CFBundleDevelopmentRegion: 'es',
     },
   },
@@ -71,8 +72,25 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-calendar',
       {
         calendarPermission:
-          'Road to Ironman lee tus calendarios (clases, trabajo…) para saber cuándo estás ocupado y planificar tus entrenos en huecos libres. Tus amigos solo ven “ocupado”, nunca el título.',
+          'Road to Ironman mira cuándo estás ocupado (clases, trabajo…) para poner tus entrenos en huecos libres y los añade a tu calendario con su hora. Tus amigos solo ven “ocupado”, nunca el título.',
         remindersPermission: false,
+      },
+    ],
+    [
+      'expo-speech-recognition',
+      {
+        microphonePermission:
+          'Road to Ironman usa el micrófono para que le cuentes a tu coach una lesión, un cambio de planes o lo que has comido.',
+        speechRecognitionPermission:
+          'Road to Ironman convierte tu voz en texto para que tu coach entienda lo que le cuentas y ajuste tu plan.',
+      },
+    ],
+    [
+      'expo-image-picker',
+      {
+        cameraPermission: 'Road to Ironman usa la cámara para que hagas una foto a tu comida y calcule lo que llevas.',
+        photosPermission: 'Road to Ironman abre tus fotos para que elijas la de tu comida y calcule lo que llevas.',
+        microphonePermission: false,
       },
     ],
     [
@@ -108,6 +126,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             ios: {
               supportedFamilies: ['systemSmall', 'accessoryCircular', 'accessoryInline'],
               initialLayout: './src/integrations/widgets/RaceWidget.tsx',
+            },
+          },
+          {
+            name: 'BriefingWidget',
+            displayName: 'Informe de hoy',
+            description: 'Toca para escuchar cómo has dormido y qué te toca hoy',
+            ios: {
+              supportedFamilies: ['accessoryRectangular', 'accessoryCircular', 'accessoryInline', 'systemSmall'],
+              initialLayout: './src/integrations/widgets/BriefingWidget.tsx',
             },
           },
           {

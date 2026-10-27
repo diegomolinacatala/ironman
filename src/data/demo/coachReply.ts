@@ -72,11 +72,15 @@ function nutritionLine(ctx: CoachContext): string {
   return `Para «${w.title}» — Antes: ${hint.before}${during} Después: ${hint.after} (Orientación general, no es consejo médico.)`;
 }
 
-function intentParagraph(intent: Intent, ctx: CoachContext): string {
+const INJURY_ADVICE = 'Si el dolor es agudo, aumenta o no mejora en 2–3 días, consulta a un profesional.';
+
+function intentParagraph(intent: Intent, ctx: CoachContext, injuryLogged: boolean): string {
   const name = ctx.profile.displayName;
   switch (intent) {
     case 'injury':
-      return 'Si el dolor es agudo, aumenta o no mejora en 2–3 días, consulta a un profesional. Registra la molestia como imprevisto (lesión) y te propongo cómo ajustar la semana sin cargar esa zona.';
+      return injuryLogged
+        ? `${INJURY_ADVICE} Ya lo tengo apuntado en tus imprevistos: pídeme «Replanificar» y ajusto la semana sin cargar esa zona.`
+        : `${INJURY_ADVICE} Registra la molestia como imprevisto (lesión) y te propongo cómo ajustar la semana sin cargar esa zona.`;
     case 'fatigue':
       return 'Escucha al cuerpo: hoy mejor bajar la intensidad o cambiar la sesión por algo suave. Si quieres, pídeme «Replanificar» y adapto la semana a cómo estás.';
     case 'other_sport':
@@ -90,9 +94,10 @@ function intentParagraph(intent: Intent, ctx: CoachContext): string {
   }
 }
 
-export function buildChatReply(input: { message: string; ctx: CoachContext }): string {
+export function buildChatReply(input: { message: string; ctx: CoachContext; injuryLogged?: boolean }): string {
   const { ctx } = input;
-  const intent = detectIntent(input.message);
-  const paragraphs = [intentParagraph(intent, ctx), readinessLine(ctx), weekLine(ctx), raceLine(ctx), nextWorkoutLine(ctx)];
+  // An injury the demo coach just logged always gets the injury advice ("consulta a un profesional").
+  const intent = input.injuryLogged ? 'injury' : detectIntent(input.message);
+  const paragraphs = [intentParagraph(intent, ctx, input.injuryLogged === true), readinessLine(ctx), weekLine(ctx), raceLine(ctx), nextWorkoutLine(ctx)];
   return paragraphs.filter((p): p is string => Boolean(p)).join('\n\n');
 }

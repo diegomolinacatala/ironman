@@ -20,6 +20,7 @@ export const OWN_TABLE_TOPICS: Readonly<Record<string, ChangeTopic>> = {
   races: 'races',
   life_events: 'life_events',
   daily_metrics: 'metrics',
+  briefings: 'briefings',
 };
 
 /** Extra topics implied by a new notification (e.g. a friend answered a quedada). */

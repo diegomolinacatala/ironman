@@ -121,6 +121,13 @@ export interface MetricsRow {
   steps: number | null;
   stress_avg: NumericValue;
   training_status: string | null;
+  /** v2 (`20261027000100_v2.sql`): sleep stages (minutes) and window of the night ending on `date`. */
+  sleep_deep_min?: NumericValue;
+  sleep_light_min?: NumericValue;
+  sleep_rem_min?: NumericValue;
+  sleep_awake_min?: NumericValue;
+  sleep_start?: string | null;
+  sleep_end?: string | null;
   raw?: unknown;
   updated_at?: string;
 }
@@ -173,7 +180,25 @@ export interface CoachJobRow {
   proposal_id: string | null;
   engine: string | null;
   error: string | null;
+  /** v2: `{ memory: string[], lifeEventId: uuid | null }` written by the coach job. */
+  extras?: unknown;
   created_at?: string;
+  updated_at?: string;
+}
+
+/** `briefings` (v2): one row per (user, date), written by the `briefing` edge function. */
+export interface BriefingRow {
+  user_id: string;
+  date: string;
+  headline: string;
+  sleep_verdict: string;
+  sleep_summary: string;
+  script: string;
+  focus: string;
+  /** SleepSnapshot (camelCase) or null. */
+  sleep: unknown;
+  model: string | null;
+  created_at: string;
   updated_at?: string;
 }
 

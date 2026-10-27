@@ -8,6 +8,7 @@ import ConnectClaudeScreen from '@/app/settings/claude';
 import IntegrationsScreen from '@/app/settings/integrations';
 import NotificationSettingsScreen from '@/app/settings/notifications';
 import ProfileSettingsScreen from '@/app/settings/profile';
+import { addDays, todayISO } from '@/domain/dates';
 import type { CreatedToken, PersonalToken, Profile } from '@/domain/types';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
@@ -59,6 +60,14 @@ const mockConnectGarmin = jest.fn(async (_vars: { apiKey: string; expiresAt: str
 const mockUpdateProfile = jest.fn(async (patch: Partial<Profile>) => ({ ...mockProfile, ...patch }));
 const mockReschedule = jest.fn(async (_input: unknown) => 3);
 const mockSetString = jest.fn(async (_text: string) => true);
+const mockOpenBrowser = jest.fn(async (_url: string, _opts?: unknown) => ({ type: 'dismiss' }));
+const mockTraining = {
+  enabled: false,
+  enable: jest.fn(async () => true),
+  disable: jest.fn(async (_opts?: { removeEvents?: boolean }) => undefined),
+  setAlarmMinutes: jest.fn(async (_minutes: number) => undefined),
+  syncNow: jest.fn(async () => undefined),
+};
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -71,8 +80,27 @@ jest.mock(
   () => (jest.requireActual('react-native-safe-area-context/jest/mock') as { default: object }).default,
 );
 
-jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetString(text) }));
-jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn(async () => ({ type: 'opened' })) }));
+jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetString(text), isPasteButtonAvailable: false }));
+jest.mock('expo-web-browser', () => ({
+  WebBrowserPresentationStyle: { PAGE_SHEET: 'pageSheet' },
+  openBrowserAsync: (url: string, opts?: unknown) => mockOpenBrowser(url, opts),
+}));
+jest.mock('@/integrations/calendar/trainingCalendar', () => ({
+  useTrainingCalendar: () => ({
+    available: true,
+    permission: 'granted',
+    enabled: mockTraining.enabled,
+    calendarTitle: null,
+    alarmMinutes: 30,
+    lastSync: null,
+    busy: false,
+    error: null,
+    enable: mockTraining.enable,
+    disable: mockTraining.disable,
+    setAlarmMinutes: mockTraining.setAlarmMinutes,
+    syncNow: mockTraining.syncNow,
+  }),
+}));
 jest.mock('@/lib/env', () => {
   const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
   // A lazy getter (not a spread, which would read it at import time) so each test can flip the flag.
@@ -97,6 +125,7 @@ jest.mock('@/data/queries', () => {
     useCreateToken: () => mutation(mockCreateToken),
     useRevokeToken: () => mutation(mockRevokeToken),
     useIntegrations: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
+    useMetrics: () => ({ data: [], isLoading: false, isError: false }),
     useConnectGarmin: () => mutation(mockConnectGarmin),
     useSyncGarmin: () => mutation(jest.fn()),
     useDisconnectGarmin: () => mutation(jest.fn()),
@@ -135,31 +164,59 @@ beforeEach(() => {
   mockState.mode = 'supabase';
   mockState.tokens = [];
   mockEnvFlags.aiCoachEnabled = false;
+  mockTraining.enabled = false;
 });
 
 describe('Conecta tu Claude', () => {
-  test('generates the MCP URL once and copies it', async () => {
+  test('never mints a link on its own: "Crear mi enlace" creates, copies and opens claude.ai', async () => {
     await render(<ConnectClaudeScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Generar mi URL' }));
+    expect(mockCreateToken).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Crear mi enlace' }));
     await waitFor(() => expect(mockCreateToken).toHaveBeenCalledWith({ scope: 'mcp', label: 'Claude' }));
-    expect(await screen.findByText('https://x.supabase.co/functions/v1/mcp/u/rb_0123456789abcdef')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Copiar' }));
     await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('https://x.supabase.co/functions/v1/mcp/u/rb_0123456789abcdef'));
+    expect(await screen.findByText('https://x.supabase.co/functions/v1/mcp/u/rb_0123456789abcdef')).toBeTruthy();
+    expect(screen.getByText(/Esperando a que Claude se conecte/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Abrir Claude' }));
+    await waitFor(() => expect(mockOpenBrowser).toHaveBeenCalledWith('https://claude.ai/settings/connectors', { presentationStyle: 'pageSheet' }));
   });
 
-  test('lists active tokens and shows the demo explanation', async () => {
-    mockState.mode = 'demo';
-    mockState.tokens = [createdToken('mcp').token, { ...createdToken('ics').token, id: 't2' }];
+  test('an unused link is reused on a new visit; "Crear enlace nuevo" revokes the unused ones first', async () => {
+    mockState.tokens = [
+      { ...createdToken('mcp').token, id: 'old', createdAt: '2026-10-20T10:00:00Z' },
+      { ...createdToken('mcp').token, id: 'recent', createdAt: '2026-10-26T10:00:00Z' },
+    ];
     await render(<ConnectClaudeScreen />);
-    expect(screen.getByText(/Conectar tu Claude necesita el servidor/)).toBeTruthy();
+    expect(screen.getByText(/Ya tienes un enlace sin estrenar/)).toBeTruthy();
+    expect(screen.getByText(/Esperando a que Claude se conecte/)).toBeTruthy();
+    expect(mockCreateToken).not.toHaveBeenCalled();
+    expect(mockSetString).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Crear enlace nuevo' }));
+    await waitFor(() => expect(mockCreateToken).toHaveBeenCalledTimes(1));
+    expect(mockRevokeToken.mock.calls.map((c) => c[0])).toEqual(['old', 'recent']);
+    expect(await screen.findByText('https://x.supabase.co/functions/v1/mcp/u/rb_0123456789abcdef')).toBeTruthy();
+  });
+
+  test('already connected: success state, example prompts and active links', async () => {
+    mockState.tokens = [{ ...createdToken('mcp').token, lastUsedAt: new Date().toISOString() }, { ...createdToken('ics').token, id: 't2' }];
+    await render(<ConnectClaudeScreen />);
+    expect(screen.getByText('Claude ya ve tu plan')).toBeTruthy();
+    expect(mockCreateToken).not.toHaveBeenCalled();
     expect(screen.getAllByRole('button', { name: 'Revocar' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Copiar: Planifica mi semana/ })).toBeTruthy();
+  });
+
+  test('demo mode simulates the connection', async () => {
+    mockState.mode = 'demo';
+    await render(<ConnectClaudeScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Crear mi enlace' }));
+    expect(await screen.findByText(/Modo demo: simulamos que Claude se conecta/)).toBeTruthy();
   });
 
   test('with the AI coach off there is no comparison with it and no Anthropic consent link', async () => {
     await render(<ConnectClaudeScreen />);
-    expect(screen.getByText(/ponle de nombre Road to Ironman/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Crear mi enlace' }));
+    expect(await screen.findByText(/Nombre: Road to Ironman/)).toBeTruthy();
     expect(screen.queryByText('¿Y el Coach IA de la app?')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Abrir el Coach IA' })).toBeNull();
     expect(screen.queryByText(/Coach IA/)).toBeNull();
     expect(screen.queryByText(/Anthropic/)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: /Privacidad/ }));
@@ -187,16 +244,42 @@ describe('Calendario en tu iPhone', () => {
 });
 
 describe('Conexiones', () => {
-  test('connects Garmin with the pasted key and chosen expiry', async () => {
+  test('connects Garmin with a typed key and a 1-year expiry', async () => {
     await render(<IntegrationsScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Ya tengo la clave copiada' }));
+    expect(screen.getByRole('button', { name: 'Pegar clave' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: '¿No se pega? Escríbela a mano' }));
     await fireEvent.changeText(screen.getByPlaceholderText('Pega aquí tu clave'), '  abcdefghijklmnopqrstuvwxyz  ');
-    await fireEvent.press(screen.getByRole('button', { name: '30 días' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Conectar' }));
     await waitFor(() => expect(mockConnectGarmin).toHaveBeenCalledTimes(1));
     const vars = mockConnectGarmin.mock.calls[0]?.[0];
     expect(vars?.apiKey).toBe('abcdefghijklmnopqrstuvwxyz');
-    expect(vars?.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(vars?.expiresAt).toBe(addDays(todayISO(), 365));
     expect(screen.getByText('Clases')).toBeTruthy();
+  });
+
+  test('opens Garmin Connect in the in-app browser', async () => {
+    await render(<IntegrationsScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Abrir Garmin Connect' }));
+    await waitFor(() =>
+      expect(mockOpenBrowser).toHaveBeenCalledWith('https://connect.garmin.com/app/settings/personalApiToken', { presentationStyle: 'pageSheet' }),
+    );
+    expect(await screen.findByText('¿Ya has copiado la clave?')).toBeTruthy();
+  });
+
+  test('training calendar: turning it on enables the sync', async () => {
+    await render(<IntegrationsScreen />);
+    await fireEvent(screen.getByLabelText('Añadir mis entrenos al calendario'), 'valueChange', true);
+    await waitFor(() => expect(mockTraining.enable).toHaveBeenCalledTimes(1));
+  });
+
+  test('training calendar on: alarm chips and "Sincronizar ahora"', async () => {
+    mockTraining.enabled = true;
+    await render(<IntegrationsScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: '15 min' }));
+    await waitFor(() => expect(mockTraining.setAlarmMinutes).toHaveBeenCalledWith(15));
+    await fireEvent.press(screen.getByRole('button', { name: 'Sincronizar ahora' }));
+    await waitFor(() => expect(mockTraining.syncNow).toHaveBeenCalledTimes(1));
   });
 
   test('calendar copy is accurate and the privacy summary is one tap away', async () => {
@@ -212,14 +295,16 @@ describe('Conexiones', () => {
     mockEnvFlags.aiCoachEnabled = true;
     await render(<IntegrationsScreen />);
     expect(screen.getByText(/el Coach IA solo recibe las horas ocupadas, nunca los títulos/)).toBeTruthy();
-    expect(screen.getByText(/se envía a Anthropic para planificar/)).toBeTruthy();
+    expect(screen.getByText(/se envía a Cloudflare \(Workers AI\) para planificar/)).toBeTruthy();
   });
 
-  test('Garmin is disabled in demo mode', async () => {
+  test('in demo mode any key connects Garmin (simulated)', async () => {
     mockState.mode = 'demo';
     await render(<IntegrationsScreen />);
-    expect(screen.getByText(/En modo demo no hay servidor/)).toBeTruthy();
-    expect(screen.queryByPlaceholderText('Pega aquí tu clave')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ya tengo la clave copiada' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Usar una clave de prueba (demo)' }));
+    await waitFor(() => expect(mockConnectGarmin).toHaveBeenCalledTimes(1));
+    expect(mockConnectGarmin.mock.calls[0]?.[0]?.apiKey).toBe('demo-personal-api-key-road-to-ironman');
   });
 });
 

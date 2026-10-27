@@ -4,7 +4,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { createDemoRepository, type DemoRepository } from '../demo/DemoRepository';
+import type { DemoDelays } from '../demo/repo/common';
 import type { ChangeTopic } from '../repository';
+
+/** Demo latencies off (the connector delay stays: tests move the clock past it). */
+export const NO_DELAYS: DemoDelays = { aiMs: 0, garminMs: 0, connectorMs: 6000 };
 
 /** Sunday 25 Oct 2026, 10:00 local time. */
 export const SUNDAY = new Date(2026, 9, 25, 10, 0, 0);
@@ -12,7 +16,7 @@ export const SUNDAY = new Date(2026, 9, 25, 10, 0, 0);
 export const WEDNESDAY = new Date(2026, 9, 21, 10, 0, 0);
 
 export async function signedInRepo(now: Date = SUNDAY, friendDelayMs = 30): Promise<DemoRepository> {
-  const repo = createDemoRepository({ now: () => now, persistDebounceMs: 0, friendDelayMs });
+  const repo = createDemoRepository({ now: () => now, persistDebounceMs: 0, friendDelayMs, delays: NO_DELAYS });
   await repo.auth.verifyEmailCode('diego@example.com', '123456');
   return repo;
 }

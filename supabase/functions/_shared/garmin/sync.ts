@@ -1,5 +1,6 @@
 /**
- * Garmin Personal API sync (last 14 days): daily metrics → daily_metrics
+ * Garmin Personal API sync (last 14 days; 28 on the first sync after connecting, so
+ * baselines such as the 7-night HRV are there from day one): daily metrics → daily_metrics
  * (source 'garmin', merge per field), activities → complete matching planned
  * workouts or insert completed unplanned ones (external_id 'garmin:<id>').
  * Activities already recorded by another source (Garmin Connect → Apple
@@ -19,6 +20,9 @@ import { mergeDayParts, parseActivities, parseBodyBattery, parseDailySummaries, 
 import type { DayMetricsPart, GarminActivity } from './parse.ts';
 
 export const SYNC_DAYS = 14;
+/** First sync after `connect` (sleep and Body Battery endpoints accept at most 28 days per call). */
+export const FIRST_SYNC_DAYS = 28;
+const MAX_SYNC_DAYS = 28;
 
 export type GarminSyncStore = Pick<PlanningStore, 'listWorkouts' | 'completeWorkout' | 'insertCompletedWorkout' | 'upsertMetrics'>;
 
@@ -102,14 +106,15 @@ interface Fetched {
   activities: unknown;
 }
 
-async function fetchAll(deps: GarminSyncDeps, token: GarminToken, from: string, to: string): Promise<Fetched> {
+async function fetchAll(deps: GarminSyncDeps, token: GarminToken, from: string, to: string, days: number): Promise<Fetched> {
   const range = { startDate: from, endDate: to };
+  const activityLimit = days > SYNC_DAYS ? 100 : 50;
   const calls = [
     deps.api.get('/usersummary-service/v2/dailysummaries', token, range),
     deps.api.get('/sleep-service/sleep/dailySleepSummariesByDate', token, range),
     deps.api.get(`/hrv-service/hrv/daily/${from}/${to}`, token),
     deps.api.get('/wellness-service/wellness/bodyBattery/reports/daily', token, range),
-    deps.api.get('/activitylist-service/activities/search/activities', token, { start: 0, limit: 50, ...range }),
+    deps.api.get('/activitylist-service/activities/search/activities', token, { start: 0, limit: activityLimit, ...range }),
   ];
   const settled = await Promise.allSettled(calls);
   const unauthorized = settled.find((s) => s.status === 'rejected' && s.reason instanceof GarminApiError && s.reason.status === 401);
@@ -134,16 +139,30 @@ async function applyImport(deps: GarminSyncDeps, userId: UUID, plan: ImportPlan)
   return { completed, inserted };
 }
 
+export interface SyncUserInput {
+  userId: UUID;
+  apiKey: string;
+  timezone: string;
+  /** Days back from today, inclusive (default SYNC_DAYS, max 28). */
+  days?: number;
+}
+
 /** Syncs one user. Throws GarminApiError(401) when the key is no longer valid. */
-export async function syncGarminUser(deps: GarminSyncDeps, input: { userId: UUID; apiKey: string; timezone: string }): Promise<SyncResult> {
+export async function syncGarminUser(deps: GarminSyncDeps, input: SyncUserInput): Promise<SyncResult> {
   const token = await deps.api.exchangeKey(input.apiKey);
   const now = deps.now();
   const nowIso = now.toISOString();
+  const days = Math.max(1, Math.min(MAX_SYNC_DAYS, Math.round(input.days ?? SYNC_DAYS)));
   const to = todayIn(input.timezone, now);
-  const from = addDays(to, -(SYNC_DAYS - 1));
-  const data = await fetchAll(deps, token, from, to);
+  const from = addDays(to, -(days - 1));
+  const data = await fetchAll(deps, token, from, to, days);
   const parts = mergeDayParts(
-    [...parseDailySummaries(data.dailies), ...parseSleepSummaries(data.sleep), ...parseHrv(data.hrv), ...parseBodyBattery(data.bodyBattery)],
+    [
+      ...parseDailySummaries(data.dailies),
+      ...parseSleepSummaries(data.sleep, input.timezone),
+      ...parseHrv(data.hrv),
+      ...parseBodyBattery(data.bodyBattery),
+    ],
     from,
     to,
   );

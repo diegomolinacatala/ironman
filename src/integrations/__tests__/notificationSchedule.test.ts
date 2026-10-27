@@ -56,7 +56,7 @@ describe('buildSchedule', () => {
     expect(specs.filter((s) => s.kind === 'workout_reminder')).toHaveLength(0);
   });
 
-  test('morning summary lists the day sessions and says rest on empty days', () => {
+  test('the morning notification invites to listen to the briefing every day at morningTime', () => {
     const workouts = [
       workout({ id: 'a', date: TODAY, startTime: '07:30', title: 'Natación técnica', sport: 'swim', durationMin: 45 }),
       workout({ id: 'b', date: TODAY, startTime: '19:00', title: 'Rodaje Z2', durationMin: 50 }),
@@ -64,11 +64,19 @@ describe('buildSchedule', () => {
     const specs = buildSchedule({ workouts, prefs, today: TODAY, now: NOW, days: 2 });
     const summaries = specs.filter((s) => s.kind === 'morning_summary');
     expect(summaries).toHaveLength(2);
-    expect(summaries[0]?.title).toBe('Hoy: 2 sesiones');
-    expect(summaries[0]?.body).toBe("Natación técnica (45') · Rodaje Z2 (50')");
+    expect(summaries[0]?.title).toBe('Tu informe de hoy');
+    expect(summaries[0]?.body).toBe('Toca para escuchar cómo has dormido y qué te toca hoy');
+    expect(summaries[0]?.url).toBe('/briefing?play=1');
     expect(dateOf(summaries[0])).toEqual(new Date(2026, 9, 26, 7, 0));
-    expect(summaries[1]?.title).toBe('Hoy toca descanso');
-    expect(summaries[1]?.url).toBe('/today');
+    expect(summaries[1]?.title).toBe('Tu informe de hoy');
+    expect(summaries[1]?.url).toBe('/briefing?play=1');
+  });
+
+  test('the morning briefing follows morningTime and is off with morningSummary off', () => {
+    const late = buildSchedule({ workouts: [], prefs: { ...prefs, morningTime: '08:15' }, today: TODAY, now: NOW, days: 1 });
+    expect(dateOf(late.find((s) => s.kind === 'morning_summary'))).toEqual(new Date(2026, 9, 26, 8, 15));
+    const off = buildSchedule({ workouts: [], prefs: { ...prefs, morningSummary: false }, today: TODAY, now: NOW });
+    expect(off.some((s) => s.kind === 'morning_summary')).toBe(false);
   });
 
   test('evening check-in is one daily repeating notification', () => {

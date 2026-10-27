@@ -43,6 +43,7 @@ function emptyDb(clock: DemoClock): DemoDb {
     proposals: [],
     tokens: [],
     integrations: [],
+    briefings: [],
   };
 }
 

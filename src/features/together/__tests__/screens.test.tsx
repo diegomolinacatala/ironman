@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
-import TogetherScreen from '@/app/(tabs)/together';
+import TogetherScreen from '@/app/together';
 import FriendWeekScreen from '@/app/friends/[id]';
 import AddFriendScreen from '@/app/friends/add';
 import JointSessionScreen from '@/app/joint/[id]';
@@ -123,11 +123,12 @@ beforeEach(() => {
   mockParams = {};
 });
 
-describe('Juntos tab', () => {
+describe('Juntos', () => {
   test('shows friends, requests, quedada invites and the feed', async () => {
     await render(<TogetherScreen />, { wrapper: Providers });
     expect(await screen.findByText('Álex completó Rodaje Z2')).toBeTruthy();
-    expect(screen.getByText('Juntos')).toBeTruthy();
+    // v2: a stack screen; the title "Juntos" lives in the native header (root stack).
+    expect(screen.getByText('1 amigo')).toBeTruthy();
     expect(await screen.findByText('Huecos comunes')).toBeTruthy();
     expect(screen.getByText('Marta')).toBeTruthy();
     expect(await screen.findByText('Te han invitado')).toBeTruthy();

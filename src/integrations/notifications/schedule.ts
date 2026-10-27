@@ -49,7 +49,6 @@ export const DEFAULT_WINDOW_DAYS = 7;
 const UNTIMED_REMINDER_MIN = 7 * 60 + 30;
 const WEEKLY_PLAN_MIN = 19 * 60;
 const WEEKLY_REMINDERS = 2;
-const MAX_SUMMARY_ITEMS = 3;
 const DEFAULT_MORNING_MIN = 7 * 60;
 const DEFAULT_EVENING_MIN = 21 * 60;
 const DEFAULT_LEAD_MIN = 30;
@@ -80,7 +79,7 @@ function details(w: Workout): string {
 
 function workoutReminder(w: Workout, prefs: NotificationPrefs, now: Date): NotificationSpec | null {
   const start = parseTimeMinutes(w.startTime);
-  if (start == null && prefs.morningSummary) return null; // the morning summary already covers it
+  if (start == null && prefs.morningSummary) return null; // the morning briefing already covers it
   const leadRaw = Number.isFinite(prefs.reminderMinutesBefore) ? prefs.reminderMinutesBefore : DEFAULT_LEAD_MIN;
   const lead = Math.min(MAX_LEAD_MIN, Math.max(0, Math.round(leadRaw)));
   const fireAt =
@@ -103,28 +102,22 @@ function workoutReminder(w: Workout, prefs: NotificationPrefs, now: Date): Notif
   };
 }
 
-function summaryText(sessions: readonly Workout[]): { title: string; body: string } {
-  const [first] = sessions;
-  if (!first) return { title: 'Hoy toca descanso', body: 'Recupera bien: el descanso también es entreno.' };
-  if (sessions.length === 1) {
-    const time = formatTime(first.startTime);
-    const when = time ? `${time} · ` : '';
-    return { title: `Hoy: ${first.title}`, body: `${when}${details(first)}. ¡A por ello!` };
-  }
-  const listed = sessions.slice(0, MAX_SUMMARY_ITEMS).map((w) => `${w.title} (${formatDuration(w.durationMin)})`);
-  const extra = sessions.length > MAX_SUMMARY_ITEMS ? ` y ${sessions.length - MAX_SUMMARY_ITEMS} más` : '';
-  return { title: `Hoy: ${sessions.length} sesiones`, body: `${listed.join(' · ')}${extra}` };
-}
+/** Opens the briefing screen and reads it aloud (generated there if it is not ready yet). */
+export const MORNING_BRIEFING_URL = '/briefing?play=1';
 
-function morningSummary(workouts: readonly Workout[], date: ISODate, minutes: number, now: Date): NotificationSpec | null {
+/**
+ * "Tu informe de hoy" at `morningTime`: the tap opens the spoken briefing (sleep + today's plan).
+ * Fixed copy on purpose: the briefing is written on demand, after the notification is scheduled.
+ */
+function morningSummary(date: ISODate, minutes: number, now: Date): NotificationSpec | null {
   const fireAt = atLocal(date, minutes);
   if (fireAt.getTime() <= now.getTime()) return null;
-  const text = summaryText(sessionsOn(workouts, date));
   return {
     id: `rti.morning.${date}`,
     kind: 'morning_summary',
-    ...text,
-    url: '/today',
+    title: 'Tu informe de hoy',
+    body: 'Toca para escuchar cómo has dormido y qué te toca hoy',
+    url: MORNING_BRIEFING_URL,
     categoryId: 'summary',
     threadId: 'rti.summary',
     trigger: { type: 'date', date: fireAt },
@@ -187,7 +180,7 @@ export function buildSchedule(input: ScheduleInput): NotificationSpec[] {
   const reminders = prefs.workoutReminders
     ? days.flatMap((date) => sessionsOn(workouts, date).map((w) => workoutReminder(w, prefs, now)))
     : [];
-  const summaries = prefs.morningSummary ? days.map((date) => morningSummary(workouts, date, morningMin, now)) : [];
+  const summaries = prefs.morningSummary ? days.map((date) => morningSummary(date, morningMin, now)) : [];
   const repeating = prefs.eveningCheckin ? [eveningCheckin(eveningMin)] : [];
   const weekly = prefs.weeklyPlanReminder ? weeklyPlanReminders(input.today, now, WEEKLY_REMINDERS) : [];
 

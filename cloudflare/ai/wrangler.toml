@@ -1,0 +1,35 @@
+# Road to Ironman — free AI proxy (Cloudflare Workers AI, plan gratuito: 10.000 neuronas/día).
+# Only the Supabase Edge Functions (coach, briefing, meal) call it: POST /v1/chat with
+# `Authorization: Bearer <AI_SHARED_SECRET>`.
+#
+# Deploy:   cd cloudflare/ai && npx wrangler deploy
+# Secret:   npx wrangler secret put AI_SHARED_SECRET   (the same value goes to Supabase as AI_WORKER_SECRET)
+name = "ironman-ai"
+main = "src/index.mts"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# Workers AI (no API keys; billed in neurons against the account's free daily allocation).
+[ai]
+binding = "AI"
+
+# Native rate limits (namespace_id: free integer, unique per account; the Tasks worker uses 7301-7304).
+# Both are required: without them the worker answers 500 misconfigured (fails closed).
+# Per caller IP, checked BEFORE the bearer token (throttles floods of 401s).
+[[ratelimits]]
+name = "IP_LIMITER"
+namespace_id = "7402"
+simple = { limit = 60, period = 60 }
+
+# Per app user: key = `x-ai-client` header (hex HMAC-SHA256 of the user id with the shared secret,
+# sent by the Supabase functions; never the raw id). Requests without it share one bucket.
+[[ratelimits]]
+name = "CHAT_LIMITER"
+namespace_id = "7401"
+simple = { limit = 30, period = 60 }
+
+[observability]
+enabled = true
+
+# Secrets (never in the repo): AI_SHARED_SECRET (at least 32 characters, e.g. `openssl rand -hex 32`;
+# shorter values are rejected as misconfigured).

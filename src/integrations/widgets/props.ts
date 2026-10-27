@@ -8,15 +8,23 @@ import { nextRace } from '@/domain/periodization';
 import type { ISODate, JointSession, Profile, Race, Workout } from '@/domain/types';
 
 import { atLocal, localDate, parseTimeMinutes, startOfLocalDate } from '../time';
+import type { BriefingWidgetProps } from './BriefingWidget';
 import type { NextWorkoutItem, NextWorkoutWidgetProps } from './NextWorkoutWidget';
 import type { RaceWidgetProps } from './RaceWidget';
 import type { TodayWidgetProps, WidgetSessionItem, WidgetWeekDay } from './TodayWidget';
+
+/** Today's morning briefing as the widget needs it (null until generated). */
+export interface WidgetBriefing {
+  date: ISODate;
+  headline: string;
+}
 
 export interface WidgetDataInput {
   workouts: readonly Workout[];
   races: readonly Race[];
   jointSessions: readonly JointSession[];
   profile: Profile | null;
+  briefing?: WidgetBriefing | null;
   /** "roadtoironman://" — see `linkBaseFor`. */
   linkBase: string;
 }
@@ -25,6 +33,7 @@ export interface WidgetPropsBundle {
   today: TodayWidgetProps;
   race: RaceWidgetProps;
   next: NextWorkoutWidgetProps;
+  briefing: BriefingWidgetProps;
 }
 
 export interface TimelineEntry<T> {
@@ -36,7 +45,10 @@ export interface WidgetTimelines {
   today: TimelineEntry<TodayWidgetProps>[];
   race: TimelineEntry<RaceWidgetProps>[];
   next: TimelineEntry<NextWorkoutWidgetProps>[];
+  briefing: TimelineEntry<BriefingWidgetProps>[];
 }
+
+const BRIEFING_HEADLINE_MAX = 120;
 
 const WEEKDAY_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const;
 const MAX_WEEK_SPORTS = 3;
@@ -196,12 +208,22 @@ function buildNext(input: WidgetDataInput, at: Date, today: ISODate): NextWorkou
   return { next, linkBase: input.linkBase };
 }
 
+/**
+ * "Informe de hoy": strings only ('' = none). The widget itself hides the headline
+ * once its entry date is not `date` any more (after midnight it invites to listen).
+ */
+export function buildBriefingProps(briefing: WidgetBriefing | null | undefined, linkBase: string): BriefingWidgetProps {
+  const headline = briefing?.headline.replace(/\s+/g, ' ').trim().slice(0, BRIEFING_HEADLINE_MAX) ?? '';
+  return { date: headline && briefing ? briefing.date : '', headline, linkBase };
+}
+
 /** Props of every widget as they should look at `at` (defaults to its local date). */
 export function buildWidgetProps(input: WidgetDataInput, at: Date, today: ISODate = localDate(at)): WidgetPropsBundle {
   return {
     today: buildToday(input, at, today),
     race: buildRace(input, today),
     next: buildNext(input, at, today),
+    briefing: buildBriefingProps(input.briefing, input.linkBase),
   };
 }
 
@@ -236,5 +258,7 @@ export function buildWidgetTimelines(
     today: dayPoints.map((date) => ({ date, props: buildToday(input, date, dayOf(date)) })),
     race: dayPoints.map((date) => ({ date, props: buildRace(input, dayOf(date)) })),
     next: nextPoints.map((date) => ({ date, props: buildNext(input, date, dayOf(date)) })),
+    // Now + next midnight: the widget switches from the headline to the call to action by itself.
+    briefing: dayPoints.slice(0, 2).map((date) => ({ date, props: buildBriefingProps(input.briefing, input.linkBase) })),
   };
 }
