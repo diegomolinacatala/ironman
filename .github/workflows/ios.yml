@@ -74,6 +74,11 @@ jobs:
       - name: Textos de permisos del Info.plist
         run: node scripts/ios/check-info-plist.mjs
 
+      # Los módulos de Expo precompilados se copian tal cual a la app: si uno se compiló contra otro
+      # expo-modules-core, la app se cierra al abrirla ("DYLD Symbol missing", build 7).
+      - name: Módulos precompilados compatibles
+        run: node scripts/ios/check-prebuilt-abi.mjs
+
       - name: Aviso si falta Supabase
         if: vars.EXPO_PUBLIC_SUPABASE_URL == '' || vars.EXPO_PUBLIC_SUPABASE_KEY == ''
         run: echo "::warning::Sin EXPO_PUBLIC_SUPABASE_URL/KEY la app arrancará en modo demo."

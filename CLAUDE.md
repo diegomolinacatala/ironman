@@ -7,5 +7,6 @@
 - Checks: `npm run test:all` (typecheck + jest + PGlite DB tests + edge-function tests).
 - Widget props must be property lists: pass them through `toPropertyList` (`src/integrations/widgets/plist.ts`), never send `null` to expo-widgets.
 - iOS builds: GitHub Actions (`.github/workflows/ios.yml`) runs `expo prebuild` on a Mac and uploads to TestFlight; no EAS.
+- After adding or updating an Expo package run `node scripts/ios/check-prebuilt-abi.mjs`: a prebuilt module built against another `expo-modules-core` closes the app at launch (build 7). `expo-file-system` is pinned to `58.0.11` for that reason.
 - v2 (`docs/V2.md`): the in-app AI is on and free — `coach`/`briefing`/`meal` call Cloudflare Workers AI via `cloudflare/ai` (EXPO_PUBLIC_AI_COACH=0 disables). Never add a paid AI path without asking the owner.
 - Jest replaces Reanimated globally (`jest.setup.ts`); worker tests: `node --test "cloudflare/ai/src/**/*.test.mts"`.

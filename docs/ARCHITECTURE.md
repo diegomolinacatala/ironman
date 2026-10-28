@@ -609,4 +609,10 @@ The product contract is `docs/V2.md`; this section lists what changed in the arc
   deleted the `NSMicrophoneUsageDescription` that `expo-speech-recognition` had written. Both now share one
   string (`MICROPHONE_PERMISSION` in `app.config.ts`) and CI runs `scripts/ios/check-info-plist.mjs` (final
   introspected Info.plist: every purpose string + background modes) before prebuild.
+- **Prebuilt module guard (build 7 closed at launch, "DYLD Symbol missing"):** SDK 58 ships some modules
+  as precompiled xcframeworks (`node_modules/<pkg>/prebuilds`) that go into the app byte-for-byte.
+  `expo-file-system@58.0.12` was prebuilt against a newer `expo-modules-core` than the 58.0.26 `expo`
+  installs, so it is pinned to `58.0.11`. CI runs `scripts/ios/check-prebuilt-abi.mjs`: every Swift
+  symbol a prebuilt framework imports from another prebuilt framework must be exported by it. Re-run
+  it after any `npx expo install`; unpin when `expo` moves to a core that matches.
 
