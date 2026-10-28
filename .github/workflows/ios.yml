@@ -70,6 +70,10 @@ jobs:
           npx tsc --noEmit
           npx jest --ci
 
+      # App Store Connect rechaza la build ~20 min después si falta un texto de permiso (ITMS-90683).
+      - name: Textos de permisos del Info.plist
+        run: node scripts/ios/check-info-plist.mjs
+
       - name: Aviso si falta Supabase
         if: vars.EXPO_PUBLIC_SUPABASE_URL == '' || vars.EXPO_PUBLIC_SUPABASE_KEY == ''
         run: echo "::warning::Sin EXPO_PUBLIC_SUPABASE_URL/KEY la app arrancará en modo demo."

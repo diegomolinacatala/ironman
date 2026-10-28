@@ -12,6 +12,13 @@ const APP_NAME = 'Road to Ironman';
 const BUNDLE_ID = process.env.APP_BUNDLE_ID ?? 'io.github.diegomolinacatala.ironman';
 const APP_GROUP = `group.${BUNDLE_ID}`;
 const SCHEME = 'roadtoironman';
+/**
+ * Shared by expo-speech-recognition and expo-image-picker: both plugins write
+ * NSMicrophoneUsageDescription, and `false` in the later one DELETES the key (build 6 was
+ * rejected with ITMS-90683). scripts/ios/check-info-plist.mjs guards the final Info.plist.
+ */
+const MICROPHONE_PERMISSION =
+  'Road to Ironman usa el micrófono para que le cuentes a tu coach una lesión, un cambio de planes o lo que has comido.';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -79,8 +86,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-speech-recognition',
       {
-        microphonePermission:
-          'Road to Ironman usa el micrófono para que le cuentes a tu coach una lesión, un cambio de planes o lo que has comido.',
+        microphonePermission: MICROPHONE_PERMISSION,
         speechRecognitionPermission:
           'Road to Ironman convierte tu voz en texto para que tu coach entienda lo que le cuentas y ajuste tu plan.',
       },
@@ -90,7 +96,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         cameraPermission: 'Road to Ironman usa la cámara para que hagas una foto a tu comida y calcule lo que llevas.',
         photosPermission: 'Road to Ironman abre tus fotos para que elijas la de tu comida y calcule lo que llevas.',
-        microphonePermission: false,
+        microphonePermission: MICROPHONE_PERMISSION,
       },
     ],
     [

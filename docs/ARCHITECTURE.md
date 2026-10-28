@@ -605,4 +605,8 @@ The product contract is `docs/V2.md`; this section lists what changed in the arc
   `/briefing?play=1`; foreground Garmin sync when the last one is older than 60 min.
 - **Tests:** `jest.setup.ts` replaces `react-native-reanimated` with `src/test/reanimatedMock.tsx` (its own
   mock needs the native worklets runtime). Worker tests: `node --test "cloudflare/ai/src/**/*.test.mts"`.
+- **Info.plist guard (build 6 rejected, ITMS-90683):** `expo-image-picker` with `microphonePermission: false`
+  deleted the `NSMicrophoneUsageDescription` that `expo-speech-recognition` had written. Both now share one
+  string (`MICROPHONE_PERMISSION` in `app.config.ts`) and CI runs `scripts/ios/check-info-plist.mjs` (final
+  introspected Info.plist: every purpose string + background modes) before prebuild.
 
