@@ -24,6 +24,12 @@ const AUTHENTICATED_RPCS = [
   'cancel_joint_session',
   'list_joint_sessions',
   'get_joint_session',
+  'list_open_joint_sessions',
+  'join_joint_session',
+  'update_joint_session',
+  'list_joint_comments',
+  'add_joint_comment',
+  'list_friend_races',
   'list_feed',
   'toggle_kudos',
   'register_push_token',
@@ -43,6 +49,7 @@ const SERVICE_RPCS = [
   'svc_list_friends',
   'svc_reserve_coach_job',
   'svc_reserve_ai_call',
+  'svc_propose_joint_session',
 ];
 
 describe('schema, privileges and sign-up', () => {

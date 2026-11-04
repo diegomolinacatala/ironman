@@ -66,7 +66,7 @@ export const getFriendsAvailabilityTool: RegisteredTool = defineTool({
     '(plan completo, solo resumen sin títulos, o solo franjas ocupadas; nunca datos de salud),',
     'los huecos libres comunes con el usuario (commonSlots: fecha, inicio, fin y minutos en hora local; dentro de las franjas de entrenamiento del usuario si las tiene para ese día, si no entre 06:00 y 22:00, con 15 min de margen)',
     'y los días en que ambos tienen planificado el mismo deporte (sameSportDays, con el workoutId del usuario).',
-    'Úsala para proponer entrenar juntos; las quedadas se crean desde la app.',
+    'Úsala para elegir el hueco de una quedada; para enviar la invitación, propose_joint_session (tras confirmarlo con el usuario).',
   ].join(' '),
   input,
   annotations: { title: 'Disponibilidad de amigos y huecos comunes', ...READ_ONLY },

@@ -40,6 +40,7 @@ jest.mock('@/integrations/calendar/trainingCalendar', () => ({
 }));
 jest.mock('@/integrations/camera/mealPhoto', () => ({ mealPhotoUri: () => null }));
 jest.mock('@/data/queries', () => ({ useCompleteWorkout: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }) }));
+jest.mock('@/features/today/TodaySocialCard', () => ({ TodaySocialCard: () => null }));
 
 function meal(overrides: Partial<NutritionLog> = {}): NutritionLog {
   return {

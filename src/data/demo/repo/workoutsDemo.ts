@@ -4,6 +4,7 @@ import type { ApplyResult, CompletedData, DateRange, PlanChange, UUID, Workout, 
 import type { Repository } from '../../repository';
 import type { DemoClock, DemoDb } from '../db';
 import { feedForCompletion } from '../events';
+import { feedForJointCompletion } from '../togetherOps';
 import { assertWorkoutDraft } from '../validation';
 import { RESET_PATCH, completionPatch, proposalStatusAfterApply, skipPatch } from '../workoutOps';
 import { byDateThenTime, inRange, notFound, requireMe, type DemoDeps } from './common';
@@ -62,7 +63,7 @@ export function patchWorkout(db: DemoDb, me: UUID, id: UUID, patch: WorkoutPatch
   };
   const next = { ...db, workouts: db.workouts.map((w) => (w.id === id ? updated : w)) };
   const becameCompleted = current.status !== 'completed' && updated.status === 'completed';
-  return { db: becameCompleted ? feedForCompletion(next, updated, clock) : next, result: updated };
+  return { db: becameCompleted ? feedForJointCompletion(feedForCompletion(next, updated, clock), updated, clock) : next, result: updated };
 }
 
 function unlinkParticipants(db: DemoDb, workoutId: UUID): DemoDb {

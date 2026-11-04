@@ -11,6 +11,7 @@ import type {
   FriendWeekItem,
   ISODate,
   ISODateTime,
+  ISOTime,
   JointSession,
   LifeEvent,
   LifeEventKind,
@@ -111,6 +112,40 @@ export interface RaceWrite {
   notes?: string | null;
 }
 
+/** Quedada to propose (camelCase, as `svc_propose_joint_session` reads `p_session`). */
+export interface JointSessionDraft {
+  sport: Exclude<Sport, 'rest'>;
+  date: ISODate;
+  startTime: ISOTime | null;
+  durationMin: number;
+  intensity: Intensity;
+  title: string;
+  location: string | null;
+  notes: string | null;
+  /** Open quedada: every accepted friend is notified and may join; invitees may be empty. */
+  isOpen: boolean;
+}
+
+/** The quedada as `svc_propose_joint_session` returns it. */
+export interface ProposedJointSession extends JointSession {
+  notes: string | null;
+  isOpen: boolean;
+  createdAt: ISODateTime | null;
+}
+
+/**
+ * A write the database refused for a reason the caller can fix (validation,
+ * not a friend, not found…). `message` is the Spanish text of `private.raise_error`.
+ */
+export class StoreRejectedError extends Error {
+  readonly kind: 'validation' | 'forbidden' | 'not_found' | 'conflict';
+  constructor(kind: StoreRejectedError['kind'], message: string) {
+    super(message);
+    this.name = 'StoreRejectedError';
+    this.kind = kind;
+  }
+}
+
 export interface PlanningWriter {
   insertProposal(userId: UUID, draft: ProposalDraft): Promise<UUID>;
   applyPlanChanges(userId: UUID, changes: PlanChange[], proposalId: UUID): Promise<ApplyChangesResult>;
@@ -124,6 +159,12 @@ export interface PlanningWriter {
   insertCompletedWorkout(userId: UUID, row: CompletedWorkoutInsert): Promise<Workout | null>;
   insertRace(userId: UUID, race: Required<Pick<RaceWrite, 'name' | 'date' | 'distance' | 'priority'>> & RaceWrite): Promise<Race>;
   updateRace(userId: UUID, raceId: UUID, patch: RaceWrite): Promise<Race | null>;
+  /**
+   * Creates a quedada organized by the user (svc_propose_joint_session): links the
+   * organizer's workout and notifies the invitees (accepted friends only).
+   * Throws StoreRejectedError with the database's Spanish message when refused.
+   */
+  proposeJointSession(userId: UUID, draft: JointSessionDraft, inviteeIds: readonly UUID[]): Promise<ProposedJointSession>;
 }
 
 export type PlanningStore = PlanningReader & PlanningWriter;

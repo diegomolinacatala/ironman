@@ -1,7 +1,8 @@
 /**
  * Side effects of a valid coach answer beyond the plan proposal (docs/V2.md §3):
  * memory lines appended to `profiles.coach_notes` and the imprevisto logged in
- * `life_events`. Only for what the athlete said themselves in a chat (mode
+ * `life_events`, plus the quedada suggested with a friend (validated, never
+ * sent: the app opens a prefilled form). Only for what the athlete said themselves in a chat (mode
  * 'chat' with a non-empty message): plan_week (onboarding) and replans never
  * write them. Each one is best effort: a failure is logged and never fails the
  * job (the reply and proposal still reach the athlete).
@@ -10,11 +11,12 @@ import type { Logger } from '../log.ts';
 import { errorInfo } from '../log.ts';
 import type { PlanningContext } from '../planning/context.ts';
 import type { PlanningReader } from '../planning/store.ts';
-import type { CoachJobExtras, CoachRequest, UUID } from '../types.ts';
+import type { CoachJobExtras, CoachQuedada, CoachRequest, UUID } from '../types.ts';
 import { isDuplicateLifeEvent, toLifeEventInsert } from './life-event.ts';
 import { mergeCoachNotes, normalizeMemory } from './memory.ts';
 import type { CoachOutput } from './output.ts';
 import type { CoachStore } from './ports.ts';
+import { toCoachQuedada } from './quedada.ts';
 
 export interface ExtrasDeps {
   reader: Pick<PlanningReader, 'getProfile'>;
@@ -57,25 +59,42 @@ async function logLifeEvent(deps: ExtrasDeps, userId: UUID, raw: unknown, contex
   }
 }
 
+/** The suggested quedada, when it targets a friend of this request inside the plan window. */
+function suggestQuedada(request: Pick<CoachRequest, 'friendIds'>, raw: unknown, context: PlanningContext, log: Logger): CoachQuedada | null {
+  if (raw === null || raw === undefined) return null;
+  const parsed = toCoachQuedada(raw, {
+    friendIds: request.friendIds ?? [],
+    friends: context.friends,
+    today: context.today,
+    weekStart: context.weekStart,
+  });
+  if (!parsed.ok) {
+    log.info('coach quedada dropped', { reason: parsed.error });
+    return null;
+  }
+  return parsed.value;
+}
+
 /** Only a chat message typed or dictated by the athlete may add memory or imprevistos. */
 export function mayWriteExtras(request: Pick<CoachRequest, 'mode' | 'message'>): boolean {
   return request.mode === 'chat' && (request.message ?? '').trim().length > 0;
 }
 
-/** Runs both side effects and returns what goes into `coach_jobs.extras`. */
+/** Runs both side effects, checks the quedada and returns what goes into `coach_jobs.extras`. */
 export async function applyCoachExtras(
   deps: ExtrasDeps,
   userId: UUID,
-  request: Pick<CoachRequest, 'mode' | 'message'>,
-  output: Pick<CoachOutput, 'memory' | 'life_event'>,
+  request: Pick<CoachRequest, 'mode' | 'message' | 'friendIds'>,
+  output: Pick<CoachOutput, 'memory' | 'life_event' | 'quedada'>,
   context: PlanningContext,
   log: Logger,
 ): Promise<CoachJobExtras> {
   if (!mayWriteExtras(request)) {
-    if (output.memory.length || output.life_event) log.info('coach extras ignored outside a chat message', { mode: request.mode });
-    return { memory: [], lifeEventId: null };
+    if (output.memory.length || output.life_event || output.quedada) log.info('coach extras ignored outside a chat message', { mode: request.mode });
+    return { memory: [], lifeEventId: null, quedada: null };
   }
   const memory = await remember(deps, userId, output.memory, log);
   const lifeEventId = await logLifeEvent(deps, userId, output.life_event, context, log);
-  return { memory, lifeEventId };
+  const quedada = suggestQuedada(request, output.quedada, context, log);
+  return { memory, lifeEventId, quedada };
 }

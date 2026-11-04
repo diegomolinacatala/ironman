@@ -14,6 +14,7 @@ import type {
   DateRange,
   ISODate,
   JointSessionDraft,
+  JointSessionPatch,
   LifeEventDraft,
   MealAnalysisInput,
   MetricsDraft,
@@ -51,6 +52,9 @@ export const qk = {
   friendWeek: (friendId: UUID, r: DateRange) => ['friend_week', friendId, r.from, r.to] as const,
   jointSessions: (r: DateRange) => ['joint_sessions', r.from, r.to] as const,
   jointSession: (id: UUID) => ['joint_session', id] as const,
+  openJointSessions: (r: DateRange) => ['open_joint_sessions', r.from, r.to] as const,
+  jointComments: (id: UUID) => ['joint_comments', id] as const,
+  friendRaces: ['friend_races'] as const,
   feed: ['feed'] as const,
   notifications: ['notifications'] as const,
   proposals: (status?: ProposalStatus) => ['proposals', status ?? 'all'] as const,
@@ -63,16 +67,16 @@ export const qk = {
 /** Root keys invalidated for each change topic. */
 const TOPIC_KEYS: Record<ChangeTopic, readonly string[]> = {
   workouts: ['workouts', 'workout', 'friend_week'],
-  races: ['races'],
+  races: ['races', 'friend_races'],
   life_events: ['life_events'],
   busy_blocks: ['busy_blocks', 'friend_week'],
   checkins: ['checkins'],
   metrics: ['metrics'],
   nutrition: ['nutrition'],
-  friends: ['friends', 'friend_week', 'profile_search', 'feed'],
-  joint_sessions: ['joint_sessions', 'joint_session', 'workouts', 'workout', 'friend_week'],
+  friends: ['friends', 'friend_week', 'profile_search', 'feed', 'open_joint_sessions', 'friend_races'],
+  joint_sessions: ['joint_sessions', 'joint_session', 'workouts', 'workout', 'friend_week', 'open_joint_sessions', 'joint_comments'],
   feed: ['feed'],
-  notifications: ['notifications'],
+  notifications: ['notifications', 'joint_comments', 'open_joint_sessions'],
   proposals: ['proposals', 'proposal'],
   profile: ['profile'],
   integrations: ['integrations'],
@@ -447,6 +451,50 @@ export function useRespondJointSession() {
 export function useCancelJointSession() {
   const repo = useRepository();
   return useRepoMutation((id: UUID) => repo.cancelJointSession(id), ['joint_sessions', 'workouts']);
+}
+
+export function useUpdateJointSession() {
+  const repo = useRepository();
+  return useRepoMutation(
+    ({ id, patch }: { id: UUID; patch: JointSessionPatch }) => repo.updateJointSession(id, patch),
+    ['joint_sessions', 'workouts'],
+  );
+}
+
+export function useOpenJointSessions(range: DateRange) {
+  const repo = useRepository();
+  return useQuery({
+    queryKey: qk.openJointSessions(range),
+    queryFn: () => repo.listOpenJointSessions(range),
+    enabled: useSignedIn(),
+  });
+}
+
+export function useJoinJointSession() {
+  const repo = useRepository();
+  return useRepoMutation((id: UUID) => repo.joinJointSession(id), ['joint_sessions', 'workouts', 'notifications']);
+}
+
+export function useJointComments(sessionId: UUID | undefined) {
+  const repo = useRepository();
+  return useQuery({
+    queryKey: qk.jointComments(sessionId ?? ''),
+    queryFn: () => repo.listJointComments(sessionId as UUID),
+    enabled: useSignedIn() && Boolean(sessionId),
+  });
+}
+
+export function useAddJointComment() {
+  const repo = useRepository();
+  return useRepoMutation(
+    ({ sessionId, body }: { sessionId: UUID; body: string }) => repo.addJointComment(sessionId, body),
+    ['joint_sessions'],
+  );
+}
+
+export function useFriendRaces() {
+  const repo = useRepository();
+  return useQuery({ queryKey: qk.friendRaces, queryFn: () => repo.listFriendRaces(), enabled: useSignedIn() });
 }
 
 export function useFeed(limit = 30) {

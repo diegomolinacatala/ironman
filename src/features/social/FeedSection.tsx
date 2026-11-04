@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import type { ISODate, UUID } from '@/domain/types';
-import { useFeed } from '@/data/queries';
+import { useFeed, useProfile } from '@/data/queries';
 import { errorMessage } from '@/lib/logger';
 import { Divider, ErrorNotice, Loading, SectionHeader, Text, space } from '@/ui';
 
@@ -12,6 +12,7 @@ const FEED_LIMIT = 30;
 /** "Actividad": light feed of my circle, newest first, with kudos. */
 export function FeedSection({ myId, today }: { myId: UUID | null; today: ISODate }) {
   const feed = useFeed(FEED_LIMIT);
+  const myName = useProfile().data?.displayName ?? null;
   const items = feed.data ?? [];
   return (
     <View style={styles.section}>
@@ -29,7 +30,7 @@ export function FeedSection({ myId, today }: { myId: UUID | null; today: ISODate
         {items.map((item, index) => (
           <View key={item.id}>
             {index > 0 ? <Divider /> : null}
-            <FeedItemRow item={item} myId={myId} today={today} />
+            <FeedItemRow item={item} myId={myId} today={today} myName={myName} />
           </View>
         ))}
       </View>

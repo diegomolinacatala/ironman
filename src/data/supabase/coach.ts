@@ -5,7 +5,8 @@
  *
  * With it ON: `coach` edge function POST (the request, incl. `channel`) →
  * 202 { jobId } → poll the `coach_jobs` row every 2 s (max 130 s) → load the
- * proposal, the saved memory lines and the logged life event (`extras`).
+ * proposal, the saved memory lines, the logged life event and the suggested
+ * quedada (`extras`).
  * Falls back to the local rules engine (with a notice) when AI is unavailable
  * or anything fails.
  */
@@ -141,7 +142,7 @@ async function jobToResponse(deps: CoachDeps, job: CoachJobRow): Promise<CoachRe
   ]);
   const lifeEvent = extras.lifeEventId ? await readLifeEvent(deps.ctx, extras.lifeEventId) : null;
   const reply = job.reply?.trim() || proposal?.summary || 'Listo. Revisa la propuesta.';
-  return { reply, proposal, engine: job.engine === 'rules' ? 'rules' : 'ai', memory: extras.memory, lifeEvent };
+  return { reply, proposal, engine: job.engine === 'rules' ? 'rules' : 'ai', memory: extras.memory, lifeEvent, quedada: extras.quedada };
 }
 
 export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) => Promise<CoachResponse> {

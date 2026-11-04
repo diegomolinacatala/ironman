@@ -9,10 +9,13 @@ import {
   parseJointParams,
   prefillFromOpportunity,
   prefillFromSlot,
+  formFromSession,
   toJointDraft,
+  toJointPatch,
   validateJointForm,
   type JointForm,
 } from '../jointForm';
+import type { JointSession } from '@/domain/types';
 import type { Opportunity } from '../types';
 
 import { ALEX } from './fixtures';
@@ -31,6 +34,7 @@ function form(patch: Partial<JointForm> = {}): JointForm {
     location: '',
     notes: '',
     fromWorkoutId: null,
+    isOpen: false,
     ...patch,
   };
 }
@@ -112,7 +116,7 @@ describe('validateJointForm', () => {
   });
 
   test.each<[Partial<JointForm>, string]>([
-    [{ inviteeIds: [] }, 'Elige al menos un amigo para invitar.'],
+    [{ inviteeIds: [] }, 'Elige al menos un amigo o ábrela a todos tus amigos.'],
     [{ title: '   ' }, 'Ponle un título a la quedada.'],
     [{ title: 'x'.repeat(121) }, 'El título es demasiado largo.'],
     [{ date: '2026-10-20' }, 'La quedada no puede ser en el pasado.'],
@@ -140,6 +144,7 @@ describe('toJointDraft', () => {
       notes: 'traer geles',
       inviteeIds: [ALEX],
       fromWorkoutId: 'w1',
+      isOpen: false,
     });
   });
 
@@ -198,5 +203,47 @@ describe('prefills and params', () => {
     expect(clampDuration(3)).toBe(15);
     expect(clampDuration(9999)).toBe(480);
     expect(clampDuration(Number.NaN)).toBe(60);
+  });
+});
+
+describe('open quedadas and edits', () => {
+  test('an open quedada can be sent without invitees', () => {
+    expect(validateJointForm(form({ inviteeIds: [] }), TODAY)).toBe('Elige al menos un amigo o ábrela a todos tus amigos.');
+    expect(validateJointForm(form({ inviteeIds: [], isOpen: true }), TODAY)).toBeNull();
+    expect(toJointDraft(form({ inviteeIds: [], isOpen: true })).isOpen).toBe(true);
+  });
+
+  test('route params prefill intensity, location and open', () => {
+    const prefill = parseJointParams({ intensity: 'tempo', location: ' Casa de Campo ', open: '1' });
+    expect(prefill).toMatchObject({ intensity: 'tempo', location: 'Casa de Campo', open: '1' });
+    expect(parseJointParams({ intensity: 'loco' }).intensity).toBeUndefined();
+    const initial = initialForm(prefill, TODAY, [ALEX]);
+    expect(initial).toMatchObject({ intensity: 'tempo', location: 'Casa de Campo', isOpen: true });
+  });
+
+  test('toJointPatch keeps only what changed', () => {
+    const session: JointSession = {
+      id: 's1',
+      organizerId: 'me',
+      sport: 'run',
+      date: '2026-10-27',
+      startTime: '18:30',
+      durationMin: 60,
+      intensity: 'endurance',
+      title: 'Rodaje juntos',
+      location: null,
+      notes: null,
+      status: 'confirmed',
+      isOpen: false,
+      participants: [
+        { userId: 'me', displayName: 'Yo', avatarUrl: null, status: 'accepted', workoutId: 'w1' },
+        { userId: ALEX, displayName: 'Álex', avatarUrl: null, status: 'accepted', workoutId: 'w2' },
+      ],
+      createdAt: '2026-10-20T10:00:00Z',
+    };
+    const edit = formFromSession(session);
+    expect(edit.inviteeIds).toEqual([ALEX]);
+    expect(toJointPatch(edit, session)).toEqual({});
+    expect(toJointPatch({ ...edit, time: '7', location: 'Retiro' }, session)).toEqual({ startTime: '07:00', location: 'Retiro' });
   });
 });

@@ -1,8 +1,9 @@
 /**
  * Context of the morning briefing: last night's sleep, recovery signals, today's
  * and tomorrow's workouts (with structure), yesterday's sessions, race countdown
- * and phase, active imprevistos and today's busy blocks AS TIMES ONLY (calendar
- * titles never leave the account). Compact and in the athlete's local time.
+ * and phase, active imprevistos, today's busy blocks AS TIMES ONLY (calendar
+ * titles never leave the account) and the social side (today's quedadas and
+ * pending invitations, `together.ts`). Compact and in the athlete's local time.
  */
 import { addDays, DEFAULT_TZ, diffDays, todayIn, weekdayOf, WEEKDAYS_ES, zonedToUtc } from '../dates.ts';
 import { busyView, NotFoundError } from '../planning/context.ts';
@@ -14,10 +15,12 @@ import { wellnessSignals } from '../planning/wellness.ts';
 import type { WellnessSignals } from '../planning/wellness.ts';
 import type { ISODate, LifeEvent, Race, SleepSnapshot, UUID, Workout } from '../types.ts';
 import { sleepForPrompt, sleepSnapshot } from './sleep.ts';
+import { INVITE_HORIZON_DAYS, togetherForPrompt, togetherOf } from './together.ts';
+import type { BriefingTogether } from './together.ts';
 
 export type BriefingReader = Pick<
   PlanningReader,
-  'getProfile' | 'listWorkouts' | 'listRaces' | 'listLifeEvents' | 'listBusyBlocks' | 'listCheckins' | 'listMetrics'
+  'getProfile' | 'listWorkouts' | 'listRaces' | 'listLifeEvents' | 'listBusyBlocks' | 'listCheckins' | 'listMetrics' | 'listJointSessions'
 >;
 
 export interface BriefingContext {
@@ -39,6 +42,8 @@ export interface BriefingContext {
   phase: { phase: string; label: string; focus: string };
   lifeEvents: Record<string, unknown>[];
   busyToday: { start: string; end: string }[];
+  /** Today's quedadas and invitations waiting for an answer (first names, title, time, place). */
+  together: BriefingTogether;
 }
 
 /** Only the first name goes to the model (enough to greet; no surnames). */
@@ -88,13 +93,14 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
   const { date, userId } = opts;
   const yesterday = addDays(date, -1);
   const tomorrow = addDays(date, 1);
-  const [workouts, races, events, busy, checkins, metrics] = await Promise.all([
+  const [workouts, races, events, busy, checkins, metrics, joint] = await Promise.all([
     reader.listWorkouts(userId, yesterday, tomorrow),
     reader.listRaces(userId),
     reader.listLifeEvents(userId, date, date),
     reader.listBusyBlocks(userId, zonedToUtc(date, '00:00', tz), zonedToUtc(tomorrow, '00:00', tz)),
     reader.listCheckins(userId, addDays(date, -7), date),
     reader.listMetrics(userId, addDays(date, -14), date),
+    reader.listJointSessions(userId, date, addDays(date, INVITE_HORIZON_DAYS - 1)),
   ]);
   const on = (d: ISODate): Workout[] => workouts.filter((w) => w.date === d).sort(byTime);
   const done = on(yesterday).filter((w) => w.status === 'completed');
@@ -120,11 +126,13 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
     phase: { phase: phase.phase, label: phase.label, focus: phase.focus },
     lifeEvents: events.filter((e) => e.startDate <= date && e.endDate >= date).map(eventForPrompt),
     busyToday: busyView(busy, tz, date, date).map(({ start, end }) => ({ start, end })),
+    together: togetherOf(joint, userId, date),
   };
 }
 
 /** The JSON sent to Claude (no ids, no calendar titles, no raw instants). */
 export function promptPayload(ctx: BriefingContext): Record<string, unknown> {
+  const together = togetherForPrompt(ctx.together);
   return {
     date: ctx.date,
     weekday: ctx.weekday,
@@ -139,5 +147,6 @@ export function promptPayload(ctx: BriefingContext): Record<string, unknown> {
     phase: ctx.phase,
     activeImprevistos: ctx.lifeEvents,
     busyToday: ctx.busyToday,
+    ...(together ? { together } : {}),
   };
 }

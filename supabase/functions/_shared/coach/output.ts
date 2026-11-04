@@ -2,8 +2,9 @@
  * Structured output of the AI coach: a flat, all-required-but-nullable change
  * shape (structured outputs need every property listed and no numeric bounds),
  * converted to camelCase `PlanChange` and re-validated with the strict schema.
- * v2 adds `memory` (facts to remember) and `life_event` (imprevisto to log);
- * both are validated on their own so a bad one never discards the reply.
+ * v2 adds `memory` (facts to remember), `life_event` (imprevisto to log) and
+ * `quedada` (joint session suggested with a friend); each is validated on its
+ * own so a bad one never discards the reply.
  */
 import { planChangeSchema } from '../planning/changes.ts';
 import { array, boolean, enumOf, intEnum, integer, nullable, object, string, toStructuredOutputSchema } from '../schema.ts';
@@ -60,6 +61,26 @@ export const lifeEventOutputSchema = object({
 
 export type LifeEventOutput = Infer<typeof lifeEventOutputSchema>;
 
+/** Quedada the coach suggests (validated later against the friends block and the 14-day window). */
+export const quedadaOutputSchema = object(
+  {
+    friend_id: string({ description: 'friendId de uno de los amigos del bloque "Calendario de amigos".' }),
+    date: string({ format: 'date', description: 'YYYY-MM-DD.' }),
+    start_time: nullable(string({ description: 'HH:mm o null.' })),
+    sport: enumOf(SPORTS),
+    duration_min: integer(),
+    intensity: enumOf(INTENSITIES),
+    title: string({ min: 1, description: 'Título corto en español ("Rodaje juntos").' }),
+    location: nullable(string()),
+    reason: string({ description: 'Por qué ese hueco, en una frase.' }),
+  },
+  undefined,
+  // Weaker models add keys of their own: ignore them instead of dropping the suggestion.
+  { stripUnknown: true },
+);
+
+export type QuedadaOutput = Infer<typeof quedadaOutputSchema>;
+
 /** Publishes the strict JSON Schema but accepts any value at runtime (checked by the caller). */
 function deferred<T>(schema: Schema<T>): Schema<unknown> {
   return { json: schema.json, parse: (input) => ({ ok: true, value: input }) };
@@ -71,6 +92,7 @@ export const coachOutputSchema = object({
   changes: array(flatChange),
   memory: array(string(), { description: '0-3 hechos o preferencias duraderas del atleta (≤ 140 caracteres cada uno).' }),
   life_event: deferred(nullable(lifeEventOutputSchema)),
+  quedada: deferred(nullable(quedadaOutputSchema)),
 });
 
 type FlatChange = Infer<typeof flatChange>;
@@ -82,6 +104,8 @@ export interface CoachOutput {
   memory: string[];
   /** Validated later (toLifeEventInsert); anything here is untrusted. */
   life_event: unknown;
+  /** Validated later (toCoachQuedada); anything here is untrusted. */
+  quedada: unknown;
   /** Changes whose shape was unusable (counted as dropped in the reply). */
   malformedChanges: number;
 }
@@ -155,7 +179,7 @@ function parseChanges(raw: unknown): { changes: FlatChange[]; malformed: number 
 /**
  * Parses the model text (JSON). Degrades gracefully for weaker models: only a non-empty
  * `reply` is mandatory; malformed changes are dropped (and counted), `summary` defaults to
- * '', `memory` keeps only strings and `life_event` is checked later. Null → bad output.
+ * '', `memory` keeps only strings and `life_event` / `quedada` (missing → null) are checked later. Null → bad output.
  */
 export function parseCoachOutput(text: string): CoachOutput | null {
   let value: unknown;
@@ -175,6 +199,7 @@ export function parseCoachOutput(text: string): CoachOutput | null {
     changes,
     memory: Array.isArray(v.memory) ? v.memory.filter((m): m is string => typeof m === 'string') : [],
     life_event: v.life_event ?? null,
+    quedada: v.quedada ?? null,
     malformedChanges: malformed,
   };
 }

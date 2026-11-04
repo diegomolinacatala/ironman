@@ -13,8 +13,11 @@ import {
   mapRace,
   mapWorkout,
 } from '../db/rows.ts';
-import type { MetricsUpsert, PlanningStore, RaceWrite } from '../planning/store.ts';
-import type { JointSession, UUID } from '../types.ts';
+import { StoreRejectedError } from '../planning/store.ts';
+import type { MetricsUpsert, PlanningStore, ProposedJointSession, RaceWrite } from '../planning/store.ts';
+import { normalizeTime } from '../dates.ts';
+import { INTENSITIES, SPORTS } from '../types.ts';
+import type { JointParticipant, JointSession, UUID } from '../types.ts';
 import { rowsOf, unwrap } from './db.ts';
 import type { Db } from './db.ts';
 
@@ -90,6 +93,61 @@ async function listJointSessions(db: Db, userId: UUID, from: string, to: string)
   const userIds = [...new Set(participants.map((p) => String(asRow(p).user_id)))];
   const profiles = rowsOf(await db.from('profiles').select('id,display_name').in('id', userIds), 'joint profiles');
   return assembleJointSessions(sessions, participants, profiles);
+}
+
+/** SQLSTATE of `private.raise_error` kinds the caller can act on (see 20261025000200_helpers.sql). */
+const REJECTION_CODES: Record<string, StoreRejectedError['kind']> = {
+  '22023': 'validation',
+  '42501': 'forbidden',
+  P0002: 'not_found',
+  '23505': 'conflict',
+};
+
+const text = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : v == null ? fallback : String(v));
+const textOrNull = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+const pick = <T extends string>(values: readonly T[], v: unknown, fallback: T): T =>
+  (values as readonly unknown[]).includes(v) ? (v as T) : fallback;
+
+/** `private.joint_session_json` (camelCase jsonb) → ProposedJointSession. */
+export function mapProposedJointSession(raw: unknown): ProposedJointSession {
+  const s = asRow(raw);
+  const participants: JointParticipant[] = (Array.isArray(s.participants) ? s.participants : []).map(asRow).map((p) => ({
+    userId: text(p.userId),
+    displayName: text(p.displayName, 'Amigo'),
+    status: pick(['invited', 'accepted', 'declined'] as const, p.status, 'invited'),
+    workoutId: textOrNull(p.workoutId),
+  }));
+  const duration = Number(s.durationMin);
+  return {
+    id: text(s.id),
+    organizerId: text(s.organizerId),
+    sport: pick(SPORTS, s.sport, 'other'),
+    date: text(s.date).slice(0, 10),
+    startTime: normalizeTime(s.startTime),
+    durationMin: Number.isFinite(duration) ? duration : 60,
+    intensity: pick(INTENSITIES, s.intensity, 'endurance'),
+    title: text(s.title, 'Quedada'),
+    location: textOrNull(s.location),
+    notes: textOrNull(s.notes),
+    status: pick(['proposed', 'confirmed', 'cancelled'] as const, s.status, 'proposed'),
+    isOpen: s.isOpen === true,
+    participants,
+    createdAt: textOrNull(s.createdAt),
+  };
+}
+
+async function proposeJointSession(
+  db: Db,
+  userId: UUID,
+  draft: Parameters<PlanningStore['proposeJointSession']>[1],
+  inviteeIds: readonly UUID[],
+): Promise<ProposedJointSession> {
+  const result = await db.rpc('svc_propose_joint_session', { p_user: userId, p_session: draft, p_invitees: [...inviteeIds] });
+  const kind = result.error?.code ? REJECTION_CODES[result.error.code] : undefined;
+  if (result.error && kind) throw new StoreRejectedError(kind, result.error.message);
+  const data = unwrap(result, 'svc_propose_joint_session');
+  if (!data) throw new Error('db svc_propose_joint_session: empty result');
+  return mapProposedJointSession(data);
 }
 
 export function createPlanningStore(db: Db, now: () => Date = () => new Date()): PlanningStore {
@@ -262,6 +320,7 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
       const data = unwrap(await db.from('races').update(raceRow(patch)).eq('id', raceId).eq('user_id', userId).select(RACE_COLS).maybeSingle(), 'update race');
       return data ? mapRace(data) : null;
     },
+    proposeJointSession: (userId, draft, inviteeIds) => proposeJointSession(db, userId, draft, inviteeIds),
   };
 }
 

@@ -42,9 +42,12 @@ export function listJointFor(db: DemoDb, userId: UUID, range: DateRange): JointS
     .map((s) => toJointSession(db, s));
 }
 
+/** Participants see their quedadas; friends of the organizer also see open ones (to join). */
 export function getJointFor(db: DemoDb, userId: UUID, id: UUID): JointSession | null {
   const s = db.jointSessions.find((x) => x.id === id);
-  return s && involves(s, userId) ? toJointSession(db, s) : null;
+  if (!s) return null;
+  if (involves(s, userId) || (s.isOpen === true && areFriends(db, userId, s.organizerId))) return toJointSession(db, s);
+  return null;
 }
 
 function jointWorkout(s: DemoJointSession, userId: UUID, clock: DemoClock): Workout {
@@ -106,7 +109,8 @@ export function proposeJoint(
 ): { db: DemoDb; sessionId: UUID } {
   assertJointDraft(draft);
   const invitees = [...new Set(draft.inviteeIds)].filter((id) => id !== organizerId);
-  if (invitees.length === 0 || invitees.some((id) => !areFriends(db, organizerId, id))) {
+  const isOpen = draft.isOpen === true;
+  if ((invitees.length === 0 && !isOpen) || invitees.some((id) => !areFriends(db, organizerId, id))) {
     throw new RepositoryError('forbidden', 'Solo puedes invitar a amigos que hayan aceptado tu solicitud.');
   }
   const base: DemoJointSession = {
@@ -121,6 +125,7 @@ export function proposeJoint(
     location: draft.location ?? null,
     notes: draft.notes ?? null,
     status: 'proposed',
+    isOpen,
     participants: [],
     createdAt: clock.now,
   };
@@ -141,7 +146,29 @@ export function proposeJoint(
       }, clock),
     withSession,
   );
-  return { db: notified, sessionId: session.id };
+  return { db: isOpen ? notifyOpen(notified, session, invitees, clock) : notified, sessionId: session.id };
+}
+
+function friendIdsOf(db: DemoDb, userId: UUID): UUID[] {
+  return db.friendships
+    .filter((f) => f.status === 'accepted' && (f.requesterId === userId || f.addresseeId === userId))
+    .map((f) => (f.requesterId === userId ? f.addresseeId : f.requesterId));
+}
+
+/** Open quedada: every friend who was not invited hears about it once. */
+function notifyOpen(db: DemoDb, s: DemoJointSession, invitees: readonly UUID[], clock: DemoClock): DemoDb {
+  return friendIdsOf(db, s.organizerId)
+    .filter((id) => !invitees.includes(id))
+    .reduce(
+      (acc, userId) =>
+        notify(acc, userId, {
+          type: 'joint_open',
+          title: `${displayName(db, s.organizerId)} abre una quedada`,
+          body: `${s.title} · ${when(s, clock.today)}. Apúntate si te encaja.`,
+          data: { url: `/joint/${s.id}`, jointSessionId: s.id, fromUserId: s.organizerId },
+        }, clock),
+      db,
+    );
 }
 
 function requireSession(db: DemoDb, id: UUID): DemoJointSession {

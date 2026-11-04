@@ -6,8 +6,10 @@
  * superseded request is ignored when its answer arrives (matched by turn id).
  */
 import { startOfWeek } from '@/domain/dates';
-import type { CoachMessage, CoachRequest, CoachResponse, ISODate, PlanProposal } from '@/domain/types';
+import type { CoachMessage, CoachRequest, CoachResponse, Friend, ISODate, PlanProposal } from '@/domain/types';
 import { MAX_MESSAGE_LENGTH, requestFromParams, type CoachRouteParams, type PreparedRequest } from '@/features/coach/requests';
+
+import { friendIdsForConversation } from './friendMentions';
 
 export type TalkChannel = 'voice' | 'text';
 export type InputMode = 'voice' | 'text';
@@ -131,10 +133,21 @@ export function coachHistory(turns: readonly TalkTurn[], max: number = MAX_HISTO
   return messages.filter((m) => m.content.trim().length > 0).slice(-max);
 }
 
-/** Chat request for a spoken or typed message of this session. */
-export function talkRequest(text: string, channel: TalkChannel, turns: readonly TalkTurn[], today: ISODate): PreparedRequest {
+/**
+ * Chat request for a spoken or typed message of this session. Friends named in
+ * it (or in the previous message, for follow-ups) travel as `friendIds` so the
+ * coach can see their calendars and suggest a quedada.
+ */
+export function talkRequest(
+  text: string,
+  channel: TalkChannel,
+  turns: readonly TalkTurn[],
+  today: ISODate,
+  friends: readonly Friend[] = [],
+): PreparedRequest {
   const message = clampMessage(text.trim());
   const history = coachHistory(turns);
+  const friendIds = friendIdsForConversation(message, turns.map((t) => t.text), friends);
   return {
     request: {
       mode: 'chat',
@@ -142,6 +155,7 @@ export function talkRequest(text: string, channel: TalkChannel, turns: readonly 
       message,
       channel,
       ...(history.length > 0 ? { history } : {}),
+      ...(friendIds.length > 0 ? { friendIds } : {}),
     },
     text: message,
   };

@@ -247,7 +247,7 @@ describe('joint sessions (quedadas)', () => {
     assert.ok(list.every((s) => s.participants.some((p) => p.userId === marta)));
     const sample = list[0];
     assert.deepEqual(Object.keys(sample ?? {}).sort(), [
-      'createdAt', 'date', 'durationMin', 'id', 'intensity', 'location', 'notes', 'organizerId',
+      'createdAt', 'date', 'durationMin', 'id', 'intensity', 'isOpen', 'location', 'notes', 'organizerId',
       'participants', 'sport', 'startTime', 'status', 'title',
     ]);
     const [none] = await t.asUser<{ list: unknown[] }>(stranger, 'select public.list_joint_sessions($1, $2) as list', [isoDay(0), isoDay(30)]);

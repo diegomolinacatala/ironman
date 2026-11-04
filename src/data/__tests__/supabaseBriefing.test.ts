@@ -204,6 +204,50 @@ describe('Supabase generateBriefing', () => {
     expect(chainArgs(calls.find((c) => c.target === 'workouts'), 'lte')).toEqual(['date', '2026-10-28']);
   });
 
+  it("mentions today's quedada in the local briefing; failing quedadas never block it", async () => {
+    mockEnv.aiCoachEnabled = false;
+    const quedada = {
+      id: 'j1',
+      organizerId: 'david',
+      sport: 'run',
+      date: DATE,
+      startTime: '07:30',
+      durationMin: 50,
+      intensity: 'endurance',
+      title: 'Rodaje en el Retiro',
+      location: 'Casa de Campo',
+      status: 'confirmed',
+      participants: [
+        { userId: 'david', displayName: 'David García', status: 'accepted', workoutId: null },
+        { userId: 'me', displayName: 'Diego', status: 'accepted', workoutId: 'w1' },
+      ],
+    };
+    const { client, calls } = fakeClient({
+      profiles: { data: PROFILE_ROW, error: null },
+      workouts: { data: [WORKOUT_ROW], error: null },
+      races: { data: [], error: null },
+      daily_metrics: { data: [METRICS_ROW], error: null },
+      briefings: { data: null, error: null },
+      'rpc:list_joint_sessions': { data: [quedada], error: null },
+    });
+    const briefing = await createSupabaseRepository({ client, now: () => NOW }).generateBriefing(DATE);
+    expect(briefing.script).toContain('Hoy a las siete y media de la mañana entrenas con David: rodaje en el Retiro, en Casa de Campo.');
+    expect(calls.find((c) => c.target === 'rpc:list_joint_sessions')?.args).toEqual([{ p_from: DATE, p_to: '2026-11-09' }]);
+    expect(briefing.script).not.toContain('García');
+
+    const failing = fakeClient({
+      profiles: { data: PROFILE_ROW, error: null },
+      workouts: { data: [WORKOUT_ROW], error: null },
+      races: { data: [], error: null },
+      daily_metrics: { data: [METRICS_ROW], error: null },
+      briefings: { data: null, error: null },
+      'rpc:list_joint_sessions': { data: null, error: { message: 'boom', code: 'XX000' } },
+    });
+    const plain = await createSupabaseRepository({ client: failing.client, now: () => NOW }).generateBriefing(DATE);
+    expect(plain).toMatchObject({ engine: 'rules', date: DATE });
+    expect(plain.script).not.toContain('entrenas con');
+  });
+
   it('invokes the briefing function and returns its briefing', async () => {
     const { repo, invoke } = setup();
     invoke.mockResolvedValueOnce({ data: AI_BRIEFING, error: null });

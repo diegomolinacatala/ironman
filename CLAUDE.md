@@ -10,3 +10,9 @@
 - After adding or updating an Expo package run `node scripts/ios/check-prebuilt-abi.mjs`: a prebuilt module built against another `expo-modules-core` closes the app at launch (build 7). `expo-file-system` is pinned to `58.0.11` for that reason.
 - v2 (`docs/V2.md`): the in-app AI is on and free — `coach`/`briefing`/`meal` call Cloudflare Workers AI via `cloudflare/ai` (EXPO_PUBLIC_AI_COACH=0 disables). Never add a paid AI path without asking the owner.
 - Jest replaces Reanimated globally (`jest.setup.ts`); worker tests: `node --test "cloudflare/ai/src/**/*.test.mts"`.
+
+## Social ("Juntos") — state after v3 (2026-11-04)
+
+Done: friends by @username, visibility `full|summary|busy`, week compare + Huecos + Oportunidades + weekly volume side by side, quedadas (propose / respond / cancel / **edit** / **open to all friends + join** / **comments**), feed with kudos + **`joint_completed`** ("entrenasteis juntos", posted when every accepted participant completed the linked workout, e.g. via Garmin sync), **friends' races + shared-race countdown**, **Juntos card on Hoy**, **quedada reminder ≥ 1 h before** (local notification), **morning briefing mentions today's quedada and pending invites**, **voice coach** gets `friendIds` when a friend is mentioned and may return a `quedada` suggestion (the app only prefills `/joint/new`, never sends it), **MCP `propose_joint_session`** (sends a real invite: Claude must confirm first). DB: `supabase/migrations/20261104000100_social_together.sql`; tests `supabase/tests/together.test.ts`.
+
+Next ideas (not built): Live Activity for a quedada in progress; Garmin "same activity" detection by time overlap when the quedada had no linked workout; shared weekly goals/challenges; group chat beyond one quedada; Android.

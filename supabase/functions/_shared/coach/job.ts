@@ -1,7 +1,7 @@
 /**
  * Background part of the coach: context → Claude (structured output) →
  * validated changes → plan_proposals (source 'ai_coach') → memory lines in
- * coach_notes + logged imprevisto → coach_jobs done (with `extras`).
+ * coach_notes + logged imprevisto + suggested quedada → coach_jobs done (with `extras`).
  * Any failure (including the overall deadline) ends the job with status
  * 'error' and a Spanish message, so the app can fall back to the rules engine.
  */
@@ -180,7 +180,7 @@ export async function runCoachJob(deps: CoachJobDeps, job: CoachJob): Promise<vo
       extras,
     });
     if (!finished) log.warn('coach job was no longer running when it finished', { proposalId });
-    log.info('coach job done', { ms: Date.now() - started, changes: changes.length, dropped, memory: extras.memory.length, lifeEvent: extras.lifeEventId !== null });
+    log.info('coach job done', { ms: Date.now() - started, changes: changes.length, dropped, memory: extras.memory.length, lifeEvent: extras.lifeEventId !== null, quedada: extras.quedada !== null });
   } catch (error) {
     await markFailed(deps, job, log, error);
   } finally {

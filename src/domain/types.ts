@@ -553,6 +553,8 @@ export interface JointSession {
   location: string | null;
   notes: string | null;
   status: JointStatus;
+  /** Open quedada: any accepted friend of the organizer may join (default false). */
+  isOpen?: boolean;
   participants: JointParticipant[];
   createdAt: ISODateTime;
 }
@@ -569,9 +571,37 @@ export interface JointSessionDraft {
   inviteeIds: UUID[];
   /** Link the organizer's existing workout instead of creating a new one. */
   fromWorkoutId?: UUID | null;
+  /** Open to every friend (then `inviteeIds` may be empty). */
+  isOpen?: boolean;
 }
 
-export type FeedEventType = 'workout_completed' | 'race_added' | 'joint_confirmed' | 'plan_updated';
+/** Organizer's edit of a quedada (only the given fields change). */
+export type JointSessionPatch = Partial<
+  Pick<JointSession, 'sport' | 'date' | 'startTime' | 'durationMin' | 'intensity' | 'title' | 'location' | 'notes' | 'isOpen'>
+>;
+
+/** Short message in a quedada thread (participants only). */
+export interface JointComment {
+  id: UUID;
+  sessionId: UUID;
+  userId: UUID;
+  displayName: string;
+  body: string;
+  createdAt: ISODateTime;
+}
+
+/** A friend's upcoming race (name hidden when they share only a summary). */
+export interface FriendRace {
+  friendId: UUID;
+  displayName: string;
+  raceId: UUID;
+  name: string | null;
+  date: ISODate;
+  distance: RaceDistance;
+  priority: RacePriority;
+}
+
+export type FeedEventType = 'workout_completed' | 'race_added' | 'joint_confirmed' | 'plan_updated' | 'joint_completed';
 
 export interface FeedItem {
   id: UUID;
@@ -597,6 +627,9 @@ export const NOTIFICATION_TYPES = [
   'plan_updated',
   'friend_completed',
   'kudos',
+  'joint_updated',
+  'joint_comment',
+  'joint_open',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -693,6 +726,23 @@ export interface CoachResponse {
   memory: string[];
   /** Imprevisto the coach logged from this message (injury, illness, travel…), or null. */
   lifeEvent: LifeEvent | null;
+  /** Quedada the coach suggests with a friend (never sent without the athlete's tap), or null. */
+  quedada?: QuedadaSuggestion | null;
+}
+
+/** A quedada proposed by the coach: the app turns it into a prefilled /joint/new form. */
+export interface QuedadaSuggestion {
+  friendId: UUID;
+  friendName: string;
+  sport: Sport;
+  date: ISODate;
+  startTime: ISOTime | null;
+  durationMin: number;
+  intensity: Intensity;
+  title: string;
+  location: string | null;
+  /** One line on why this slot (Spanish). */
+  reason: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -6,12 +6,15 @@
 import { isISODate } from '@/domain/dates';
 import { mealSlotForTime } from '@/domain/mealEstimate';
 import {
+  INTENSITIES,
   MEAL_SLOTS,
+  SPORTS,
   type Briefing,
   type ISODate,
   type ISODateTime,
   type MealAnalysis,
   type MealAnalysisInput,
+  type QuedadaSuggestion,
   type SleepSnapshot,
   type SleepVerdict,
   type UUID,
@@ -26,6 +29,9 @@ const ENGINES = ['ai', 'rules'] as const;
 const MAX_ITEMS = 12;
 const MAX_MEMORY = 5;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const QUEDADA_SPORTS = SPORTS.filter((s) => s !== 'rest');
+const QUEDADA_LIMITS = { minDuration: 5, maxDuration: 720, titleMax: 120, locationMax: 200, reasonMax: 300, nameMax: 120 } as const;
 
 /** Edge functions answer JSON, but a missing content-type turns it into text. */
 function asJsonRecord(value: unknown): JsonRecord | null {
@@ -138,11 +144,55 @@ export function parseMealAnalysis(data: unknown, input: MealAnalysisInput): Meal
 export interface CoachExtras {
   memory: string[];
   lifeEventId: UUID | null;
+  quedada: QuedadaSuggestion | null;
 }
 
-export const EMPTY_COACH_EXTRAS: CoachExtras = { memory: [], lifeEventId: null };
+export const EMPTY_COACH_EXTRAS: CoachExtras = { memory: [], lifeEventId: null, quedada: null };
 
-/** `coach_jobs.extras` = `{ memory: string[], lifeEventId: uuid | null }`. */
+function boundedText(value: unknown, max: number): string | null {
+  const s = text(value);
+  return s && s.length <= max ? s : null;
+}
+
+/**
+ * `extras.quedada` (camelCase, snake_case tolerated) → QuedadaSuggestion, or
+ * null when anything is off (the server validated it, but this is still
+ * untrusted JSON that ends up in a form).
+ */
+export function parseQuedadaSuggestion(value: unknown): QuedadaSuggestion | null {
+  const r = asJsonRecord(value);
+  if (!r) return null;
+  const friendId = asString(pick(r, 'friendId', 'friend_id'));
+  const friendName = boundedText(pick(r, 'friendName', 'friend_name'), QUEDADA_LIMITS.nameMax);
+  const sport = oneOf(r.sport, QUEDADA_SPORTS);
+  const date = asString(r.date);
+  const rawTime = pick(r, 'startTime', 'start_time');
+  const startTime = rawTime === null || rawTime === undefined ? null : asString(rawTime);
+  const duration = asNumber(pick(r, 'durationMin', 'duration_min'));
+  const intensity = oneOf(r.intensity, INTENSITIES);
+  const title = boundedText(r.title, QUEDADA_LIMITS.titleMax);
+  const rawLocation = r.location;
+  const location = rawLocation === null || rawLocation === undefined ? null : text(rawLocation);
+  if (!friendId || !UUID_RE.test(friendId) || !friendName || !sport || !intensity || !title) return null;
+  if (!date || !isISODate(date)) return null;
+  if (startTime !== null && !TIME_RE.test(startTime)) return null;
+  if (duration === null || !Number.isInteger(duration) || duration < QUEDADA_LIMITS.minDuration || duration > QUEDADA_LIMITS.maxDuration) return null;
+  if (location !== null && location.length > QUEDADA_LIMITS.locationMax) return null;
+  return {
+    friendId,
+    friendName,
+    sport,
+    date,
+    startTime,
+    durationMin: duration,
+    intensity,
+    title,
+    location,
+    reason: (text(r.reason) ?? '').slice(0, QUEDADA_LIMITS.reasonMax),
+  };
+}
+
+/** `coach_jobs.extras` = `{ memory: string[], lifeEventId: uuid | null, quedada: {…} | null }`. */
 export function parseCoachExtras(value: unknown): CoachExtras {
   const r = asJsonRecord(value);
   if (!r) return EMPTY_COACH_EXTRAS;
@@ -151,5 +201,5 @@ export function parseCoachExtras(value: unknown): CoachExtras {
     .filter((line): line is string => line !== null)
     .slice(0, MAX_MEMORY);
   const id = asString(pick(r, 'lifeEventId', 'life_event_id'));
-  return { memory, lifeEventId: id && UUID_RE.test(id) ? id : null };
+  return { memory, lifeEventId: id && UUID_RE.test(id) ? id : null, quedada: parseQuedadaSuggestion(r.quedada) };
 }

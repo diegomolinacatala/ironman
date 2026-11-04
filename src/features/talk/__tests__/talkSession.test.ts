@@ -1,5 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
+import type { Friend } from '@/domain/types';
 import { makeCoachResponse, makeProposal } from '@/features/coach/__tests__/fixtures';
 import { MAX_MESSAGE_LENGTH } from '@/features/coach/requests';
 
@@ -103,6 +104,22 @@ describe('requests and history', () => {
       ],
     });
     expect(talkRequest('hola', 'text', [], TODAY).request).not.toHaveProperty('history');
+  });
+
+  test('friends named in the message (or the previous one) travel as friendIds', () => {
+    const david: Friend = {
+      friendshipId: 'fs1',
+      profile: { id: 'david-id', username: 'davidm', displayName: 'David', avatarUrl: null, sports: [] },
+      status: 'accepted',
+      direction: 'mutual',
+      visibility: 'full',
+      createdAt: '2026-10-01T10:00:00.000Z',
+    };
+    expect(talkRequest('quiero rodar con David', 'voice', [], TODAY, [david]).request.friendIds).toEqual(['david-id']);
+    const followUp = talkRequest('¿y el domingo?', 'text', [turn('t1', { text: 'busca hueco con David' })], TODAY, [david]);
+    expect(followUp.request.friendIds).toEqual(['david-id']);
+    expect(talkRequest('me duele la rodilla', 'text', [], TODAY, [david]).request).not.toHaveProperty('friendIds');
+    expect(talkRequest('con David', 'text', [], TODAY).request).not.toHaveProperty('friendIds');
   });
 
   test('history keeps the newest messages and skips empty ones', () => {

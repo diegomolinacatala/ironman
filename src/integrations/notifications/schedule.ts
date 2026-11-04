@@ -41,7 +41,12 @@ export interface ScheduleInput {
   now: Date;
   /** Window length in days (default 7). */
   days?: number;
+  /** jointSessionId → partners' names ("David", "David y Marta") for quedada reminders. */
+  jointPartners?: Readonly<Record<string, string>>;
 }
+
+/** Quedadas are reminded at least this long before: time to get there. */
+export const JOINT_LEAD_MIN = 60;
 
 /** Below Apple's 64 so the system never silently drops the latest ones. */
 export const MAX_SCHEDULED = 60;
@@ -77,11 +82,44 @@ function details(w: Workout): string {
   return w.jointSessionId ? [...parts, 'Quedada'].join(' · ') : parts.join(' · ');
 }
 
-function workoutReminder(w: Workout, prefs: NotificationPrefs, now: Date): NotificationSpec | null {
+function jointReminder(
+  w: Workout,
+  start: number,
+  leads: { joint: number; personal: number },
+  partners: string | undefined,
+  now: Date,
+): NotificationSpec | null {
+  const startsAt = atLocal(w.date, start).getTime();
+  // Planned less than an hour ahead: still remind with the personal lead.
+  const lead = startsAt - leads.joint * 60_000 > now.getTime() ? leads.joint : leads.personal;
+  const fireAt = new Date(startsAt - lead * 60_000);
+  if (fireAt.getTime() <= now.getTime()) return null;
+  const withWho = partners ? ` con ${partners}` : '';
+  return {
+    id: `rti.workout.${w.id}`,
+    kind: 'workout_reminder',
+    title: lead === 0 ? `Empieza la quedada${withWho}` : `Quedada${withWho} en ${leadLabel(lead)}`,
+    body: `${formatTime(w.startTime)} · ${w.title} · ${sportLabel(w.sport)} · ${formatDuration(w.durationMin)}`,
+    url: `/joint/${w.jointSessionId}`,
+    categoryId: 'workout',
+    threadId: 'rti.workouts',
+    trigger: { type: 'date', date: fireAt },
+  };
+}
+
+function workoutReminder(
+  w: Workout,
+  prefs: NotificationPrefs,
+  now: Date,
+  jointPartners?: Readonly<Record<string, string>>,
+): NotificationSpec | null {
   const start = parseTimeMinutes(w.startTime);
-  if (start == null && prefs.morningSummary) return null; // the morning briefing already covers it
   const leadRaw = Number.isFinite(prefs.reminderMinutesBefore) ? prefs.reminderMinutesBefore : DEFAULT_LEAD_MIN;
   const lead = Math.min(MAX_LEAD_MIN, Math.max(0, Math.round(leadRaw)));
+  if (w.jointSessionId && start != null) {
+    return jointReminder(w, start, { joint: Math.max(lead, JOINT_LEAD_MIN), personal: lead }, jointPartners?.[w.jointSessionId], now);
+  }
+  if (start == null && prefs.morningSummary) return null; // the morning briefing already covers it
   const fireAt =
     start == null
       ? atLocal(w.date, UNTIMED_REMINDER_MIN)
@@ -178,7 +216,7 @@ export function buildSchedule(input: ScheduleInput): NotificationSpec[] {
   const eveningMin = parseTimeMinutes(prefs.eveningTime) ?? DEFAULT_EVENING_MIN;
 
   const reminders = prefs.workoutReminders
-    ? days.flatMap((date) => sessionsOn(workouts, date).map((w) => workoutReminder(w, prefs, now)))
+    ? days.flatMap((date) => sessionsOn(workouts, date).map((w) => workoutReminder(w, prefs, now, input.jointPartners)))
     : [];
   const summaries = prefs.morningSummary ? days.map((date) => morningSummary(date, morningMin, now)) : [];
   const repeating = prefs.eveningCheckin ? [eveningCheckin(eveningMin)] : [];

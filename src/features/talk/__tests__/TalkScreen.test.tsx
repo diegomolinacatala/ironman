@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import type { ReactNode } from 'react';
 
 import TalkScreen from '@/app/talk';
-import type { ApplyResult, CoachRequest, CoachResponse, PlanProposal, Profile, ProposalStatus } from '@/domain/types';
+import type { ApplyResult, CoachRequest, CoachResponse, Friend, PlanProposal, Profile, ProposalStatus } from '@/domain/types';
 import { makeCoachResponse, makeLifeEvent, makeProposal, makeWorkout } from '@/features/coach/__tests__/fixtures';
 import type { VoiceInput } from '@/integrations/speech/useVoiceInput';
 
@@ -18,6 +18,16 @@ const mockApply = jest.fn(async (_vars: { changes: unknown[]; proposalId?: strin
 const mockSetStatus = jest.fn(async (_vars: { id: string; status: ProposalStatus }) => undefined);
 const mockUpdateProfile = jest.fn(async (patch: Partial<Profile>) => patch);
 const mockSpeak = jest.fn();
+const mockFriends: Friend[] = [
+  {
+    friendshipId: 'fs1',
+    profile: { id: 'david-id', username: 'davidm', displayName: 'David Molina', avatarUrl: null, sports: [] },
+    status: 'accepted',
+    direction: 'mutual',
+    visibility: 'full',
+    createdAt: '2026-10-01T10:00:00.000Z',
+  },
+];
 const mockWorkouts = [makeWorkout({ id: 'w1', title: 'Rodaje suave' }), makeWorkout({ id: 'w2', title: 'Series' })];
 const mockVoice: VoiceInput = {
   state: 'idle',
@@ -61,6 +71,7 @@ jest.mock('@/data/queries', () => ({
   useApplyPlanChanges: () => ({ mutateAsync: mockApply, isPending: false }),
   useSetProposalStatus: () => ({ mutateAsync: mockSetStatus, isPending: false }),
   useWorkouts: () => ({ data: mockWorkouts }),
+  useFriends: () => ({ data: mockFriends }),
   useProposal: () => ({ data: undefined }),
   useProfile: () => ({ data: { aiConsentAt: mockState.consentAt }, isLoading: false }),
   useUpdateProfile: () => ({ mutateAsync: mockUpdateProfile, isPending: false }),
@@ -244,6 +255,63 @@ describe('Talk — result', () => {
       { role: 'user', content: 'Me he torcido el tobillo' },
       { role: 'assistant', content: expect.stringContaining('Quito el rodaje') },
     ]);
+  });
+});
+
+describe('Talk — quedada suggested by the coach', () => {
+  beforeEach(() => {
+    mockVoice.available = false;
+    mockCoach.mockImplementation(async () =>
+      makeCoachResponse({
+        reply: 'Te propongo un rodaje con David el sábado por la mañana.',
+        quedada: {
+          friendId: 'david-id',
+          friendName: 'David Molina',
+          sport: 'run',
+          date: '2026-11-07',
+          startTime: '08:00',
+          durationMin: 60,
+          intensity: 'endurance',
+          title: 'Rodaje juntos',
+          location: 'Retiro',
+          reason: 'Los dos tenéis libre el sábado temprano.',
+        },
+      }),
+    );
+  });
+
+  test('a message naming a friend sends friendIds and the card opens the prefilled form (nothing is sent)', async () => {
+    await render(<TalkScreen />);
+    await sendTyped('Quiero rodar con David este finde');
+    expect(await screen.findByText('Quedada con David')).toBeTruthy();
+    expect(mockCoach.mock.calls[0]?.[0]).toMatchObject({ friendIds: ['david-id'] });
+    expect(screen.getByText('Sáb 7 nov · 08:00 · Rodaje juntos · 1h · Retiro')).toBeTruthy();
+    expect(screen.getByText('Los dos tenéis libre el sábado temprano.')).toBeTruthy();
+    expect(mockRouter.push).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Preparar la invitación' }));
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/joint/new',
+      params: {
+        friendId: 'david-id',
+        date: '2026-11-07',
+        sport: 'run',
+        startTime: '08:00',
+        durationMin: '60',
+        intensity: 'endurance',
+        title: 'Rodaje juntos',
+        location: 'Retiro',
+      },
+    });
+  });
+
+  test('messages without friends do not send friendIds and show no card', async () => {
+    mockCoach.mockImplementation(async () => makeCoachResponse({ reply: 'Descansa hoy.' }));
+    await render(<TalkScreen />);
+    await sendTyped('Me duele la rodilla');
+    await screen.findByText('Descansa hoy.');
+    expect(mockCoach.mock.calls[0]?.[0]).not.toHaveProperty('friendIds');
+    expect(screen.queryByRole('button', { name: 'Preparar la invitación' })).toBeNull();
   });
 });
 

@@ -14,6 +14,7 @@ import type {
   IntegrationStatus,
   ISODate,
   ISODateTime,
+  JointComment,
   JointSession,
   LifeEvent,
   NutritionLog,
@@ -26,8 +27,11 @@ import type {
   Workout,
 } from '@/domain/types';
 
-/** v2: sleep stages in the seed, `briefings`, Diego not onboarded (the v2 onboarding runs once). */
-export const DEMO_DB_VERSION = 2;
+/**
+ * v2: sleep stages in the seed, `briefings`, Diego not onboarded (the v2 onboarding runs once).
+ * v3: open quedadas, `jointComments`.
+ */
+export const DEMO_DB_VERSION = 3;
 
 export interface DemoFriendship {
   id: UUID;
@@ -98,6 +102,7 @@ export interface DemoDb {
   nutrition: NutritionLog[];
   friendships: DemoFriendship[];
   jointSessions: DemoJointSession[];
+  jointComments: JointComment[];
   feed: DemoFeedEvent[];
   kudos: DemoKudos[];
   notifications: AppNotification[];
@@ -124,6 +129,7 @@ export function isDemoDb(value: unknown): value is DemoDb {
     Array.isArray(db.profiles) &&
     Array.isArray(db.workouts) &&
     Array.isArray(db.jointSessions) &&
+    Array.isArray(db.jointComments) &&
     Array.isArray(db.notifications) &&
     Array.isArray(db.briefings)
   );

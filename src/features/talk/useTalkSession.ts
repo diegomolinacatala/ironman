@@ -3,13 +3,14 @@
  * AI consent gate, keeps the turns of this visit and lets the user cancel a
  * slow answer (the AI can take ~2 min; a cancelled answer is ignored).
  */
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useMemo, useReducer, useRef } from 'react';
 
-import { useCoach } from '@/data/queries';
+import { useCoach, useFriends } from '@/data/queries';
 import { todayISO } from '@/domain/dates';
 import type { CoachResponse } from '@/domain/types';
 import type { PreparedRequest } from '@/features/coach/requests';
 import { useConsentGate, type ConsentGate } from '@/features/coach/useConsentGate';
+import { splitFriends } from '@/features/social/friendModel';
 import { errorMessage, logger } from '@/lib/logger';
 import { haptics } from '@/ui';
 
@@ -45,6 +46,9 @@ export interface TalkSession {
 
 export function useTalkSession(voiceAvailable: boolean): TalkSession {
   const coach = useCoach();
+  // Accepted friends named in a message let the coach see their calendars (quedadas).
+  const friends = useFriends();
+  const acceptedFriends = useMemo(() => splitFriends(friends.data).accepted, [friends.data]);
   const [state, dispatch] = useReducer(talkReducer, voiceAvailable, initialTalkState);
   const latest = useRef(state);
   latest.current = state;
@@ -78,7 +82,7 @@ export function useTalkSession(voiceAvailable: boolean): TalkSession {
     state,
     gate,
     send: (text, channel) => {
-      const prepared = talkRequest(text, channel, latest.current.turns, todayISO());
+      const prepared = talkRequest(text, channel, latest.current.turns, todayISO(), acceptedFriends);
       if (prepared.text.length > 0) gate.submit(prepared);
     },
     sendPrepared: (prepared, onSent) => gate.submit(prepared, onSent),

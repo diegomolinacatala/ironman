@@ -2,7 +2,18 @@
  * Quedada form: route params parsing, validation and conversion to a draft.
  * Pure — the screen only wires state and mutations.
  */
-import { INTENSITIES, SPORTS, type Intensity, type ISODate, type ISOTime, type JointSessionDraft, type Sport, type UUID } from '@/domain/types';
+import {
+  INTENSITIES,
+  SPORTS,
+  type Intensity,
+  type ISODate,
+  type ISOTime,
+  type JointSession,
+  type JointSessionDraft,
+  type JointSessionPatch,
+  type Sport,
+  type UUID,
+} from '@/domain/types';
 
 import type { JointPrefill, Opportunity, Slot } from './types';
 
@@ -34,6 +45,8 @@ export interface JointForm {
   location: string;
   notes: string;
   fromWorkoutId: UUID | null;
+  /** Open to every friend: anyone can join, no invitee needed. */
+  isOpen: boolean;
 }
 
 type RawParams = Record<string, string | string[] | undefined>;
@@ -61,6 +74,8 @@ export function parseJointParams(raw: RawParams): JointPrefill {
   const startTime = first(raw, 'startTime');
   const duration = Number(first(raw, 'durationMin'));
   const title = first(raw, 'title')?.trim();
+  const intensity = first(raw, 'intensity');
+  const location = first(raw, 'location')?.trim();
   return {
     friendId: first(raw, 'friendId'),
     date: date && DATE_RE.test(date) ? date : undefined,
@@ -69,6 +84,9 @@ export function parseJointParams(raw: RawParams): JointPrefill {
     durationMin: Number.isFinite(duration) && duration > 0 ? clampDuration(duration) : undefined,
     fromWorkoutId: first(raw, 'fromWorkoutId'),
     title: title ? title.slice(0, JOINT_LIMITS.titleMax) : undefined,
+    intensity: intensity && (INTENSITIES as readonly string[]).includes(intensity) ? (intensity as Intensity) : undefined,
+    location: location ? location.slice(0, JOINT_LIMITS.locationMax) : undefined,
+    open: first(raw, 'open') === '1' ? '1' : undefined,
   };
 }
 
@@ -99,10 +117,28 @@ export function initialForm(prefill: JointPrefill, today: ISODate, acceptedFrien
     date: prefill.date && prefill.date >= today ? prefill.date : today,
     time: prefill.startTime ?? '',
     durationMin: prefill.durationMin ?? JOINT_LIMITS.defaultDuration,
-    intensity: 'endurance',
-    location: '',
+    intensity: prefill.intensity ?? 'endurance',
+    location: prefill.location ?? '',
     notes: '',
     fromWorkoutId: prefill.fromWorkoutId ?? null,
+    isOpen: prefill.open === '1',
+  };
+}
+
+/** Edit form of an existing quedada (organizer): invitees are not editable. */
+export function formFromSession(session: JointSession): JointForm {
+  return {
+    inviteeIds: session.participants.filter((p) => p.userId !== session.organizerId).map((p) => p.userId),
+    sport: session.sport,
+    title: session.title,
+    date: session.date,
+    time: session.startTime ?? '',
+    durationMin: session.durationMin,
+    intensity: session.intensity,
+    location: session.location ?? '',
+    notes: session.notes ?? '',
+    fromWorkoutId: null,
+    isOpen: session.isOpen === true,
   };
 }
 
@@ -123,7 +159,7 @@ export function normalizeTime(input: string): ISOTime | null | 'invalid' {
 
 /** First problem with the form, in Spanish, or null when it can be sent. */
 export function validateJointForm(form: JointForm, today: ISODate): string | null {
-  if (form.inviteeIds.length === 0) return 'Elige al menos un amigo para invitar.';
+  if (form.inviteeIds.length === 0 && !form.isOpen) return 'Elige al menos un amigo o ábrela a todos tus amigos.';
   if (form.title.trim().length === 0) return 'Ponle un título a la quedada.';
   if (form.title.trim().length > JOINT_LIMITS.titleMax) return 'El título es demasiado largo.';
   if (!DATE_RE.test(form.date)) return 'Elige un día.';
@@ -153,7 +189,24 @@ export function toJointDraft(form: JointForm): JointSessionDraft {
     notes: notes.length > 0 ? notes : null,
     inviteeIds: [...form.inviteeIds],
     fromWorkoutId: form.fromWorkoutId,
+    isOpen: form.isOpen,
   };
+}
+
+/** Only the fields that differ from `session` (edit mode). */
+export function toJointPatch(form: JointForm, session: JointSession): JointSessionPatch {
+  const draft = toJointDraft(form);
+  const patch: JointSessionPatch = {};
+  if (draft.sport !== session.sport) patch.sport = draft.sport;
+  if (draft.title !== session.title) patch.title = draft.title;
+  if (draft.date !== session.date) patch.date = draft.date;
+  if ((draft.startTime ?? null) !== session.startTime) patch.startTime = draft.startTime ?? null;
+  if (draft.durationMin !== session.durationMin) patch.durationMin = draft.durationMin;
+  if (draft.intensity !== session.intensity) patch.intensity = draft.intensity;
+  if ((draft.location ?? null) !== session.location) patch.location = draft.location ?? null;
+  if ((draft.notes ?? null) !== session.notes) patch.notes = draft.notes ?? null;
+  if (draft.isOpen !== (session.isOpen === true)) patch.isOpen = draft.isOpen;
+  return patch;
 }
 
 /** Route params for `/joint/new` (only defined values). */

@@ -5,11 +5,14 @@
  */
 import {
   INTENSITIES,
+  RACE_DISTANCES,
   SPORTS,
   WORKOUT_SOURCES,
   type Availability,
   type CompletedData,
+  type FriendRace,
   type Intensity,
+  type JointComment,
   type JointParticipant,
   type JointSession,
   type NotificationPrefs,
@@ -268,6 +271,7 @@ export function parseJointSession(value: unknown): JointSession | null {
     location: asString(value.location),
     notes: asString(value.notes),
     status: oneOfOr(value.status, JOINT_STATUSES, 'proposed'),
+    isOpen: asBoolean(pick(value, 'isOpen', 'is_open')) ?? false,
     participants: asArray(value.participants)
       .map(parseParticipant)
       .filter((p): p is JointParticipant => p !== null),
@@ -279,4 +283,52 @@ export function parseJointSessions(value: unknown): JointSession[] {
   return asArray(value)
     .map(parseJointSession)
     .filter((s): s is JointSession => s !== null);
+}
+
+export function parseJointComment(value: unknown): JointComment | null {
+  if (!isRecord(value)) return null;
+  const id = asString(value.id);
+  const sessionId = asString(pick(value, 'sessionId', 'session_id'));
+  const userId = asString(pick(value, 'userId', 'user_id'));
+  const body = asString(value.body);
+  if (!id || !sessionId || !userId || !body) return null;
+  return {
+    id,
+    sessionId,
+    userId,
+    displayName: asString(pick(value, 'displayName', 'display_name')) ?? '',
+    body,
+    createdAt: asString(pick(value, 'createdAt', 'created_at')) ?? '',
+  };
+}
+
+export function parseJointComments(value: unknown): JointComment[] {
+  return asArray(value)
+    .map(parseJointComment)
+    .filter((c): c is JointComment => c !== null);
+}
+
+const RACE_PRIORITIES = ['A', 'B', 'C'] as const;
+
+export function parseFriendRace(value: unknown): FriendRace | null {
+  if (!isRecord(value)) return null;
+  const friendId = asString(pick(value, 'friendId', 'friend_id'));
+  const raceId = asString(pick(value, 'raceId', 'race_id'));
+  const date = asString(value.date);
+  if (!friendId || !raceId || !date) return null;
+  return {
+    friendId,
+    raceId,
+    displayName: asString(pick(value, 'displayName', 'display_name')) ?? '',
+    name: asString(value.name),
+    date,
+    distance: oneOfOr(value.distance, RACE_DISTANCES, 'other'),
+    priority: oneOfOr(value.priority, RACE_PRIORITIES, 'A'),
+  };
+}
+
+export function parseFriendRaces(value: unknown): FriendRace[] {
+  return asArray(value)
+    .map(parseFriendRace)
+    .filter((r): r is FriendRace => r !== null);
 }

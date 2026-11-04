@@ -2,7 +2,8 @@
  * In-memory test doubles for the store ports (used only by *.test.ts).
  * Mirrors the user scoping of the real adapters: every method filters by userId.
  */
-import type { ApplyChangesResult, MetricsUpsert, PlanningStore, RaceWrite } from '../planning/store.ts';
+import { StoreRejectedError } from '../planning/store.ts';
+import type { ApplyChangesResult, MetricsUpsert, PlanningStore, ProposedJointSession, RaceWrite } from '../planning/store.ts';
 import type {
   BusyBlock,
   DailyCheckin,
@@ -167,6 +168,42 @@ export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): P
     insertRace: async (userId, race) => {
       const created = { id: uuid(), userId, location: null, goal: null, notes: null, ...race } as Race & { userId: UUID };
       state.races.push(created);
+      return created;
+    },
+    proposeJointSession: async (userId, draft, inviteeIds) => {
+      // Mirrors private.propose_joint_session_as: same checks and Spanish messages.
+      const invitees = [...new Set(inviteeIds)];
+      if (invitees.length === 0 && !draft.isOpen) throw new StoreRejectedError('validation', 'Invita al menos a un amigo');
+      if (invitees.length > 10) throw new StoreRejectedError('validation', 'Puedes invitar como máximo a 10 personas');
+      if (invitees.includes(userId)) throw new StoreRejectedError('validation', 'No puedes invitarte a ti mismo');
+      const friends = state.friends.get(userId) ?? [];
+      if (invitees.some((id) => !friends.some((f) => f.friendId === id))) throw new StoreRejectedError('forbidden', 'Solo puedes invitar a tus amigos');
+      const id = uuid();
+      const linked = workout({
+        userId,
+        date: draft.date,
+        startTime: draft.startTime,
+        sport: draft.sport,
+        title: draft.title,
+        durationMin: draft.durationMin,
+        intensity: draft.intensity,
+        source: 'joint',
+        jointSessionId: id,
+      });
+      state.workouts.push(linked);
+      const me = state.profiles.find((p) => p.id === userId);
+      const created: ProposedJointSession = {
+        id,
+        organizerId: userId,
+        ...draft,
+        status: 'proposed',
+        participants: [
+          { userId, displayName: me?.displayName ?? 'Yo', status: 'accepted', workoutId: linked.id },
+          ...invitees.map((fid) => ({ userId: fid, displayName: friends.find((f) => f.friendId === fid)?.displayName ?? 'Amigo', status: 'invited' as const, workoutId: null })),
+        ],
+        createdAt: NOW.toISOString(),
+      };
+      state.joint.push(created);
       return created;
     },
     updateRace: async (userId, raceId, patch: RaceWrite) => {

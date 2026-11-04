@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { silentLogger } from '../log.ts';
+import { StoreRejectedError } from '../planning/store.ts';
 import { emptyState, fakeStore, fixedNow, FRIEND, OTHER_USER, USER, workout } from '../testing/fakes.ts';
 import type { FakeState } from '../testing/fakes.ts';
 import type { ToolResult } from './tool.ts';
@@ -205,6 +206,113 @@ test('get_friends_availability returns masked items, common slots and same-sport
   assert.equal(friends[0].sameSportDays[0].myWorkoutId, PLANNED_ID);
   const unknown = await run(state, 'get_friends_availability', { friend_ids: ['cccccccc-cccc-4ccc-8ccc-cccccccccccc'] });
   assert.equal(unknown.isError, true);
+});
+
+interface JointResult {
+  created: boolean;
+  next: string;
+  jointSession: { id: string; isOpen: boolean; myWorkoutId: string | null; appLink: string; participants: { userId: string; status: string }[] };
+}
+
+const RODAJE = {
+  friend_ids: [FRIEND],
+  sport: 'run',
+  date: '2026-10-31',
+  start_time: '09:00',
+  duration_min: 60,
+  intensity: 'endurance',
+  title: 'Rodaje del sábado',
+  location: 'Retiro, puerta de Alcalá',
+};
+
+function withFriend(): FakeState {
+  const state = emptyState();
+  state.friends.set(USER, [{ friendId: FRIEND, username: 'david', displayName: 'David' }]);
+  return state;
+}
+
+test('propose_joint_session creates the quedada, links my workout and invites the friend', async () => {
+  const state = withFriend();
+  const r = await run(state, 'propose_joint_session', RODAJE);
+  assert.equal(r.isError, undefined, text(r));
+  const sc = r.structuredContent as unknown as JointResult;
+  assert.equal(sc.created, true);
+  assert.equal(state.joint.length, 1);
+  assert.deepEqual(
+    sc.jointSession.participants.map((p) => [p.userId, p.status]),
+    [[USER, 'accepted'], [FRIEND, 'invited']],
+  );
+  const linked = state.workouts.find((w) => w.jointSessionId === sc.jointSession.id);
+  assert.equal(sc.jointSession.myWorkoutId, linked?.id);
+  assert.equal(sc.jointSession.appLink, `roadtoironman://joint/${sc.jointSession.id}`);
+  assert.match(sc.next, /David/);
+  const tool = registry.get('propose_joint_session');
+  assert.equal(tool?.annotations.readOnlyHint, false);
+  assert.equal(tool?.annotations.destructiveHint, false);
+  assert.match(tool?.description ?? '', /invitación real/);
+});
+
+test('propose_joint_session: open quedada without friends; closed one needs a friend', async () => {
+  const state = withFriend();
+  const { friend_ids: _omit, ...noFriends } = RODAJE;
+  const open = await run(state, 'propose_joint_session', { ...noFriends, is_open: true });
+  assert.equal(open.isError, undefined, text(open));
+  const sc = open.structuredContent as unknown as JointResult;
+  assert.equal(sc.jointSession.isOpen, true);
+  assert.equal(sc.jointSession.participants.length, 1);
+  const closed = await run(state, 'propose_joint_session', { ...noFriends, title: 'Otra' });
+  assert.equal(closed.isError, true);
+  assert.match(text(closed), /al menos un amigo/);
+  assert.equal(state.joint.length, 1);
+});
+
+test('propose_joint_session rejects past dates and more than 60 days ahead', async () => {
+  const state = withFriend();
+  const past = await run(state, 'propose_joint_session', { ...RODAJE, date: '2026-10-23' });
+  assert.equal(past.isError, true);
+  assert.match(text(past), /pasado/);
+  const far = await run(state, 'propose_joint_session', { ...RODAJE, date: '2026-12-24' });
+  assert.equal(far.isError, true);
+  assert.match(text(far), /60 días/);
+  const fake = await run(state, 'propose_joint_session', { ...RODAJE, date: '2026-02-30' });
+  assert.equal(fake.isError, true);
+  const rest = await run(state, 'propose_joint_session', { ...RODAJE, sport: 'rest' });
+  assert.equal(rest.isError, true);
+  assert.equal(state.joint.length, 0);
+  const limit = await run(state, 'propose_joint_session', { ...RODAJE, date: '2026-12-23' });
+  assert.equal(limit.isError, undefined, text(limit));
+});
+
+test('propose_joint_session only invites accepted friends and surfaces database refusals', async () => {
+  const state = withFriend();
+  const stranger = await run(state, 'propose_joint_session', { ...RODAJE, friend_ids: [OTHER_USER] });
+  assert.equal(stranger.isError, true);
+  assert.match(text(stranger), new RegExp(OTHER_USER));
+  assert.match(text(stranger), /David/);
+  const tool = registry.get('propose_joint_session');
+  assert.ok(tool);
+  const store = {
+    ...fakeStore(state),
+    proposeJointSession: async () => Promise.reject(new StoreRejectedError('forbidden', 'Solo puedes invitar a tus amigos')),
+  };
+  const refused = await tool.run(RODAJE, { userId: USER, store, now: fixedNow, logger: silentLogger });
+  assert.equal(refused.isError, true);
+  assert.match(text(refused), /Solo puedes invitar a tus amigos/);
+  assert.equal(state.joint.length, 0);
+});
+
+test('propose_joint_session returns the existing quedada instead of inviting twice', async () => {
+  const state = withFriend();
+  const first = await run(state, 'propose_joint_session', RODAJE);
+  const again = await run(state, 'propose_joint_session', { ...RODAJE, title: '  rodaje DEL sábado ', start_time: '10:00' });
+  const sc = again.structuredContent as unknown as JointResult;
+  assert.equal(sc.created, false);
+  assert.equal(sc.jointSession.id, (first.structuredContent as unknown as JointResult).jointSession.id);
+  assert.equal(state.joint.length, 1);
+  state.joint[0] = { ...state.joint[0], status: 'cancelled' };
+  const afterCancel = await run(state, 'propose_joint_session', RODAJE);
+  assert.equal((afterCancel.structuredContent as unknown as JointResult).created, true);
+  assert.equal(state.joint.length, 2);
 });
 
 test('handler crashes become generic isError results', async () => {

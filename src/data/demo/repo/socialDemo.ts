@@ -1,4 +1,4 @@
-import type { DateRange, FriendWeekItem, JointSession, JointSessionDraft, UUID } from '@/domain/types';
+import type { DateRange, FriendWeekItem, JointSession, JointSessionDraft, JointSessionPatch, UUID } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../../repository';
 import { profileOf } from '../db';
@@ -13,6 +13,7 @@ import {
   sendRequest,
   toggleKudosIn,
 } from '../socialOps';
+import { addComment, friendRacesFor, joinJoint, listCommentsFor, listOpenFor, updateJoint, updatedJointFor } from '../togetherOps';
 import { assertFriendRange } from '../validation';
 import { requireMe, type DemoDeps } from './common';
 
@@ -29,6 +30,12 @@ type SocialMethods = Pick<
   | 'proposeJointSession'
   | 'respondJointSession'
   | 'cancelJointSession'
+  | 'updateJointSession'
+  | 'listOpenJointSessions'
+  | 'joinJointSession'
+  | 'listJointComments'
+  | 'addJointComment'
+  | 'listFriendRaces'
   | 'listFeed'
   | 'toggleKudos'
 >;
@@ -142,6 +149,68 @@ function jointMethods(
   };
 }
 
+type TogetherMethods = Pick<
+  Repository,
+  'updateJointSession' | 'listOpenJointSessions' | 'joinJointSession' | 'listJointComments' | 'addJointComment' | 'listFriendRaces'
+>;
+
+/** Simulated friends answer a quedada comment after `friendDelayMs` (organizer of a session with Diego). */
+function simulateReply({ store, friendDelayMs }: DemoDeps, sessionId: UUID): void {
+  store.later(friendDelayMs, async () => {
+    await store.update((db, clock) => {
+      const session = db.jointSessions.find((s) => s.id === sessionId);
+      const other = session?.participants.find((p) => p.userId !== db.meId && p.status === 'accepted');
+      if (!session || !other || session.status === 'cancelled') return { db, result: undefined };
+      return { db: addComment(db, other.userId, sessionId, '¡Perfecto, allí nos vemos! 💪', clock).db, result: undefined };
+    });
+    store.emit(['joint_sessions', 'notifications']);
+  });
+}
+
+function togetherMethods(deps: DemoDeps): TogetherMethods {
+  const { store } = deps;
+  return {
+    async updateJointSession(id: UUID, patch: JointSessionPatch): Promise<JointSession> {
+      const me = await requireMe(store);
+      return store.update((db, clock) => {
+        const next = updateJoint(db, id, me, patch, clock);
+        return { db: next, result: updatedJointFor(next, me, id) };
+      });
+    },
+    async listOpenJointSessions(range: DateRange) {
+      const me = await requireMe(store);
+      const db = await store.read();
+      return listOpenFor(db, me, range, store.clock().today);
+    },
+    async joinJointSession(id: UUID): Promise<JointSession> {
+      const me = await requireMe(store);
+      return store.update((db, clock) => {
+        const next = joinJoint(db, id, me, clock);
+        return { db: next, result: updatedJointFor(next, me, id) };
+      });
+    },
+    async listJointComments(sessionId: UUID) {
+      const me = await requireMe(store);
+      return listCommentsFor(await store.read(), me, sessionId);
+    },
+    async addJointComment(sessionId: UUID, body: string) {
+      const me = await requireMe(store);
+      const comment = await store.update((db, clock) => {
+        const r = addComment(db, me, sessionId, body, clock);
+        return { db: r.db, result: r.comment };
+      });
+      const db = await store.read();
+      const isFirstFromMe = db.jointComments.filter((c) => c.sessionId === sessionId && c.userId === me).length === 1;
+      if (isFirstFromMe) simulateReply(deps, sessionId);
+      return comment;
+    },
+    async listFriendRaces() {
+      const me = await requireMe(store);
+      return friendRacesFor(await store.read(), me, store.clock().today);
+    },
+  };
+}
+
 function feedMethods({ store }: DemoDeps): Pick<Repository, 'listFeed' | 'toggleKudos'> {
   return {
     async listFeed(limit = 30) {
@@ -156,5 +225,5 @@ function feedMethods({ store }: DemoDeps): Pick<Repository, 'listFeed' | 'toggle
 }
 
 export function socialDemo(deps: DemoDeps): SocialMethods {
-  return { ...friendMethods(deps), ...jointMethods(deps), ...feedMethods(deps) };
+  return { ...friendMethods(deps), ...jointMethods(deps), ...togetherMethods(deps), ...feedMethods(deps) };
 }

@@ -6,6 +6,7 @@
  * (Spain, tú) `script` for text-to-speech (`briefingScript.ts`). Pure.
  */
 import { HRV_HIGH_RATIO, HRV_LOW_RATIO, hrvRatio, isNum, sleepSnapshotFrom, sleepVerdictOf } from './briefingSleep';
+import { NO_TOGETHER, togetherOf } from './briefingSocial';
 import {
   NO_GARMIN,
   NO_SLEEP_YET,
@@ -20,7 +21,7 @@ import {
   type DayPlan,
 } from './briefingScript';
 import { diffDays, formatDuration } from './dates';
-import type { Briefing, DailyMetrics, ISODate, Race, SleepSnapshot, SleepVerdict, Workout } from './types';
+import type { Briefing, DailyMetrics, ISODate, JointSession, Race, SleepSnapshot, SleepVerdict, UUID, Workout } from './types';
 
 export { sleepSnapshotFrom, sleepVerdictOf } from './briefingSleep';
 
@@ -35,6 +36,11 @@ export interface BriefingInput {
   /** Next target race (or null). */
   race: Race | null;
   now: Date;
+  /**
+   * The athlete's quedadas from `date` on: today's are spoken, and so are the
+   * invitations still waiting for an answer. Optional: no social sentences without it.
+   */
+  social?: { me: UUID; jointSessions: readonly JointSession[] };
 }
 
 const HEADLINE_MAX = 90;
@@ -169,6 +175,7 @@ export function composeBriefing(input: BriefingInput): Briefing {
     tomorrowWorkouts: input.tomorrowWorkouts,
     race,
     daysToRace,
+    together: input.social ? togetherOf(input.social.jointSessions, input.social.me, date) : NO_TOGETHER,
   });
   return {
     date,

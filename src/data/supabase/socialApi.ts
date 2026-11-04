@@ -2,6 +2,9 @@ import type {
   DateRange,
   FeedItem,
   Friend,
+  FriendRace,
+  JointComment,
+  JointSessionPatch,
   FriendWeekItem,
   JointSession,
   JointSessionDraft,
@@ -15,7 +18,7 @@ import { run, runVoid, type SupabaseCtx } from './base';
 import { rowToPublicProfile } from './mappers';
 import { rowToFeedItem, rowToFriend, rowToFriendWeekItem } from './mappersRpc';
 import { asString } from './narrow';
-import { parseJointSession, parseJointSessions } from './parsers';
+import { parseFriendRaces, parseJointComment, parseJointComments, parseJointSession, parseJointSessions } from './parsers';
 import type { FeedRpcRow, FriendRpcRow, FriendWeekRpcRow, PublicProfileRpcRow } from './rows';
 
 type SocialMethods = Pick<
@@ -31,6 +34,12 @@ type SocialMethods = Pick<
   | 'proposeJointSession'
   | 'respondJointSession'
   | 'cancelJointSession'
+  | 'updateJointSession'
+  | 'listOpenJointSessions'
+  | 'joinJointSession'
+  | 'listJointComments'
+  | 'addJointComment'
+  | 'listFriendRaces'
   | 'listFeed'
   | 'toggleKudos'
 >;
@@ -53,7 +62,23 @@ export function jointDraftToRpc(draft: JointSessionDraft): Record<string, unknow
     title: draft.title.trim(),
     location: draft.location ?? null,
     notes: draft.notes ?? null,
+    isOpen: draft.isOpen === true,
   };
+}
+
+/** `p_patch` jsonb for `update_joint_session`: only the given fields (camelCase). */
+export function jointPatchToRpc(patch: JointSessionPatch): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (patch.sport !== undefined) out.sport = patch.sport;
+  if (patch.date !== undefined) out.date = patch.date;
+  if (patch.startTime !== undefined) out.startTime = patch.startTime;
+  if (patch.durationMin !== undefined) out.durationMin = Math.round(patch.durationMin);
+  if (patch.intensity !== undefined) out.intensity = patch.intensity;
+  if (patch.title !== undefined) out.title = patch.title.trim();
+  if (patch.location !== undefined) out.location = patch.location?.trim() || null;
+  if (patch.notes !== undefined) out.notes = patch.notes?.trim() || null;
+  if (patch.isOpen !== undefined) out.isOpen = patch.isOpen;
+  return out;
 }
 
 function friendsApi(
@@ -147,6 +172,67 @@ function jointApi(
   };
 }
 
+export const MAX_COMMENT_LENGTH = 500;
+
+function sessionOrThrow(value: unknown, fallback: string): JointSession {
+  const session = parseJointSession(value);
+  if (!session) throw new RepositoryError('unknown', fallback);
+  return session;
+}
+
+type TogetherMethods = Pick<
+  Repository,
+  'updateJointSession' | 'listOpenJointSessions' | 'joinJointSession' | 'listJointComments' | 'addJointComment' | 'listFriendRaces'
+>;
+
+/** Open quedadas, edits, comments and friends' races (db migration 20261104000100). */
+function togetherApi(ctx: SupabaseCtx): TogetherMethods {
+  const { client } = ctx;
+  return {
+    async updateJointSession(id: UUID, patch: JointSessionPatch): Promise<JointSession> {
+      const body = jointPatchToRpc(patch);
+      if (Object.keys(body).length === 0) throw new RepositoryError('validation', 'No hay cambios que guardar.');
+      const data = await run<unknown>(
+        'updateJointSession',
+        client.rpc('update_joint_session', { p_session_id: id, p_patch: body }),
+        'No se ha podido cambiar la quedada.',
+      );
+      return sessionOrThrow(data, 'No se ha podido cambiar la quedada.');
+    },
+    async listOpenJointSessions(range: DateRange): Promise<JointSession[]> {
+      const data = await run<unknown>(
+        'listOpenJointSessions',
+        client.rpc('list_open_joint_sessions', { p_from: range.from, p_to: range.to }),
+      );
+      return parseJointSessions(data);
+    },
+    async joinJointSession(id: UUID): Promise<JointSession> {
+      const data = await run<unknown>('joinJointSession', client.rpc('join_joint_session', { p_session_id: id }), 'No te has podido apuntar.');
+      return sessionOrThrow(data, 'No te has podido apuntar.');
+    },
+    async listJointComments(sessionId: UUID): Promise<JointComment[]> {
+      const data = await run<unknown>('listJointComments', client.rpc('list_joint_comments', { p_session_id: sessionId }));
+      return parseJointComments(data);
+    },
+    async addJointComment(sessionId: UUID, body: string): Promise<JointComment> {
+      const text = body.trim();
+      if (!text) throw new RepositoryError('validation', 'Escribe un mensaje.');
+      if (text.length > MAX_COMMENT_LENGTH) throw new RepositoryError('validation', 'Mensaje demasiado largo (máximo 500 caracteres).');
+      const data = await run<unknown>(
+        'addJointComment',
+        client.rpc('add_joint_comment', { p_session_id: sessionId, p_body: text }),
+        'No se ha podido enviar el mensaje.',
+      );
+      const comment = parseJointComment(data);
+      if (!comment) throw new RepositoryError('unknown', 'No se ha podido enviar el mensaje.');
+      return comment;
+    },
+    async listFriendRaces(): Promise<FriendRace[]> {
+      return parseFriendRaces(await run<unknown>('listFriendRaces', client.rpc('list_friend_races')));
+    },
+  };
+}
+
 function feedApi(ctx: SupabaseCtx): Pick<Repository, 'listFeed' | 'toggleKudos'> {
   const { client } = ctx;
   return {
@@ -161,5 +247,5 @@ function feedApi(ctx: SupabaseCtx): Pick<Repository, 'listFeed' | 'toggleKudos'>
 }
 
 export function socialApi(ctx: SupabaseCtx): SocialMethods {
-  return { ...friendsApi(ctx), ...jointApi(ctx), ...feedApi(ctx) };
+  return { ...friendsApi(ctx), ...jointApi(ctx), ...togetherApi(ctx), ...feedApi(ctx) };
 }

@@ -1,6 +1,7 @@
 /**
- * Quedada detail: what, when, where, who — and my actions
- * (Aceptar/Rechazar when invited, Cancelar when I organise).
+ * Quedada detail: what, when, where, who — and my actions (Aceptar/Rechazar
+ * when invited, Me apunto for a friend's open quedada, Cambiar/Cancelar when I
+ * organise) plus the participants' messages.
  */
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
@@ -11,13 +12,14 @@ import { formatDayLong, formatDuration, todayISO } from '@/domain/dates';
 import { sportLabel } from '@/domain/labels';
 import type { JointSession, UUID } from '@/domain/types';
 import { IntensityTag } from '@/features/workouts/IntensityTag';
+import { JointComments } from '@/features/together/JointComments';
 import { isOrganizer, myParticipant, sessionStatusCopy, sessionTimeLabel } from '@/features/together/jointModel';
 import { openWorkout } from '@/features/together/navigation';
 import { ParticipantRow } from '@/features/together/ParticipantRow';
 import { StatusTag } from '@/features/together/StatusTag';
 import { useJointActions } from '@/features/together/useJointActions';
 import { errorMessage } from '@/lib/logger';
-import { Button, Card, Divider, EmptyState, ErrorNotice, Icon, Loading, Screen, SectionHeader, SportBadge, Text, space, useTheme, type IconName } from '@/ui';
+import { Button, Card, Divider, EmptyState, ErrorNotice, Icon, Loading, Screen, SectionHeader, SportBadge, Tag, Text, space, useTheme, type IconName } from '@/ui';
 
 function InfoRow({ icon, label, value }: { icon: IconName; label: string; value: string }) {
   const { colors } = useTheme();
@@ -49,20 +51,26 @@ function Hero({ session }: { session: JointSession }) {
         <View style={styles.tags}>
           <StatusTag copy={sessionStatusCopy(session.status)} />
           <IntensityTag intensity={session.intensity} />
+          {session.isOpen ? <Tag label="Abierta a amigos" icon="together" color={theme.colors.accentInk} /> : null}
         </View>
       </View>
     </View>
   );
 }
 
-function Actions({ session, myId }: { session: JointSession; myId: UUID | null }) {
+function Actions({ session, myId, today }: { session: JointSession; myId: UUID | null; today: string }) {
   const actions = useJointActions(session);
   const me = myParticipant(session, myId);
   const organizer = isOrganizer(session, myId);
   const active = session.status !== 'cancelled';
+  const upcoming = active && session.date >= today;
   const invited = active && !organizer && me?.status === 'invited';
+  const canJoin = upcoming && session.isOpen === true && !organizer && (!me || me.status === 'declined');
   return (
     <View style={styles.actions}>
+      {canJoin ? (
+        <Button label="Me apunto" icon="check" size="lg" fullWidth onPress={() => void actions.join()} loading={actions.busy === 'join'} />
+      ) : null}
       {invited ? (
         <View style={styles.row}>
           <Button label="Aceptar" icon="check" onPress={() => void actions.respond(true)} loading={actions.busy === 'accept'} disabled={actions.busy !== null} style={styles.flex} />
@@ -71,6 +79,15 @@ function Actions({ session, myId }: { session: JointSession; myId: UUID | null }
       ) : null}
       {me?.workoutId ? (
         <Button label="Ver mi entreno" icon="calendarBadge" variant="secondary" fullWidth onPress={() => openWorkout(me.workoutId as UUID)} />
+      ) : null}
+      {organizer && upcoming ? (
+        <Button
+          label="Cambiar día, hora o lugar"
+          icon="edit"
+          variant="secondary"
+          fullWidth
+          onPress={() => router.push({ pathname: '/joint/new', params: { edit: session.id } })}
+        />
       ) : null}
       {organizer && active ? (
         <Button label="Cancelar quedada" icon="close" variant="danger" fullWidth onPress={() => void actions.cancel()} loading={actions.busy === 'cancel'} />
@@ -149,7 +166,14 @@ export default function JointSessionScreen() {
           </View>
         ))}
       </View>
-      <Actions session={session} myId={myId} />
+      <Actions session={session} myId={myId} today={today} />
+      {myParticipant(session, myId) ? (
+        <JointComments
+          sessionId={session.id}
+          myId={myId}
+          canWrite={session.status !== 'cancelled' && myParticipant(session, myId)?.status !== 'declined'}
+        />
+      ) : null}
     </Screen>
   );
 }

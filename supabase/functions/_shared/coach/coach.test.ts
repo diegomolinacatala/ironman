@@ -24,7 +24,7 @@ test('parseCoachRequest validates and normalizes the app request', () => {
 
 test('structured output schema has every property required and no numeric bounds', () => {
   const schema = COACH_OUTPUT_JSON_SCHEMA as { required: string[]; properties: { changes: { items: { required: string[]; additionalProperties: boolean } } } };
-  assert.deepEqual(schema.required, ['reply', 'summary', 'changes', 'memory', 'life_event']);
+  assert.deepEqual(schema.required, ['reply', 'summary', 'changes', 'memory', 'life_event', 'quedada']);
   assert.equal(schema.properties.changes.items.required.length, 12);
   assert.equal(schema.properties.changes.items.additionalProperties, false);
   assert.ok(!JSON.stringify(schema).includes('minimum'));

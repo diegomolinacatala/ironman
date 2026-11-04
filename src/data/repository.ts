@@ -29,6 +29,9 @@ import type {
   IntegrationStatus,
   JointSession,
   JointSessionDraft,
+  JointSessionPatch,
+  JointComment,
+  FriendRace,
   LifeEvent,
   LifeEventDraft,
   MealAnalysis,
@@ -205,6 +208,16 @@ export interface Repository {
   proposeJointSession(draft: JointSessionDraft): Promise<JointSession>;
   respondJointSession(id: UUID, accept: boolean): Promise<void>;
   cancelJointSession(id: UUID): Promise<void>;
+  /** Organizer only: changes the quedada; every planned linked workout follows. */
+  updateJointSession(id: UUID, patch: JointSessionPatch): Promise<JointSession>;
+  /** Friends' open quedadas (dated in range, from today) the user is not in yet. */
+  listOpenJointSessions(range: DateRange): Promise<JointSession[]>;
+  /** Joins a friend's open quedada (creates the linked workout). */
+  joinJointSession(id: UUID): Promise<JointSession>;
+  listJointComments(sessionId: UUID): Promise<JointComment[]>;
+  addJointComment(sessionId: UUID, body: string): Promise<JointComment>;
+  /** Friends' upcoming races ('busy' friends skipped, name hidden for 'summary'). */
+  listFriendRaces(): Promise<FriendRace[]>;
   listFeed(limit?: number): Promise<FeedItem[]>;
   toggleKudos(feedItemId: UUID): Promise<void>;
 

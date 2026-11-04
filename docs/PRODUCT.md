@@ -50,7 +50,7 @@ Resumen ejecutivo de `docs/research/01..05`. Fecha: 25-oct-2026.
 - Semana y Hoy: sesiones planificadas/completadas, cumplimiento, totales, fase de entrenamiento,
   cuenta atrás, readiness (check-in + métricas), consejos de alimentación por sesión.
 - Imprevistos → propuesta de re-plan (motor de reglas o tu Claude) → diff aceptable uno a uno.
-- Coach de reglas: plan semanal y reorganizar; Conecta tu Claude (MCP con 8 herramientas).
+- Coach de reglas: plan semanal y reorganizar; Conecta tu Claude (MCP con 9 herramientas, incluida proponer una quedada a un amigo).
 - Carreras A/B/C, periodización automática hacia la carrera A, gráfica de carga, volumen por deporte.
 - Juntos: amigos, privacidad (todo / resumen / solo ocupado), comparar semanas, huecos comunes,
   oportunidades, quedadas con invitación y aceptación, feed con kudos, avisos.

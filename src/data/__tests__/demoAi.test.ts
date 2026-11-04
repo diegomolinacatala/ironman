@@ -54,6 +54,14 @@ describe('demo morning briefing', () => {
     await repo.store.dispose();
   });
 
+  it("mentions the seeded quedada invitation (organizer's first name, day, speakable title)", async () => {
+    const { repo } = await clockRepo();
+    const briefing = await repo.generateBriefing(TODAY);
+    expect(briefing.script).toMatch(/Tienes una invitación de Álex para el jueves: sesión de carrera\./);
+    expect(briefing.script).not.toMatch(/\d/);
+    await repo.store.dispose();
+  });
+
   it('takes ~aiMs to think', async () => {
     const repo = createDemoRepository({ now: () => SUNDAY, persistDebounceMs: 0, delays: { aiMs: 60 } });
     await repo.auth.verifyEmailCode('diego@example.com', '123456');

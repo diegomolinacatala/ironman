@@ -1,24 +1,27 @@
 import { useState } from 'react';
 
 import type { JointSession } from '@/domain/types';
-import { useCancelJointSession, useRespondJointSession } from '@/data/queries';
+import { useCancelJointSession, useJoinJointSession, useRespondJointSession } from '@/data/queries';
 import { confirmAction } from '@/features/social/confirm';
 import { errorMessage, logger } from '@/lib/logger';
 import { haptics } from '@/ui';
 
-export type JointAction = 'accept' | 'decline' | 'cancel';
+export type JointAction = 'accept' | 'decline' | 'cancel' | 'join';
 
 export interface JointActions {
   busy: JointAction | null;
   error: string | null;
   respond: (accept: boolean) => Promise<void>;
   cancel: () => Promise<void>;
+  /** Joins a friend's open quedada. */
+  join: () => Promise<void>;
 }
 
 /** Accept / decline / cancel a quedada with confirmations and Spanish errors. */
 export function useJointActions(session: JointSession | null | undefined): JointActions {
   const respondMutation = useRespondJointSession();
   const cancelMutation = useCancelJointSession();
+  const joinMutation = useJoinJointSession();
   const [busy, setBusy] = useState<JointAction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +30,7 @@ export function useJointActions(session: JointSession | null | undefined): Joint
     setError(null);
     try {
       await fn();
-      if (action === 'accept') haptics.success();
+      if (action === 'accept' || action === 'join') haptics.success();
     } catch (e) {
       logger.warn(`joint ${action} failed`, e);
       setError(errorMessage(e, 'No se ha podido actualizar la quedada.'));
@@ -63,5 +66,12 @@ export function useJointActions(session: JointSession | null | undefined): Joint
     await run('cancel', () => cancelMutation.mutateAsync(session.id));
   };
 
-  return { busy, error, respond, cancel };
+  const join = async () => {
+    if (!session) return;
+    await run('join', async () => {
+      await joinMutation.mutateAsync(session.id);
+    });
+  };
+
+  return { busy, error, respond, cancel, join };
 }

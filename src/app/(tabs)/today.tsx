@@ -13,6 +13,7 @@ import { MealsStrip } from '@/features/today/MealsStrip';
 import { RaceChip } from '@/features/today/RaceChip';
 import { TodayHeader } from '@/features/today/TodayHeader';
 import { TodaySessionSection } from '@/features/today/TodaySessionSection';
+import { TodaySocialCard } from '@/features/today/TodaySocialCard';
 import { dateLine, greeting } from '@/features/today/todayModel';
 import { TomorrowStrip } from '@/features/today/TomorrowStrip';
 import { useTodayData } from '@/features/today/useTodayData';
@@ -23,8 +24,8 @@ import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
 import { Screen, space } from '@/ui';
 
 /**
- * Hoy (v2): greeting, race chip, the "Informe de hoy" hero, today's session, today's meals and
- * tomorrow. Talking to the coach lives in the tab-bar accessory.
+ * Hoy (v2): greeting, race chip, the "Informe de hoy" hero, today's session, today's meals,
+ * tomorrow and Juntos at a glance. Talking to the coach lives in the tab-bar accessory.
  */
 export default function TodayScreen() {
   const data = useTodayData();
@@ -78,6 +79,9 @@ export default function TodayScreen() {
           <TomorrowStrip date={data.tomorrow} workouts={data.tomorrowWorkouts} />
         </Appear>
       ) : null}
+      <Appear index={6}>
+        <TodaySocialCard myId={data.myId ?? null} today={today} jointSessions={data.jointSessions} />
+      </Appear>
 
       {completing ? (
         <CompleteSheet key={completing.id} workout={completing} visible onClose={() => setCompleting(null)} />

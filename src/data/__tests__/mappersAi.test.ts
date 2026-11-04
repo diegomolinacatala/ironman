@@ -137,12 +137,58 @@ describe('coach job extras', () => {
     expect(parseCoachExtras({ memory: [' Prefiere nadar por la mañana ', '', 4], lifeEventId: id })).toEqual({
       memory: ['Prefiere nadar por la mañana'],
       lifeEventId: id,
+      quedada: null,
     });
     expect(parseCoachExtras(JSON.stringify({ memory: ['a', 'b', 'c', 'd', 'e', 'f'], life_event_id: 'not-a-uuid' }))).toEqual({
       memory: ['a', 'b', 'c', 'd', 'e'],
       lifeEventId: null,
+      quedada: null,
     });
-    expect(parseCoachExtras(null)).toEqual({ memory: [], lifeEventId: null });
+    expect(parseCoachExtras(null)).toEqual({ memory: [], lifeEventId: null, quedada: null });
+  });
+
+  const QUEDADA = {
+    friendId: '22222222-2222-4222-8222-222222222222',
+    friendName: 'David',
+    sport: 'run',
+    date: '2026-11-08',
+    startTime: '08:00',
+    durationMin: 60,
+    intensity: 'endurance',
+    title: 'Rodaje juntos',
+    location: 'Retiro',
+    reason: 'Los dos tenéis libre el sábado por la mañana.',
+  };
+
+  it('reads the suggested quedada (camelCase or snake_case)', () => {
+    expect(parseCoachExtras({ memory: [], lifeEventId: null, quedada: QUEDADA }).quedada).toEqual(QUEDADA);
+    const snake = parseCoachExtras({
+      quedada: { friend_id: QUEDADA.friendId, friend_name: 'David', sport: 'bike', date: '2026-11-08', start_time: null, duration_min: 90, intensity: 'tempo', title: ' Salida ', location: null },
+    }).quedada;
+    expect(snake).toEqual({ ...QUEDADA, sport: 'bike', startTime: null, durationMin: 90, intensity: 'tempo', title: 'Salida', location: null, reason: '' });
+  });
+
+  it.each([
+    ['bad friend id', { friendId: 'nope' }],
+    ['no friend name', { friendName: '  ' }],
+    ['rest', { sport: 'rest' }],
+    ['unknown sport', { sport: 'padel' }],
+    ['bad date', { date: '2026-02-30' }],
+    ['bad time', { startTime: '8:00' }],
+    ['short', { durationMin: 4 }],
+    ['long', { durationMin: 721 }],
+    ['fractional', { durationMin: 30.5 }],
+    ['bad intensity', { intensity: 'easy' }],
+    ['no title', { title: '' }],
+    ['long title', { title: 'x'.repeat(121) }],
+    ['long location', { location: 'x'.repeat(201) }],
+  ])('drops an invalid quedada (%s)', (_label, patch) => {
+    expect(parseCoachExtras({ quedada: { ...QUEDADA, ...patch } }).quedada).toBeNull();
+  });
+
+  it('ignores a non-object quedada', () => {
+    expect(parseCoachExtras({ quedada: 'el sábado' }).quedada).toBeNull();
+    expect(parseCoachExtras({ quedada: [QUEDADA] }).quedada).toBeNull();
   });
 });
 

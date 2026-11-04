@@ -30,6 +30,21 @@ export interface PlanSnapshot {
   tick: number;
 }
 
+/** jointSessionId → first names of the other accepted participants ("David y Marta"). */
+export function jointPartnerNames(sessions: readonly JointSession[], myId: string): Record<string, string> {
+  return Object.fromEntries(
+    sessions.flatMap((s) => {
+      const names = s.participants
+        .filter((p) => p.userId !== myId && p.status === 'accepted')
+        .map((p) => p.displayName.trim().split(/\s+/)[0] ?? '')
+        .filter(Boolean);
+      if (names.length === 0) return [];
+      const text = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+      return [[s.id, text]];
+    }),
+  );
+}
+
 export function usePlanMirrors(enabled: boolean, snapshot: PlanSnapshot): void {
   const { workouts, races, jointSessions, profile, briefing, userId, today, tick } = snapshot;
   const timeZone = profile?.timezone ?? null;
@@ -37,7 +52,7 @@ export function usePlanMirrors(enabled: boolean, snapshot: PlanSnapshot): void {
   useEffect(() => {
     if (!enabled || !profile || !workouts) return undefined;
     const timer = setTimeout(() => {
-      rescheduleLocalNotifications({ workouts, profile, today })
+      rescheduleLocalNotifications({ workouts, profile, today, jointPartners: jointPartnerNames(jointSessions ?? [], profile.id) })
         .then((count) => logger.debug(`notifications: ${count} scheduled`))
         .catch((error: unknown) => logger.warn('notifications: reschedule failed', error));
       syncWidgets({ workouts, races: races ?? [], jointSessions: jointSessions ?? [], profile, today, briefing });

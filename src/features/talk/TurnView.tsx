@@ -7,6 +7,7 @@ import { Button, Icon, Text, radius, space, useTheme, type IconName } from '@/ui
 import { FadeIn } from './motion';
 import { NoteChips } from './NoteChips';
 import { ProposalPanel } from './ProposalPanel';
+import { QuedadaSuggestionCard } from './QuedadaSuggestionCard';
 import { resolutionNotice, type ProposalResolution, type TalkChannel, type TalkTurn } from './talkSession';
 import type { ProposalDecision } from './useProposalDecision';
 
@@ -61,7 +62,7 @@ function ProposalStatus({ proposal, resolution }: { proposal: PlanProposal; reso
 
 export interface TurnViewProps {
   turn: TalkTurn;
-  /** The latest answer is the hero of the screen. */
+  /** The latest answer is the hero of the screen (and the only one that shows its quedada card). */
   latest: boolean;
   /** Its proposal is waiting for "Aplicar cambios" / "Ahora no". */
   open: boolean;
@@ -103,6 +104,7 @@ export function TurnView({ turn, latest, open, decision, speaking, onListen, onS
         <NoteChips memory={response.memory ?? []} lifeEvent={response.lifeEvent ?? null} />
         {proposal && open ? <ProposalPanel proposal={proposal} decision={decision} /> : null}
         {proposal && !open ? <ProposalStatus proposal={proposal} resolution={turn.resolution} /> : null}
+        {latest && response.quedada ? <QuedadaSuggestionCard quedada={response.quedada} /> : null}
       </FadeIn>
     </View>
   );

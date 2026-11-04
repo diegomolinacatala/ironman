@@ -19,6 +19,8 @@ import { openFriendWeek, openJointNew } from './navigation';
 import { OpportunityCard } from './OpportunityCard';
 import { useTogetherWeek } from './useTogetherWeek';
 import { VisibilityNotice } from './VisibilityNotice';
+import { weekVolumes } from './sharedModel';
+import { WeekVolumeCompare } from './WeekVolumeCompare';
 
 type WeekChoice = 'this' | 'next';
 const MAX_OPPORTUNITIES = 3;
@@ -69,6 +71,11 @@ export function TogetherPanel({ friend, myName, today }: TogetherPanelProps) {
             onPress={() => openFriendWeek(friendId, weekStart)}
           />
           <VisibilityNotice friendName={name} visibility={data.visibility} />
+          <WeekVolumeCompare
+            volumes={weekVolumes(data.myWorkouts, data.friendItems, data.visibility)}
+            myName="Tú"
+            friendName={name}
+          />
 
           <SectionHeader title="Huecos comunes" action={{ label: 'Ver semana', onPress: () => openFriendWeek(friendId, weekStart) }} />
           <CommonSlotsList

@@ -109,6 +109,9 @@ const TYPE_ICON: Record<NotificationType, IconName> = {
   plan_updated: 'sparkles',
   friend_completed: 'flag',
   kudos: 'heart',
+  joint_updated: 'edit',
+  joint_comment: 'send',
+  joint_open: 'calendarPlus',
 };
 
 export function notificationIcon(type: NotificationType): IconName {

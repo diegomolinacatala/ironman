@@ -18,8 +18,8 @@ import type { UUID } from '../types.ts';
 import { apnsErrorText, isApnsDeviceToken } from './apns.ts';
 import type { ApnsFailure, ApnsMessage, ApnsResult, ApnsSender } from './apns.ts';
 
-/** Types silenced by `notification_prefs.social = false`. Invites, cancellations and plan proposals always go out. */
-export const SOCIAL_TYPES: ReadonlySet<string> = new Set(['friend_request', 'friend_accepted', 'friend_completed', 'kudos']);
+/** Types silenced by `notification_prefs.social = false`. Invites, changes, cancellations and plan proposals always go out. */
+export const SOCIAL_TYPES: ReadonlySet<string> = new Set(['friend_request', 'friend_accepted', 'friend_completed', 'kudos', 'joint_comment', 'joint_open']);
 export const PUSH_WINDOW_MS = 24 * 3600_000;
 export const APNS_CONCURRENCY = 8;
 export const NOT_CONFIGURED_ERROR = 'apns_not_configured';

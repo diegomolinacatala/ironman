@@ -88,7 +88,46 @@ function jointConfirmed(payload: Record<string, unknown>, isMe: boolean, today: 
   };
 }
 
-export function describeFeedItem(item: FeedItem, myId: UUID | null, today: ISODate): FeedText {
+function readNames(payload: Record<string, unknown>): string[] {
+  const value = payload.participants;
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0) : [];
+}
+
+/** "David", "David y Marta", "David, Marta y Luis". */
+export function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+}
+
+/** "Entrenasteis juntos": the actor (organizer) trained with the other participants. */
+function jointCompleted(
+  payload: Record<string, unknown>,
+  isMe: boolean,
+  actorName: string,
+  myName: string | null,
+): Omit<FeedText, 'actor'> {
+  const title = readString(payload, 'title');
+  const others = readNames(payload)
+    .filter((n) => n !== actorName)
+    .map((n) => (!isMe && myName !== null && n === myName ? 'contigo' : n));
+  const hidden = typeof payload.othersCount === 'number' && payload.othersCount > 0 ? payload.othersCount : 0;
+  const withMe = others.includes('contigo');
+  const rest = others.filter((n) => n !== 'contigo');
+  const people = hidden > 0 ? [...rest, hidden === 1 ? 'otra persona' : `${hidden} personas más`] : rest;
+  const verb = isMe ? 'entrenaste' : 'entrenó';
+  const withOthers = people.length > 0 ? `con ${joinNames(people)}` : '';
+  const withWho = withMe
+    ? withOthers ? ` contigo y ${withOthers}` : ' contigo'
+    : withOthers ? ` ${withOthers}` : ' en compañía';
+  const duration = readNumber(payload, 'durationMin');
+  return {
+    action: `${verb}${withWho}${title ? `: ${title}` : ''}`,
+    detail: joinDetail(['Entrenasteis juntos', duration ? formatDuration(duration) : null]),
+    sport: readSport(payload),
+  };
+}
+
+export function describeFeedItem(item: FeedItem, myId: UUID | null, today: ISODate, myName: string | null = null): FeedText {
   const isMe = myId !== null && item.actor.id === myId;
   const actor = isMe ? 'Tú' : item.actor.displayName || `@${item.actor.username}`;
   const payload = item.payload ?? {};
@@ -99,6 +138,8 @@ export function describeFeedItem(item: FeedItem, myId: UUID | null, today: ISODa
       return { actor, ...raceAdded(payload, isMe, today) };
     case 'joint_confirmed':
       return { actor, ...jointConfirmed(payload, isMe, today) };
+    case 'joint_completed':
+      return { actor, ...jointCompleted(payload, isMe, item.actor.displayName, myName) };
     case 'plan_updated':
       return {
         actor,

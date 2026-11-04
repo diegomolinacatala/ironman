@@ -2,7 +2,8 @@
  * Demo coach: the rules engine plus a tiny imitation of what the AI coach
  * does in v2 — it logs an injury mentioned in the message as an imprevisto
  * and remembers explicit preferences ("prefiero…", "me gusta más…") in
- * `profile.coachNotes`, returning both as `lifeEvent` / `memory`.
+ * `profile.coachNotes`, returning both as `lifeEvent` / `memory`, and suggests
+ * a quedada with a friend named in the message (`friendIds` → `quedada`).
  */
 import { addDays } from '@/domain/dates';
 import type { BodyArea, CoachRequest, CoachResponse, ISODate, LifeEvent } from '@/domain/types';
@@ -10,8 +11,9 @@ import type { BodyArea, CoachRequest, CoachResponse, ISODate, LifeEvent } from '
 import type { Repository } from '../../repository';
 import { runRulesCoach, type RulesCoachRepo } from '../rulesCoach';
 import { requireMe, type DemoDeps } from './common';
+import { demoQuedadaFor, quedadaReplyLine, type QuedadaDemoRepo } from './quedadaDemo';
 
-export type CoachDemoRepo = RulesCoachRepo & Pick<Repository, 'createLifeEvent' | 'upsertMyProfile'>;
+export type CoachDemoRepo = RulesCoachRepo & QuedadaDemoRepo & Pick<Repository, 'createLifeEvent' | 'upsertMyProfile'>;
 
 const INJURY_RE = /me duele|dolor|lesi[oó]n|torc[ií]|esguince|molesti|tobillo|rodilla/i;
 const PREFERENCE_RE = /^(?:yo\s+)?(prefiero|me gusta m[aá]s)\s+(.+)$/i;
@@ -118,6 +120,11 @@ export function createDemoCoach({ store }: DemoDeps, repo: CoachDemoRepo): (requ
     // A re-plan request about a new injury re-plans around the event just logged.
     const effective = lifeEvent && request.mode === 'replan' ? { ...request, lifeEventId: lifeEvent.id } : request;
     const response = await runRulesCoach(repo, effective, { today, notice: noticeOf(lifeEvent, preference), injuryLogged: lifeEvent !== null });
-    return { ...response, memory: preference ? [preference.memory] : [], lifeEvent };
+    // Never suggest training together right after a new injury.
+    const quedada = lifeEvent ? null : await demoQuedadaFor(repo, request, today);
+    const reply = quedada ? `${response.reply}
+
+${quedadaReplyLine(quedada)}` : response.reply;
+    return { ...response, reply, memory: preference ? [preference.memory] : [], lifeEvent, quedada };
   };
 }

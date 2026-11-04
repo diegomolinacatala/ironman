@@ -158,6 +158,8 @@ export async function rescheduleLocalNotifications(input: {
   workouts: Workout[];
   profile: Profile;
   today: ISODate;
+  /** jointSessionId → partners' names, for "Quedada con David en 1 h". */
+  jointPartners?: Readonly<Record<string, string>>;
 }): Promise<number> {
   if (!isNative) return 0;
   return localQueue.run(async (isCurrent) => {
@@ -169,6 +171,7 @@ export async function rescheduleLocalNotifications(input: {
       prefs: input.profile.notificationPrefs,
       today: input.today,
       now: new Date(),
+      jointPartners: input.jointPartners,
     });
     const results = await Promise.allSettled(specs.map((spec) => Notifications.scheduleNotificationAsync(toRequest(spec))));
     const failed = results.filter((r) => r.status === 'rejected');

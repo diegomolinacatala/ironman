@@ -18,6 +18,8 @@ import { NoFriendsState } from '@/features/social/NoFriendsState';
 import { NotificationsBell } from '@/features/social/NotificationsBell';
 import { JointSessionsSection, upcomingJointRange } from '@/features/together/JointSessionsSection';
 import { openJointNew } from '@/features/together/navigation';
+import { OpenQuedadasSection } from '@/features/together/OpenQuedadasSection';
+import { SharedRacesCard } from '@/features/together/SharedRacesCard';
 import { TogetherPanel } from '@/features/together/TogetherPanel';
 import { errorMessage } from '@/lib/logger';
 import { ErrorNotice, Loading, Screen, space } from '@/ui';
@@ -75,6 +77,8 @@ export default function TogetherScreen() {
         </View>
       ) : null}
 
+      {accepted.length > 0 ? <OpenQuedadasSection today={today} /> : null}
+
       {accepted.length > 0 ? (
         <JointSessionsSection
           myId={myId}
@@ -82,6 +86,8 @@ export default function TogetherScreen() {
           onPropose={() => openJointNew(selected ? { friendId: selected.profile.id } : {})}
         />
       ) : null}
+
+      {accepted.length > 0 ? <SharedRacesCard today={today} /> : null}
 
       {accepted.length > 0 ? <FeedSection myId={myId} today={today} /> : null}
     </Screen>

@@ -5,6 +5,7 @@
  * `delays.aiMs` so loading states can be seen in the demo.
  */
 import { composeBriefing } from '@/domain/briefing';
+import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
 import { addDays, isISODate } from '@/domain/dates';
 import { estimateMealLocally } from '@/domain/mealEstimate';
 import { nextRace } from '@/domain/periodization';
@@ -13,6 +14,7 @@ import type { Briefing, ISODate, MealAnalysis, MealAnalysisInput, MealSlot, UUID
 import { RepositoryError, type Repository } from '../../repository';
 import { cleanMealInput } from '../../supabase/mealApi';
 import type { DemoBriefing, DemoDb } from '../db';
+import { listJointFor } from '../jointOps';
 import { pause, requireMe, type DemoDeps } from './common';
 import { withSync } from './integrationsDemo';
 
@@ -50,6 +52,7 @@ function briefingFrom(db: DemoDb, me: UUID, date: ISODate, now: Date): Briefing 
       date,
     ),
     now,
+    social: { me, jointSessions: listJointFor(db, me, { from: date, to: addDays(date, INVITE_HORIZON_DAYS - 1) }) },
   });
 }
 

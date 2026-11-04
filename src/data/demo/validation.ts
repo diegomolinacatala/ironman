@@ -29,7 +29,9 @@ export function assertFriendRange(range: DateRange): void {
 
 export function assertJointDraft(draft: JointSessionDraft): void {
   if (draft.title.trim().length === 0) throw new RepositoryError('validation', 'Ponle un título a la quedada.');
-  if (draft.inviteeIds.length === 0) throw new RepositoryError('validation', 'Invita al menos a un amigo.');
+  if (draft.inviteeIds.length === 0 && draft.isOpen !== true) {
+    throw new RepositoryError('validation', 'Invita al menos a un amigo o abre la quedada a todos tus amigos.');
+  }
   if (!Number.isFinite(draft.durationMin) || draft.durationMin < 5 || draft.durationMin > 720) {
     throw new RepositoryError('validation', 'La duración debe estar entre 5 y 720 minutos.');
   }

@@ -81,16 +81,16 @@ describe('joint/new', () => {
     mockParams = { fromWorkoutId: 'w1', date: tomorrow, sport: 'run', durationMin: '60' };
     await render(<JointNewScreen />, { wrapper: Providers });
     await fireEvent.press(await screen.findByRole('button', { name: 'Enviar invitación' }));
-    expect(within(screen.getByTestId('form-footer')).getByText('Elige al menos un amigo para invitar.')).toBeTruthy();
+    expect(within(screen.getByTestId('form-footer')).getByText('Elige al menos un amigo o ábrela a todos tus amigos.')).toBeTruthy();
     expect(repo.proposeJointSession).not.toHaveBeenCalled();
   });
 
   test('picking a friend clears the error', async () => {
     await render(<JointNewScreen />, { wrapper: Providers });
     await fireEvent.press(await screen.findByRole('button', { name: 'Enviar invitación' }));
-    expect(screen.getByText('Elige al menos un amigo para invitar.')).toBeTruthy();
+    expect(screen.getByText('Elige al menos un amigo o ábrela a todos tus amigos.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Marta' }));
-    expect(screen.queryByText('Elige al menos un amigo para invitar.')).toBeNull();
+    expect(screen.queryByText('Elige al menos un amigo o ábrela a todos tus amigos.')).toBeNull();
   });
 
   test('has a Cancelar header control', async () => {

@@ -337,6 +337,12 @@ username `u` + 8 hex chars and display_name from email local part / `raw_user_me
 | `respond_joint_session(p_session_id uuid, p_accept boolean)` | `void` | On accept creates the invitee's linked workout; session → confirmed when ≥1 invitee accepted. |
 | `cancel_joint_session(p_session_id uuid)` | `void` | Organizer only; status cancelled; deletes linked *planned* workouts of others, unlinks the organizer's. |
 | `list_joint_sessions(p_from date, p_to date)` | `jsonb` (array of `JointSession` camelCase objects) | Sessions where caller participates. |
+| `update_joint_session(p_session_id uuid, p_patch jsonb)` | `jsonb` (`JointSession`) | Organizer only (v3, migration `20261104000100`); merged fields re-validated, not to the past; every *planned* linked workout follows; others get `joint_updated`. |
+| `list_open_joint_sessions(p_from date, p_to date)` | `jsonb` | Friends' open quedadas (`is_open`) from today the caller is not in; participants the caller is not friends with are left out. |
+| `join_joint_session(p_session_id uuid)` | `jsonb` (`JointSession`) | Open quedada of a friend: participant accepted + linked workout, session confirmed, organizer gets `joint_response`. Max 11 people. |
+| `list_joint_comments(p_session_id uuid)` / `add_joint_comment(p_session_id uuid, p_body text)` | `jsonb` | Participants only (declined: read only); 1..500 chars, 200 per quedada; others get `joint_comment`. Table `joint_session_comments` has no client access. |
+| `list_friend_races()` | `jsonb` (`FriendRace[]`) | Friends' upcoming races; 'busy' friends skipped, `name` null for 'summary'. |
+| `svc_propose_joint_session(p_user uuid, p_session jsonb, p_invitees uuid[])` | `jsonb` | Service role only (MCP `propose_joint_session`). `p_session.isOpen = true` allows no invitees and notifies every friend (`joint_open`). |
 | `list_feed(p_limit int default 30)` | `table(id, actor_id, actor_username, actor_display_name, actor_avatar_url, actor_sports, type, payload, created_at, kudos_count, has_kudoed)` | Own + friends' events. |
 | `toggle_kudos(p_event_id uuid)` | `boolean` (now kudoed?) | Event must be visible. |
 | `register_push_token(p_token text, p_platform text)` | `void` | Upsert, reassign token to caller. |
@@ -347,7 +353,7 @@ username `u` + 8 hex chars and display_name from email local part / `raw_user_me
 | `integration_status()` | `table(provider, state, key_expires_at, last_sync_at, last_error)` | |
 | `delete_my_account()` | `void` | Deletes `auth.users` row of caller (cascades). |
 | `is_username_available(p_username text)` | `boolean` | Own username counts as available. |
-| `get_joint_session(p_session_id uuid)` | `jsonb` (camelCase `JointSession` or null) | Participants' names are not readable via RLS. |
+| `get_joint_session(p_session_id uuid)` | `jsonb` (camelCase `JointSession` or null) | Participants' names are not readable via RLS. v3: friends of the organizer also get an open quedada (only participants they are friends with). Feed event `joint_completed` ("entrenasteis juntos") is posted once every accepted participant completed their linked workout. |
 
 `list_friends` / `svc_list_friends` also return `visibility` (the friend's sharing level, only for accepted friendships).
 
@@ -431,18 +437,23 @@ ones. Record usage in `ai_usage`.
    (ids), life events, busy blocks (own titles ok), check-ins & metrics last 14 d, joint sessions,
    last 6 weeks load summary. Param `week_start?`, `detail?: concise|detailed`.
 2. `get_friends_availability` (read) — accepted friends' masked weeks + common free slots.
-3. `propose_plan_changes` (write) — `{ week_start, summary, changes: PlanChange[], apply_now?: boolean }`
+3. `propose_joint_session` (write) — `{ friend_ids[0..10], sport, date, start_time?, duration_min,
+   intensity, title, location?, notes?, is_open? }` → `svc_propose_joint_session` (invitees must be
+   accepted friends; organizer's linked workout created; invitees get notification + push). Date from
+   today to +60 d; ≥1 friend unless `is_open`; same date + sport + title returns the existing quedada
+   (`created: false`). The description tells Claude it sends a real invitation: confirm first.
+4. `propose_plan_changes` (write) — `{ week_start, summary, changes: PlanChange[], apply_now?: boolean }`
    → stores proposal (source `claude`); `apply_now` applies via `svc_apply_plan_changes`. Default:
    pending, the user reviews in the app (push notification is sent by trigger).
-4. `log_life_event` (write) — imprevisto.
-5. `log_daily_metrics` (write) — Garmin snapshot days (hrv, resting hr, sleep, body battery,
+5. `log_life_event` (write) — imprevisto.
+6. `log_daily_metrics` (write) — Garmin snapshot days (hrv, resting hr, sleep, body battery,
    training readiness, vo2max, stress, training status) → `daily_metrics (source 'garmin')`.
-6. `log_completed_activity` (write) — match & complete a planned workout or create unplanned.
-7. `get_plan_for_device` (read) — upcoming planned workouts as structured steps (Garmin-workout
+7. `log_completed_activity` (write) — match & complete a planned workout or create unplanned.
+8. `get_plan_for_device` (read) — upcoming planned workouts as structured steps (Garmin-workout
    friendly JSON) so the user's Garmin connector can upload them to the watch.
-8. `manage_race` (write) — add/update a race.
+9. `manage_race` (write) — add/update a race.
 Server `instructions`: how to plan with these tools (always read context first, propose changes as a
-proposal, respect quedadas and key sessions, Spanish, Europe/Madrid, minutes).
+proposal, propose a quedada only after the user confirms it, respect quedadas and key sessions, Spanish, Europe/Madrid, minutes).
 
 ---
 

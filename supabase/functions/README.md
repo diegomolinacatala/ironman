@@ -243,7 +243,8 @@ de datos, cada IP tiene un cupo de tokens fallidos, y el tope global del isolate
 con un token válido (el tráfico sin autenticar no puede dejar sin servicio a los usuarios reales).
 `get_planning_context` devuelve las ocupaciones del calendario solo como franjas (sin títulos).
 
-Herramientas: `get_planning_context`, `get_friends_availability`, `propose_plan_changes`,
+Herramientas: `get_planning_context`, `get_friends_availability`, `propose_joint_session` (envía una
+invitación real: Claude la confirma antes contigo), `propose_plan_changes`,
 `log_life_event`, `log_daily_metrics`, `log_completed_activity`, `get_plan_for_device`, `manage_race`.
 `log_daily_metrics` acepta también (v2) `sleep_deep_min`, `sleep_light_min`, `sleep_rem_min`, `sleep_awake_min`
 (0-1440) y `sleep_start`/`sleep_end` (ISO 8601 con zona; el fin debe ser posterior y como mucho 20 h después).
@@ -290,7 +291,7 @@ done
 _shared/
   schema.ts dates.ts http.ts log.ts crypto.ts secrets.ts types.ts   utilidades puras
   planning/   contexto de planificación, carga, fases, validación de cambios, huecos, export a Garmin
-  mcp/        protocolo JSON-RPC dual-era, guardas HTTP y las 8 herramientas
+  mcp/        protocolo JSON-RPC dual-era, guardas HTTP y las 9 herramientas
   coach/      prompt del entrenador, salida estructurada, memoria e imprevistos, trabajo en segundo plano, capa HTTP
   ai/         elección de proveedor (Workers AI / Claude), consentimiento + cupo de 24 h (ai_usage), llamada acotada
               a la IA y limpieza de texto (briefing, meal)

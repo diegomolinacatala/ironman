@@ -158,3 +158,33 @@ describe('helpers', () => {
     expect(isLocalNotificationKind(undefined)).toBe(false);
   });
 });
+
+describe('quedada reminders', () => {
+  test('at least 1 h before, with the partners and a link to the quedada', () => {
+    const w = workout({ id: 'wj', date: TODAY, startTime: '19:00', title: 'Series', jointSessionId: 'j1' });
+    const specs = buildSchedule({ workouts: [w], prefs, today: TODAY, now: NOW, jointPartners: { j1: 'David' } });
+    const spec = specs.find((s) => s.id === 'rti.workout.wj');
+    expect(spec?.title).toBe('Quedada con David en 1 h');
+    expect(spec?.url).toBe('/joint/j1');
+    expect(spec?.body.startsWith('19:00 · Series')).toBe(true);
+    expect(dateOf(spec).getTime()).toBe(new Date(2026, 9, 26, 18, 0).getTime());
+  });
+
+  test('a longer personal lead wins; untimed quedadas use the normal reminder', () => {
+    const w = workout({ id: 'wj', date: TODAY, startTime: '19:00', jointSessionId: 'j1' });
+    const long = buildSchedule({ workouts: [w], prefs: { ...prefs, reminderMinutesBefore: 120 }, today: TODAY, now: NOW });
+    expect(long.find((s) => s.id === 'rti.workout.wj')?.title).toBe('Quedada en 2 h');
+    const untimed = buildSchedule({ workouts: [workout({ id: 'wu', date: TODAY, jointSessionId: 'j2' })], prefs: { ...prefs, morningSummary: false }, today: TODAY, now: NOW });
+    expect(untimed.find((s) => s.id === 'rti.workout.wu')?.url).toBe('/workout/wu');
+  });
+});
+
+describe('quedada reminders close to the start', () => {
+  test('less than 1 h ahead falls back to the personal lead', () => {
+    const w = workout({ id: 'wsoon', date: TODAY, startTime: '06:45', jointSessionId: 'j9' });
+    const specs = buildSchedule({ workouts: [w], prefs, today: TODAY, now: NOW, jointPartners: { j9: 'David' } });
+    const spec = specs.find((s) => s.id === 'rti.workout.wsoon');
+    expect(spec?.title).toBe('Quedada con David en 30 min');
+    expect(dateOf(spec).getTime()).toBe(new Date(2026, 9, 26, 6, 15).getTime());
+  });
+});

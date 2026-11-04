@@ -3,7 +3,7 @@
  * compiling whether or not the domain exports them by name).
  */
 import type { findOpportunities, freeSlots, friendBusyIntervals } from '@/domain/together';
-import type { ISODate, ISOTime, Sport, UUID, Workout, WorkoutStatus } from '@/domain/types';
+import type { Intensity, ISODate, ISOTime, Sport, UUID, Workout, WorkoutStatus } from '@/domain/types';
 
 export type Slot = ReturnType<typeof freeSlots>[number];
 export type Opportunity = ReturnType<typeof findOpportunities>[number];
@@ -53,4 +53,8 @@ export interface JointPrefill {
   durationMin?: number;
   fromWorkoutId?: UUID;
   title?: string;
+  intensity?: Intensity;
+  location?: string;
+  /** '1' opens the quedada to every friend. */
+  open?: string;
 }

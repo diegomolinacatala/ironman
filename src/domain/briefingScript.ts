@@ -1,7 +1,8 @@
 /**
  * The spoken part of the local morning briefing: today's plan read as a
  * 110–200 word Spanish (Spain, tú) script for text-to-speech, with every
- * number, time and unit written out. Also the day-plan helpers shared with
+ * number, time and unit written out, plus one short sentence per quedada of
+ * the day and for the pending invitations (`briefingSocial.ts`). Also the day-plan helpers shared with
  * the display texts in `briefing.ts`. Pure.
  */
 import {
@@ -15,7 +16,8 @@ import {
   wordCount,
 } from './briefingSpeech';
 import { HRV_HIGH_RATIO, HRV_LOW_RATIO, hrvRatio, isNum } from './briefingSleep';
-import { dateTimeParts } from './dates';
+import { NO_TOGETHER, type BriefingTogether, type PendingInvite, type TodayJoint } from './briefingSocial';
+import { dateTimeParts, diffDays } from './dates';
 import { estimateTss } from './load';
 import { phaseFor, type Phase } from './periodization';
 import type { Intensity, ISODate, Race, SleepSnapshot, SleepVerdict, Sport, Workout } from './types';
@@ -127,11 +129,15 @@ interface Sentence {
   drop?: number;
 }
 
-/** Titles made only of words (no digits, symbols or acronyms) are read as they are. */
-function spokenTitle(w: Workout): string {
-  const title = w.title.trim();
+/** Titles made only of words (no digits, symbols or acronyms) are read as they are; else null. */
+function speakableTitle(raw: string): string | null {
+  const title = raw.trim();
   const speakable = /^[\p{L}\s]+$/u.test(title) && !/\b\p{Lu}{2,}\b/u.test(title);
-  return speakable && title ? lowerFirst(title) : SPORT_SPOKEN[w.sport];
+  return speakable && title ? lowerFirst(title) : null;
+}
+
+function spokenTitle(w: Workout): string {
+  return speakableTitle(w.title) ?? SPORT_SPOKEN[w.sport];
 }
 
 function sessionPhrase(w: Workout): string {
@@ -221,6 +227,43 @@ function todaySentences(plan: DayPlan, race: Race | null): Sentence[] {
   return set ? [{ text: intro }, set] : [{ text: intro }];
 }
 
+/** Quedada titles fall back to "sesión de bici" (read after a colon). */
+function jointTitle(title: string, sport: Sport): string {
+  return speakableTitle(title) ?? `sesión de ${SPORT_SPOKEN[sport]}`;
+}
+
+function todayJointSentence(j: TodayJoint): Sentence {
+  const at = atTimeWords(j.startTime);
+  const when = at ? `Hoy ${at}` : 'Hoy';
+  const where = j.location ? `, en ${j.location}` : '';
+  if (j.partners.length === 0) {
+    return { text: `${when} tienes una quedada: ${jointTitle(j.title, j.sport)}${where}, aunque aún no te la ha confirmado nadie.` };
+  }
+  return { text: `${when} entrenas con ${joinEs(j.partners)}: ${jointTitle(j.title, j.sport)}${where}.` };
+}
+
+/** "para hoy", "para mañana", "para el sábado" (this week) or "para el sábado catorce de noviembre". */
+function inviteDayWords(date: ISODate, from: ISODate): string {
+  const days = diffDays(date, from);
+  if (days <= 0) return 'para hoy';
+  if (days === 1) return 'para mañana';
+  const full = dateWords(date);
+  return days < 7 ? `para el ${full.split(' ')[0] ?? full}` : `para el ${full}`;
+}
+
+function inviteSentences(invitations: readonly PendingInvite[], count: number, date: ISODate): Sentence[] {
+  const [first] = invitations;
+  if (!first) return [];
+  const what = `de ${first.from} ${inviteDayWords(first.date, date)}: ${jointTitle(first.title, first.sport)}`;
+  if (count <= 1) return [{ text: `Tienes una invitación ${what}.`, drop: 1 }];
+  return [{ text: `Tienes ${numberToWords(count, 'feminine')} invitaciones a quedadas sin responder; la primera, ${what}.`, drop: 1 }];
+}
+
+/** One short sentence per quedada of the day and one for the pending invitations; nothing when there is none. */
+function togetherSentences(t: BriefingTogether, date: ISODate): Sentence[] {
+  return [...t.today.map(todayJointSentence), ...inviteSentences(t.invitations, t.invitationCount, date)];
+}
+
 function tomorrowSentence(workouts: readonly Workout[]): Sentence {
   const plan = dayPlanOf(workouts, false);
   if (plan.kind !== 'train' || !plan.planned[0]) return { text: 'Mañana descansas.' };
@@ -281,15 +324,18 @@ export interface ScriptInput {
   tomorrowWorkouts: readonly Workout[];
   race: Race | null;
   daysToRace: number | null;
+  /** Today's quedadas and pending invitations (default: none). */
+  together?: BriefingTogether;
 }
 
-/** The text-to-speech script: greeting, sleep, today, focus, tomorrow, race countdown, closing. */
+/** The text-to-speech script: greeting, sleep, today, quedadas, focus, tomorrow, race countdown, closing. */
 export function composeScript(input: ScriptInput): string {
   const { date, plan, race } = input;
   const sentences: Sentence[] = [
     { text: `${greetingOf(input.now, input.name)} Hoy es ${dateWords(date)}.` },
     ...sleepSentences(input.snapshot, input.verdict, input.hasAnyMetrics),
     ...todaySentences(plan, race),
+    ...togetherSentences(input.together ?? NO_TOGETHER, date),
     { text: input.focus },
     ...(plan.kind === 'race' ? [] : [tomorrowSentence(input.tomorrowWorkouts)]),
     ...[raceSentence(race, date, input.daysToRace)].filter((s): s is Sentence => s !== null),

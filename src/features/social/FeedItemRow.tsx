@@ -17,6 +17,8 @@ export interface FeedItemRowProps {
   item: FeedItem;
   myId: UUID | null;
   today: ISODate;
+  /** My display name: "contigo" in "entrenó contigo". */
+  myName?: string | null;
 }
 
 function KudosButton({ item, isMine }: { item: FeedItem; isMine: boolean }) {
@@ -57,8 +59,8 @@ function KudosButton({ item, isMine }: { item: FeedItem; isMine: boolean }) {
   );
 }
 
-export function FeedItemRow({ item, myId, today }: FeedItemRowProps) {
-  const text = describeFeedItem(item, myId, today);
+export function FeedItemRow({ item, myId, today, myName = null }: FeedItemRowProps) {
+  const text = describeFeedItem(item, myId, today, myName);
   const isMine = myId !== null && item.actor.id === myId;
   const when = relativeTime(item.createdAt);
   return (

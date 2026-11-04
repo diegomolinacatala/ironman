@@ -374,10 +374,25 @@ export interface CoachRequest {
   channel?: 'voice' | 'text';
 }
 
-/** `coach_jobs.extras`: what the coach remembered and the imprevisto it logged. */
+/** Quedada the coach suggests with a friend (camelCase, validated). Never sent: the app opens a prefilled form. */
+export interface CoachQuedada {
+  friendId: UUID;
+  friendName: string;
+  sport: Sport;
+  date: ISODate;
+  startTime: ISOTime | null;
+  durationMin: number;
+  intensity: Intensity;
+  title: string;
+  location: string | null;
+  reason: string;
+}
+
+/** `coach_jobs.extras`: what the coach remembered, the imprevisto it logged and the quedada it suggests. */
 export interface CoachJobExtras {
   memory: string[];
   lifeEventId: UUID | null;
+  quedada: CoachQuedada | null;
 }
 
 export interface SyncResult {

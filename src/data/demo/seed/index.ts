@@ -36,6 +36,7 @@ function emptyDb(clock: DemoClock): DemoDb {
     nutrition: [],
     friendships: [],
     jointSessions: [],
+    jointComments: [],
     feed: [],
     kudos: [],
     notifications: [],

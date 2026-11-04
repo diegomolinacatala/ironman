@@ -7,9 +7,10 @@
  * `getBriefing` keeps returning it until a server briefing replaces it.
  */
 import { composeBriefing } from '@/domain/briefing';
+import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
 import { addDays, isISODate } from '@/domain/dates';
 import { nextRace } from '@/domain/periodization';
-import type { Briefing, ISODate } from '@/domain/types';
+import type { Briefing, ISODate, JointSession } from '@/domain/types';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
@@ -28,7 +29,8 @@ const METRICS_DAYS = 8;
 const BRIEFING_COLUMNS = 'user_id,date,headline,sleep_verdict,sleep_summary,script,focus,sleep,model,created_at,updated_at';
 
 type BriefingMethods = Pick<Repository, 'getBriefing' | 'generateBriefing'>;
-export type BriefingSourceRepo = Pick<Repository, 'getMyProfile' | 'listMetrics' | 'listWorkouts' | 'listRaces'>;
+export type BriefingSourceRepo = Pick<Repository, 'getMyProfile' | 'listMetrics' | 'listWorkouts' | 'listRaces'> &
+  Partial<Pick<Repository, 'listJointSessions'>>;
 
 export interface BriefingDeps {
   ctx: SupabaseCtx;
@@ -36,14 +38,26 @@ export interface BriefingDeps {
   timeoutMs?: number;
 }
 
+/** Quedadas are a bonus: without them (or when they fail) the briefing is composed anyway. */
+async function jointSessionsFor(repo: BriefingSourceRepo, date: ISODate): Promise<JointSession[] | null> {
+  if (!repo.listJointSessions) return null;
+  try {
+    return await repo.listJointSessions({ from: date, to: addDays(date, INVITE_HORIZON_DAYS - 1) });
+  } catch (error) {
+    logger.warn('briefing: quedadas unavailable for the local template', error instanceof RepositoryError ? error.code : error);
+    return null;
+  }
+}
+
 /** Composes the local ('rules') briefing from the athlete's data. */
 export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODate, now: Date): Promise<Briefing> {
   const tomorrow = addDays(date, 1);
-  const [profile, metrics, workouts, races] = await Promise.all([
+  const [profile, metrics, workouts, races, joint] = await Promise.all([
     repo.getMyProfile(),
     repo.listMetrics({ from: addDays(date, -(METRICS_DAYS - 1)), to: date }),
     repo.listWorkouts({ from: date, to: tomorrow }),
     repo.listRaces(),
+    jointSessionsFor(repo, date),
   ]);
   return composeBriefing({
     date,
@@ -53,6 +67,7 @@ export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODa
     tomorrowWorkouts: workouts.filter((w) => w.date === tomorrow),
     race: nextRace(races, date),
     now,
+    ...(profile && joint ? { social: { me: profile.id, jointSessions: joint } } : {}),
   });
 }
 
