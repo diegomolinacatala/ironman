@@ -14,7 +14,7 @@ import { asString, isRecord } from './narrow';
 export type AiFunctionResult = { kind: 'ok'; data: unknown } | { kind: 'fallback'; reason: string };
 
 export interface AiFunctionCall {
-  name: 'briefing' | 'meal';
+  name: 'briefing' | 'meal' | 'speech';
   body: Record<string, unknown>;
   timeoutMs: number;
   /** Message for errors we cannot describe better. */

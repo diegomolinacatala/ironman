@@ -159,3 +159,8 @@ verify_jwt = false
 # v2 meal photo analysis (Claude vision): user JWT verified in code, same pattern as briefing.
 [functions.meal]
 verify_jwt = false
+
+# Natural text-to-speech (coach answers, morning briefing) through the Cloudflare worker: user JWT
+# verified in code (userIdFromJwt), same pattern as briefing; 503 ai_unavailable without the worker.
+[functions.speech]
+verify_jwt = false

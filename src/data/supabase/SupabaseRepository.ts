@@ -15,6 +15,7 @@ import { createCoachRequester } from './coach';
 import { inboxApi } from './inboxApi';
 import { integrationsApi } from './integrationsApi';
 import { mealApi } from './mealApi';
+import { speechApi } from './speechApi';
 import { planningApi } from './planningApi';
 import { profileApi } from './profileApi';
 import { subscribeRealtime } from './realtime';
@@ -41,6 +42,7 @@ export function createSupabaseRepository(options: SupabaseRepositoryOptions = {}
     ...inboxApi(ctx),
     ...integrationsApi(ctx),
     ...mealApi(ctx),
+    ...speechApi(ctx),
   };
 
   const requestCoach = createCoachRequester({ ctx, repo: data, today: () => todayISO(now()) });

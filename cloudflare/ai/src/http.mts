@@ -1,11 +1,16 @@
 /**
- * POST /v1/chat: configuration check (secret ≥ 32 chars and both limiters, else 500 — fails
- * closed) → per-IP limit (before auth, so 401 floods are throttled) → bearer secret (constant
- * time) → per-user limit (`x-ai-client`) → body ≤ 3 MB → validation → env.AI.run →
- * `{ text, finishReason, usage, model }`.
+ * Routes: POST /v1/chat and POST /v1/speech, both through the same pipeline: configuration
+ * check (secret ≥ 32 chars and both limiters, else 500 — fails closed) → per-IP limit (before
+ * auth, so 401 floods are throttled) → bearer secret (constant time) → per-user limit
+ * (`x-ai-client`, one bucket shared by both routes) → body size (chat ≤ 3 MB, speech ≤ 8 KB) →
+ * validation → env.AI.run.
+ * - /v1/chat → `{ text, finishReason, usage, model }`.
+ * - /v1/speech → audio bytes: tier `premium` = Aura 2 MP3 (`audio/mpeg`), falling back to MeloTTS
+ *   on any failure or empty audio; tier `basic` = MeloTTS WAV (`audio/wav`). Header
+ *   `x-speech-model` names the model that actually spoke.
  * Errors `{ error, message }`: 401 unauthorized, 400 bad_request, 404, 405, 413 too_large,
  * 429 rate_limited, 503 quota (free daily neurons used up), 502 model_error, 500 misconfigured.
- * Never logs or echoes the secret or the request body.
+ * Never logs or echoes the secret, the request body or the spoken text.
  */
 import {
   bearer,
@@ -19,6 +24,18 @@ import {
   parseChatRequest,
   secretMatches,
 } from './chat.mts';
+import {
+  audioBytes,
+  BASIC_SPEECH_MODEL,
+  basicAudioBytes,
+  basicInput,
+  MAX_SPEECH_BODY_BYTES,
+  parseSpeechRequest,
+  PREMIUM_SPEECH_MODEL,
+  premiumInput,
+  safeErrorMessage,
+} from './speech.mts';
+import type { SpeechAudio, SpeechRequest } from './speech.mts';
 import type { AiBinding, RateLimitBinding } from './types.mts';
 
 export interface HandlerDeps {
@@ -39,10 +56,10 @@ const error = (status: number, code: string, message: string, headers: Record<st
 
 class TooLarge extends Error {}
 
-async function readBody(req: Request): Promise<unknown> {
-  if (Number(req.headers.get('content-length') ?? '0') > MAX_BODY_BYTES) throw new TooLarge();
+async function readBody(req: Request, maxBytes: number): Promise<unknown> {
+  if (Number(req.headers.get('content-length') ?? '0') > maxBytes) throw new TooLarge();
   const buffer = await req.arrayBuffer();
-  if (buffer.byteLength > MAX_BODY_BYTES) throw new TooLarge();
+  if (buffer.byteLength > maxBytes) throw new TooLarge();
   return JSON.parse(new TextDecoder().decode(buffer)) as unknown;
 }
 
@@ -54,20 +71,16 @@ interface Ready {
   log: HandlerDeps['log'];
 }
 
+interface Route {
+  maxBodyBytes: number;
+  handle: (body: unknown, deps: Ready) => Promise<Response>;
+}
+
 const tooMany = (): Response => error(429, 'rate_limited', 'Too many requests. Try again in a minute.', { 'retry-after': '60' });
 
-async function run(req: Request, deps: Ready): Promise<Response> {
-  if (!(await deps.ipLimiter.limit({ key: ipKey(req.headers.get('cf-connecting-ip')) })).success) return tooMany();
-  if (!(await secretMatches(bearer(req.headers.get('authorization')), deps.secret))) {
-    return error(401, 'unauthorized', 'Missing or invalid bearer token.');
-  }
-  if (!(await deps.chatLimiter.limit({ key: clientKey(req.headers.get('x-ai-client')) })).success) return tooMany();
-  let body: unknown;
-  try {
-    body = await readBody(req);
-  } catch (e) {
-    return e instanceof TooLarge ? error(413, 'too_large', `Body above ${MAX_BODY_BYTES} bytes.`) : error(400, 'bad_request', 'Body is not valid JSON.');
-  }
+const quotaExhausted = (): Response => error(503, 'quota', 'The free daily Workers AI allocation is used up. Try again tomorrow.');
+
+async function handleChat(body: unknown, deps: Ready): Promise<Response> {
   const parsed = parseChatRequest(body);
   if (!parsed.ok) return error(400, 'bad_request', parsed.error);
   const { model } = parsed.value;
@@ -78,16 +91,79 @@ async function run(req: Request, deps: Ready): Promise<Response> {
     const message = e instanceof Error ? e.message.slice(0, 300) : 'unknown';
     if (isQuotaError(e)) {
       deps.log('warn', 'workers ai quota exhausted', { model });
-      return error(503, 'quota', 'The free daily Workers AI allocation is used up. Try again tomorrow.');
+      return quotaExhausted();
     }
     deps.log('error', 'workers ai failed', { model, message });
     return error(502, 'model_error', 'The model failed to answer.');
   }
 }
 
+async function speakPremium(req: SpeechRequest, ai: AiBinding): Promise<SpeechAudio> {
+  const bytes = await audioBytes(await ai.run(PREMIUM_SPEECH_MODEL, premiumInput(req)));
+  if (bytes.byteLength === 0) throw new Error('aura returned empty audio');
+  return { bytes, contentType: 'audio/mpeg', model: PREMIUM_SPEECH_MODEL };
+}
+
+async function speakBasic(req: SpeechRequest, ai: AiBinding): Promise<SpeechAudio> {
+  const bytes = await basicAudioBytes(await ai.run(BASIC_SPEECH_MODEL, basicInput(req)));
+  if (bytes.byteLength === 0) throw new Error('melotts returned empty audio');
+  return { bytes, contentType: 'audio/wav', model: BASIC_SPEECH_MODEL };
+}
+
+const audio = ({ bytes, contentType, model }: SpeechAudio): Response =>
+  new Response(bytes, { status: 200, headers: { 'content-type': contentType, 'cache-control': 'no-store', 'x-speech-model': model } });
+
+async function handleSpeech(body: unknown, deps: Ready): Promise<Response> {
+  const parsed = parseSpeechRequest(body);
+  if (!parsed.ok) return error(400, 'bad_request', parsed.error);
+  const req = parsed.value;
+  if (req.tier === 'premium') {
+    try {
+      return audio(await speakPremium(req, deps.ai));
+    } catch (e) {
+      deps.log('warn', 'premium speech failed, falling back to basic', {
+        model: PREMIUM_SPEECH_MODEL,
+        quota: isQuotaError(e),
+        message: safeErrorMessage(e, req.text),
+      });
+    }
+  }
+  try {
+    return audio(await speakBasic(req, deps.ai));
+  } catch (e) {
+    if (isQuotaError(e)) {
+      deps.log('warn', 'workers ai quota exhausted', { model: BASIC_SPEECH_MODEL });
+      return quotaExhausted();
+    }
+    deps.log('error', 'workers ai failed', { model: BASIC_SPEECH_MODEL, message: safeErrorMessage(e, req.text) });
+    return error(502, 'model_error', 'The speech model failed to answer.');
+  }
+}
+
+const ROUTES: Record<string, Route> = {
+  '/v1/chat': { maxBodyBytes: MAX_BODY_BYTES, handle: handleChat },
+  '/v1/speech': { maxBodyBytes: MAX_SPEECH_BODY_BYTES, handle: handleSpeech },
+};
+
+async function run(req: Request, route: Route, deps: Ready): Promise<Response> {
+  if (!(await deps.ipLimiter.limit({ key: ipKey(req.headers.get('cf-connecting-ip')) })).success) return tooMany();
+  if (!(await secretMatches(bearer(req.headers.get('authorization')), deps.secret))) {
+    return error(401, 'unauthorized', 'Missing or invalid bearer token.');
+  }
+  if (!(await deps.chatLimiter.limit({ key: clientKey(req.headers.get('x-ai-client')) })).success) return tooMany();
+  let body: unknown;
+  try {
+    body = await readBody(req, route.maxBodyBytes);
+  } catch (e) {
+    return e instanceof TooLarge ? error(413, 'too_large', `Body above ${route.maxBodyBytes} bytes.`) : error(400, 'bad_request', 'Body is not valid JSON.');
+  }
+  return route.handle(body, deps);
+}
+
 export async function handleRequest(req: Request, deps: HandlerDeps): Promise<Response> {
   const { pathname } = new URL(req.url);
-  if (pathname !== '/v1/chat') return error(404, 'not_found', 'Only POST /v1/chat.');
+  const route = Object.hasOwn(ROUTES, pathname) ? ROUTES[pathname] : undefined;
+  if (!route) return error(404, 'not_found', 'Only POST /v1/chat and POST /v1/speech.');
   if (req.method !== 'POST') return error(405, 'method_not_allowed', 'Use POST.', { allow: 'POST' });
   const { ai, ipLimiter, chatLimiter, secret, log } = deps;
   if (!secret || secret.length < MIN_SECRET_LENGTH || !ipLimiter || !chatLimiter) {
@@ -98,5 +174,5 @@ export async function handleRequest(req: Request, deps: HandlerDeps): Promise<Re
     });
     return error(500, 'misconfigured', 'The worker is not configured.');
   }
-  return run(req, { ai, ipLimiter, chatLimiter, secret, log });
+  return run(req, route, { ai, ipLimiter, chatLimiter, secret, log });
 }

@@ -3,7 +3,10 @@
  * dependency, so it deploys with `npx wrangler deploy` and no npm install).
  */
 
-/** `env.AI` (Workers AI). */
+/**
+ * `env.AI` (Workers AI). The output depends on the model: an object for text models and MeloTTS
+ * (`{ audio: base64 }`), a ReadableStream of audio for Deepgram Aura.
+ */
 export interface AiBinding {
   run(model: string, input: Record<string, unknown>): Promise<unknown>;
 }

@@ -71,6 +71,8 @@ jest.mock('@/features/workouts/DateField', () => {
 });
 jest.mock('@/data/context', () => ({
   useAuth: () => ({ session: { userId: 'u1', email: 'd@x.es' }, isLoading: false, auth: mockAuth, mode: 'demo' }),
+  // Demo repository: no natural voice (Tu coach → Voz shows the iPhone voice).
+  useRepository: () => ({}),
 }));
 jest.mock('@/data/queries', () => {
   const query = <T,>(data: T) => ({ data, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn(async () => undefined) });

@@ -86,6 +86,7 @@ const ICONS = {
   pause: { ios: 'pause.fill', md: 'pause' },
   stop: { ios: 'stop.fill', md: 'stop' },
   speaker: { ios: 'speaker.wave.2.fill', md: 'volume_up' },
+  phone: { ios: 'iphone', md: 'smartphone' },
   waveform: { ios: 'waveform', md: 'graphic_eq' },
   sunrise: { ios: 'sunrise.fill', md: 'wb_twilight' },
   sleep: { ios: 'bed.double.fill', md: 'bedtime' },

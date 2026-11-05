@@ -49,6 +49,7 @@ const SERVICE_RPCS = [
   'svc_list_friends',
   'svc_reserve_coach_job',
   'svc_reserve_ai_call',
+  'svc_reserve_speech',
   'svc_propose_joint_session',
 ];
 

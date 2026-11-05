@@ -9,6 +9,7 @@ crea el cliente de Supabase y conecta las piezas.
 | `coach` | `POST /coach` con un `CoachRequest` | JWT del usuario | `true` |
 | `briefing` (v2) | `POST /briefing` con `{ date, refresh? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `meal` (v2) | `POST /meal` con `{ date, time, imageBase64?, text? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
+| `speech` | `POST /speech` con `{ text, voice? }` (voz natural del coach y del informe) | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `mcp` | `POST /mcp/u/<secreto>` (conector "Conecta tu Claude") | secreto personal en la ruta (scope `mcp`) | `false` |
 | `ics` | `GET /ics/<secreto>.ics` (suscripción `webcal://`) | secreto personal en la ruta (scope `ics`) | `false` |
 | `push-dispatch` | `POST /push-dispatch` (trigger `pg_net` + barrido `pg_cron`) | clave secreta del servidor en `apikey` | `false` |
@@ -39,6 +40,9 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.meal]           # el JWT se verifica en el código (userIdFromJwt)
+verify_jwt = false
+
+[functions.speech]         # el JWT se verifica en el código (userIdFromJwt)
 verify_jwt = false
 
 [functions.mcp]
@@ -75,10 +79,12 @@ Los inyecta Supabase automáticamente: `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` (o
 | `APPLE_KEY_ID` | Igual que arriba | Key ID de la clave con "Sign in with Apple" activado para el App ID. |
 | `APPLE_PRIVATE_KEY` | Igual que arriba | Contenido del `.p8` (mismo formato que `APNS_PRIVATE_KEY`). |
 | `APPLE_CLIENT_ID` | Igual que arriba | Bundle id de la app: `io.github.diegomolinacatala.ironman`. Si pones una lista separada por comas se usa la primera. |
-| `AI_WORKER_URL` | Sí para la IA gratuita de v2 (`coach`, `briefing`, `meal`) | URL del worker `ironman-ai` (`https://ironman-ai.<tu-subdominio>.workers.dev`, la que imprime `wrangler deploy`). |
+| `AI_WORKER_URL` | Sí para la IA gratuita de v2 (`coach`, `briefing`, `meal`) y la voz natural (`speech`) | URL del worker `ironman-ai` (`https://ironman-ai.<tu-subdominio>.workers.dev`, la que imprime `wrangler deploy`). |
 | `AI_WORKER_SECRET` | Igual que arriba | El mismo valor que el secreto `AI_SHARED_SECRET` del worker, **mínimo 32 caracteres** (p. ej. `openssl rand -hex 32`); más corto se ignora (y el worker responde `500 misconfigured`). |
 | `AI_MODEL` | No (por defecto `@cf/nvidia/nemotron-3-120b-a12b`) | Modelo de Workers AI para `coach` y `briefing`. Permitidos por el worker (todos del plan gratuito): `@cf/nvidia/nemotron-3-120b-a12b`, `@cf/meta/llama-4-scout-17b-16e-instruct`, `@cf/google/gemma-4-26b-a4b-it`. |
 | `AI_VISION_MODEL` | No (por defecto `@cf/meta/llama-4-scout-17b-16e-instruct`) | Modelo de Workers AI para las fotos de `meal` (debe aceptar imágenes). |
+| `SPEECH_USER_DAILY_LIMIT` | No (por defecto `300`) | Llamadas a `speech` por usuario en 24 h (ventana móvil). Al llegar, `429 rate_limited` y la app usa la voz del iPhone. |
+| `SPEECH_PREMIUM_DAILY_CHARS` | No (por defecto `2500`) | Caracteres por día UTC (Cloudflare reinicia las neuronas a las 00:00 UTC), sumando **todos** los usuarios, que se leen con la voz premium (Deepgram Aura-2). Pasado el presupuesto, voz básica (MeloTTS, mucho más barata). 2500 ≈ 6.800 de las 10.000 neuronas gratuitas (el LLM usa ≤ 1.500 al día). `0` = siempre básica. |
 | `ANTHROPIC_API_KEY` | No (opcional, de pago) | Claude `claude-opus-5-5`, solo si no está configurado el worker. Sin worker ni clave las tres funciones responden `503 {error:'ai_unavailable'}` y la app usa el motor de reglas, el informe local y la estimación local de comidas. `briefing` también usa `GARMIN_KEY_SECRET` (si está) para refrescar Garmin antes de preparar el informe. |
 
 **Una sola clave de Apple para push y Sign in with Apple.** En *Certificates, Identifiers & Profiles ›
@@ -131,6 +137,7 @@ npx supabase link --project-ref <ref>
 npx supabase db push                       # migraciones (RPC svc_* que usan estas funciones)
 npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
 npx supabase functions deploy coach briefing meal garmin mcp --use-api    # v2 (tras db push de 20261027000100_v2.sql)
+npx supabase functions deploy speech --use-api                            # voz natural (tras db push de 20261105000100_speech_budget.sql)
 ```
 
 Cada función tiene su `deno.json` (`nodeModulesDir: "none"`) para que Deno no use el
@@ -192,6 +199,22 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
   ese día (para el consejo). Salida `{ meal, description, items[], kcal, carbs_g, protein_g, fat_g, confidence, tip }`
   normalizada: macros enteras en rangos razonables o `null` (kcal se calcula de las macros si falta), franja por la
   hora si la del modelo no vale, consejo ≤ 140. No guarda nada salvo la fila de `ai_usage`.
+- **speech** — `POST { text, voice? }` → `200 { audio, mime, model, tier }` con `Cache-Control: no-store`:
+  `audio` = bytes del audio en base64 estándar (con relleno), `mime` = `audio/mpeg` (Deepgram Aura-2) o `audio/wav`
+  (MeloTTS), `model` = cabecera `x-speech-model` del worker (`unknown` si falta), `tier` = `premium` | `basic` (el
+  reservado; el worker puede caer a MeloTTS si Aura-2 falla: fíate de `mime` para reproducir). `text`: 1-600
+  caracteres tras recortar (se limpia de caracteres de control, markdown, emojis y espacios repetidos; si no queda
+  nada, `400`); `voice`: `nestor` (por defecto), `carina`, `diana` o `alvaro`. Errores: `401`, `400`, `405`, `413`
+  (cuerpo > 8 KB), `503 ai_unavailable` sin worker (`AI_WORKER_URL` + `AI_WORKER_SECRET` ≥ 32), `403 consent_required`
+  (`profiles.ai_consent_at` null), `429 rate_limited` (`SPEECH_USER_DAILY_LIMIT` llamadas en 24 h), `503 ai_unavailable`
+  ante cualquier fallo del worker, timeout de 15 s o respuesta que no sea audio (con mensaje de límite diario si el
+  worker responde `503 quota`), `500 internal`. Ante cualquier error la app usa la voz del iPhone.
+  `svc_reserve_speech(p_user, p_chars, p_user_limit, p_premium_budget)` reserva de forma atómica ANTES de llamar al
+  worker (las llamadas fallidas cuentan) una fila de `ai_usage` con `function_name = 'speech'`, `model` = tier e
+  `input_tokens` = caracteres; el tier es `premium` mientras los caracteres premium desde las 00:00 UTC (todos los
+  usuarios) más los de esta petición quepan en `SPEECH_PREMIUM_DAILY_CHARS`, si no `basic`. Llama a
+  `POST ${AI_WORKER_URL}/v1/speech` con `Authorization: Bearer <AI_WORKER_SECRET>`, `x-ai-client` (el mismo HMAC que
+  el chat) y `{ text, voice, tier }`. Nunca registra el texto.
 - **apple-revoke** — `POST { authorizationCode }` (un código nuevo de `AppleAuthentication.signInAsync`)
   con el JWT del usuario → `200 { revoked: boolean }`. Firma un `client_secret` ES256 (5 min) con la
   clave `.p8`, canjea el código en `https://appleid.apple.com/auth/token` y revoca el refresh token en

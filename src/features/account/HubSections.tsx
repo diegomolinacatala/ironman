@@ -1,5 +1,7 @@
 import { todayISO } from '@/domain/dates';
+import { useRepository } from '@/data/context';
 import type { Profile, Race } from '@/domain/types';
+import { coachVoiceName, useCoachVoice } from '@/integrations/speech/coachVoice';
 
 import { AppearancePicker } from '../settings/AppearancePicker';
 import { availabilitySubtitle, raceRow, sportsProfileSubtitle } from './hubModel';
@@ -47,5 +49,17 @@ export function PrivacyGroup() {
     <SettingsGroup title="Privacidad">
       <LinkRows items={[{ icon: 'lock', title: 'Privacidad y datos', subtitle: 'Qué datos usamos, para qué y quién los ve', href: '/privacy' }]} />
     </SettingsGroup>
+  );
+}
+
+/** Tu coach → Voz: which voice reads the briefing and the coach's replies. */
+export function CoachVoiceRow() {
+  const chosen = useCoachVoice();
+  // Demo mode / AI off: the iPhone voice is what will actually play.
+  const voice = useRepository().synthesizeSpeech ? chosen : 'device';
+  return (
+    <LinkRows
+      items={[{ icon: 'speaker', title: 'Voz del coach', subtitle: coachVoiceName(voice), href: '/settings/voice', brand: true }]}
+    />
   );
 }

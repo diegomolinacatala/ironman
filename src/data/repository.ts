@@ -49,6 +49,8 @@ import type {
   PublicProfile,
   Race,
   RaceDraft,
+  SpeechAudio,
+  SpeechVoice,
   SyncResult,
   TokenScope,
   UUID,
@@ -184,6 +186,14 @@ export interface Repository {
    * `engine: 'rules'` and `confidence: 'low'`. Throws RepositoryError for auth/validation/network.
    */
   analyzeMeal(input: MealAnalysisInput): Promise<MealAnalysis>;
+
+  // Natural voice ----------------------------------------------------------------
+  /**
+   * Speech audio for `text` (≤ 600 characters) in a natural voice (`speech` edge function,
+   * Workers AI). Optional: absent in demo mode. Never throws: null means "use the device voice"
+   * (AI off, offline, no consent, daily allowance used up, not deployed…).
+   */
+  synthesizeSpeech?(input: { text: string; voice: SpeechVoice }): Promise<SpeechAudio | null>;
 
   // Morning briefing -----------------------------------------------------------
   /** The stored briefing of `date` (server-side, written by the `briefing` function), or null. */

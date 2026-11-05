@@ -381,6 +381,9 @@ proposal → `applied` when nothing failed and every change of the proposal was 
 `last_used_at`), `svc_apply_plan_changes(p_user uuid, p_changes jsonb, p_proposal_id uuid)`,
 `svc_get_friend_week(p_viewer uuid, p_friend uuid, p_from date, p_to date)`,
 `svc_list_friends(p_user uuid)`. Public wrappers call these with `auth.uid()`.
+`svc_reserve_speech(p_user uuid, p_chars int, p_user_limit int, p_premium_budget int) returns text`
+(`speech` function: per-user 24 h limit → null, else `'premium'` while today's UTC premium characters of
+all users + `p_chars` fit in `p_premium_budget`, else `'basic'`; inserts the `ai_usage` row; see V2 §3).
 
 **Triggers → notifications / feed** (Spanish titles):
 friend request (addressee), friend accepted (requester), joint invite (invitee), joint response
@@ -422,6 +425,7 @@ your `verify_jwt` needs in your report (expected: coach/garmin = true … see be
 | `ics` | path token, `verify_jwt=false` | `GET /ics/<secret>.ics` → `text/calendar` (VTIMEZONE Europe/Madrid), workouts −14..+56 days + confirmed quedadas; all-day events when no start time. |
 | `push-dispatch` | secret key (`verify_jwt=false`, check `apikey` == secret) | Sends unsent `notifications` (last 24 h) straight to APNs (see §13), respects `notification_prefs.social` for social types, marks `pushed_at`/`push_error`, deletes tokens Apple rejects. |
 | `apple-revoke` | `verify_jwt=false`, user JWT verified in code | `POST {authorizationCode}` → exchanges it at Apple and revokes the token (SIWA account deletion); `503 apple_not_configured` without `APPLE_*` secrets. |
+| `speech` | `verify_jwt=false`, user JWT verified in code | `POST {text, voice?}` → `200 {audio (base64), mime, model, tier}`: consent, `svc_reserve_speech` (per-user 24 h limit + global premium budget per UTC day), then the worker's `POST /v1/speech` (15 s). `503 ai_unavailable` on any worker problem (the app keeps the iPhone voice). Contract in V2 §3 and `supabase/functions/README.md`. Never logs the text. |
 | `garmin` | `verify_jwt=false`; user JWT verified in code for `connect/disconnect/sync`; secret key for `sync_all` (pg_cron) | Garmin **Personal API** (`docs/research/04` §3.2): exchange key → JWT, pull dailies/sleep/HRV/body battery/activities, upsert `daily_metrics (source 'garmin')`, match activities to planned workouts (complete them) or insert completed unplanned workouts (`source 'garmin'`, `external_id 'garmin:<id>'`). Key encrypted AES-GCM with `GARMIN_KEY_SECRET` (env). Defensive parsing; never log keys. |
 
 **Consent & privacy (coach):** the function answers `403 {error:'consent_required'}` when
@@ -607,7 +611,7 @@ The product contract is `docs/V2.md`; this section lists what changed in the arc
   go through it once. Claude counts as connected when the `mcp` token created there has `lastUsedAt`.
 - **In-app AI is ON** (`env.aiCoachEnabled`, `EXPO_PUBLIC_AI_COACH=0` disables) and costs nothing: the
   `coach`, `briefing` and `meal` functions use **Cloudflare Workers AI** through `cloudflare/ai` (see V2 §3,
-  *AI provider*). `_shared/ai/provider.ts` picks Workers AI → Claude (optional) → none; the Workers port
+  *AI provider*; the worker also serves `POST /v1/speech`, neural text-to-speech for the coach voice). `_shared/ai/provider.ts` picks Workers AI → Claude (optional) → none; the Workers port
   (`_shared/platform/workers-ai.ts`) implements the same `ClaudePort`. Consent copy names Cloudflare.
 - **New tables/columns:** `briefings` (select-own, server writes), `daily_metrics.sleep_*` (stages,
   start/end), `coach_jobs.extras` (`memory`, `lifeEventId`). Coach memory lines are appended to
@@ -616,7 +620,7 @@ The product contract is `docs/V2.md`; this section lists what changed in the arc
   (`domain/briefing.ts` template, `domain/mealEstimate.ts`); a fallback briefing is cached on the device
   per user/date until a server one exists.
 - **Integrations:** on-device speech-to-text (`integrations/speech/useVoiceInput`, expo-speech-recognition,
-  es-ES) and text-to-speech (`useSpeaker`, expo-speech, best Spanish voice, audio background mode); meal
+  es-ES) and text-to-speech (`useSpeaker`: natural Aura-2 voice first — `speechText.ts` prepares the text for the ear and cuts it in sentences, `neuralSpeech.ts` plays them with expo-audio and caches them in `Paths.cache/speech`, voice picked in Tú → Tu coach → Voz (`coachVoice.ts`, stored on the device); any failure hands the rest to expo-speech with the best installed Spanish voice; audio background mode). expo-audio is used WITHOUT its config plugin: the plugin would overwrite the Spanish `NSMicrophoneUsageDescription`; meal
   photos (`integrations/camera/mealPhoto`, downscaled JPEG, private copy in the app's documents); the
   **training calendar** (`integrations/calendar/trainingCalendar`): planned workouts of [today − 1, today + 21]
   written to a "Road to Ironman" calendar with an alarm, never read back as busy time; the

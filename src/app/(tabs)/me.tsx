@@ -4,7 +4,7 @@ import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { AccountActions } from '@/features/account/AccountActions';
 import { CoachNotesSection } from '@/features/account/CoachNotesSection';
 import { ConnectionsSection } from '@/features/account/ConnectionsSection';
-import { PreferencesGroup, PrivacyGroup, TrainingGroup } from '@/features/account/HubSections';
+import { CoachVoiceRow, PreferencesGroup, PrivacyGroup, TrainingGroup } from '@/features/account/HubSections';
 import { MorningSection } from '@/features/account/MorningSection';
 import { ProfileHero } from '@/features/account/ProfileHero';
 import { GroupDivider, SettingsGroup } from '@/features/account/SettingsGroup';
@@ -59,6 +59,8 @@ export default function MeScreen() {
       <TrainingGroup profile={me} races={races.data} />
       <SettingsGroup title="Tu coach">
         <MorningSection profile={me} />
+        <GroupDivider />
+        <CoachVoiceRow />
         <GroupDivider />
         <CoachNotesSection notes={me.coachNotes} />
       </SettingsGroup>

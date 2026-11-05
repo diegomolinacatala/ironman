@@ -404,6 +404,19 @@ export interface MealAnalysis {
 }
 
 // ---------------------------------------------------------------------------
+// Speech (natural voice of the coach)
+// ---------------------------------------------------------------------------
+
+/** Deepgram Aura-2 Spanish (Spain) voices served by the `speech` edge function. */
+export type SpeechVoice = 'carina' | 'diana' | 'nestor' | 'alvaro';
+
+export interface SpeechAudio {
+  /** Audio file, base64. */
+  audio: string;
+  mime: 'audio/mpeg' | 'audio/wav';
+}
+
+// ---------------------------------------------------------------------------
 // Nutrition
 // ---------------------------------------------------------------------------
 
