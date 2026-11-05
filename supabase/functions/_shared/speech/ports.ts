@@ -20,17 +20,22 @@ export const SPEECH_MIMES = ['audio/mpeg', 'audio/wav'] as const;
 export type SpeechMime = (typeof SPEECH_MIMES)[number];
 
 export interface SpeechLimits {
-  /** `speech` calls allowed per user in the last 24 h. */
-  userDailyLimit: number;
+  /** Characters (any tier) allowed per user in the last 24 h (rolling). */
+  userDailyChars: number;
+  /** Characters one user may send to the premium voice per UTC day (their share of the premium budget). */
+  userPremiumDailyChars: number;
   /** Characters sent to the premium voice per UTC day, across all users. */
   premiumDailyChars: number;
+  /** Characters sent to the basic voice per UTC day, across all users. */
+  basicDailyChars: number;
 }
 
 export interface SpeechBudgetStore {
   getAiConsentAt(userId: UUID): Promise<ISODateTime | null>;
   /**
-   * Atomically checks the user's 24 h limit and the global premium budget and records the call
-   * (before the worker call: failed calls stay counted). Returns the tier, or null at the user limit.
+   * Atomically checks the user's 24 h character limit, their premium share and the global premium /
+   * basic budgets of the UTC day, and records the call (before the worker call: failed calls stay
+   * counted). Returns the tier, or null when the user or both daily budgets are spent.
    */
   reserveSpeech(userId: UUID, chars: number, limits: SpeechLimits): Promise<SpeechTier | null>;
 }

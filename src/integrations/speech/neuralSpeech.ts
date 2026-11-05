@@ -4,15 +4,22 @@
  *
  * - Starts as soon as the first (short) piece is ready, ~1 s; the next two are fetched while
  *   the current one plays.
- * - Every piece is cached on the device (`Paths.cache/speech/<sha256>.mp3|wav`), so listening to
- *   the briefing again costs nothing and needs no network. The system may purge that folder;
- *   we also keep at most `CACHE_MAX_FILES`.
+ * - Aura pieces (MP3) are cached on the device (`Paths.cache/speech/<sha256>.mp3`), so listening
+ *   to the briefing again costs nothing and needs no network. Fallback audio (MeloTTS WAV, used
+ *   when the day's Aura budget is spent) is played from a temporary file and never cached, so it
+ *   cannot replace the chosen voice later. At most `CACHE_MAX_FILES` are kept.
  * - When a piece cannot be synthesised or played, `onFallback` hands the rest of the text to
- *   the device voice, so the coach never goes silent.
- * - Audio session: `playback` + duck other audio, also with the silent switch on (like the
- *   device voice, see `audioSession.ts`).
+ *   the device voice, so the coach never goes silent (held while paused).
+ * - Audio session: `playback` + duck other audio, also with the silent switch on. expo-audio
+ *   deactivates the shared AVAudioSession ~100 ms after a pause / finish on its own queue; if
+ *   dictation or the device voice started in that window it would be cut. So every stop, finish
+ *   and fallback marks expo-audio inactive (`setIsAudioActiveAsync(false)`, which turns that
+ *   pending deactivation into a no-op) and `stop()` resolves once that is done; the next playback
+ *   re-enables it first.
+ * - A phone call / Siri pauses the player without telling us: a stall that lasts
+ *   `STALL_MS` is reported as `onInterrupted` (the UI shows "paused"; resume plays on).
  */
-import { createAudioPlayer, setAudioModeAsync, type AudioStatus } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync, type AudioStatus } from 'expo-audio';
 import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
@@ -30,14 +37,17 @@ export interface NeuralCallbacks {
   /** 0..1 over the whole text, weighted by characters. */
   onProgress: (progress: number) => void;
   onDone: () => void;
-  /** Piece `index` failed: speak `rest` with the device voice. `progress` = share already spoken. */
+  /** Piece failed: speak `rest` with the device voice. `progress` = share already spoken. */
   onFallback: (rest: string, progress: number) => void;
+  /** The system paused playback (call, Siri, route change): show it as paused. */
+  onInterrupted?: () => void;
 }
 
 export interface NeuralPlayback {
   pause: () => void;
   resume: () => void;
-  stop: () => void;
+  /** Silences it; resolves once the audio session is released (safe to start dictation). */
+  stop: () => Promise<void>;
 }
 
 /** Minimal surface of expo-audio's AudioPlayer that we use (lets tests pass a fake). */
@@ -50,59 +60,75 @@ export interface PlayerLike {
 
 export interface NeuralDeps {
   createPlayer: (uri: string) => PlayerLike;
-  /** Local URI of the audio of `text` (cached), or null when it cannot be synthesised. */
+  /** Local URI of the audio of `text` (cached when it is the natural voice), or null. */
   audioUri: (text: string, voice: SpeechVoice, synthesize: Synthesize) => Promise<string | null>;
   prepareAudio: () => Promise<void>;
+  /** Marks expo-audio's session inactive (cancels its delayed deactivation). */
+  releaseAudio: () => Promise<void>;
 }
 
 const PREFETCH_AHEAD = 2;
 const CACHE_DIR = 'speech';
+const TEMP_DIR = 'speech-tmp';
 const CACHE_MAX_FILES = 160;
-/** Bump when the voice or the text preparation changes, so old audio is not reused. */
-const CACHE_VERSION = 'v1';
-
+/** Bump when the voice or the text preparation changes, so old audio is not reused. v2: MP3 only. */
+const CACHE_VERSION = 'v2';
+/** Natural voice = Aura-2 MP3; anything else (MeloTTS WAV) is a fallback and is not cached. */
+const CACHEABLE_MIME: SpeechAudio['mime'] = 'audio/mpeg';
 const EXTENSION: Record<SpeechAudio['mime'], string> = { 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
+/** A pause we did not ask for that lasts this long is an interruption, not a hiccup. */
+export const STALL_MS = 700;
+/** Status updates this close to the end are the piece finishing, not a stall. */
+const END_TOLERANCE_S = 0.3;
 
-let cacheTrimmed = false;
+let cachePrepared = false;
+let tempCounter = 0;
 
-function cacheDirectory(): Directory {
-  const dir = new Directory(Paths.cache, CACHE_DIR);
+function directory(name: string): Directory {
+  const dir = new Directory(Paths.cache, name);
   dir.create({ idempotent: true, intermediates: true });
-  if (!cacheTrimmed) {
-    cacheTrimmed = true;
-    trimCache(dir);
-  }
   return dir;
 }
 
-/** Keeps the newest `CACHE_MAX_FILES` files (best effort). */
-function trimCache(dir: Directory): void {
+function files(dir: Directory): File[] {
+  return dir.list().filter((entry): entry is File => entry instanceof File);
+}
+
+/** Once per app run: keep the newest cached pieces, empty the temporary folder (best effort). */
+function prepareCache(): void {
+  if (cachePrepared) return;
+  cachePrepared = true;
   try {
-    const files = dir.list().filter((entry): entry is File => entry instanceof File);
-    if (files.length <= CACHE_MAX_FILES) return;
-    files
+    const cached = files(directory(CACHE_DIR));
+    cached
+      .filter((file) => !file.uri.endsWith('.mp3'))
+      .forEach((file) => file.delete());
+    cached
+      .filter((file) => file.uri.endsWith('.mp3'))
       .sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0))
       .slice(CACHE_MAX_FILES)
       .forEach((file) => file.delete());
+    files(directory(TEMP_DIR)).forEach((file) => file.delete());
   } catch (error) {
-    logger.debug('speech: could not trim the audio cache', error);
+    logger.debug('speech: could not tidy the audio cache', error);
   }
 }
 
-async function cachedAudioUri(text: string, voice: SpeechVoice, synthesize: Synthesize): Promise<string | null> {
+/** Exported for tests. */
+export async function cachedAudioUri(text: string, voice: SpeechVoice, synthesize: Synthesize): Promise<string | null> {
   if (Platform.OS === 'web') {
     const audio = await synthesize({ text, voice });
     return audio ? `data:${audio.mime};base64,${audio.audio}` : null;
   }
+  prepareCache();
   const key = await digestStringAsync(CryptoDigestAlgorithm.SHA256, `${CACHE_VERSION}|${voice}|${text}`);
-  const dir = cacheDirectory();
-  for (const extension of Object.values(EXTENSION)) {
-    const cached = new File(dir, `${key}.${extension}`);
-    if (cached.exists) return cached.uri;
-  }
+  const cached = new File(directory(CACHE_DIR), `${key}.mp3`);
+  if (cached.exists) return cached.uri;
   const audio = await synthesize({ text, voice });
   if (!audio) return null;
-  const file = new File(dir, `${key}.${EXTENSION[audio.mime]}`);
+  tempCounter += 1;
+  const file =
+    audio.mime === CACHEABLE_MIME ? cached : new File(directory(TEMP_DIR), `${key}-${tempCounter}.${EXTENSION[audio.mime]}`);
   await file.write(audio.audio, { encoding: 'base64' });
   return file.uri;
 }
@@ -110,9 +136,18 @@ async function cachedAudioUri(text: string, voice: SpeechVoice, synthesize: Synt
 async function prepareAudio(): Promise<void> {
   prepareSpeechPlayback();
   try {
+    await setIsAudioActiveAsync(true);
     await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'duckOthers', allowsRecording: false, shouldPlayInBackground: false });
   } catch (error) {
     logger.debug('speech: could not set the audio mode', error);
+  }
+}
+
+async function releaseAudio(): Promise<void> {
+  try {
+    await setIsAudioActiveAsync(false);
+  } catch (error) {
+    logger.debug('speech: could not release expo-audio', error);
   }
 }
 
@@ -120,6 +155,7 @@ const defaultDeps: NeuralDeps = {
   createPlayer: (uri) => createAudioPlayer({ uri }),
   audioUri: cachedAudioUri,
   prepareAudio,
+  releaseAudio,
 };
 
 /** Share of the text (by characters) covered by pieces before `index`, plus `fraction` of piece `index`. */
@@ -141,14 +177,22 @@ export function playNeural(
 ): NeuralPlayback {
   const lengths = chunks.map((chunk) => chunk.length);
   const pending = new Map<number, Promise<string | null>>();
+  /** Stopped, finished or handed to the device voice: nothing of ours may play any more. */
   let cancelled = false;
   let paused = false;
   let started = false;
   let index = 0;
   let player: PlayerLike | null = null;
   let subscription: { remove: () => void } | null = null;
-  /** Piece ready while paused: start it on resume. */
+  /** Piece ready (or fallback due) while paused: run it on resume. */
   let waiting: (() => void) | null = null;
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  let released: Promise<void> | null = null;
+
+  const clearStall = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = null;
+  };
 
   const ensure = (i: number): Promise<string | null> | undefined => {
     if (i < 0 || i >= chunks.length) return undefined;
@@ -163,7 +207,8 @@ export function playNeural(
     return promise;
   };
 
-  const release = () => {
+  const releasePlayer = () => {
+    clearStall();
     subscription?.remove();
     subscription = null;
     if (player) {
@@ -177,16 +222,46 @@ export function playNeural(
     player = null;
   };
 
+  /** Ends our use of the audio for good (idempotent). */
+  const finishAudio = (): Promise<void> => {
+    cancelled = true;
+    waiting = null;
+    releasePlayer();
+    if (!released) released = deps.releaseAudio().catch(() => undefined);
+    return released;
+  };
+
   const fallBack = (i: number) => {
     if (cancelled) return;
-    cancelled = true;
-    release();
-    callbacks.onFallback(chunks.slice(i).join(' '), chunkProgress(lengths, i, 0));
+    const rest = chunks.slice(i).join(' ');
+    const progress = chunkProgress(lengths, i, 0);
+    const hand = () => void finishAudio().then(() => callbacks.onFallback(rest, progress));
+    releasePlayer();
+    if (paused) {
+      waiting = hand;
+      return;
+    }
+    hand();
+  };
+
+  const watchStall = (i: number, status: AudioStatus, wasPlaying: boolean) => {
+    const nearEnd = status.duration > 0 && status.currentTime >= status.duration - END_TOLERANCE_S;
+    if (status.playing || status.didJustFinish || status.isBuffering || !wasPlaying || nearEnd || paused) {
+      clearStall();
+      return;
+    }
+    if (stallTimer) return;
+    stallTimer = setTimeout(() => {
+      stallTimer = null;
+      if (cancelled || paused || i !== index) return;
+      paused = true;
+      callbacks.onInterrupted?.();
+    }, STALL_MS);
   };
 
   const startChunk = (i: number, uri: string) => {
     if (cancelled) return;
-    release();
+    releasePlayer();
     try {
       player = deps.createPlayer(uri);
     } catch (error) {
@@ -194,6 +269,7 @@ export function playNeural(
       fallBack(i);
       return;
     }
+    let wasPlaying = false;
     subscription = player.addListener('playbackStatusUpdate', (status) => {
       if (cancelled || i !== index) return;
       if (status.error) {
@@ -201,6 +277,8 @@ export function playNeural(
         fallBack(i);
         return;
       }
+      watchStall(i, status, wasPlaying);
+      if (status.playing) wasPlaying = true;
       if (status.duration > 0) callbacks.onProgress(chunkProgress(lengths, i, status.currentTime / status.duration));
       if (status.didJustFinish) void playFrom(i + 1);
     });
@@ -216,8 +294,7 @@ export function playNeural(
     if (cancelled) return;
     index = i;
     if (i >= chunks.length) {
-      cancelled = true;
-      release();
+      await finishAudio();
       callbacks.onProgress(1);
       callbacks.onDone();
       return;
@@ -244,6 +321,7 @@ export function playNeural(
   return {
     pause: () => {
       paused = true;
+      clearStall();
       player?.pause();
     },
     resume: () => {
@@ -253,15 +331,12 @@ export function playNeural(
       if (start) start();
       else player?.play();
     },
-    stop: () => {
-      cancelled = true;
-      waiting = null;
-      release();
-    },
+    stop: () => finishAudio(),
   };
 }
 
 /** Test hook. */
 export function resetNeuralCacheForTests(): void {
-  cacheTrimmed = false;
+  cachePrepared = false;
+  tempCounter = 0;
 }

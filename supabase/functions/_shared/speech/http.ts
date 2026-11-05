@@ -1,9 +1,10 @@
 /**
  * HTTP layer of `POST /speech` `{ text, voice? }` → `200 { audio, mime, model, tier }`:
  * user JWT (verified in code) → body (text trimmed 1..600 chars, voice one of SPEECH_VOICES,
- * default 'nestor') → 503 without the worker → 403 consent_required → 429 rate_limited (per-user
- * 24 h limit; atomic `svc_reserve_speech`, which also picks the tier from the global premium budget
- * of the UTC day) → worker (15 s) → base64 audio. `Cache-Control: no-store`.
+ * default 'nestor') → 503 without the worker → 403 consent_required → 429 rate_limited (atomic
+ * `svc_reserve_speech`: per-user characters in 24 h, then premium within the global and per-user
+ * premium budgets of the UTC day, else basic within the global basic budget, else refused)
+ * → worker (15 s) → base64 audio. `Cache-Control: no-store`.
  * Errors `{ error, message }`: 401, 400, 405, 413, 403, 429, 503 ai_unavailable (any worker failure,
  * timeout or non-audio answer: the app then uses the on-device voice), 500. Never logs the text.
  */
@@ -28,7 +29,7 @@ export const SPEECH_CONSENT_MESSAGE =
   'Para escuchar la voz natural del coach tienes que aceptar que enviemos el texto a la IA del coach (Cloudflare Workers AI). Mientras tanto uso la voz del iPhone.';
 export const SPEECH_UNAVAILABLE_MESSAGE = 'La voz natural no está disponible ahora mismo. Uso la voz del iPhone.';
 export const SPEECH_QUOTA_MESSAGE = 'La voz natural ha llegado a su límite de hoy. Uso la voz del iPhone hasta mañana.';
-export const SPEECH_LIMITED_MESSAGE = 'Has usado mucho la voz natural en las últimas 24 h. Mientras tanto uso la voz del iPhone.';
+export const SPEECH_LIMITED_MESSAGE = 'La voz natural ha llegado a su límite de hoy. Mientras tanto uso la voz del iPhone.';
 
 export interface SpeechHttpDeps {
   /** Verifies the caller's JWT and returns the user id (null → 401). */

@@ -24,18 +24,20 @@ function expandShorthand(text: string): string {
   return (
     text
       // 1h30, 1h30', 1 h 30 min → "1 hora y 30 minutos"
-      .replace(/\b(\d{1,2})\s?h\s?(\d{1,2})(?:\s?(?:min|')(?![a-záéíóú]))?/gi, (_m, h: string, m: string) => `${unit(h, 'hora', 'horas')} y ${unit(String(Number(m)), 'minuto', 'minutos')}`)
+      .replace(/\b(\d{1,2})\s?h\s?(\d{1,2})(?:\s?(?:min|')(?![\p{L}\p{N}]))?(?![\p{L}\p{N}])/giu, (_m, h: string, m: string) => `${unit(h, 'hora', 'horas')} y ${unit(String(Number(m)), 'minuto', 'minutos')}`)
+      // Paces: 5'15"/km, 4'30", 5'05 min/km → "5 minutos y 15 segundos el kilómetro"
+      .replace(/\b(\d{1,2})'\s?(\d{2})(?:"|(?![\p{L}\p{N}]))(\s?(?:min)?\s?\/\s?km(?![\p{L}\p{N}]))?/giu, (_m, m: string, sec: string, km?: string) => `${unit(m, 'minuto', 'minutos')} y ${unit(String(Number(sec)), 'segundo', 'segundos')}${km ? ' el kilómetro' : ''}`)
       // 4x8' / 6 x 400 m → "4 por 8'"
       .replace(/\b(\d+)\s?[x×]\s?(?=\d)/gi, '$1 por ')
       .replace(ZONE_WORD, 'zona $1')
-      .replace(/(\d)\s?km\/h\b/gi, '$1 kilómetros por hora')
-      .replace(/\b(\d+(?:[.,]\d+)?)\s?km\b/gi, (_m, n: string) => unit(n, 'kilómetro', 'kilómetros'))
-      .replace(/\b(\d+)\s?(?:min|')(?![a-záéíóú'])/gi, (_m, n: string) => unit(n, 'minuto', 'minutos'))
-      .replace(/\b(\d+)\s?(?:seg|s|")(?![a-záéíóú])/g, (_m, n: string) => unit(n, 'segundo', 'segundos'))
-      .replace(/\b(\d+)\s?h\b/gi, (_m, n: string) => unit(n, 'hora', 'horas'))
-      .replace(/\b(\d+)\s?W\b/g, '$1 vatios')
-      .replace(/\b(\d+)\s?ppm\b/gi, '$1 pulsaciones')
-      .replace(/\bFC\b/g, 'frecuencia cardiaca')
+      .replace(/(\d)\s?km\/h(?![\p{L}\p{N}])/giu, '$1 kilómetros por hora')
+      .replace(/\b(\d+(?:[.,]\d+)?)\s?km(?![\p{L}\p{N}])/giu, (_m, n: string) => unit(n, 'kilómetro', 'kilómetros'))
+      .replace(/\b(\d+)\s?(?:min|')(?![\p{L}\p{N}'])/giu, (_m, n: string) => unit(n, 'minuto', 'minutos'))
+      .replace(/\b(\d+)\s?(?:seg|s|")(?![\p{L}\p{N}])/gu, (_m, n: string) => unit(n, 'segundo', 'segundos'))
+      .replace(/\b(\d+)\s?h(?![\p{L}\p{N}])/giu, (_m, n: string) => unit(n, 'hora', 'horas'))
+      .replace(/\b(\d+)\s?W(?![\p{L}\p{N}])/gu, '$1 vatios')
+      .replace(/\b(\d+)\s?(?:ppm|lpm)(?![\p{L}\p{N}])/giu, '$1 pulsaciones')
+      .replace(/\bFC(?![\p{L}\p{N}])/gu, 'frecuencia cardiaca')
       // 3-4 → 3 a 4 (not dates such as 2026-11-05)
       .replace(/(?<![-–/\d])\b(\d{1,3})\s?[-–]\s?(\d{1,3})\b(?![-–/]\d)/g, '$1 a $2')
       .replace(/\s+vs\.?\s+/gi, ' frente a ')

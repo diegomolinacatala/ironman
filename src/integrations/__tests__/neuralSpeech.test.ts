@@ -6,7 +6,7 @@ jest.mock('expo-speech-recognition', () => ({
   ExpoSpeechRecognitionModule: { setCategoryIOS: jest.fn(), setAudioSessionActiveIOS: jest.fn() },
 }));
 
-import { chunkProgress, playNeural, type NeuralCallbacks, type NeuralDeps, type PlayerLike } from '../speech/neuralSpeech';
+import { chunkProgress, playNeural, STALL_MS, type NeuralCallbacks, type NeuralDeps, type PlayerLike } from '../speech/neuralSpeech';
 
 interface FakePlayer extends PlayerLike {
   uri: string;
@@ -18,8 +18,10 @@ interface FakePlayer extends PlayerLike {
 function setup(audio: Record<string, string | null | Promise<string | null>>) {
   const players: FakePlayer[] = [];
   const requested: string[] = [];
+  const releaseAudio = jest.fn(async () => undefined);
   const deps: NeuralDeps = {
     prepareAudio: async () => undefined,
+    releaseAudio,
     audioUri: async (text) => {
       requested.push(text);
       return audio[text] ?? null;
@@ -54,8 +56,9 @@ function setup(audio: Record<string, string | null | Promise<string | null>>) {
     onProgress: jest.fn(),
     onDone: jest.fn(),
     onFallback: jest.fn(),
+    onInterrupted: jest.fn(),
   } satisfies NeuralCallbacks;
-  return { deps, callbacks, players, requested };
+  return { deps, callbacks, players, requested, releaseAudio };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -113,6 +116,7 @@ describe('playNeural', () => {
     playNeural(['Uno.', 'Dos.'], 'carina', jest.fn(async () => null), callbacks, deps);
     await flush();
     players[0].emit({ error: 'decoder' } as Partial<AudioStatus>);
+    await flush();
     expect(callbacks.onFallback).toHaveBeenCalledWith('Uno. Dos.', 0);
     expect(players[0].removed).toBe(true);
   });
@@ -147,6 +151,98 @@ describe('playNeural', () => {
     await flush();
     expect(players).toHaveLength(1);
     expect(callbacks.onDone).not.toHaveBeenCalled();
+  });
+});
+
+describe('playNeural: audio session, interruptions and pause', () => {
+  test('stop, finish and fallback release expo-audio; stop resolves after it', async () => {
+    const { deps, callbacks, releaseAudio } = setup({ 'Uno.': 'f1' });
+    let releasedAt = 0;
+    releaseAudio.mockImplementation(async () => {
+      releasedAt += 1;
+    });
+    const playback = playNeural(['Uno.'], 'nestor', jest.fn(async () => null), callbacks, deps);
+    await flush();
+    await playback.stop();
+    expect(releasedAt).toBe(1);
+    await playback.stop();
+    expect(releaseAudio).toHaveBeenCalledTimes(1);
+
+    const done = setup({ 'Uno.': 'f1' });
+    playNeural(['Uno.'], 'nestor', jest.fn(async () => null), done.callbacks, done.deps);
+    await flush();
+    done.players[0].emit({ didJustFinish: true, duration: 1, currentTime: 1 });
+    await flush();
+    expect(done.releaseAudio).toHaveBeenCalledTimes(1);
+    expect(done.callbacks.onDone).toHaveBeenCalledTimes(1);
+
+    const failing = setup({});
+    playNeural(['Uno.'], 'nestor', jest.fn(async () => null), failing.callbacks, failing.deps);
+    await flush();
+    expect(failing.releaseAudio).toHaveBeenCalledTimes(1);
+    expect(failing.callbacks.onFallback).toHaveBeenCalledTimes(1);
+  });
+
+  test('a fallback due while paused waits for resume (and never happens after stop)', async () => {
+    const { deps, callbacks, players } = setup({ 'Uno.': 'f1', 'Dos.': null });
+    const playback = playNeural(['Uno.', 'Dos.'], 'nestor', jest.fn(async () => null), callbacks, deps);
+    await flush();
+    playback.pause();
+    players[0].emit({ didJustFinish: true, duration: 1, currentTime: 1 });
+    await flush();
+    expect(callbacks.onFallback).not.toHaveBeenCalled();
+    playback.resume();
+    await flush();
+    expect(callbacks.onFallback).toHaveBeenCalledWith('Dos.', chunkProgress([4, 4], 1, 0));
+
+    const stopped = setup({ 'Uno.': 'f1', 'Dos.': null });
+    const other = playNeural(['Uno.', 'Dos.'], 'nestor', jest.fn(async () => null), stopped.callbacks, stopped.deps);
+    await flush();
+    other.pause();
+    stopped.players[0].emit({ didJustFinish: true, duration: 1, currentTime: 1 });
+    await flush();
+    await other.stop();
+    other.resume();
+    await flush();
+    expect(stopped.callbacks.onFallback).not.toHaveBeenCalled();
+  });
+
+  test('a system pause (call, Siri) that lasts is reported as an interruption; resume plays on', async () => {
+    jest.useFakeTimers();
+    try {
+      const { deps, callbacks, players } = setup({ 'Uno.': 'f1' });
+      const playback = playNeural(['Uno.'], 'nestor', jest.fn(async () => null), callbacks, deps);
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+      players[0].emit({ playing: true, currentTime: 1, duration: 5 });
+      players[0].playing = false;
+      players[0].emit({ playing: false, currentTime: 1.2, duration: 5 });
+      jest.advanceTimersByTime(STALL_MS + 10);
+      expect(callbacks.onInterrupted).toHaveBeenCalledTimes(1);
+      playback.resume();
+      expect(players[0].playing).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('the end of a piece and a short hiccup are not interruptions', async () => {
+    jest.useFakeTimers();
+    try {
+      const { deps, callbacks, players } = setup({ 'Uno.': 'f1', 'Dos.': 'f2' });
+      playNeural(['Uno.', 'Dos.'], 'nestor', jest.fn(async () => null), callbacks, deps);
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+      players[0].emit({ playing: true, currentTime: 1, duration: 5 });
+      players[0].emit({ playing: false, currentTime: 4.9, duration: 5 });
+      jest.advanceTimersByTime(STALL_MS + 10);
+      players[0].emit({ playing: false, currentTime: 2, duration: 5 });
+      players[0].emit({ playing: true, currentTime: 2.1, duration: 5 });
+      jest.advanceTimersByTime(STALL_MS + 10);
+      expect(callbacks.onInterrupted).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

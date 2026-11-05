@@ -37,7 +37,8 @@ export interface Speaker {
   speak(text: string): void;
   pause(): void;
   resume(): void;
-  stop(): void;
+  /** Silences it; resolves once the audio session is free (await it before starting dictation). */
+  stop(): Promise<void>;
 }
 
 export const SPEECH_RATE = 1.0;
@@ -72,16 +73,31 @@ export function resetSpeakerVoiceCache(): void {
 let currentUtterance = 0;
 /** Natural-voice playback of `currentUtterance`, if that is what is playing. */
 let activeNeural: NeuralPlayback | null = null;
+/** Resets the hook instance that owns `currentUtterance` when another one takes over. */
+let resetOwner: (() => void) | null = null;
+/** `currentUtterance` was paused before the device voice could start: start it on resume. */
+let pendingDeviceStart: (() => void) | null = null;
+let pausedUtterance = 0;
 
 function swallow(label: string): (error: unknown) => void {
   return (error) => logger.debug(`speech: ${label} failed`, error);
 }
 
-/** Silences whatever is playing (both engines). */
-function stopEverything(): void {
-  activeNeural?.stop();
+/** Silences whatever is playing (both engines); resolves once the audio session is released. */
+function stopEverything(): Promise<void> {
+  const released = activeNeural?.stop() ?? Promise.resolve();
   activeNeural = null;
+  pendingDeviceStart = null;
+  pausedUtterance = 0;
   Speech.stop().catch(swallow('stop'));
+  return released;
+}
+
+/** Another instance is about to speak: the current owner goes back to idle. */
+function supersede(): void {
+  const reset = resetOwner;
+  resetOwner = null;
+  reset?.();
 }
 
 export function useSpeaker(): Speaker {
@@ -107,8 +123,8 @@ export function useSpeaker(): Speaker {
       alive = false;
       if (mine.current !== 0 && mine.current === currentUtterance) {
         currentUtterance += 1;
-        stopEverything();
-        releaseSpeechPlayback();
+        resetOwner = null;
+        void stopEverything().then(releaseSpeechPlayback);
       }
     };
   }, []);
@@ -120,6 +136,9 @@ export function useSpeaker(): Speaker {
     setProgress(done ? 1 : 0);
     if (id === currentUtterance) {
       activeNeural = null;
+      resetOwner = null;
+      pendingDeviceStart = null;
+      pausedUtterance = 0;
       releaseSpeechPlayback();
     }
   }, []);
@@ -134,22 +153,27 @@ export function useSpeaker(): Speaker {
           finish(id, false);
           return;
         }
-        prepareSpeechPlayback();
-        Speech.speak(content, {
-          language: chosen?.language ?? FALLBACK_LANGUAGE,
-          voice: chosen?.identifier,
-          rate: SPEECH_RATE,
-          pitch: 1,
-          onBoundary: (event: { charIndex: number; charLength: number }) => {
-            if (id === mine.current) setProgress(offset + (1 - offset) * speechProgress(event.charIndex, event.charLength, content.length));
-          },
-          onDone: () => finish(id, true),
-          onStopped: () => finish(id, false),
-          onError: (error: Error) => {
-            logger.warn('speech: could not speak', error);
-            finish(id, false);
-          },
-        });
+        const start = () => {
+          prepareSpeechPlayback();
+          Speech.speak(content, {
+            language: chosen?.language ?? FALLBACK_LANGUAGE,
+            voice: chosen?.identifier,
+            rate: SPEECH_RATE,
+            pitch: 1,
+            onBoundary: (event: { charIndex: number; charLength: number }) => {
+              if (id === mine.current) setProgress(offset + (1 - offset) * speechProgress(event.charIndex, event.charLength, content.length));
+            },
+            onDone: () => finish(id, true),
+            onStopped: () => finish(id, false),
+            onError: (error: Error) => {
+              logger.warn('speech: could not speak', error);
+              finish(id, false);
+            },
+          });
+        };
+        // Paused while the voice loaded: wait for resume instead of talking over the pause.
+        if (pausedUtterance === id) pendingDeviceStart = start;
+        else start();
       });
     },
     [finish],
@@ -160,8 +184,10 @@ export function useSpeaker(): Speaker {
       const content = toSpokenText(text);
       currentUtterance += 1;
       const id = currentUtterance;
+      supersede();
       mine.current = id;
-      stopEverything();
+      resetOwner = () => finish(id, false);
+      void stopEverything();
       if (!content) {
         finish(id, false);
         return;
@@ -185,6 +211,9 @@ export function useSpeaker(): Speaker {
             if (id === mine.current) setProgress(value);
           },
           onDone: () => finish(id, true),
+          onInterrupted: () => {
+            if (id === mine.current) setPaused(true);
+          },
           onFallback: (rest, offset) => {
             if (id !== currentUtterance) return;
             activeNeural = null;
@@ -196,22 +225,25 @@ export function useSpeaker(): Speaker {
     [finish, speakWithDevice],
   );
 
-  const stop = useCallback(() => {
+  const stop = useCallback((): Promise<void> => {
     const id = mine.current;
+    let released = Promise.resolve();
     if (id !== 0 && id === currentUtterance) {
       currentUtterance += 1;
-      stopEverything();
-      releaseSpeechPlayback();
+      resetOwner = null;
+      released = stopEverything().then(releaseSpeechPlayback);
     }
     mine.current = 0;
     setSpeaking(false);
     setPaused(false);
     setProgress(0);
+    return released;
   }, []);
 
   const pause = useCallback(() => {
     if (mine.current === 0 || mine.current !== currentUtterance) return;
     setPaused(true);
+    pausedUtterance = mine.current;
     if (activeNeural) {
       activeNeural.pause();
       return;
@@ -225,8 +257,15 @@ export function useSpeaker(): Speaker {
   const resume = useCallback(() => {
     if (mine.current === 0 || mine.current !== currentUtterance) return;
     setPaused(false);
+    pausedUtterance = 0;
     if (activeNeural) {
       activeNeural.resume();
+      return;
+    }
+    const start = pendingDeviceStart;
+    pendingDeviceStart = null;
+    if (start) {
+      start();
       return;
     }
     Speech.resume().catch(swallow('resume'));

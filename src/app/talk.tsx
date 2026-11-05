@@ -70,9 +70,9 @@ export default function TalkScreen() {
       voice.stop();
       return;
     }
-    speaker.stop();
     setHint(null);
-    void voice.start();
+    // The natural voice releases the audio session asynchronously: dictation must start after it.
+    void speaker.stop().then(() => voice.start());
   };
 
   const reset = () => {

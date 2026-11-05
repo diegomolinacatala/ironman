@@ -83,8 +83,10 @@ Los inyecta Supabase automáticamente: `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` (o
 | `AI_WORKER_SECRET` | Igual que arriba | El mismo valor que el secreto `AI_SHARED_SECRET` del worker, **mínimo 32 caracteres** (p. ej. `openssl rand -hex 32`); más corto se ignora (y el worker responde `500 misconfigured`). |
 | `AI_MODEL` | No (por defecto `@cf/nvidia/nemotron-3-120b-a12b`) | Modelo de Workers AI para `coach` y `briefing`. Permitidos por el worker (todos del plan gratuito): `@cf/nvidia/nemotron-3-120b-a12b`, `@cf/meta/llama-4-scout-17b-16e-instruct`, `@cf/google/gemma-4-26b-a4b-it`. |
 | `AI_VISION_MODEL` | No (por defecto `@cf/meta/llama-4-scout-17b-16e-instruct`) | Modelo de Workers AI para las fotos de `meal` (debe aceptar imágenes). |
-| `SPEECH_USER_DAILY_LIMIT` | No (por defecto `300`) | Llamadas a `speech` por usuario en 24 h (ventana móvil). Al llegar, `429 rate_limited` y la app usa la voz del iPhone. |
-| `SPEECH_PREMIUM_DAILY_CHARS` | No (por defecto `2500`) | Caracteres por día UTC (Cloudflare reinicia las neuronas a las 00:00 UTC), sumando **todos** los usuarios, que se leen con la voz premium (Deepgram Aura-2). Pasado el presupuesto, voz básica (MeloTTS, mucho más barata). 2500 ≈ 6.800 de las 10.000 neuronas gratuitas (el LLM usa ≤ 1.500 al día). `0` = siempre básica. |
+| `SPEECH_USER_DAILY_CHARS` | No (por defecto `15000`) | Caracteres (de cualquier voz) que un usuario puede enviar a `speech` en 24 h (ventana móvil). Al llegar, `429 rate_limited` y la app usa la voz del iPhone. |
+| `SPEECH_USER_PREMIUM_DAILY_CHARS` | No (por defecto `1800`) | Parte del presupuesto premium que puede gastar **un** usuario por día UTC; pasado, ese usuario recibe la voz básica y el resto sigue teniendo premium. |
+| `SPEECH_PREMIUM_DAILY_CHARS` | No (por defecto `2500`) | Caracteres por día UTC (Cloudflare reinicia las neuronas a las 00:00 UTC), sumando **todos** los usuarios, que se leen con la voz premium (Deepgram Aura-2, 2.727 neuronas por 1.000 caracteres). Pasado el presupuesto, voz básica. 2500 ≈ 6.800 de las 10.000 neuronas gratuitas (el LLM usa ≤ 1.500 al día). `0` = siempre básica. |
+| `SPEECH_BASIC_DAILY_CHARS` | No (por defecto `60000`) | Caracteres por día UTC, sumando todos los usuarios, con la voz básica (MeloTTS, ~18,6 neuronas por minuto de audio ≈ 1.000 caracteres): 60.000 ≈ 1.100 neuronas. Pasado, `429 rate_limited` para todos hasta las 00:00 UTC. |
 | `ANTHROPIC_API_KEY` | No (opcional, de pago) | Claude `claude-opus-5-5`, solo si no está configurado el worker. Sin worker ni clave las tres funciones responden `503 {error:'ai_unavailable'}` y la app usa el motor de reglas, el informe local y la estimación local de comidas. `briefing` también usa `GARMIN_KEY_SECRET` (si está) para refrescar Garmin antes de preparar el informe. |
 
 **Una sola clave de Apple para push y Sign in with Apple.** En *Certificates, Identifiers & Profiles ›
@@ -137,7 +139,7 @@ npx supabase link --project-ref <ref>
 npx supabase db push                       # migraciones (RPC svc_* que usan estas funciones)
 npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
 npx supabase functions deploy coach briefing meal garmin mcp --use-api    # v2 (tras db push de 20261027000100_v2.sql)
-npx supabase functions deploy speech --use-api                            # voz natural (tras db push de 20261105000100_speech_budget.sql)
+npx supabase functions deploy speech --use-api                            # voz natural (junto con db push de 20261105000100_speech_budget.sql y 20261105000200_speech_budget_caps.sql)
 ```
 
 Cada función tiene su `deno.json` (`nodeModulesDir: "none"`) para que Deno no use el
@@ -206,13 +208,18 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
   caracteres tras recortar (se limpia de caracteres de control, markdown, emojis y espacios repetidos; si no queda
   nada, `400`); `voice`: `nestor` (por defecto), `carina`, `diana` o `alvaro`. Errores: `401`, `400`, `405`, `413`
   (cuerpo > 8 KB), `503 ai_unavailable` sin worker (`AI_WORKER_URL` + `AI_WORKER_SECRET` ≥ 32), `403 consent_required`
-  (`profiles.ai_consent_at` null), `429 rate_limited` (`SPEECH_USER_DAILY_LIMIT` llamadas en 24 h), `503 ai_unavailable`
+  (`profiles.ai_consent_at` null), `429 rate_limited` (el usuario llegó a `SPEECH_USER_DAILY_CHARS` en 24 h, o se
+  agotaron los presupuestos premium y básico del día UTC), `503 ai_unavailable`
   ante cualquier fallo del worker, timeout de 15 s o respuesta que no sea audio (con mensaje de límite diario si el
   worker responde `503 quota`), `500 internal`. Ante cualquier error la app usa la voz del iPhone.
-  `svc_reserve_speech(p_user, p_chars, p_user_limit, p_premium_budget)` reserva de forma atómica ANTES de llamar al
-  worker (las llamadas fallidas cuentan) una fila de `ai_usage` con `function_name = 'speech'`, `model` = tier e
-  `input_tokens` = caracteres; el tier es `premium` mientras los caracteres premium desde las 00:00 UTC (todos los
-  usuarios) más los de esta petición quepan en `SPEECH_PREMIUM_DAILY_CHARS`, si no `basic`. Llama a
+  `svc_reserve_speech(p_user, p_chars, p_user_daily_chars, p_user_premium_chars, p_premium_budget, p_basic_budget)`
+  (migración `20261105000200_speech_budget_caps.sql`) reserva de forma atómica ANTES de llamar al worker (las
+  llamadas fallidas cuentan) una fila de `ai_usage` con `function_name = 'speech'`, `model` = tier e
+  `input_tokens` = caracteres: `null` si los caracteres del usuario en 24 h más los de esta petición superan
+  `SPEECH_USER_DAILY_CHARS`; si no, `premium` cuando, desde las 00:00 UTC, los caracteres premium de todos los
+  usuarios caben en `SPEECH_PREMIUM_DAILY_CHARS` **y** los del usuario en `SPEECH_USER_PREMIUM_DAILY_CHARS`; si no,
+  `basic` cuando los caracteres básicos de todos caben en `SPEECH_BASIC_DAILY_CHARS`; si no, `null` (no se inserta
+  fila). Llama a
   `POST ${AI_WORKER_URL}/v1/speech` con `Authorization: Bearer <AI_WORKER_SECRET>`, `x-ai-client` (el mismo HMAC que
   el chat) y `{ text, voice, tier }`. Nunca registra el texto.
 - **apple-revoke** — `POST { authorizationCode }` (un código nuevo de `AppleAuthentication.signInAsync`)

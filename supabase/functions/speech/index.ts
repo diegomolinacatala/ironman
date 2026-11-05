@@ -1,8 +1,9 @@
 /**
  * Natural text-to-speech for the coach and the morning briefing: POST { text, voice? } with the
  * user JWT → 200 { audio (base64), mime, model, tier }. verify_jwt = false in config.toml; the JWT
- * is verified in code (userIdFromJwt), like `briefing`. Consent + svc_reserve_speech (per-user 24 h
- * limit, global premium budget per UTC day) before calling our Cloudflare worker (POST /v1/speech).
+ * is verified in code (userIdFromJwt), like `briefing`. Consent + svc_reserve_speech (per-user chars in
+ * 24 h, per-user and global premium budgets and global basic budget per UTC day) before calling our
+ * Cloudflare worker (POST /v1/speech).
  * Without AI_WORKER_URL + AI_WORKER_SECRET it answers 503 ai_unavailable (the app uses the iPhone voice).
  */
 import { bearerToken } from '../_shared/http.ts';

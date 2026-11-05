@@ -15,7 +15,7 @@ const mockSpeaker = {
   speak: jest.fn((_text: string) => undefined),
   pause: jest.fn(),
   resume: jest.fn(),
-  stop: jest.fn(),
+  stop: jest.fn(async () => undefined),
 };
 const mockGenerate = {
   mutateAsync: jest.fn(async (_args: { date: string; refresh?: boolean }) => BRIEFING),

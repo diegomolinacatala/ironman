@@ -28,7 +28,12 @@ export function useBriefingPlayer(): BriefingPlayer {
   useEffect(() => {
     stopRef.current = speaker.stop;
   });
-  useEffect(() => () => stopRef.current(), []);
+  useEffect(
+    () => () => {
+      void stopRef.current();
+    },
+    [],
+  );
 
   const play = (script: string) => {
     if (script.trim()) speaker.speak(script);

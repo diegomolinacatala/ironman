@@ -87,7 +87,7 @@ jest.mock('@/integrations/speech/useSpeaker', () => ({
     speak: mockSpeak,
     pause: jest.fn(),
     resume: jest.fn(),
-    stop: jest.fn(),
+    stop: jest.fn(async () => undefined),
   }),
 }));
 

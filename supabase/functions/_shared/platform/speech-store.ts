@@ -13,8 +13,10 @@ export function createSpeechBudgetStore(db: Db): SpeechBudgetStore {
         await db.rpc('svc_reserve_speech', {
           p_user: userId,
           p_chars: chars,
-          p_user_limit: limits.userDailyLimit,
+          p_user_daily_chars: limits.userDailyChars,
+          p_user_premium_chars: limits.userPremiumDailyChars,
           p_premium_budget: limits.premiumDailyChars,
+          p_basic_budget: limits.basicDailyChars,
         }),
         'svc_reserve_speech',
       );

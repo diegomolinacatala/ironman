@@ -17,6 +17,14 @@ describe('toSpokenText', () => {
     expect(toSpokenText('Mira la FC.')).toBe('Mira la frecuencia cardiaca.');
   });
 
+  test('reads paces and leaves accented words after numbers alone', () => {
+    expect(toSpokenText('Ritmo de 5\'15"/km.')).toBe('Ritmo de 5 minutos y 15 segundos el kilómetro.');
+    expect(toSpokenText('Corre a 5\'05 min/km.')).toBe('Corre a 5 minutos y 5 segundos el kilómetro.');
+    expect(toSpokenText('Tienes 3 hábitos y 2 ímpetus.')).toBe('Tienes 3 hábitos y 2 ímpetus.');
+    expect(toSpokenText('Haz 2h.')).toBe('Haz 2 horas.');
+    expect(toSpokenText('A 150 lpm.')).toBe('A 150 pulsaciones.');
+  });
+
   test('reads ranges but leaves dates alone', () => {
     expect(toSpokenText('Haz 3-4 series.')).toBe('Haz 3 a 4 series.');
     expect(toSpokenText('El 2026-11-05 descansas.')).toBe('El 2026-11-05 descansas.');

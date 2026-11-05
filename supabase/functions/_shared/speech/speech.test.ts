@@ -5,7 +5,14 @@ import type { Logger } from '../log.ts';
 import { USER } from '../testing/fakes.ts';
 import type { UUID } from '../types.ts';
 import { audioMime, bytesToBase64 } from './audio.ts';
-import { DEFAULT_SPEECH_PREMIUM_DAILY_CHARS, DEFAULT_SPEECH_USER_DAILY_LIMIT, speechLimits, speechWorkerConfig } from './config.ts';
+import {
+  DEFAULT_SPEECH_BASIC_DAILY_CHARS,
+  DEFAULT_SPEECH_PREMIUM_DAILY_CHARS,
+  DEFAULT_SPEECH_USER_DAILY_CHARS,
+  DEFAULT_SPEECH_USER_PREMIUM_DAILY_CHARS,
+  speechLimits,
+  speechWorkerConfig,
+} from './config.ts';
 import {
   handleSpeechHttp,
   parseSpeechRequest,
@@ -19,7 +26,7 @@ import type { SpeechHttpDeps } from './http.ts';
 import { SpeechUnavailableError } from './ports.ts';
 import type { SpeechAudio, SpeechLimits, SpeechPort, SpeechSynthesisRequest, SpeechTier } from './ports.ts';
 
-const LIMITS: SpeechLimits = { userDailyLimit: 300, premiumDailyChars: 2500 };
+const LIMITS: SpeechLimits = { userDailyChars: 15_000, userPremiumDailyChars: 1_800, premiumDailyChars: 2_500, basicDailyChars: 60_000 };
 const MP3 = new Uint8Array([0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0xff, 0xfb, 0x90, 0x64]);
 
 interface Harness {
@@ -164,6 +171,7 @@ test('429 rate_limited when the reservation is refused (worker not called)', asy
   assert.equal(res.status, 429);
   assert.deepEqual(res.body, { error: 'rate_limited', message: SPEECH_LIMITED_MESSAGE });
   assert.equal(h.calls.length, 0);
+  assert.match(SPEECH_LIMITED_MESSAGE, /límite de hoy.*voz del iPhone/);
 });
 
 test('503 ai_unavailable when the worker is not configured (no consent check, nothing reserved)', async () => {
@@ -242,16 +250,29 @@ test('audioMime accepts only audio/mpeg and audio/wav', () => {
 });
 
 test('speechLimits: defaults, overrides and invalid values', () => {
-  assert.deepEqual(speechLimits(() => undefined), {
-    userDailyLimit: DEFAULT_SPEECH_USER_DAILY_LIMIT,
+  const defaults: SpeechLimits = {
+    userDailyChars: DEFAULT_SPEECH_USER_DAILY_CHARS,
+    userPremiumDailyChars: DEFAULT_SPEECH_USER_PREMIUM_DAILY_CHARS,
     premiumDailyChars: DEFAULT_SPEECH_PREMIUM_DAILY_CHARS,
-  });
-  assert.deepEqual(DEFAULT_SPEECH_USER_DAILY_LIMIT, 300);
-  assert.deepEqual(DEFAULT_SPEECH_PREMIUM_DAILY_CHARS, 2500);
-  const env: Record<string, string> = { SPEECH_USER_DAILY_LIMIT: ' 50 ', SPEECH_PREMIUM_DAILY_CHARS: '0' };
-  assert.deepEqual(speechLimits((n) => env[n]), { userDailyLimit: 50, premiumDailyChars: 0 });
-  const bad: Record<string, string> = { SPEECH_USER_DAILY_LIMIT: '-3', SPEECH_PREMIUM_DAILY_CHARS: '99999999999' };
-  assert.deepEqual(speechLimits((n) => bad[n]), { userDailyLimit: 300, premiumDailyChars: 2500 });
+    basicDailyChars: DEFAULT_SPEECH_BASIC_DAILY_CHARS,
+  };
+  assert.deepEqual(speechLimits(() => undefined), defaults);
+  assert.deepEqual(defaults, { userDailyChars: 15_000, userPremiumDailyChars: 1_800, premiumDailyChars: 2_500, basicDailyChars: 60_000 });
+  const env: Record<string, string> = {
+    SPEECH_USER_DAILY_CHARS: ' 5000 ',
+    SPEECH_USER_PREMIUM_DAILY_CHARS: '600',
+    SPEECH_PREMIUM_DAILY_CHARS: '0',
+    SPEECH_BASIC_DAILY_CHARS: '1000',
+  };
+  assert.deepEqual(speechLimits((n) => env[n]), { userDailyChars: 5000, userPremiumDailyChars: 600, premiumDailyChars: 0, basicDailyChars: 1000 });
+  const bad: Record<string, string> = {
+    SPEECH_USER_DAILY_CHARS: '-3',
+    SPEECH_USER_PREMIUM_DAILY_CHARS: '1.5',
+    SPEECH_PREMIUM_DAILY_CHARS: '99999999999',
+    SPEECH_BASIC_DAILY_CHARS: 'lots',
+  };
+  assert.deepEqual(speechLimits((n) => bad[n]), defaults);
+  assert.deepEqual(speechLimits((n) => ({ SPEECH_USER_DAILY_LIMIT: '1' })[n]), defaults, 'the old call limit is ignored');
 });
 
 test('speechWorkerConfig needs the URL and a secret of at least 32 characters', () => {

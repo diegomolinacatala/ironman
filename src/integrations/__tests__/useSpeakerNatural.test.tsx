@@ -26,7 +26,7 @@ jest.mock('../speech/neuralSpeech', () => {
   return {
     calls,
     playNeural: (chunks: string[], voice: string, _synth: unknown, callbacks: unknown) => {
-      const playback = { pause: jest.fn(), resume: jest.fn(), stop: jest.fn() };
+      const playback = { pause: jest.fn(), resume: jest.fn(), stop: jest.fn(async () => undefined) };
       calls.push({ chunks, voice, callbacks, playback });
       return playback;
     },
@@ -127,6 +127,61 @@ describe('useSpeaker with the natural voice', () => {
     });
     await waitFor(() => expect(speech.spoken).toHaveLength(1));
     expect(calls).toHaveLength(0);
+  });
+
+  test('another screen speaking resets the first one (no stuck "playing" controls)', async () => {
+    const first = await renderHook(() => useSpeaker(), { wrapper });
+    const second = await renderHook(() => useSpeaker(), { wrapper });
+    await act(async () => {
+      first.result.current.speak('Informe.');
+    });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(first.result.current.speaking).toBe(true);
+    await act(async () => {
+      second.result.current.speak('Muestra.');
+    });
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[0].playback.stop).toHaveBeenCalled();
+    expect(first.result.current.speaking).toBe(false);
+    expect(second.result.current.speaking).toBe(true);
+  });
+
+  test('an interruption shows as paused; resume plays on', async () => {
+    const { result } = await renderHook(() => useSpeaker(), { wrapper });
+    await act(async () => {
+      result.current.speak('Hola.');
+    });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    await act(async () => {
+      calls[0].callbacks.onInterrupted?.();
+    });
+    expect(result.current.paused).toBe(true);
+    await act(async () => {
+      result.current.resume();
+    });
+    expect(calls[0].playback.resume).toHaveBeenCalledTimes(1);
+    expect(result.current.paused).toBe(false);
+  });
+
+  test('paused when the device voice takes over: it waits for resume', async () => {
+    const { result } = await renderHook(() => useSpeaker(), { wrapper });
+    await act(async () => {
+      result.current.speak('Uno. Dos.');
+    });
+    await waitFor(() => expect(calls).toHaveLength(1));
+    await act(async () => {
+      calls[0].callbacks.onFallback('Dos.', 0.5);
+      result.current.pause();
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(speech.spoken).toHaveLength(0);
+    await act(async () => {
+      result.current.resume();
+    });
+    expect(speech.spoken).toHaveLength(1);
+    expect(speech.spoken[0].text).toBe('Dos.');
   });
 
   test('a new text stops the natural playback of the previous one', async () => {
