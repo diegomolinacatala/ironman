@@ -6,13 +6,13 @@ import { StyleSheet, View } from 'react-native';
 
 import { intensityLabel, sportLabel } from '@/domain/labels';
 import { INTENSITIES, type Friend, type Intensity, type Sport, type UUID } from '@/domain/types';
-import { Chip, Text, TextField, space, useTheme } from '@/ui';
+import { Chip, Text, TextField, fonts, space, useTheme } from '@/ui';
 
 import { JOINT_SPORTS, normalizeTime } from './jointForm';
 
 export function FieldLabel({ children }: { children: string }) {
   return (
-    <Text variant="overline" color="textMuted" accessibilityRole="header">
+    <Text variant="caption" color="textMuted" accessibilityRole="header" style={styles.label}>
       {children}
     </Text>
   );
@@ -103,4 +103,5 @@ export function TimeInput({ value, onChange }: { value: string; onChange: (time:
 const styles = StyleSheet.create({
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   group: { gap: space.sm },
+  label: { fontFamily: fonts.bodySemibold },
 });

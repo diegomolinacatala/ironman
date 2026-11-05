@@ -10,6 +10,7 @@ import { BriefingCard } from '@/features/briefing/BriefingCard';
 import { Appear } from '@/features/today/Appear';
 import { Banners } from '@/features/today/Banners';
 import { MealsStrip } from '@/features/today/MealsStrip';
+import { QuickActions } from '@/features/today/QuickActions';
 import { RaceChip } from '@/features/today/RaceChip';
 import { TodayHeader } from '@/features/today/TodayHeader';
 import { TodaySessionSection } from '@/features/today/TodaySessionSection';
@@ -24,8 +25,9 @@ import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
 import { Screen, space } from '@/ui';
 
 /**
- * Hoy (v2): greeting, race chip, the "Informe de hoy" hero, today's session, today's meals,
- * tomorrow and Juntos at a glance. Talking to the coach lives in the tab-bar accessory.
+ * Hoy: greeting + race countdown, quick actions (check-in, imprevisto, comida), banners, the
+ * "Informe de hoy", today's session, today's meals, tomorrow and today's quedadas. Talking to
+ * the coach lives in the tab-bar accessory (inline here where there is none).
  */
 export default function TodayScreen() {
   const data = useTodayData();
@@ -35,6 +37,7 @@ export default function TodayScreen() {
   const [completing, setCompleting] = useState<Workout | null>(null);
   const [moving, setMoving] = useState<Workout | null>(null);
   const { today } = data;
+  const inlineAccessory = needsInlineAccessory();
 
   const openMore = (workout: Workout) =>
     sheet.open({
@@ -49,7 +52,7 @@ export default function TodayScreen() {
     <Screen
       onRefresh={() => void data.refresh()}
       refreshing={data.isRefreshing}
-      contentStyle={bottomPadding != null ? { paddingBottom: bottomPadding } : undefined}>
+      contentStyle={[styles.content, bottomPadding != null ? { paddingBottom: bottomPadding } : null]}>
       <Appear index={0} style={styles.header}>
         <TodayHeader
           greeting={greeting(data.displayName)}
@@ -57,8 +60,9 @@ export default function TodayScreen() {
           unread={data.unread}
         />
         {data.racesReady ? <RaceChip race={data.race} phase={data.phase} today={today} /> : null}
+        <QuickActions checkinDone={data.checkinDone} showMeal={!inlineAccessory} />
       </Appear>
-      {needsInlineAccessory() ? (
+      {inlineAccessory ? (
         <Appear index={1}>
           <CoachAccessory placement="regular" surface="card" />
         </Appear>
@@ -106,5 +110,6 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
+  content: { gap: space.xl },
   header: { gap: space.md },
 });

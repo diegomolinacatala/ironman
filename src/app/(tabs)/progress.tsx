@@ -1,8 +1,13 @@
-/** Progreso — fitness, volume, recovery and races. v2: a root-stack screen (native header), linked from Tú. */
-import { Stack, router } from 'expo-router';
+/**
+ * Progreso — form (PMC) → volume & compliance → recovery → nutrition → races.
+ * A tab since the 2026-11 rebrand; every section has one clear way into its detail screen.
+ */
+import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { isoWeekNumber, todayISO } from '@/domain/dates';
+import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
+import { NutritionSummaryCard } from '@/features/nutrition/NutritionSummaryCard';
 import { ComplianceCard } from '@/features/progress/ComplianceCard';
 import { PmcCard } from '@/features/progress/PmcCard';
 import { RecoveryCard } from '@/features/progress/RecoveryCard';
@@ -10,34 +15,7 @@ import { useProgressData } from '@/features/progress/useProgressData';
 import { VolumeCard } from '@/features/progress/VolumeCard';
 import { RaceCountdownCard } from '@/features/races/RaceCountdownCard';
 import { phaseName } from '@/features/races/raceModel';
-import { Card, Divider, ErrorNotice, IconButton, ListRow, Loading, Screen, SectionHeader, space } from '@/ui';
-
-function Links() {
-  return (
-    <Card variant="flat" padding="sm">
-      <ListRow
-        icon="flag"
-        title="Carreras"
-        subtitle="Calendario de carreras y prioridades A/B/C"
-        onPress={() => router.push('/races')}
-      />
-      <Divider inset={50} />
-      <ListRow
-        icon="food"
-        title="Nutrición"
-        subtitle="Lo que comes y cómo alimentarte en las sesiones clave"
-        onPress={() => router.push('/nutrition')}
-      />
-      <Divider inset={50} />
-      <ListRow
-        icon="coach"
-        title="Coach"
-        subtitle="Pide que ajuste tu semana según tu frescura"
-        onPress={() => router.push('/coach')}
-      />
-    </Card>
-  );
-}
+import { ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
 
 export default function ProgressScreen() {
   const today = todayISO();
@@ -45,22 +23,24 @@ export default function ProgressScreen() {
   const overline = data.phase
     ? `Semana ${isoWeekNumber(today)} · ${phaseName(data.phase.phase)}`
     : `Semana ${isoWeekNumber(today)}`;
+  const bottomPadding = useTabBottomPadding();
 
   return (
-    <Screen inSheet overline={overline} onRefresh={data.refetch} refreshing={data.isRefetching}>
-      <Stack.Screen
-        options={{
-          headerRight: () => <IconButton icon="mic" accessibilityLabel="Hablar con el coach" onPress={() => router.push('/talk')} />,
-        }}
-      />
+    <Screen
+      title="Progreso"
+      overline={overline}
+      onRefresh={data.refetch}
+      refreshing={data.isRefetching}
+      contentStyle={bottomPadding != null ? { paddingBottom: bottomPadding } : undefined}>
       {data.error ? <ErrorNotice message={data.error} onRetry={data.refetch} /> : null}
       {data.isLoading ? <Loading label="Calculando tu forma…" /> : null}
-      {data.pmc ? <PmcCard series={data.pmc} /> : null}
 
-      <View style={styles.section}>
-        <SectionHeader title="Próxima carrera" action={{ label: 'Carreras', onPress: () => router.push('/races') }} />
-        {!data.isLoading ? <RaceCountdownCard race={data.race} phase={data.phase} today={today} /> : null}
-      </View>
+      {data.pmc ? (
+        <View style={styles.section}>
+          <SectionHeader title="Tu forma" />
+          <PmcCard series={data.pmc} />
+        </View>
+      ) : null}
 
       {data.volume.length > 0 ? (
         <View style={styles.section}>
@@ -78,7 +58,17 @@ export default function ProgressScreen() {
         <RecoveryCard series={data.recovery} />
       </View>
 
-      <Links />
+      <View style={styles.section}>
+        <SectionHeader title="Nutrición" />
+        <NutritionSummaryCard totals={data.nutrition?.totals ?? null} entries={data.nutrition?.entries ?? 0} />
+      </View>
+
+      {!data.isLoading ? (
+        <View style={styles.section}>
+          <SectionHeader title="Carreras" />
+          <RaceCountdownCard race={data.race} phase={data.phase} today={today} />
+        </View>
+      ) : null}
     </Screen>
   );
 }

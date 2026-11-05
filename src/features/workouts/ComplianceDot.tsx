@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import type { Compliance } from '@/domain/load';
-import { Icon, Text, fonts, useTheme } from '@/ui';
+import { Icon, Text, fonts, readableTextOn, useTheme } from '@/ui';
 
 import { complianceMeta } from './complianceMeta';
 
@@ -18,7 +18,8 @@ export interface ComplianceDotProps {
 export function ComplianceDot({ state, size = 18 }: ComplianceDotProps): JSX.Element {
   const { colors } = useTheme();
   const meta = complianceMeta(state);
-  const fg = meta.color ? '#FFFFFF' : colors.textMuted;
+  // Glyph picks white or ink against the fill (amber needs ink to stay legible).
+  const fg = meta.color ? readableTextOn(meta.color) : colors.textMuted;
   const glyphSize = Math.round(size * 0.62);
   return (
     <View
@@ -50,5 +51,5 @@ export function ComplianceDot({ state, size = 18 }: ComplianceDotProps): JSX.Ele
 
 const styles = StyleSheet.create({
   dot: { alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
-  glyph: { fontFamily: fonts.displayHeavy, textAlign: 'center', includeFontPadding: false },
+  glyph: { fontFamily: fonts.display, textAlign: 'center', includeFontPadding: false },
 });

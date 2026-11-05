@@ -3,7 +3,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { formatDayLong, parseISODate, toISODate } from '@/domain/dates';
 import type { ISODate } from '@/domain/types';
-import { Text, TextField, radius, space, useTheme } from '@/ui';
+import { Text, TextField, fonts, radius, space, useTheme } from '@/ui';
 
 export interface RaceDateFieldProps {
   value: ISODate;
@@ -20,10 +20,10 @@ export function RaceDateField({ value, onChange }: RaceDateFieldProps) {
   if (Platform.OS === 'ios') {
     return (
       <View style={styles.field}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted" style={styles.label}>
           Fecha
         </Text>
-        <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
           <Text variant="body" style={styles.flex} numberOfLines={1}>
             {valid ? formatDayLong(value) : 'Elige fecha'}
           </Text>
@@ -33,7 +33,7 @@ export function RaceDateField({ value, onChange }: RaceDateFieldProps) {
             display="compact"
             locale="es-ES"
             themeVariant={isDark ? 'dark' : 'light'}
-            accentColor={colors.text}
+            accentColor={colors.accent}
             onValueChange={(_event, date) => onChange(toISODate(date))}
             accessibilityLabel="Fecha de la carrera"
           />
@@ -59,11 +59,12 @@ export function RaceDateField({ value, onChange }: RaceDateFieldProps) {
 
 const styles = StyleSheet.create({
   field: { gap: space.xs },
+  label: { fontFamily: fonts.bodySemibold },
   box: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    minHeight: 50,
+    minHeight: 48,
     borderWidth: 1,
     borderRadius: radius.md,
     paddingHorizontal: space.md,

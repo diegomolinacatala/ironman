@@ -11,7 +11,7 @@ import type {
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] as const;
 const WEEKDAYS_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] as const;
 
-/** "sábado 25 oct" (rendered uppercase by the overline style). */
+/** "sábado 25 oct". */
 export function todayHeadline(date: ISODate): string {
   const [y, m, d] = date.split('-').map((n) => Number.parseInt(n, 10));
   const js = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1, 12);

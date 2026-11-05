@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import type { FeedItem, ISODate, UUID } from '@/domain/types';
 import { useToggleKudos } from '@/data/queries';
 import { errorMessage, logger } from '@/lib/logger';
-import { Avatar, Icon, SportBadge, Text, haptics, radius, space, useTheme } from '@/ui';
+import { Avatar, Icon, SportBadge, Text, fonts, haptics, radius, space, useTheme } from '@/ui';
 
 import { showNotice } from './confirm';
 import { describeFeedItem } from './feedText';
@@ -27,7 +27,8 @@ function KudosButton({ item, isMine }: { item: FeedItem; isMine: boolean }) {
   const optimistic = toggle.isPending;
   const hasKudoed = optimistic ? !item.hasKudoed : item.hasKudoed;
   const count = Math.max(0, item.kudosCount + (optimistic ? (item.hasKudoed ? -1 : 1) : 0));
-  const color = hasKudoed ? colors.accentInk : colors.textMuted;
+  // Kudos is the one warm touch in the feed: a rose heart when given.
+  const color = hasKudoed ? colors.danger : colors.textMuted;
   const label = isMine
     ? `${count} ${count === 1 ? 'aplauso' : 'aplausos'}`
     : `${hasKudoed ? 'Quitar aplauso' : 'Dar aplauso'}. ${count} en total`;
@@ -52,7 +53,7 @@ function KudosButton({ item, isMine }: { item: FeedItem; isMine: boolean }) {
       onPress={() => void onPress()}
       style={({ pressed }) => [styles.kudos, pressed && { backgroundColor: colors.surfacePressed }]}>
       <Icon name={hasKudoed ? 'heart' : 'heartOutline'} size={18} color={color} />
-      <Text variant="caption" style={{ color }}>
+      <Text variant="caption" style={[styles.count, { color }]}>
         {count}
       </Text>
     </Pressable>
@@ -75,7 +76,7 @@ export function FeedItemRow({ item, myId, today, myName = null }: FeedItemRowPro
             {text.detail}
           </Text>
         ) : null}
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           {when}
         </Text>
       </View>
@@ -89,6 +90,7 @@ export function FeedItemRow({ item, myId, today, myName = null }: FeedItemRowPro
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.md, paddingVertical: space.md, alignItems: 'flex-start' },
+  count: { fontFamily: fonts.bodySemibold, fontVariant: ['tabular-nums'] },
   body: { flex: 1, gap: 2 },
   side: { alignItems: 'center', gap: space.xs },
   kudos: {

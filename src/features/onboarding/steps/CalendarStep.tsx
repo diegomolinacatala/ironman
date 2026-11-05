@@ -85,7 +85,7 @@ export function CalendarStep({ nav }: { nav: StepNav }) {
       </Appear>
       {permission === 'granted' ? (
         <Appear index={3} style={styles.block}>
-          <Text variant="overline" color="textMuted">
+          <Text variant="heading" accessibilityRole="header">
             Calendarios que miro para no pisarte planes
           </Text>
           <CalendarList

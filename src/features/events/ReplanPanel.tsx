@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { formatDayLabel, formatTime, todayISO } from '@/domain/dates';
 import type { LifeEvent } from '@/domain/types';
-import { Button, Card, Icon, Text, space, useTheme } from '@/ui';
+import { Button, Card, Icon, Text, iconSize, radius, space, useTheme } from '@/ui';
 
 import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { closeModal } from '@/features/workouts/ModalClose';
@@ -25,19 +25,20 @@ export function ReplanPanel({ event }: { event: LifeEvent }) {
   const replan = useReplanForEvent(event);
   return (
     <View style={styles.root}>
-      <Card variant="inverse" padding="lg" style={styles.saved}>
+      <Card variant="tinted" tint={colors.accentSoft} padding="lg" style={styles.saved}>
         <View style={styles.row}>
           <View style={[styles.icon, { backgroundColor: colors.accent }]}>
-            <Icon name={lifeEventIcon(event.kind)} size={22} color={colors.onAccent} />
+            <Icon name={lifeEventIcon(event.kind)} size={iconSize.md} color={colors.onAccent} />
           </View>
           <View style={styles.flex}>
-            <Text variant="overline" style={{ color: colors.inverseText, opacity: 0.7 }}>
-              Imprevisto guardado
-            </Text>
-            <Text variant="heading" style={{ color: colors.inverseText }}>
-              {event.title}
-            </Text>
-            <Text variant="caption" style={{ color: colors.inverseText, opacity: 0.7 }}>
+            <View style={styles.savedHead}>
+              <Icon name="checkCircle" size={iconSize.sm} color={colors.success} />
+              <Text variant="caption" color="onAccentSoft">
+                Imprevisto guardado
+              </Text>
+            </View>
+            <Text variant="heading">{event.title}</Text>
+            <Text variant="caption" color="textMuted">
               {eventWhen(event)}
             </Text>
           </View>
@@ -82,6 +83,7 @@ const styles = StyleSheet.create({
   root: { gap: space.md },
   saved: { marginBottom: space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  icon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  savedHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   flex: { flex: 1, gap: 2 },
 });

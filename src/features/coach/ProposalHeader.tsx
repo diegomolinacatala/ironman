@@ -26,13 +26,15 @@ export function ProposalHeader({ proposal }: { proposal: PlanProposal }) {
       </View>
       <View style={styles.weekRow}>
         <Icon name="week" size={14} color={colors.textMuted} />
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted">
           {`Semana ${formatWeekRange(proposal.weekStart)} · ${changeCountLabel(proposal.changes.length)}`}
         </Text>
       </View>
-      <Text variant="heading">{proposal.summary}</Text>
+      <Text variant="title" accessibilityRole="header">
+        {proposal.summary}
+      </Text>
       {proposal.model ? (
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           {`Modelo: ${proposal.model}`}
         </Text>
       ) : null}

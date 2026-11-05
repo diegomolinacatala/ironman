@@ -124,9 +124,7 @@ function FriendDay({ friend, props, mine }: { friend: Friend; props: ConflictPre
   const slots = daySlots(props.date, mine, items, Math.max(MIN_FIT_MINUTES, props.durationMin));
   return (
     <View style={styles.person}>
-      <Text variant="overline" color="textMuted">
-        {name}
-      </Text>
+      <Text variant="bodyStrong">{name}</Text>
       <ReportLines report={report} who={{ isMe: false, name }} timed={Boolean(props.startTime)} sport={props.sport} />
       {slots.length > 0 ? (
         <View style={styles.slots}>
@@ -171,16 +169,14 @@ export function ConflictPreview(props: ConflictPreviewProps) {
 
   return (
     <Card padding="lg" variant="flat">
-      <Text variant="overline" color="textMuted" accessibilityRole="header">
+      <Text variant="heading" accessibilityRole="header">
         {formatDayLabel(props.date, props.today)} · así estáis
       </Text>
       {loading ? (
         <Loading />
       ) : (
         <View style={styles.person}>
-          <Text variant="overline" color="textMuted">
-            Tú
-          </Text>
+          <Text variant="bodyStrong">Tú</Text>
           <ReportLines report={report} who={{ isMe: true, name: 'Tú' }} timed={Boolean(props.startTime)} sport={props.sport} />
         </View>
       )}

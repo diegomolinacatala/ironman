@@ -1,37 +1,36 @@
 import { StyleSheet, View } from 'react-native';
 
 import type { RacePriority } from '@/domain/types';
-import { Text, useTheme } from '@/ui';
+import { Text, fonts, useTheme, type Theme } from '@/ui';
 
 import { PRIORITY_INFO } from './raceModel';
 
-/** Race-bib style A/B/C square: A solid ink, B outlined, C soft. */
-export function PriorityBadge({ priority, size = 28, inverse = false }: { priority: RacePriority; size?: number; inverse?: boolean }) {
+interface BadgeStyle {
+  bg: string;
+  border: string;
+  fg: string;
+}
+
+/** A = accent fill (the goal), B = soft brand tint, C = neutral outline. */
+function badgeStyle(priority: RacePriority, colors: Theme['colors']): BadgeStyle {
+  if (priority === 'A') return { bg: colors.accent, border: colors.accent, fg: colors.onAccent };
+  if (priority === 'B') return { bg: colors.accentSoft, border: colors.accentSoft, fg: colors.onAccentSoft };
+  return { bg: colors.surface, border: colors.borderStrong, fg: colors.textMuted };
+}
+
+/** A/B/C priority square. */
+export function PriorityBadge({ priority, size = 28 }: { priority: RacePriority; size?: number }) {
   const { colors } = useTheme();
-  const ink = inverse ? colors.inverseText : colors.text;
-  const paper = inverse ? colors.inverseBg : colors.bg;
-  const style =
-    priority === 'A'
-      ? { backgroundColor: ink, borderColor: ink, color: paper }
-      : priority === 'B'
-        ? { backgroundColor: 'transparent', borderColor: ink, color: ink }
-        : { backgroundColor: 'transparent', borderColor: inverse ? 'rgba(127,127,127,0.6)' : colors.borderStrong, color: inverse ? ink : colors.textMuted };
+  const style = badgeStyle(priority, colors);
   return (
     <View
       accessible
       accessibilityLabel={`Prioridad ${priority}: ${PRIORITY_INFO[priority].title}`}
       style={[
         styles.badge,
-        {
-          width: size,
-          height: size,
-          borderRadius: size * 0.28,
-          backgroundColor: style.backgroundColor,
-          borderColor: style.borderColor,
-          borderStyle: priority === 'C' ? 'dashed' : 'solid',
-        },
+        { width: size, height: size, borderRadius: Math.round(size * 0.3), backgroundColor: style.bg, borderColor: style.border },
       ]}>
-      <Text variant="title" style={{ color: style.color, fontSize: size * 0.62, lineHeight: size * 0.74 }}>
+      <Text maxFontSizeMultiplier={1} style={[styles.letter, { color: style.fg, fontSize: size * 0.5, lineHeight: size * 0.62 }]}>
         {priority}
       </Text>
     </View>
@@ -39,5 +38,6 @@ export function PriorityBadge({ priority, size = 28, inverse = false }: { priori
 }
 
 const styles = StyleSheet.create({
-  badge: { alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  badge: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  letter: { fontFamily: fonts.bodyBold },
 });

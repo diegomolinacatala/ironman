@@ -42,8 +42,8 @@ export function NutritionEntryForm({ date, saving, onSubmit }: NutritionEntryFor
 
   return (
     <Card variant="flat" padding="lg" style={styles.card}>
-      <Text variant="overline" color="textMuted">
-        Añadir
+      <Text variant="heading" accessibilityRole="header">
+        Añadir comida
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
         {MEAL_SLOTS.map((slot: MealSlot) => (

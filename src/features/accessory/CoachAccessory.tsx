@@ -16,22 +16,26 @@ export interface CoachAccessoryProps {
   surface: AccessorySurface;
 }
 
+export const TALK_LABEL = 'Habla con tu coach';
+const TALK_HINT = 'Cuéntale cómo estás, un imprevisto o un cambio en tu semana';
 const TARGET = 44;
+const MIC_BADGE = 32;
 
 function surfaceStyle(surface: AccessorySurface, { colors, isDark }: Theme): ViewStyle {
   if (surface === 'glass') return {};
   const shadow: ViewStyle =
     surface === 'floating' && !isDark
-      ? { shadowColor: colors.shadow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 4 }
+      ? { shadowColor: colors.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 }
       : {};
   return { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, ...shadow };
 }
 
+/** Navy (sky in dark) disc with the mic: the brand mark of "talk to your coach". */
 function MicBadge() {
   const { colors } = useTheme();
   return (
     <View style={[styles.mic, { backgroundColor: colors.accent }]}>
-      <Icon name="mic" size={18} color={colors.onAccent} />
+      <Icon name="mic" size={16} color={colors.onAccent} />
     </View>
   );
 }
@@ -46,8 +50,28 @@ function CameraButton() {
       onPress={openMealCamera}
       hitSlop={4}
       style={({ pressed }) => [styles.iconTarget, pressed && { backgroundColor: colors.surfacePressed }]}>
-      <Icon name="camera" size={20} color={colors.text} />
+      <Icon name="camera" size={20} color={colors.textMuted} />
     </Pressable>
+  );
+}
+
+/** Minimized tab bar (iOS 26 'inline'): two labelled icons, the mic in the brand colour. */
+function InlineAccessory({ surface }: { surface: AccessorySurface }) {
+  const theme = useTheme();
+  const { colors } = theme;
+  return (
+    <View style={[styles.inline, surfaceStyle(surface, theme)]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={TALK_LABEL}
+        accessibilityHint={TALK_HINT}
+        onPress={openTalk}
+        hitSlop={4}
+        style={({ pressed }) => [styles.iconTarget, pressed && { backgroundColor: colors.surfacePressed }]}>
+        <Icon name="mic" size={20} color={colors.accentInk} />
+      </Pressable>
+      <CameraButton />
+    </View>
   );
 }
 
@@ -56,33 +80,19 @@ export function CoachAccessory({ placement, surface }: CoachAccessoryProps) {
   const theme = useTheme();
   const { colors } = theme;
 
-  if (placement === 'inline') {
-    return (
-      <View style={[styles.inline, surfaceStyle(surface, theme)]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Cuéntaselo a tu coach"
-          onPress={openTalk}
-          hitSlop={4}
-          style={({ pressed }) => [styles.iconTarget, pressed && { backgroundColor: colors.surfacePressed }]}>
-          <Icon name="mic" size={20} color={colors.text} />
-        </Pressable>
-        <CameraButton />
-      </View>
-    );
-  }
+  if (placement === 'inline') return <InlineAccessory surface={surface} />;
 
   return (
     <View style={[styles.regular, surface !== 'glass' && styles.padded, surfaceStyle(surface, theme)]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Cuéntaselo a tu coach"
-        accessibilityHint="Habla con tu coach: cómo estás, un imprevisto, un cambio en tu semana"
+        accessibilityLabel={TALK_LABEL}
+        accessibilityHint={TALK_HINT}
         onPress={openTalk}
-        style={({ pressed }) => [styles.talk, { opacity: pressed ? 0.7 : 1 }]}>
+        style={({ pressed }) => [styles.talk, { opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }]}>
         <MicBadge />
         <Text variant="bodyStrong" numberOfLines={1} style={styles.flex}>
-          Cuéntaselo a tu coach
+          {TALK_LABEL}
         </Text>
       </Pressable>
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -93,9 +103,9 @@ export function CoachAccessory({ placement, surface }: CoachAccessoryProps) {
 
 const styles = StyleSheet.create({
   regular: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: space.sm, flex: 1 },
-  padded: { borderRadius: radius.pill, paddingVertical: space.xs, flex: 0 },
-  talk: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: TARGET },
-  mic: { width: 32, height: 32, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  padded: { borderRadius: radius.pill, paddingVertical: space.xs, paddingLeft: space.xs + 2, flex: 0 },
+  talk: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: TARGET },
+  mic: { width: MIC_BADGE, height: MIC_BADGE, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   divider: { width: StyleSheet.hairlineWidth, height: 24 },
   iconTarget: { width: TARGET, height: TARGET, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   inline: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.xs, flex: 1 },

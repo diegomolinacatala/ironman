@@ -2,10 +2,10 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BrandMark } from '@/features/account/BrandMark';
 import { Button, Icon, IconButton, Text, radius, space, useTheme, type IconName } from '@/ui';
 
 import { Appear } from './Appear';
-import { useInk } from './GuideParts';
 import type { OnboardingStep } from './onboardingModel';
 
 export interface StepAction {
@@ -46,9 +46,10 @@ function isAction(value: StepAction | ReactElement): value is StepAction {
 }
 
 /**
- * Shell of an onboarding step: back + progress at the top, a big friendly
- * heading, the step body (scrolls, keyboard-aware) and ONE primary action
- * pinned above the bottom safe area.
+ * Shell of an onboarding step: back + progress at the top, a clear heading
+ * (icon tile → step label → title → one-line why), the step body (scrolls,
+ * keyboard-aware) and ONE primary action pinned above the bottom safe area,
+ * with at most one quiet secondary action under it.
  */
 export function StepLayout({ nav, busy = false, primary, secondary, title, children }: StepLayoutProps) {
   const { colors } = useTheme();
@@ -86,6 +87,7 @@ export function StepLayout({ nav, busy = false, primary, secondary, title, child
   );
 }
 
+/** Segmented bar: done and current steps in the brand colour, the rest as hairline tracks. */
 function Progress({ index, total }: { index: number; total: number }) {
   const { colors } = useTheme();
   return (
@@ -99,7 +101,7 @@ function Progress({ index, total }: { index: number; total: number }) {
         {Array.from({ length: total }, (_, i) => (
           <View
             key={i}
-            style={[styles.segment, { backgroundColor: i < index ? colors.text : i === index ? colors.accent : colors.surfaceAlt }]}
+            style={[styles.segment, { backgroundColor: i <= index ? colors.accent : colors.border }]}
           />
         ))}
       </View>
@@ -112,13 +114,19 @@ function Progress({ index, total }: { index: number; total: number }) {
 
 function StepHeading({ step, title }: { step: OnboardingStep; title?: string }) {
   const { colors } = useTheme();
-  const { ink } = useInk();
   return (
     <Appear style={styles.heading}>
-      <View style={[styles.iconTile, { backgroundColor: ink }]}>
-        <Icon name={step.icon} size={30} color={colors.accent} />
-      </View>
-      <Text variant="overline" color="accentInk">
+      {/* The welcome step introduces the brand: the mark instead of a generic icon. */}
+      {step.id === 'welcome' ? (
+        <View style={styles.markSlot}>
+          <BrandMark size={ICON_TILE} />
+        </View>
+      ) : (
+        <View style={[styles.iconTile, { backgroundColor: colors.accentSoft }]}>
+          <Icon name={step.icon} size={28} color={colors.onAccentSoft} />
+        </View>
+      )}
+      <Text variant="overline" color="textMuted">
         {step.overline}
       </Text>
       <Text variant="display" accessibilityRole="header">
@@ -130,6 +138,8 @@ function StepHeading({ step, title }: { step: OnboardingStep; title?: string }) 
     </Appear>
   );
 }
+
+const ICON_TILE = 56;
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -147,7 +157,7 @@ const styles = StyleSheet.create({
   backSlot: { width: 44, height: 44, justifyContent: 'center' },
   progressWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm },
   progress: { flex: 1, flexDirection: 'row', gap: 4 },
-  segment: { flex: 1, height: 6, borderRadius: 3 },
+  segment: { flex: 1, height: 4, borderRadius: 2 },
   scroll: {
     paddingHorizontal: space.lg,
     paddingTop: space.lg,
@@ -157,14 +167,15 @@ const styles = StyleSheet.create({
     maxWidth: 720,
     alignSelf: 'center',
   },
-  heading: { gap: space.sm },
+  heading: { gap: space.xs },
+  markSlot: { marginBottom: space.md },
   iconTile: {
-    width: 64,
-    height: 64,
+    width: ICON_TILE,
+    height: ICON_TILE,
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: space.sm,
+    marginBottom: space.md,
   },
   footer: {
     paddingHorizontal: space.lg,

@@ -1,8 +1,10 @@
 import { fonts, intensityColor, type Theme } from '@/ui';
 
 /**
- * Chart colours derived from theme tokens. Green/yellow/orange/red stay
- * reserved for compliance, so load lines use ink, hot pink and info blue.
+ * Chart colours derived from theme tokens: calm, data-first. Gridlines are hairlines in
+ * `border`, labels in `textMuted`. Green/yellow/orange/red stay reserved for compliance, so the
+ * load series use the brand ink (Forma física), a muted rose (Fatiga) and steel blue (Frescura).
+ * Series also differ by mark (thick line + area, thin line, bars) and are named in the legend.
  */
 export interface ChartPalette {
   fitness: string;
@@ -22,17 +24,17 @@ export interface ChartPalette {
 export function chartPalette(theme: Theme): ChartPalette {
   const { colors } = theme;
   return {
-    fitness: colors.text,
+    fitness: colors.accentInk,
     fatigue: intensityColor.vo2,
-    freshPositive: colors.info,
+    freshPositive: intensityColor.endurance,
     freshNegative: colors.textFaint,
     grid: colors.border,
-    axis: colors.textFaint,
-    projection: colors.surfaceAlt,
-    band: theme.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(21,23,26,0.04)',
+    axis: colors.textMuted,
+    projection: colors.bg,
+    band: colors.surfaceAlt,
     today: colors.text,
-    marker: colors.accent,
+    marker: colors.surface,
     background: colors.surface,
-    font: fonts.displayMedium,
+    font: fonts.bodyMedium,
   };
 }

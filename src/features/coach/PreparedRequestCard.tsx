@@ -20,10 +20,10 @@ export function PreparedRequestCard({ prepared, disabled, onSend, onDismiss }: P
   return (
     <View
       accessibilityLabel={`Petición preparada: ${prepared.text}`}
-      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
+      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.head}>
-        <Icon name="send" size={14} color={colors.textMuted} />
-        <Text variant="overline" color="textMuted">
+        <Icon name="send" size={14} color={colors.accentInk} />
+        <Text variant="callout" color="accentInk">
           ¿Se lo enviamos al coach?
         </Text>
       </View>
@@ -42,7 +42,7 @@ export function PreparedRequestCard({ prepared, disabled, onSend, onDismiss }: P
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: radius.lg, padding: space.lg, gap: space.sm },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, padding: space.lg, gap: space.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   actions: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs },
   flex: { flex: 1 },

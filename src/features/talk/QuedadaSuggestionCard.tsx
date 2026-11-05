@@ -8,22 +8,24 @@ import { prefillFromQuedada, quedadaDetail, quedadaHeading } from './quedadaSugg
 
 export interface QuedadaSuggestionCardProps {
   quedada: QuedadaSuggestion;
+  /** A plan proposal holds the primary action: this button steps down to secondary. */
+  quiet?: boolean;
 }
 
 /**
- * The quedada your coach suggests with a friend. Nothing is sent from here:
- * the button opens the "nueva quedada" form prefilled, to review and send.
+ * The quedada your coach suggests with a friend ("juntos" = soft brand tint). Nothing is sent
+ * from here: the button opens the "nueva quedada" form prefilled, to review and send.
  */
-export function QuedadaSuggestionCard({ quedada }: QuedadaSuggestionCardProps) {
+export function QuedadaSuggestionCard({ quedada, quiet = false }: QuedadaSuggestionCardProps) {
   const { colors } = useTheme();
   const heading = quedadaHeading(quedada);
   const detail = quedadaDetail(quedada);
   return (
-    <Card variant="raised" style={styles.card}>
+    <Card variant="tinted" tint={colors.accentSoft} style={styles.card}>
       <View style={styles.head} accessible accessibilityLabel={`${heading}. ${detail}`}>
         <SportBadge sport={quedada.sport} size={36} />
         <View style={styles.flex}>
-          <Text variant="overline" color="textMuted">
+          <Text variant="caption" color="onAccentSoft">
             Propuesta de tu coach
           </Text>
           <Text variant="heading">{heading}</Text>
@@ -34,7 +36,7 @@ export function QuedadaSuggestionCard({ quedada }: QuedadaSuggestionCardProps) {
       </View>
       {quedada.reason ? (
         <View style={styles.reason}>
-          <Icon name="together" size={14} color={colors.textMuted} />
+          <Icon name="together" size={14} color={colors.onAccentSoft} style={styles.reasonIcon} />
           <Text variant="caption" color="textMuted" style={styles.flex}>
             {quedada.reason}
           </Text>
@@ -43,6 +45,7 @@ export function QuedadaSuggestionCard({ quedada }: QuedadaSuggestionCardProps) {
       <Button
         label="Preparar la invitación"
         icon="send"
+        variant={quiet ? 'secondary' : 'primary'}
         fullWidth
         accessibilityHint={`Abre la quedada con ${quedada.friendName} ya rellena para revisarla antes de enviarla`}
         onPress={() => openJointNew(prefillFromQuedada(quedada))}
@@ -55,5 +58,6 @@ const styles = StyleSheet.create({
   card: { gap: space.md },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   reason: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  reasonIcon: { marginTop: 2 },
   flex: { flex: 1 },
 });

@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { IconButton, Text, useTheme } from '@/ui';
+import { IconButton, Text, readableTextOn, useTheme } from '@/ui';
 
 /** Bell with unread badge → /notifications. */
 export function BellButton({ unread }: { unread: number }) {
@@ -12,7 +12,7 @@ export function BellButton({ unread }: { unread: number }) {
       <IconButton icon="bell" variant="filled" size={44} accessibilityLabel={label} onPress={() => router.push('/notifications')} />
       {unread > 0 ? (
         <View style={[styles.badge, { backgroundColor: colors.danger, borderColor: colors.bg }]}>
-          <Text variant="caption" style={styles.badgeText} allowFontScaling={false}>
+          <Text variant="caption" style={[styles.badgeText, { color: readableTextOn(colors.danger) }]} allowFontScaling={false}>
             {unread > 9 ? '9+' : String(unread)}
           </Text>
         </View>
@@ -35,5 +35,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: '#FFFFFF', fontSize: 11, lineHeight: 13 },
+  badgeText: { fontSize: 11, lineHeight: 13 },
 });

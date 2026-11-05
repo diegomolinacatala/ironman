@@ -4,6 +4,7 @@ import type { ISODate, JointSession, NutritionLog, PlanProposal, Race, UUID, Wor
 import { useAuth } from '@/data/context';
 import {
   useBriefing,
+  useCheckins,
   useIntegrations,
   useJointSessions,
   useNotifications,
@@ -17,7 +18,7 @@ import {
 import { garminState } from '@/features/briefing/briefingModel';
 import { logger } from '@/lib/logger';
 
-import { pendingInvites, unreadCount, workoutsOn } from './selectors';
+import { checkinFor, pendingInvites, unreadCount, workoutsOn } from './selectors';
 import { mealsOfDay } from './todayModel';
 
 const JOINT_LOOKAHEAD_DAYS = 30;
@@ -39,6 +40,8 @@ export interface TodayData {
   phase: PhaseInfo | null;
   /** Today's nutrition entries, in logging order. */
   meals: NutritionLog[];
+  /** Today's check-in is already saved. */
+  checkinDone: boolean;
   unread: number;
   isLoading: boolean;
   error: unknown;
@@ -62,9 +65,10 @@ export function useTodayData(): TodayData {
   const notifications = useNotifications();
   const integrations = useIntegrations();
   const briefing = useBriefing(today);
+  const checkins = useCheckins({ from: today, to: today });
   const syncGarmin = useSyncGarmin();
 
-  const all = [workouts, races, profile, nutrition, proposals, joint, notifications, integrations, briefing];
+  const all = [workouts, races, profile, nutrition, proposals, joint, notifications, integrations, briefing, checkins];
   const raceList = races.data ?? [];
   const sessions = joint.data ?? [];
   const garminConnected = garminState(integrations.data) === 'connected';
@@ -93,6 +97,7 @@ export function useTodayData(): TodayData {
     racesReady: !races.isLoading,
     phase: raceList.length > 0 ? phaseFor(today, raceList) : null,
     meals: mealsOfDay(nutrition.data, today),
+    checkinDone: checkinFor(checkins.data, today) != null,
     unread: unreadCount(notifications.data),
     // Only the plan itself blocks its section; secondary cards degrade gracefully.
     isLoading: workouts.isLoading,

@@ -20,7 +20,7 @@ import { useRotatingStep } from './useRotatingStep';
 export const INTEGRATIONS_ROUTE = '/settings/integrations';
 
 /**
- * "Informe de hoy" hero card on Hoy: headline + last night + ▶ Escuchar, or the way to get one
+ * "Informe de hoy" card on Hoy (flat: the raised card is today's session, the screen's one primary): headline + last night + ▶ Escuchar, or the way to get one
  * (prepare it, or connect Garmin first).
  */
 export function BriefingCard({ date }: { date: ISODate }) {
@@ -35,7 +35,7 @@ export function BriefingCard({ date }: { date: ISODate }) {
   };
 
   return (
-    <Card variant="raised" padding="lg" style={styles.card}>
+    <Card padding="lg" style={styles.card}>
       <CardOverline engine={briefing?.engine} />
       {ctrl.state === 'ready' && briefing ? (
         <>

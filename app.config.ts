@@ -45,7 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: BUNDLE_ID,
     adaptiveIcon: {
-      backgroundColor: '#15171A',
+      backgroundColor: '#1F3A68',
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
@@ -60,10 +60,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-splash-screen',
       {
-        backgroundColor: '#F4F1EA',
-        dark: { backgroundColor: '#0D0F12' },
+        backgroundColor: '#F6F5F1',
+        dark: { backgroundColor: '#0E1116' },
         image: './assets/images/splash-icon.png',
-        imageWidth: 96,
+        imageWidth: 120,
       },
     ],
     'expo-font',
@@ -74,7 +74,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     '@react-native-community/datetimepicker',
     'expo-sharing',
     // TestFlight/App Store builds talk to the production APNs gateway.
-    ['expo-notifications', { color: '#D4FF3A', mode: 'production' }],
+    ['expo-notifications', { color: '#1F3A68', mode: 'production' }],
     [
       'expo-calendar',
       {

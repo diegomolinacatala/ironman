@@ -223,6 +223,9 @@ describe('v2 onboarding', () => {
     expect(await screen.findByText('Tu coach de bolsillo')).toBeTruthy();
     expect(screen.getByDisplayValue('Diego')).toBeTruthy();
     expect(screen.getByText('Lee tu Garmin')).toBeTruthy();
+    // The welcome step introduces the brand mark instead of a generic icon tile.
+    expect(screen.getByTestId('brand-mark', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: /^Paso 1 de \d+$/ })).toBeTruthy();
     await press('Empezar');
 
     // 2 · Objetivo
@@ -240,6 +243,8 @@ describe('v2 onboarding', () => {
     await waitFor(() => expect(mockConnectGarmin).toHaveBeenCalledTimes(1));
     expect(mockConnectGarmin.mock.calls[0]?.[0]).toEqual({ apiKey: 'garmin-personal-api-key-1234567890', expiresAt: addDays(todayISO(), 365) });
     expect(await screen.findByText('Garmin conectado')).toBeTruthy();
+    expect(screen.getByTestId('success-check')).toBeTruthy();
+    expect(screen.queryByTestId('brand-mark', { includeHiddenElements: true })).toBeNull();
     await press('Continuar');
 
     // 4 · Claude: consent, then the link is created and copied, then live verification

@@ -2,7 +2,18 @@ import { Text as RNText, type TextProps as RNTextProps } from 'react-native';
 
 import { type ThemeColors, type TypeVariant, type as typeStyles, useTheme } from './theme';
 
-type ColorToken = 'text' | 'textMuted' | 'textFaint' | 'accentInk' | 'onAccent' | 'inverseText' | 'success' | 'warning' | 'danger' | 'info';
+type ColorToken =
+  | 'text'
+  | 'textMuted'
+  | 'textFaint'
+  | 'accentInk'
+  | 'onAccent'
+  | 'onAccentSoft'
+  | 'inverseText'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info';
 
 export interface TextProps extends RNTextProps {
   variant?: TypeVariant;

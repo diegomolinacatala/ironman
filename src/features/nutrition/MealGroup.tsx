@@ -47,7 +47,7 @@ function MealThumb({ id }: { id: UUID }) {
 export function MealGroup({ group, deletingId, onDelete }: MealGroupProps) {
   return (
     <View style={styles.group}>
-      <Text variant="overline" color="textMuted" accessibilityRole="header">
+      <Text variant="bodyStrong" color="textMuted" accessibilityRole="header" style={styles.slot}>
         {mealLabel(group.slot)}
       </Text>
       <Card variant="flat" padding="sm">
@@ -84,6 +84,7 @@ export function MealGroup({ group, deletingId, onDelete }: MealGroupProps) {
 
 const styles = StyleSheet.create({
   group: { gap: space.xs },
+  slot: { paddingHorizontal: space.xs },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.sm, paddingVertical: space.xs },
   text: { flex: 1, gap: 2 },
   deleting: { opacity: 0.4 },

@@ -4,6 +4,8 @@ import { weekdayLabel } from '@/domain/labels';
 import type { Availability, Weekday } from '@/domain/types';
 import { Chip, Stepper, Text, space, useTheme } from '@/ui';
 
+import { FormLabel } from './FormLabel';
+
 import {
   MAX_WEEKLY_HOURS,
   MIN_WEEKLY_HOURS,
@@ -70,9 +72,7 @@ export function AvailabilityEditor({ value, onChange }: AvailabilityEditorProps)
       />
 
       <View style={styles.block}>
-        <Text variant="overline" color="textMuted">
-          Franjas para entrenar
-        </Text>
+        <FormLabel>Franjas para entrenar</FormLabel>
         <WindowsGrid
           windows={value.windows}
           restDay={value.restDay}
@@ -95,9 +95,7 @@ export function AvailabilityEditor({ value, onChange }: AvailabilityEditorProps)
 function RestDayPicker({ value, onChange }: { value: Weekday | null; onChange: (day: Weekday | null) => void }) {
   return (
     <View style={styles.block}>
-      <Text variant="overline" color="textMuted">
-        Día de descanso
-      </Text>
+      <FormLabel>Día de descanso</FormLabel>
       <View style={styles.chips}>
         {WEEKDAYS.map((day) => (
           <Chip key={day} label={weekdayLabel(day)} selected={value === day} onPress={() => onChange(day)} />

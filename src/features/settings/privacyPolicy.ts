@@ -72,14 +72,14 @@ const USES: PrivacySectionContent = {
       title: 'Tu calendario',
       text: 'Solo las horas ocupadas, para encontrar huecos. Los títulos de tus eventos solo los ves tú.',
     },
-    { icon: 'bell', title: 'Avisos', text: 'El token de notificaciones de tu iPhone, para enviarte avisos.' },
+    { icon: 'bell', title: 'Notificaciones', text: 'El token de notificaciones de tu iPhone, para enviarte avisos.' },
   ],
 };
 
 const FRIENDS_POINT: PrivacyPoint = {
   icon: 'together',
   title: 'Tus amigos',
-  text: 'Solo lo que elijas en Yo › Privacidad. Nunca tus datos de salud, tus lesiones ni los títulos de tu calendario.',
+  text: 'Solo lo que elijas en Tú › Privacidad y datos. Nunca tus datos de salud, tus lesiones ni los títulos de tu calendario.',
 };
 
 const OPERATORS_POINT: PrivacyPoint = {
@@ -107,7 +107,7 @@ const YOUR_CHOICES: PrivacySectionContent = {
     {
       icon: 'trash',
       title: 'Borrar todo',
-      text: 'En Yo › Borrar cuenta eliminas tu cuenta y tus datos al momento. Las claves de Garmin se borran al desconectar.',
+      text: 'En Tú › Cuenta › Borrar cuenta eliminas tu cuenta y tus datos al momento. Las claves de Garmin se borran al desconectar.',
     },
     {
       icon: 'mail',

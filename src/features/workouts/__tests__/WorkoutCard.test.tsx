@@ -3,8 +3,15 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { ComplianceDot } from '../ComplianceDot';
 import { IntensityTag } from '../IntensityTag';
+import { SheetModal } from '../SheetModal';
+import { JuntosTag, KeyTag } from '../Tags';
 import { WorkoutCard } from '../WorkoutCard';
 import { makeWorkout } from './fixtures';
+
+jest.mock(
+  'react-native-safe-area-context',
+  () => (jest.requireActual('react-native-safe-area-context/jest/mock') as { default: object }).default,
+);
 
 describe('WorkoutCard', () => {
   test('renders title, meta, partner and an accessible summary', async () => {
@@ -45,5 +52,32 @@ describe('ComplianceDot / IntensityTag', () => {
   test('intensity tag shows the Spanish label', async () => {
     await render(<IntensityTag intensity="endurance" />);
     expect(screen.getByLabelText(/^Intensidad: /)).toBeTruthy();
+  });
+});
+
+describe('Tags', () => {
+  test('juntos and key markers read in sentence case', async () => {
+    await render(
+      <>
+        <JuntosTag name="Álex" />
+        <KeyTag />
+      </>,
+    );
+    expect(screen.getByText('con Álex')).toBeTruthy();
+    expect(screen.getByText('Clave')).toBeTruthy();
+  });
+});
+
+describe('SheetModal', () => {
+  test('has one footer action plus a Cancelar that closes', async () => {
+    const onClose = jest.fn();
+    await render(
+      <SheetModal visible onClose={onClose} title="Mover entreno" overline="Ahora: Hoy" footer={<></>}>
+        <></>
+      </SheetModal>,
+    );
+    expect(screen.getByText('Mover entreno')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

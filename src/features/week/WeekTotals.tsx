@@ -32,11 +32,11 @@ export function WeekTotals({ summary, targetHours }: WeekTotalsProps) {
           style={styles.hours}
           accessible
           accessibilityLabel={`${hoursLabel(summary.completedMin)} horas hechas de ${hoursLabel(summary.plannedMin)} planificadas`}>
-          <Text variant="overline" color="textMuted">
+          <Text variant="caption" color="textMuted">
             Horas hechas / plan
           </Text>
           <View style={styles.baseline}>
-            <Text variant="display">{hoursLabel(summary.completedMin)}</Text>
+            <Text variant="metric">{hoursLabel(summary.completedMin)}</Text>
             <Text variant="metricSmall" color="textMuted">{` / ${hoursLabel(summary.plannedMin)} h`}</Text>
           </View>
           {targetHours != null ? (
@@ -49,11 +49,11 @@ export function WeekTotals({ summary, targetHours }: WeekTotalsProps) {
           style={styles.load}
           accessible
           accessibilityLabel={`Carga ${Math.round(summary.completedTss)} de ${Math.round(summary.plannedTss)}`}>
-          <Text variant="overline" color="textMuted">
+          <Text variant="caption" color="textMuted">
             Carga
           </Text>
           <Text variant="metric">{String(Math.round(summary.completedTss))}</Text>
-          <Text variant="caption" color="textMuted">{`de ${Math.round(summary.plannedTss)}`}</Text>
+          <Text variant="caption" color="textMuted" style={styles.tabular}>{`de ${Math.round(summary.plannedTss)}`}</Text>
         </View>
       </View>
 
@@ -63,9 +63,9 @@ export function WeekTotals({ summary, targetHours }: WeekTotalsProps) {
           <Text variant="callout" style={styles.flex}>
             {pct != null ? `${Math.round(pct * 100)}% cumplido · ${complianceMeta(state).label}` : 'Aún sin sesiones que valorar'}
           </Text>
-          <Text variant="caption" color="textMuted">{`${summary.completedSessions}/${summary.sessions} sesiones`}</Text>
+          <Text variant="caption" color="textMuted" style={styles.tabular}>{`${summary.completedSessions}/${summary.sessions} sesiones`}</Text>
         </View>
-        <ProgressBar value={pct ?? 0} color={barColor} height={8} />
+        <ProgressBar value={pct ?? 0} color={barColor} height={6} />
       </View>
 
       {sports.length > 0 ? (
@@ -84,11 +84,11 @@ function SportBar({ sport, planned, done }: { sport: Sport; planned: number; don
   const ratio = planned > 0 ? done / planned : done > 0 ? 1 : 0;
   return (
     <View style={styles.sportRow} accessible accessibilityLabel={`${sportLabel(sport)}: ${formatDuration(done)} de ${formatDuration(planned)}`}>
-      <SportBadge sport={sport} size={24} />
+      <SportBadge sport={sport} size={28} />
       <View style={styles.flex}>
         <View style={styles.sportHead}>
           <Text variant="caption">{sportLabel(sport)}</Text>
-          <Text variant="caption" color="textMuted">{`${formatDuration(done)} / ${formatDuration(planned)}`}</Text>
+          <Text variant="caption" color="textMuted" style={styles.tabular}>{`${formatDuration(done)} / ${formatDuration(planned)}`}</Text>
         </View>
         <ProgressBar value={ratio} color={theme.sport(sport).base} height={5} />
       </View>
@@ -107,5 +107,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   sports: { gap: space.sm },
   sportRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  sportHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
+  sportHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: space.xs },
+  tabular: { fontVariant: ['tabular-nums'] },
 });

@@ -8,7 +8,9 @@ import type { NotificationPrefs, Profile } from '@/domain/types';
 import { useNotificationPermission } from '@/integrations/hooks';
 import { rescheduleLocalNotifications } from '@/integrations/notifications';
 import { logger } from '@/lib/logger';
-import { Button, Card, Chip, Divider, ErrorNotice, Stepper, Text, space } from '@/ui';
+import { Button, Card, Chip, Divider, ErrorNotice, Stepper, space } from '@/ui';
+
+import { FormLabel } from './FormLabel';
 
 import { clockToMinutes, minutesToClock } from './format';
 import { PermissionRow, toPermissionState } from './PermissionRow';
@@ -16,6 +18,8 @@ import { SwitchRow } from './SwitchRow';
 import { useProfileSave } from './useProfileSave';
 
 const REMINDER_OPTIONS = [15, 30, 60] as const;
+/** Switch-row icon tile (32) + gap (12) + inset (4): dividers start under the text. */
+const ROW_INSET = 48;
 const TIME_STEP_MIN = 15;
 const LAST_SLOT_MIN = 24 * 60 - TIME_STEP_MIN;
 
@@ -64,7 +68,7 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
 
   return (
     <View style={styles.wrap}>
-      <Card padding="md">
+      <Card padding={0} style={styles.card}>
         <PermissionRow
           icon="bell"
           title="Permiso del iPhone"
@@ -75,16 +79,14 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
         />
       </Card>
 
-      <Card padding="md">
+      <Card padding={0} style={styles.card}>
         <SwitchRow
           icon="clock"
           title="Antes de cada entreno"
           subtitle="Un aviso con la sesión y la hora."
           value={prefs.workoutReminders}
           onChange={(workoutReminders) => set({ workoutReminders })}>
-          <Text variant="overline" color="textMuted">
-            Con antelación
-          </Text>
+          <FormLabel>Con antelación</FormLabel>
           <View style={styles.chips}>
             {REMINDER_OPTIONS.map((min) => (
               <Chip
@@ -96,16 +98,16 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
             ))}
           </View>
         </SwitchRow>
-        <Divider />
+        <Divider inset={ROW_INSET} />
         <SwitchRow
           icon="today"
-          title="Resumen de la mañana"
+          title="Informe de cada mañana"
           subtitle="Qué toca hoy y cómo llegas (sueño, disposición)."
           value={prefs.morningSummary}
           onChange={(morningSummary) => set({ morningSummary })}>
           <TimeStepper label="Hora" value={prefs.morningTime} onChange={(morningTime) => set({ morningTime })} />
         </SwitchRow>
-        <Divider />
+        <Divider inset={ROW_INSET} />
         <SwitchRow
           icon="moon"
           title="Check-in de la noche"
@@ -114,7 +116,7 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
           onChange={(eveningCheckin) => set({ eveningCheckin })}>
           <TimeStepper label="Hora" value={prefs.eveningTime} onChange={(eveningTime) => set({ eveningTime })} />
         </SwitchRow>
-        <Divider />
+        <Divider inset={ROW_INSET} />
         <SwitchRow
           icon="week"
           title="Planifica la semana"
@@ -122,7 +124,7 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
           value={prefs.weeklyPlanReminder}
           onChange={(weeklyPlanReminder) => set({ weeklyPlanReminder })}
         />
-        <Divider />
+        <Divider inset={ROW_INSET} />
         <SwitchRow
           icon="together"
           title="Amigos y quedadas"
@@ -141,5 +143,6 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
 
 const styles = StyleSheet.create({
   wrap: { gap: space.lg },
+  card: { paddingHorizontal: space.md, paddingVertical: space.xs },
   chips: { flexDirection: 'row', gap: space.sm },
 });

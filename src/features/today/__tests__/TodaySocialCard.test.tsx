@@ -1,75 +1,58 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import type { FeedItem, Friend, JointSession } from '@/domain/types';
-import { ALEX, feedItem, jointSession, ME, participant } from '@/features/together/__tests__/fixtures';
+import { ALEX, jointSession, ME, participant } from '@/features/together/__tests__/fixtures';
 
 import { TodaySocialCard } from '../TodaySocialCard';
 
-const mockRouter = { push: jest.fn() };
-let mockFriends: Friend[] = [];
-let mockFeed: FeedItem[] = [];
-let mockOpen: JointSession[] = [];
+const mockRouter = { push: jest.fn(), navigate: jest.fn() };
 
 jest.mock('expo-router', () => ({
   get router() {
     return mockRouter;
   },
 }));
-jest.mock('@/data/queries', () => ({
-  useFriends: () => ({ data: mockFriends }),
-  useFeed: () => ({ data: mockFeed }),
-  useOpenJointSessions: () => ({ data: mockOpen }),
-  useJoinJointSession: () => ({ mutateAsync: jest.fn(), isPending: false }),
-}));
 
 const TODAY = '2026-10-27';
 const NOW = new Date('2026-10-27T12:00:00Z');
 
-const alex: Friend = {
-  friendshipId: 'fs1',
-  status: 'accepted',
-  direction: 'incoming',
-  createdAt: '2026-10-01T00:00:00Z',
-  profile: { id: ALEX, username: 'alex', displayName: 'Álex García', avatarUrl: null, sports: ['run'] },
-} as Friend;
+function todaySession(overrides: Parameters<typeof jointSession>[0] = {}) {
+  return jointSession({
+    id: 'j-today',
+    date: TODAY,
+    startTime: '07:30',
+    status: 'confirmed',
+    location: 'Retiro',
+    participants: [participant({ userId: ALEX, displayName: 'Álex' }), participant()],
+    ...overrides,
+  });
+}
 
 beforeEach(() => {
   mockRouter.push.mockClear();
-  mockFriends = [alex];
-  mockFeed = [];
-  mockOpen = [];
+  mockRouter.navigate.mockClear();
 });
 
 describe('TodaySocialCard', () => {
-  test('hidden without friends', async () => {
-    mockFriends = [];
+  test('hidden when there is no quedada today (discovery lives in the Juntos tab)', async () => {
     await render(<TodaySocialCard myId={ME} today={TODAY} jointSessions={[]} now={NOW} />);
-    expect(screen.queryByText(/Juntos/)).toBeNull();
+    expect(screen.queryByText('Juntos hoy')).toBeNull();
   });
 
-  test('quiet link to Juntos when nothing social is happening', async () => {
-    await render(<TodaySocialCard myId={ME} today={TODAY} jointSessions={[]} now={NOW} />);
-    await fireEvent.press(screen.getByRole('button', { name: /Busca un hueco para entrenar con Álex/ }));
-    expect(mockRouter.push).toHaveBeenCalledWith('/together');
+  test('hidden for quedadas on other days or cancelled ones', async () => {
+    const other = todaySession({ id: 'tomorrow', date: '2026-10-28' });
+    const cancelled = todaySession({ id: 'cancelled', status: 'cancelled' });
+    await render(<TodaySocialCard myId={ME} today={TODAY} jointSessions={[other, cancelled]} now={NOW} />);
+    expect(screen.queryByText('Juntos hoy')).toBeNull();
   });
 
-  test("today's quedada, a friend's recent activity and an open quedada", async () => {
-    mockFeed = [feedItem({ createdAt: '2026-10-27T08:00:00Z' })];
-    mockOpen = [jointSession({ id: 'open1', isOpen: true, title: 'Series abiertas', participants: [participant({ userId: ALEX, displayName: 'Álex' })] })];
-    const today = jointSession({
-      id: 'j-today',
-      date: TODAY,
-      startTime: '07:30',
-      status: 'confirmed',
-      location: 'Retiro',
-      participants: [participant({ userId: ALEX, displayName: 'Álex' }), participant()],
-    });
-    await render(<TodaySocialCard myId={ME} today={TODAY} jointSessions={[today]} now={NOW} />);
+  test("today's quedada opens it; the header switches to the Juntos tab", async () => {
+    await render(<TodaySocialCard myId={ME} today={TODAY} jointSessions={[todaySession()]} now={NOW} />);
     expect(screen.getByText('Hoy entrenas con Álex a las 07:30')).toBeTruthy();
-    expect(screen.getByText('Álex completó Rodaje Z2')).toBeTruthy();
-    expect(screen.getByText('Álex abre una quedada: Series abiertas')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: /Hoy entrenas con Álex/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/joint/j-today');
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver Juntos' }));
+    expect(mockRouter.navigate).toHaveBeenCalledWith('/together');
+    expect(mockRouter.push).not.toHaveBeenCalledWith('/together');
   });
 });

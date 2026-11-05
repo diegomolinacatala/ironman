@@ -4,12 +4,12 @@ import { formatDuration } from '@/domain/dates';
 import { fuelingHint } from '@/domain/fueling';
 import { intensityLabel } from '@/domain/labels';
 import type { Workout } from '@/domain/types';
-import { Card, SportBadge, Tag, Text, space, useTheme } from '@/ui';
+import { Card, SportBadge, Tag, Text, fonts, space, useTheme } from '@/ui';
 
 function TipLine({ label, text }: { label: string; text: string }) {
   return (
     <View style={styles.tipLine}>
-      <Text variant="overline" color="textMuted" style={styles.tipLabel}>
+      <Text variant="caption" color="textMuted" style={styles.tipLabel}>
         {label}
       </Text>
       <Text variant="callout" style={styles.flex}>
@@ -59,7 +59,7 @@ export function FuelingTips({ workouts }: { workouts: readonly Workout[] }) {
       {workouts.map((w) => (
         <SessionTip key={w.id} workout={w} />
       ))}
-      <Text variant="caption" color="textFaint">
+      <Text variant="caption" color="textMuted">
         Orientación general, no es consejo médico. g/h = gramos de hidratos por hora.
       </Text>
     </View>
@@ -71,6 +71,6 @@ const styles = StyleSheet.create({
   card: { gap: space.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   tipLine: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-  tipLabel: { width: 62, paddingTop: 3 },
+  tipLabel: { width: 62, paddingTop: 2, fontFamily: fonts.bodySemibold },
   flex: { flex: 1 },
 });

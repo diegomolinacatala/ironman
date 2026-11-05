@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { useNotifications } from '@/data/queries';
-import { IconButton, Text, useTheme } from '@/ui';
+import { IconButton, Text, fonts, useTheme } from '@/ui';
 
 import { unreadCount } from './notificationModel';
 
@@ -45,5 +45,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     pointerEvents: 'none',
   },
-  badgeText: { fontSize: 10, lineHeight: 12, fontWeight: '700' },
+  badgeText: { fontFamily: fonts.bodyBold, fontSize: 10, lineHeight: 12, fontVariant: ['tabular-nums'] },
 });

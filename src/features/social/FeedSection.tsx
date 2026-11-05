@@ -3,11 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import type { ISODate, UUID } from '@/domain/types';
 import { useFeed, useProfile } from '@/data/queries';
 import { errorMessage } from '@/lib/logger';
-import { Divider, ErrorNotice, Loading, SectionHeader, Text, space } from '@/ui';
+import { Card, Divider, ErrorNotice, Loading, SectionHeader, Text, space } from '@/ui';
 
 import { FeedItemRow } from './FeedItemRow';
 
 const FEED_LIMIT = 30;
+/** Divider starts under the text, past the 40-pt avatar + gap. */
+const ROW_INSET = 40 + space.md;
 
 /** "Actividad": light feed of my circle, newest first, with kudos. */
 export function FeedSection({ myId, today }: { myId: UUID | null; today: ISODate }) {
@@ -26,18 +28,21 @@ export function FeedSection({ myId, today }: { myId: UUID | null; today: ISODate
           Aquí verás los entrenos completados de tus amigos. Dales un aplauso para animarles.
         </Text>
       ) : null}
-      <View>
-        {items.map((item, index) => (
-          <View key={item.id}>
-            {index > 0 ? <Divider /> : null}
-            <FeedItemRow item={item} myId={myId} today={today} myName={myName} />
-          </View>
-        ))}
-      </View>
+      {items.length > 0 ? (
+        <Card padding="md" style={styles.list}>
+          {items.map((item, index) => (
+            <View key={item.id}>
+              {index > 0 ? <Divider inset={ROW_INSET} /> : null}
+              <FeedItemRow item={item} myId={myId} today={today} myName={myName} />
+            </View>
+          ))}
+        </Card>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: space.xs },
+  section: { gap: space.sm },
+  list: { paddingVertical: space.xs },
 });

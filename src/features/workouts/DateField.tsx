@@ -6,6 +6,7 @@ import { formatDayLong, parseISODate, toISODate } from '@/domain/dates';
 import type { ISODate, ISOTime } from '@/domain/types';
 import { Chip, Icon, Text, radius, space, useTheme } from '@/ui';
 
+import { FormLabel } from './FormLabel';
 import { PatternTextField } from './PatternTextField';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -76,9 +77,7 @@ export function TimeField({ label, value: rawValue, onChange, optional = true }:
   if (value == null) {
     return (
       <View style={styles.field}>
-        <Text variant="overline" color="textMuted">
-          {label}
-        </Text>
+        <FormLabel>{label}</FormLabel>
         {toggle}
       </View>
     );
@@ -118,10 +117,8 @@ function NativeRow({ label, text, children }: { label: string; text: string; chi
   const { colors } = useTheme();
   return (
     <View style={styles.field}>
-      <Text variant="overline" color="textMuted">
-        {label}
-      </Text>
-      <View style={[styles.nativeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <FormLabel>{label}</FormLabel>
+      <View style={[styles.nativeRow, { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
         <Text variant="bodyStrong" style={styles.flex} numberOfLines={1}>
           {text}
         </Text>
@@ -135,7 +132,7 @@ function AndroidOpenButton({ label, onPress }: { label: string; onPress: () => v
   const { colors } = useTheme();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`Cambiar ${label.toLowerCase()}`} onPress={onPress} hitSlop={8} style={styles.androidBtn}>
-      <Icon name="edit" size={18} color={colors.text} />
+      <Icon name="edit" size={18} color={colors.accentInk} />
     </Pressable>
   );
 }
@@ -145,7 +142,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   toggleRow: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
   nativeRow: {
-    minHeight: 52,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,

@@ -9,8 +9,8 @@ import { PRIORITIES, PRIORITY_INFO } from './raceModel';
 export function PriorityExplainer() {
   const { colors } = useTheme();
   return (
-    <View style={[styles.box, { backgroundColor: colors.surfaceAlt }]}>
-      <Text variant="overline" color="textMuted">
+    <View style={[styles.box, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <Text variant="heading" accessibilityRole="header">
         Prioridades
       </Text>
       {PRIORITIES.map((p) => (
@@ -29,7 +29,7 @@ export function PriorityExplainer() {
 }
 
 const styles = StyleSheet.create({
-  box: { borderRadius: radius.lg, padding: space.lg, gap: space.md },
+  box: { borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: space.lg, gap: space.md },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   flex: { flex: 1, gap: 2 },
 });

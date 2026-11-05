@@ -2,8 +2,15 @@ import { describe, expect, test } from '@jest/globals';
 
 import type { IntegrationStatus, PersonalToken, Race } from '@/domain/types';
 
-import { addNote, editNote, joinNoteLines, noteError, noteLines, removeNote } from '../coachNotesModel';
-import { calendarConnectionView, claudeConnectionView, garminConnectionView, raceCountdown } from '../connectionsModel';
+import { addNote, editNote, joinNoteLines, noteError, noteLines, notesSummary, removeNote } from '../coachNotesModel';
+import {
+  calendarConnectionView,
+  calendarFeedConnectionView,
+  claudeConnectionView,
+  garminConnectionView,
+  raceCountdown,
+} from '../connectionsModel';
+import { availabilitySubtitle, raceRow, sportsProfileSubtitle } from '../hubModel';
 
 const TODAY = '2026-10-27';
 const NOW = new Date('2026-10-27T12:00:00');
@@ -85,5 +92,52 @@ describe('connections', () => {
     expect(raceCountdown([race('2026-10-27')], TODAY)).toMatchObject({ days: 0, value: 'Hoy' });
     expect(raceCountdown([race('2026-10-28')], TODAY)).toMatchObject({ value: '1 día' });
     expect(raceCountdown([race('2026-11-05', 'B'), race('2027-04-18')], TODAY)).toMatchObject({ name: 'R 2027-04-18', days: 173 });
+  });
+});
+
+describe('coach notes summary', () => {
+  test('count + first fact, or the nudge when empty', () => {
+    expect(notesSummary([])).toMatch(/^Aún nada/);
+    expect(notesSummary(['Vegetariano'])).toBe('1 cosa · Vegetariano');
+    expect(notesSummary(['Vegetariano', 'No nado los lunes'])).toBe('2 cosas · Vegetariano');
+  });
+});
+
+describe('calendar feed', () => {
+  const token = (patch: Partial<PersonalToken>): PersonalToken => ({
+    id: 'x',
+    scope: 'ics',
+    label: 'Calendario',
+    prefix: 'rb',
+    createdAt: '2026-10-01T00:00:00Z',
+    lastUsedAt: null,
+    revokedAt: null,
+    ...patch,
+  });
+
+  test('counts only active ICS links', () => {
+    expect(calendarFeedConnectionView(undefined)).toMatchObject({ tone: 'muted', status: 'Sin enlace', action: null });
+    expect(calendarFeedConnectionView([token({ scope: 'mcp' }), token({ revokedAt: '2026-10-02T00:00:00Z' })])).toMatchObject({ status: 'Sin enlace' });
+    expect(calendarFeedConnectionView([token({})])).toMatchObject({ tone: 'success', status: 'Activa' });
+    expect(calendarFeedConnectionView([token({ id: 'a' }), token({ id: 'b' })])).toMatchObject({ status: '2 enlaces' });
+  });
+});
+
+describe('Tú hub rows', () => {
+  const race = (patch: Partial<Race>): Race =>
+    ({ id: 'r', name: 'Valencia', date: '2027-04-18', distance: 'olympic', priority: 'A', ...patch }) as Race;
+
+  test('race row: name, distance and countdown, or the nudge', () => {
+    expect(raceRow([], TODAY)).toEqual({ title: 'Añade tu carrera', subtitle: 'El plan se construye hacia ella' });
+    expect(raceRow([race({})], TODAY)).toMatchObject({ title: 'Tu carrera', subtitle: expect.stringMatching(/^Valencia · .+ · faltan 173 días$/) });
+    expect(raceRow([race({ date: TODAY })], TODAY).subtitle).toMatch(/· es hoy$/);
+  });
+
+  test('availability and sport profile subtitles', () => {
+    const availability = { weeklyHoursTarget: 9.5, restDay: 6, longSessionDays: [], windows: [], poolDays: [] } as const;
+    expect(availabilitySubtitle({ ...availability, longSessionDays: [], windows: [], poolDays: [] })).toBe('9,5 h/semana · descanso el domingo');
+    expect(availabilitySubtitle({ ...availability, restDay: null, longSessionDays: [], windows: [], poolDays: [] })).toBe('9,5 h/semana · sin día fijo de descanso');
+    expect(sportsProfileSubtitle({ sports: ['swim', 'run'], level: 'beginner' })).toMatch(/^Natación, Carrera · /);
+    expect(sportsProfileSubtitle({ sports: [], level: 'advanced' })).not.toContain('·');
   });
 });

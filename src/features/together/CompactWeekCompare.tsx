@@ -1,16 +1,16 @@
 /**
  * Week at a glance for two people: 7 columns × (Yo | friend | Huecos).
- * Sport glyphs per day, hatched cells for busy-only days, lime bars where
+ * Sport glyphs per day, neutral hatched cells for busy-only days, soft brand bars where
  * there is common free time. Tap → full compare.
  */
 import { StyleSheet, View } from 'react-native';
 
 import { formatDuration } from '@/domain/dates';
-import { Avatar, Card, Icon, Text, radius, space, useTheme } from '@/ui';
+import { Avatar, Card, Icon, Text, fonts, radius, readableTextOn, space, useTheme } from '@/ui';
 
 import { totalSlotMinutes } from './compareModel';
 import { Hatch } from './Hatch';
-import { slotEdge, slotTint } from './palette';
+import { busyHatch, slotEdge, slotInk, slotTint } from './palette';
 import type { CompareDay, LaneEntry } from './types';
 
 const LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'] as const;
@@ -36,7 +36,7 @@ function SportGlyph({ entry }: { entry: LaneEntry }) {
         { backgroundColor: done ? c.base : c.tint, borderColor: entry.isJoint ? slotEdge(theme.colors) : c.base },
         entry.status === 'skipped' && styles.skipped,
       ]}>
-      <Icon name={sport} size={11} color={done ? '#FFFFFF' : c.base} />
+      <Icon name={sport} size={11} color={done ? readableTextOn(c.base) : c.base} />
     </View>
   );
 }
@@ -50,7 +50,7 @@ function LaneCell({ entries }: { entries: readonly LaneEntry[] }) {
       <View style={styles.cell}>
         {hasBusy ? (
           <View style={[styles.busyCell, { borderColor: colors.border }]}>
-            <Hatch color={colors.borderStrong} background={colors.surfaceAlt} spacing={4} strokeWidth={1} />
+            <Hatch {...busyHatch(colors)} spacing={4} strokeWidth={1} />
           </View>
         ) : (
           <View style={[styles.emptyDot, { backgroundColor: colors.border }]} />
@@ -88,7 +88,7 @@ function SlotCell({ day }: { day: CompareDay }) {
   return (
     <View style={styles.cell}>
       <View style={[styles.slotBar, { backgroundColor: slotTint(colors), borderColor: slotEdge(colors) }]}>
-        <Text variant="caption" style={styles.slotText} numberOfLines={1} adjustsFontSizeToFit>
+        <Text variant="caption" style={[styles.slotText, { color: slotInk(colors) }]} numberOfLines={1} adjustsFontSizeToFit>
           {formatDuration(minutes)}
         </Text>
       </View>
@@ -111,11 +111,11 @@ export function CompactWeekCompare({ days, myName, friendName, onPress }: Compac
         <View style={styles.label} />
         {days.map((day, index) => (
           <View key={day.date} style={styles.cell}>
-            <Text variant="overline" color={day.isToday ? 'text' : 'textFaint'} style={styles.letter}>
+            <Text variant="caption" color={day.isToday ? 'accentInk' : 'textMuted'} style={styles.letter}>
               {LETTERS[index] ?? ''}
             </Text>
-            <View style={[styles.dayNumber, day.isToday && { backgroundColor: colors.accent }]}>
-              <Text variant="caption" style={{ color: day.isToday ? colors.onAccent : colors.textMuted }}>
+            <View style={[styles.dayNumber, day.isToday && { backgroundColor: colors.accentSoft }]}>
+              <Text variant="caption" style={day.isToday ? [styles.todayNumber, { color: colors.onAccentSoft }] : { color: colors.textMuted }}>
                 {Number(day.date.slice(8, 10))}
               </Text>
             </View>
@@ -136,7 +136,7 @@ export function CompactWeekCompare({ days, myName, friendName, onPress }: Compac
 
       <View style={[styles.row, styles.lane]}>
         <View style={styles.label}>
-          <Avatar name={friendName} size={26} color={colors.textMuted} />
+          <Avatar name={friendName} size={26} color={colors.surfaceAlt} />
         </View>
         {days.map((day) => (
           <View key={day.date} style={[styles.column, day.isPast && styles.past]}>
@@ -157,10 +157,10 @@ export function CompactWeekCompare({ days, myName, friendName, onPress }: Compac
       </View>
 
       <View style={styles.footer}>
-        <Text variant="caption" color="textMuted">
+        <Text variant="caption" color="accentInk" style={styles.footerText}>
           Ver semana completa
         </Text>
-        <Icon name="chevronRight" size={12} color={colors.textMuted} />
+        <Icon name="chevronRight" size={12} color={colors.accentInk} />
       </View>
     </Card>
   );
@@ -173,7 +173,8 @@ const styles = StyleSheet.create({
   column: { flex: 1, alignSelf: 'stretch' },
   cell: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   past: { opacity: 0.45 },
-  letter: { fontSize: 11 },
+  letter: { fontFamily: fonts.bodySemibold, fontSize: 11, lineHeight: 14 },
+  todayNumber: { fontFamily: fonts.bodyBold },
   dayNumber: { minWidth: 24, height: 22, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   glyph: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   skipped: { opacity: 0.35 },
@@ -182,6 +183,7 @@ const styles = StyleSheet.create({
   emptyDot: { width: 4, height: 4, borderRadius: 2 },
   slotsRow: { marginTop: space.sm, paddingTop: space.sm, borderTopWidth: StyleSheet.hairlineWidth, minHeight: 36 },
   slotBar: { borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 3, height: 22, alignSelf: 'stretch', marginHorizontal: 2, alignItems: 'center', justifyContent: 'center' },
-  slotText: { fontSize: 10, lineHeight: 12 },
+  slotText: { fontFamily: fonts.bodySemibold, fontSize: 10, lineHeight: 12 },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: space.xs, marginTop: space.sm },
+  footerText: { fontFamily: fonts.bodySemibold },
 });

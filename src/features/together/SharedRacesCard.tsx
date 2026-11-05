@@ -10,7 +10,7 @@ import { raceDistanceLabel } from '@/domain/labels';
 import type { FriendRace, ISODate } from '@/domain/types';
 import { firstName } from '@/features/social/friendModel';
 import { joinNames } from '@/features/social/feedText';
-import { Card, Icon, SectionHeader, Text, space, useTheme } from '@/ui';
+import { Card, Icon, SectionHeader, Text, radius, space, useTheme } from '@/ui';
 
 import { countdownLabel, sharedRaces } from './sharedModel';
 
@@ -34,11 +34,15 @@ export function SharedRacesCard({ today }: { today: ISODate }) {
     <View style={styles.section}>
       <SectionHeader title={shared.length > 0 ? 'Carreras juntos' : 'Carreras de tus amigos'} />
       {shared.map((s) => (
-        <Card key={s.race.id} padding="md" rail={colors.accent}>
+        <Card key={s.race.id} padding="md" variant="tinted" tint={colors.accentSoft}>
           <View style={styles.row}>
-            <Icon name="trophy" size={24} color={colors.accentInk} />
+            <View style={[styles.tile, { backgroundColor: colors.surface }]}>
+              <Icon name="trophy" size={20} color={colors.accentInk} />
+            </View>
             <View style={styles.flex}>
-              <Text variant="bodyStrong">{s.race.name}</Text>
+              <Text variant="bodyStrong" color="onAccentSoft">
+                {s.race.name}
+              </Text>
               <Text variant="caption" color="textMuted">
                 Vas con {joinNames(s.friends.map((f) => firstName(f.displayName)))} · {countdownLabel(s.daysLeft)}
               </Text>
@@ -69,4 +73,5 @@ const styles = StyleSheet.create({
   list: { gap: space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   flex: { flex: 1, gap: 2 },
+  tile: { width: 36, height: 36, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
 });

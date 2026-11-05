@@ -5,6 +5,8 @@ import { useTrainingCalendar } from '@/integrations/calendar/trainingCalendar';
 import { errorMessage, logger } from '@/lib/logger';
 import { Button, Chip, ErrorNotice, Text, haptics, space } from '@/ui';
 
+import { FormLabel } from './FormLabel';
+
 import { ALARM_OPTIONS, alarmLabel } from '../onboarding/calendarModel';
 import { EventPreview } from '../onboarding/PreviewCards';
 import { confirmAction } from './confirm';
@@ -73,9 +75,7 @@ export function TrainingCalendarCard() {
             disabled={calendar.busy}
             onChange={(on) => void toggle(on)}>
             <View style={styles.block}>
-              <Text variant="overline" color="textMuted">
-                Aviso antes de cada entreno
-              </Text>
+              <FormLabel>Aviso antes de cada entreno</FormLabel>
               <View style={styles.chips}>
                 {ALARM_OPTIONS.map((option) => (
                   <Chip

@@ -229,7 +229,7 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
 
 ## "Conecta tu Claude" (MCP)
 
-1. En la app: *Yo › Conecta tu Claude* genera la URL `…/functions/v1/mcp/u/rb_<64 hex>` (se muestra una vez).
+1. En la app: *Tú › Conexiones › Claude* genera la URL `…/functions/v1/mcp/u/rb_<64 hex>` (se muestra una vez).
 2. En claude.ai (web o escritorio): *Customize › Connectors › Add custom connector*, pega la URL y elige
    **sin inicio de sesión**. Una vez añadido, también está disponible en la app de Claude del iPhone.
 3. Para revocar: borra el token en la app y genera otro (actualiza la URL del conector).

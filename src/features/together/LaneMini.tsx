@@ -12,7 +12,7 @@ import { Icon, Text, haptics, radius, space, useTheme } from '@/ui';
 
 import { Hatch } from './Hatch';
 import { timeRange } from './intervals';
-import { slotEdge } from './palette';
+import { busyHatch, slotEdge } from './palette';
 import type { LaneEntry } from './types';
 
 export interface LaneMiniProps {
@@ -38,7 +38,7 @@ function BusyMini({ entry, isMe }: { entry: LaneEntry; isMe: boolean }) {
   const { colors } = useTheme();
   return (
     <View style={[styles.mini, styles.busy, { borderColor: colors.border }]}>
-      <Hatch color={colors.border} background={colors.surfaceAlt} spacing={7} />
+      <Hatch {...busyHatch(colors)} spacing={7} strokeWidth={1} />
       <Text variant="caption" color="textMuted" numberOfLines={1}>
         {timeText(entry)}
       </Text>

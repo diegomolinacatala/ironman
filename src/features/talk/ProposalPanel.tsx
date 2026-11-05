@@ -8,7 +8,7 @@ import type { PlanProposal } from '@/domain/types';
 import { ChangeRow } from '@/features/coach/ChangeRow';
 import { changeCountLabel } from '@/features/coach/labels';
 import { buildDiffRows } from '@/features/coach/proposalDiff';
-import { Button, ErrorNotice, Text, space } from '@/ui';
+import { Button, Card, ErrorNotice, Icon, Text, space, useTheme } from '@/ui';
 
 import type { ProposalDecision } from './useProposalDecision';
 
@@ -28,19 +28,24 @@ export function ProposalPanel({ proposal, decision }: ProposalPanelProps) {
   const rows = useMemo(() => buildDiffRows(proposal.changes, workouts.data ?? []), [proposal.changes, workouts.data]);
   const hidden = rows.length - MAX_INLINE_CHANGES;
   const busy = decision.isApplying || decision.isDiscarding;
+  const { colors } = useTheme();
 
   return (
-    <View style={styles.root}>
+    <Card style={styles.root}>
       <View style={styles.head}>
-        <Text variant="overline" color="textMuted" accessibilityRole="header">
+        <View style={[styles.tile, { backgroundColor: colors.accentSoft }]}>
+          <Icon name="week" size={16} color={colors.onAccentSoft} />
+        </View>
+        <Text variant="heading" accessibilityRole="header" style={styles.flex}>
           {`Cambios en tu plan · ${changeCountLabel(proposal.changes.length)}`}
         </Text>
         <Pressable
           accessibilityRole="button"
           accessibilityHint="Abre la propuesta para elegir qué cambios aplicar"
           hitSlop={12}
+          style={styles.link}
           onPress={() => router.push(`/proposal/${encodeURIComponent(proposal.id)}`)}>
-          <Text variant="caption" color="accentInk">
+          <Text variant="callout" color="accentInk">
             Elegir cambios
           </Text>
         </Pressable>
@@ -76,13 +81,16 @@ export function ProposalPanel({ proposal, decision }: ProposalPanelProps) {
           onPress={() => void decision.discard(proposal)}
         />
       </View>
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   root: { gap: space.sm },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, flexWrap: 'wrap' },
+  head: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
+  tile: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  link: { minHeight: 32, justifyContent: 'center' },
+  flex: { flex: 1, minWidth: 140 },
   more: { paddingTop: space.sm, paddingLeft: space.sm },
   actions: { gap: space.xs, marginTop: space.sm },
 });

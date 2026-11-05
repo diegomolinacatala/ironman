@@ -7,6 +7,7 @@ import { BODY_AREAS } from '@/domain/types';
 import { Chip, Stepper, Text, TextField, space } from '@/ui';
 
 import { DateField, TimeField } from '@/features/workouts/DateField';
+import { FormLabel } from '@/features/workouts/FormLabel';
 
 import { changeStartDate, type EventFormState } from './eventForm';
 import { hasTime, kindGroup } from './kinds';
@@ -79,9 +80,7 @@ export function EventFields({ state, onChange }: EventFieldsProps) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View style={styles.field}>
-      <Text variant="overline" color="textMuted">
-        {label}
-      </Text>
+      <FormLabel>{label}</FormLabel>
       {children}
     </View>
   );

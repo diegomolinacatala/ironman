@@ -5,6 +5,7 @@ import type { Intensity, WorkoutStep } from '@/domain/types';
 import { Button, Card, Chip, IconButton, Stepper, Text, space } from '@/ui';
 
 import { addStep, removeStep, updateStep } from './form';
+import { FormLabel } from './FormLabel';
 import { IntensityPicker } from './pickers';
 import { STEP_KINDS, stepKindLabel, stepsTotalMinutes } from './steps';
 
@@ -21,11 +22,9 @@ export function StepsEditor({ steps, onChange, intensity, plannedMin }: StepsEdi
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Text variant="overline" color="textMuted">
-          Estructura
-        </Text>
+        <FormLabel>Estructura</FormLabel>
         {total != null ? (
-          <Text variant="caption" color={total === plannedMin ? 'textMuted' : 'warning'}>
+          <Text variant="caption" color={total === plannedMin ? 'textMuted' : 'warning'} style={styles.tabular}>
             {`Suma ${formatDuration(total)} de ${formatDuration(plannedMin)}`}
           </Text>
         ) : null}
@@ -57,9 +56,9 @@ function StepRow({
 }) {
   const byDistance = step.durationMin == null && step.distanceM != null;
   return (
-    <Card padding="md" style={styles.card}>
+    <Card variant="tinted" padding="md" style={styles.card}>
       <View style={styles.header}>
-        <Text variant="bodyStrong">{`Paso ${index + 1}`}</Text>
+        <Text variant="heading">{`Paso ${index + 1}`}</Text>
         <IconButton icon="trash" accessibilityLabel={`Quitar paso ${index + 1}`} onPress={onRemove} size={36} />
       </View>
       <View style={styles.wrap}>
@@ -114,4 +113,5 @@ const styles = StyleSheet.create({
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   steppers: { flexDirection: 'row', gap: space.sm },
   flex: { flex: 1 },
+  tabular: { fontVariant: ['tabular-nums'] },
 });

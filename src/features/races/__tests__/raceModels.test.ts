@@ -25,7 +25,7 @@ function race(overrides: Partial<Race>): Race {
 
 describe('raceModel', () => {
   test('countdown wording', () => {
-    expect(countdown(TODAY, TODAY)).toMatchObject({ value: 'HOY' });
+    expect(countdown(TODAY, TODAY)).toMatchObject({ value: 'Hoy' });
     expect(countdown('2026-10-26', TODAY)).toEqual({ value: '1', unit: 'día', spoken: 'Falta 1 día' });
     expect(countdown('2027-03-17', TODAY)).toMatchObject({ value: '143', unit: 'días' });
     expect(countdown('2026-10-20', TODAY)).toMatchObject({ value: '5', spoken: 'Hace 5 días' });

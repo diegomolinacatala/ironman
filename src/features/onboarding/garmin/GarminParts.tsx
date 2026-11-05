@@ -4,10 +4,10 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { useMetrics, useWorkouts } from '@/data/queries';
 import { addDays } from '@/domain/dates';
-import { Button, ErrorNotice, Icon, Text, TextField, space, useTheme } from '@/ui';
+import { Button, ErrorNotice, Icon, Text, TextField, iconSize, radius, space, useTheme } from '@/ui';
 
 import { importSummary, importSummaryLine } from '../connectModel';
-import { NumberedSteps, StatusLine, SuccessHero, useInk, type GuideItem } from '../GuideParts';
+import { NumberedSteps, StatusLine, SuccessHero, type GuideItem } from '../GuideParts';
 import type { GarminConnect } from './useGarminConnect';
 
 export const GARMIN_GUIDE: readonly GuideItem[] = [
@@ -58,7 +58,9 @@ export function GarminPastePanel({ garmin, showPasteControl = false }: { garmin:
   return (
     <View style={styles.wrap}>
       <View style={[styles.pasteHint, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Icon name="clipboard" size={28} color={colors.text} />
+        <View style={[styles.hintIcon, { backgroundColor: colors.accentSoft }]}>
+          <Icon name="clipboard" size={iconSize.md} color={colors.onAccentSoft} />
+        </View>
         <View style={styles.flex}>
           <Text variant="heading">¿Ya has copiado la clave?</Text>
           <Text variant="callout" color="textMuted">
@@ -105,7 +107,6 @@ export function GarminPastePanel({ garmin, showPasteControl = false }: { garmin:
 
 /** Success: what we imported (last 28 days of wellness + activities). */
 export function GarminImported({ today, renewable, onRenew }: { today: string; renewable?: boolean; onRenew?: () => void }) {
-  const { paper } = useInk();
   const range = useMemo(() => ({ from: addDays(today, -28), to: today }), [today]);
   const metrics = useMetrics(range);
   const workouts = useWorkouts(range);
@@ -113,7 +114,7 @@ export function GarminImported({ today, renewable, onRenew }: { today: string; r
   const line = loading ? 'Mirando qué hemos traído…' : importSummaryLine(importSummary(metrics.data ?? [], workouts.data ?? []));
   return (
     <SuccessHero title="Garmin conectado" message={line}>
-      <Text variant="caption" style={[styles.attribution, { color: paper }]}>
+      <Text variant="caption" color="textMuted">
         Datos de Garmin. Se sincroniza solo cada mañana.
       </Text>
       {renewable && onRenew ? <Button label="Usar otra clave" variant="secondary" size="sm" icon="key" onPress={onRenew} /> : null}
@@ -124,8 +125,15 @@ export function GarminImported({ today, renewable, onRenew }: { today: string; r
 const styles = StyleSheet.create({
   wrap: { gap: space.md },
   flex: { flex: 1, gap: 2 },
-  pasteHint: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: 22, borderWidth: 1 },
+  pasteHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  hintIcon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   nativePaste: { height: PASTE_HEIGHT, width: '100%' },
   link: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-  attribution: { opacity: 0.7 },
 });

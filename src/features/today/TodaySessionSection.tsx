@@ -23,11 +23,11 @@ export interface TodaySessionSectionProps {
 
 function SessionSkeleton() {
   return (
-    <Card padding="lg" style={styles.skeleton}>
+    <Card variant="raised" padding="lg" style={styles.skeleton}>
       <Skeleton width="40%" height={12} />
-      <Skeleton width="35%" height={40} radius={radius.md} />
+      <Skeleton width="35%" height={36} radius={radius.sm} />
       <Skeleton width="80%" height={18} />
-      <Skeleton height={48} radius={radius.pill} />
+      <Skeleton height={48} radius={radius.md} />
     </Card>
   );
 }

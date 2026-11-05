@@ -53,7 +53,7 @@ export function AiConsentSheet({ visible, saving, error, onAccept, onDecline, on
             </Text>
             <AiSharedDataList />
             <Text variant="caption" color="textMuted">
-              {`${AI_TERMS_NOTE} Puedes retirar el permiso cuando quieras en Yo › Privacidad. Sin permiso, el coach usa el motor de reglas.`}
+              {`${AI_TERMS_NOTE} Puedes retirar el permiso cuando quieras en Tú › Privacidad. Sin permiso, el coach usa el motor de reglas.`}
             </Text>
             <Button label="Más sobre tu privacidad" variant="ghost" size="sm" icon="lock" onPress={onMore} />
           </ScrollView>

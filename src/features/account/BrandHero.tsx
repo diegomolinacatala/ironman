@@ -1,16 +1,29 @@
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, View } from 'react-native';
 
-import { Text, fonts, space, useTheme } from '@/ui';
+import { Icon, Text, brand, iconSize, radius, space, type IconName } from '@/ui';
 
-const VALUE_POINTS = ['Lee tu Garmin', 'Vive en tu calendario', 'Le hablas y se adapta'] as const;
+import { BrandMark } from './BrandMark';
 
-/** "IRONMAN" is 7 condensed caps: ~23 % of the width keeps it on one line on a 320 pt phone. */
-const WORDMARK_RATIO = 0.235;
-const MIN_WORDMARK = 56;
-const MAX_WORDMARK = 120;
-/** "ROAD TO" kicker relative to the wordmark size. */
-const KICKER_RATIO = 0.3;
+const VALUE_POINTS: readonly { icon: IconName; label: string }[] = [
+  { icon: 'watch', label: 'Lee tu Garmin' },
+  { icon: 'calendarCheck', label: 'Vive en tu calendario' },
+  { icon: 'mic', label: 'Le hablas y se adapta' },
+];
+
+/**
+ * The hero is navy in both schemes, so its colours come from `brand`, not from the scheme:
+ * paper text (13:1 on navy), sky for the subtitle (6:1), icon tiles one step lighter than the panel.
+ */
+const HERO = {
+  bg: brand.navy,
+  text: brand.paper,
+  soft: brand.sky,
+  tile: brand.navyInk,
+} as const;
+
+const MARK_SIZE = 64;
+const ICON_TILE = 32;
 
 export interface BrandHeroProps {
   /** Safe-area top inset (the hero bleeds under the status bar). */
@@ -18,64 +31,31 @@ export interface BrandHeroProps {
 }
 
 /**
- * Sign-in hero: ink panel, a tracked "ROAD TO" kicker over a big slanted
- * "IRONMAN" wordmark on a lime slash, speed stripes and the three value
- * points. Always ink, also in dark mode.
+ * Sign-in hero: navy panel with the mark (road to the horizon under a rising sun), the
+ * "Road to Ironman" wordmark, a one-line promise and the three things the coach does.
  */
 export function BrandHero({ topInset }: BrandHeroProps) {
-  const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
-  const wordmark = Math.max(MIN_WORDMARK, Math.min(MAX_WORDMARK, Math.round(Math.min(width, 720) * WORDMARK_RATIO)));
-  const kicker = Math.round(wordmark * KICKER_RATIO);
-  const ink = isDark ? colors.bgElevated : colors.inverseBg;
-  const paper = isDark ? colors.text : colors.inverseText;
-
   return (
-    <View style={[styles.hero, { backgroundColor: ink, paddingTop: topInset + space.xl }]}>
-      <SpeedStripes color={colors.accent} />
-      <Text variant="overline" style={{ color: colors.accent }}>
-        Triatlón · Tu coach de bolsillo
-      </Text>
-      <View style={styles.wordmarkWrap} accessible accessibilityRole="header" accessibilityLabel="Road to Ironman">
-        <Text
-          allowFontScaling={false}
-          style={[
-            styles.kicker,
-            {
-              color: paper,
-              fontSize: kicker,
-              lineHeight: Math.round(kicker * 1.1),
-              letterSpacing: Math.round(kicker * 0.32),
-              fontFamily: fonts.displayHeavy,
-            },
-          ]}>
-          ROAD TO
+    <View testID="brand-hero" style={[styles.hero, { backgroundColor: HERO.bg, paddingTop: topInset + space.xl }]}>
+      {/* Light status bar over the navy panel, also in light mode (restored when the hero unmounts). */}
+      <StatusBar style="light" />
+      <BrandMark size={MARK_SIZE} />
+      <View style={styles.titles}>
+        <Text variant="hero" accessibilityRole="header" maxFontSizeMultiplier={1.2} style={{ color: HERO.text }}>
+          Road to Ironman
         </Text>
-        <View>
-          <View style={[styles.slash, { backgroundColor: colors.accent, height: wordmark * 0.34, bottom: wordmark * 0.06 }]} />
-          <Text
-            allowFontScaling={false}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            style={[
-              styles.wordmark,
-              { color: paper, fontSize: wordmark, lineHeight: wordmark * 0.96, fontFamily: fonts.displayHeavy },
-            ]}>
-            IRONMAN
-          </Text>
-        </View>
+        <Text variant="body" style={{ color: HERO.soft }}>
+          Tu coach de bolsillo para el triatlón
+        </Text>
       </View>
-      <Text variant="title" style={{ color: paper }}>
-        Tu coach de bolsillo
-      </Text>
-      <View style={styles.points}>
-        {VALUE_POINTS.map((point, index) => (
-          <View key={point} style={styles.point}>
-            <Text variant="metricSmall" style={{ color: colors.accent, width: 34 }}>
-              {String(index + 1).padStart(2, '0')}
-            </Text>
-            <Text variant="bodyStrong" style={{ color: paper }}>
-              {point}
+      <View style={styles.points} accessibilityRole="list">
+        {VALUE_POINTS.map((point) => (
+          <View key={point.label} style={styles.point}>
+            <View style={[styles.tile, { backgroundColor: HERO.tile }]}>
+              <Icon name={point.icon} size={iconSize.sm} color={HERO.text} />
+            </View>
+            <Text variant="callout" style={[styles.flex, { color: HERO.text }]}>
+              {point.label}
             </Text>
           </View>
         ))}
@@ -84,33 +64,17 @@ export function BrandHero({ topInset }: BrandHeroProps) {
   );
 }
 
-/** Three slanted lime bars in the top-right corner (race-bib / slipstream motif). */
-function SpeedStripes({ color }: { color: string }) {
-  return (
-    <View style={styles.stripes} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Svg width={180} height={140} viewBox="0 0 180 140">
-        <Polygon points="70,0 110,0 60,140 20,140" fill={color} opacity={0.95} />
-        <Polygon points="122,0 146,0 96,140 72,140" fill={color} opacity={0.55} />
-        <Polygon points="158,0 170,0 120,140 108,140" fill={color} opacity={0.3} />
-      </Svg>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   hero: {
     paddingHorizontal: space.lg,
-    paddingBottom: space.xxl,
-    gap: space.md,
-    overflow: 'hidden',
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    paddingBottom: space.xl,
+    gap: space.lg,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
   },
-  stripes: { position: 'absolute', top: 0, right: -20 },
-  wordmarkWrap: { marginTop: space.xl, alignSelf: 'flex-start', maxWidth: '100%', transform: [{ skewX: '-9deg' }] },
-  kicker: { includeFontPadding: false, marginBottom: space.xxs, marginLeft: 2 },
-  wordmark: { letterSpacing: -1, includeFontPadding: false },
-  slash: { position: 'absolute', left: -space.lg, right: -space.sm },
-  points: { gap: space.sm, marginTop: space.sm },
-  point: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  titles: { gap: space.xs },
+  points: { gap: space.sm, marginTop: space.xs },
+  point: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  tile: { width: ICON_TILE, height: ICON_TILE, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  flex: { flex: 1 },
 });

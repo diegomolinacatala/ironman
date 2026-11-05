@@ -6,7 +6,7 @@ import { haptics } from '@/ui';
 export const TALK_ROUTE = '/talk';
 export const MEAL_CAMERA_ROUTE = '/meal?source=camera';
 
-/** Mic: "Cuéntaselo a tu coach" → full-screen voice coach. */
+/** Mic: "Habla con tu coach" → full-screen voice coach. */
 export function openTalk(): void {
   haptics.impact();
   router.push(TALK_ROUTE);

@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { useTheme } from '@/ui';
@@ -59,7 +59,7 @@ function Grid({ g, palette }: { g: Geometry; palette: ChartPalette }) {
     <G>
       {ticks(g.yMax, g.yTicks).map((t) => (
         <G key={t}>
-          <Line x1={0} x2={g.plotRight} y1={g.y(t)} y2={g.y(t)} stroke={palette.grid} strokeWidth={1} strokeDasharray={t === 0 ? undefined : '2 4'} />
+          <Line x1={0} x2={g.plotRight} y1={g.y(t)} y2={g.y(t)} stroke={palette.grid} strokeWidth={t === 0 ? 1 : StyleSheet.hairlineWidth} />
           <SvgText x={g.plotRight + 6} y={g.y(t) + 4} fontSize={11} fill={palette.axis} fontFamily={palette.font}>
             {formatInt(t)}
           </SvgText>
@@ -80,15 +80,15 @@ function ProjectionZone({ g, points, palette }: { g: Geometry; points: readonly 
   return (
     <G>
       {hasProjection ? (
-        <Rect x={x0} y={TOP - 8} width={g.plotRight - x0} height={STRIP_BOTTOM - TOP + 8} fill={palette.projection} opacity={0.7} />
+        <Rect x={x0} y={TOP - 8} width={g.plotRight - x0} height={STRIP_BOTTOM - TOP + 8} fill={palette.projection} />
       ) : null}
       <Line x1={x0} x2={x0} y1={TOP - 8} y2={STRIP_BOTTOM} stroke={palette.today} strokeWidth={1} />
-      <SvgText x={x0 - 4} y={11} fontSize={11} fill={palette.today} fontFamily={palette.font} textAnchor="end" letterSpacing={1}>
-        HOY
+      <SvgText x={x0 - 4} y={11} fontSize={11} fill={palette.today} fontFamily={palette.font} textAnchor="end">
+        Hoy
       </SvgText>
       {hasProjection ? (
-        <SvgText x={x0 + 4} y={11} fontSize={11} fill={palette.axis} fontFamily={palette.font} letterSpacing={1}>
-          PLAN
+        <SvgText x={x0 + 4} y={11} fontSize={11} fill={palette.axis} fontFamily={palette.font}>
+          Plan
         </SvgText>
       ) : null}
     </G>
@@ -128,7 +128,7 @@ function Lines({ g, points, palette }: { g: Geometry; points: readonly PmcPointL
   const lastAtl = atl[g.split];
   return (
     <G>
-      <Path d={areaPath(past(ctl), MAIN_BOTTOM)} fill={palette.fitness} opacity={0.07} />
+      <Path d={areaPath(past(ctl), MAIN_BOTTOM)} fill={palette.fitness} opacity={0.08} />
       <Path d={linePath(past(atl))} stroke={palette.fatigue} strokeWidth={1.75} fill="none" strokeLinejoin="round" />
       <Path d={linePath(future(atl))} stroke={palette.fatigue} strokeWidth={1.75} fill="none" strokeDasharray={DASH} />
       <Path d={linePath(past(ctl))} stroke={palette.fitness} strokeWidth={2.75} fill="none" strokeLinejoin="round" />
@@ -146,8 +146,8 @@ function MonthLabels({ g, points, palette }: { g: Geometry; points: readonly Pmc
       {marks.map((m) => (
         <G key={m.i}>
           <Line x1={g.x(m.i)} x2={g.x(m.i)} y1={STRIP_BOTTOM + 2} y2={STRIP_BOTTOM + 7} stroke={palette.axis} />
-          <SvgText x={g.x(m.i) + 3} y={HEIGHT - 6} fontSize={11} fill={palette.axis} fontFamily={palette.font} letterSpacing={0.8}>
-            {m.label.toUpperCase()}
+          <SvgText x={g.x(m.i) + 3} y={HEIGHT - 6} fontSize={11} fill={palette.axis} fontFamily={palette.font}>
+            {m.label}
           </SvgText>
         </G>
       ))}

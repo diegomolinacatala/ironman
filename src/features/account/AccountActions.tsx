@@ -6,9 +6,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/data/context';
 import { errorMessage, logger } from '@/lib/logger';
-import { Card, Divider, ErrorNotice, ListRow, Text, haptics, space } from '@/ui';
+import { ErrorNotice, ListRow, Text, haptics, space } from '@/ui';
 
 import { confirmAction } from '../settings/confirm';
+import { GroupDivider, SettingsGroup } from './SettingsGroup';
 
 function appVersion(): string {
   const version = Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? '0.1.0';
@@ -16,7 +17,7 @@ function appVersion(): string {
   return build ? `${version} (${build})` : version;
 }
 
-/** Sign out (confirmed) and delete account (double confirmation, App Store requirement). */
+/** Cuenta: sign out (confirmed) and delete account (double confirmation, App Store requirement). */
 export function AccountActions({ isDemo }: { isDemo: boolean }) {
   const { auth } = useAuth();
   const [busy, setBusy] = useState<'signout' | 'delete' | null>(null);
@@ -74,15 +75,14 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
 
   return (
     <View style={styles.wrap}>
-      {error ? <ErrorNotice message={error} /> : null}
-      <Card padding="md">
+      <SettingsGroup title="Cuenta">
         <ListRow
           icon="logout"
           title={busy === 'signout' ? 'Cerrando sesión…' : 'Cerrar sesión'}
           onPress={busy ? undefined : () => void signOut()}
           showChevron={false}
         />
-        <Divider />
+        <GroupDivider />
         <ListRow
           icon="trash"
           title={busy === 'delete' ? 'Borrando cuenta…' : 'Borrar cuenta'}
@@ -91,8 +91,9 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
           onPress={busy ? undefined : () => void deleteAccount()}
           showChevron={false}
         />
-      </Card>
-      <Text variant="caption" color="textFaint" align="center">
+      </SettingsGroup>
+      {error ? <ErrorNotice message={error} /> : null}
+      <Text variant="caption" color="textMuted" align="center">
         Road to Ironman {appVersion()}
         {isDemo ? ' · modo demo' : ''}
       </Text>
@@ -101,5 +102,6 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: space.md },
+  // Account actions sit apart from the settings above them.
+  wrap: { gap: space.md, marginTop: space.lg },
 });

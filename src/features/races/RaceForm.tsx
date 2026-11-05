@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import type { ISODate, Race, RaceDraft, RacePriority } from '@/domain/types';
 import { FormFooter } from '@/features/workouts/FormFooter';
 import { FormScreen } from '@/features/workouts/FormScreen';
-import { Button, Segmented, Text, TextField, space } from '@/ui';
+import { Button, Segmented, Text, TextField, fonts, space } from '@/ui';
 
 import { DistancePicker } from './DistancePicker';
 import { RaceDateField } from './RaceDateField';
@@ -69,7 +69,7 @@ export function RaceForm({ race, today, saving, deleting, error, onSave, onDelet
       <RaceDateField value={form.date} onChange={(v) => set('date', v)} />
       <DistancePicker value={form.distance} onChange={(v) => set('distance', v)} />
       <View style={styles.field}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted" style={styles.label}>
           Prioridad
         </Text>
         <Segmented<RacePriority>
@@ -117,4 +117,5 @@ export function RaceForm({ race, today, saving, deleting, error, onSave, onDelet
 const styles = StyleSheet.create({
   content: { gap: space.xl },
   field: { gap: space.xs },
+  label: { fontFamily: fonts.bodySemibold },
 });

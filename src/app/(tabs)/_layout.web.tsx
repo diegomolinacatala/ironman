@@ -15,6 +15,8 @@ import { fonts, space, useTheme } from '@/ui/theme';
 const TABS: { name: string; title: string; icon: IconName }[] = [
   { name: 'today', title: 'Hoy', icon: 'today' },
   { name: 'week', title: 'Plan', icon: 'week' },
+  { name: 'together', title: 'Juntos', icon: 'together' },
+  { name: 'progress', title: 'Progreso', icon: 'progress' },
   { name: 'me', title: 'Tú', icon: 'profile' },
 ];
 
@@ -39,8 +41,8 @@ export default function TabsLayoutWeb() {
       tabBar={(props) => <TabBarWithAccessory {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.text,
-        tabBarInactiveTintColor: colors.textFaint,
+        tabBarActiveTintColor: colors.accentInk,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border, height: 64, paddingBottom: 8 },
         tabBarLabelStyle: { fontFamily: fonts.bodySemibold, fontSize: 11 },
         sceneStyle: { backgroundColor: colors.bg },

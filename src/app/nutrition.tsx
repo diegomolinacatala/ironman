@@ -15,7 +15,7 @@ import { dayTotals, fuelingSessions, groupBySlot } from '@/features/nutrition/nu
 import { FormScreen } from '@/features/workouts/FormScreen';
 import { deleteMealPhoto } from '@/integrations/camera/mealPhoto';
 import { errorMessage, logger } from '@/lib/logger';
-import { Button, Card, ErrorNotice, Icon, Loading, SectionHeader, Text, space, useTheme } from '@/ui';
+import { Button, Card, ErrorNotice, Icon, Loading, SectionHeader, Text, fonts, space, useTheme } from '@/ui';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -24,12 +24,12 @@ function CoachNote() {
   const ask = () =>
     router.push(`/talk?message=${encodeURIComponent('¿Qué como antes del fondo largo de esta semana?')}`);
   return (
-    <Card variant="tinted" tint={colors.surfaceAlt} padding="md" onPress={ask} accessibilityLabel="Tu coach lee este registro. Preguntarle qué comer antes del fondo largo.">
+    <Card variant="tinted" tint={colors.accentSoft} padding="md" onPress={ask} accessibilityLabel="Tu coach lee este registro. Preguntarle qué comer antes del fondo largo.">
       <View style={styles.noteRow}>
-        <Icon name="coach" size={18} color={colors.text} />
+        <Icon name="coach" size={20} color={colors.onAccentSoft} />
         <View style={styles.flex}>
           <Text variant="callout">Tu coach lee este registro para ajustar tus sesiones y sus consejos de comida.</Text>
-          <Text variant="caption" color="accentInk">
+          <Text variant="caption" color="onAccentSoft" style={styles.link}>
             Pregúntale qué comer antes del fondo largo
           </Text>
         </View>
@@ -111,21 +111,21 @@ export default function NutritionScreen() {
             onPress={() => router.push(date === today ? '/meal?source=camera' : `/meal?source=camera&date=${date}`)}
           />
         </View>
-        <NutritionEntryForm key={date} date={date} saving={create.isPending} onSubmit={add} />
-        {actionError ? <ErrorNotice message={actionError} /> : null}
         {logs.isLoading ? <Loading label="Cargando el registro…" /> : null}
         {logs.error ? (
           <ErrorNotice message={errorMessage(logs.error, 'No se ha podido cargar el registro.')} onRetry={() => void logs.refetch()} />
-        ) : null}
-        {!logs.isLoading && !logs.error && groups.length === 0 ? (
-          <Text variant="callout" color="textMuted">
-            Nada apuntado este día. Basta con una línea por comida: «pasta con atún», «gel + isotónico»…
-          </Text>
         ) : null}
         <DayTotalsBar totals={dayTotals(logs.data ?? [])} />
         {groups.map((g) => (
           <MealGroup key={g.slot} group={g} deletingId={deletingId} onDelete={(log) => void del(log)} />
         ))}
+        {!logs.isLoading && !logs.error && groups.length === 0 ? (
+          <Text variant="callout" color="textMuted">
+            Nada apuntado este día. Basta con una línea por comida: «pasta con atún», «gel + isotónico»…
+          </Text>
+        ) : null}
+        {actionError ? <ErrorNotice message={actionError} /> : null}
+        <NutritionEntryForm key={date} date={date} saving={create.isPending} onSubmit={add} />
       </View>
 
       <CoachNote />
@@ -138,4 +138,5 @@ const styles = StyleSheet.create({
   noteRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   flex: { flex: 1, gap: 4 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  link: { fontFamily: fonts.bodySemibold },
 });

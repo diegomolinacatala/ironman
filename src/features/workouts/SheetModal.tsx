@@ -2,21 +2,26 @@ import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { IconButton, Text, radius, space, useTheme } from '@/ui';
+import { Button, IconButton, Text, radius, space, useTheme } from '@/ui';
 
 export interface SheetModalProps {
   visible: boolean;
   onClose: () => void;
   title: string;
-  /** Small uppercase line above the title. */
+  /** Small context line above the title (sentence case, muted). */
   overline?: string;
   children: ReactNode;
-  /** Pinned under the scrollable content (primary action). */
+  /** Pinned under the scrollable content: the sheet's one primary action. */
   footer?: ReactNode;
+  /** Label of the quiet dismiss button at the bottom ("Cancelar"); null hides it. */
+  cancelLabel?: string | null;
 }
 
-/** Bottom sheet built on RN `Modal` (works on iOS, Android and web). */
-export function SheetModal({ visible, onClose, title, overline, children, footer }: SheetModalProps) {
+/**
+ * Bottom sheet built on RN `Modal` (works on iOS, Android and web): radius `xl`, clear title,
+ * one primary CTA in the footer and a ghost "Cancelar" under it.
+ */
+export function SheetModal({ visible, onClose, title, overline, children, footer, cancelLabel = 'Cancelar' }: SheetModalProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -32,13 +37,13 @@ export function SheetModal({ visible, onClose, title, overline, children, footer
           accessibilityViewIsModal
           style={[
             styles.sheet,
-            { backgroundColor: colors.bgElevated, borderColor: colors.border, paddingBottom: insets.bottom + space.lg },
+            { backgroundColor: colors.surface, borderColor: colors.border, paddingBottom: insets.bottom + space.lg },
           ]}>
           <View style={[styles.grabber, { backgroundColor: colors.borderStrong }]} />
           <View style={styles.header}>
             <View style={styles.headerText}>
               {overline ? (
-                <Text variant="overline" color="textMuted">
+                <Text variant="caption" color="textMuted" numberOfLines={1}>
                   {overline}
                 </Text>
               ) : null}
@@ -55,7 +60,12 @@ export function SheetModal({ visible, onClose, title, overline, children, footer
             showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>
-          {footer ? <View style={styles.footer}>{footer}</View> : null}
+          {footer || cancelLabel ? (
+            <View style={[styles.footer, { borderTopColor: colors.border }]}>
+              {footer}
+              {cancelLabel ? <Button label={cancelLabel} variant="ghost" onPress={onClose} fullWidth /> : null}
+            </View>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -76,9 +86,9 @@ const styles = StyleSheet.create({
     paddingTop: space.sm,
   },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: space.md },
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, marginBottom: space.md },
+  header: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, marginBottom: space.lg },
   headerText: { flex: 1, gap: 2 },
   scroll: { flexGrow: 0 },
   content: { gap: space.lg, paddingBottom: space.md },
-  footer: { paddingTop: space.md },
+  footer: { paddingTop: space.md, gap: space.xs, borderTopWidth: StyleSheet.hairlineWidth },
 });

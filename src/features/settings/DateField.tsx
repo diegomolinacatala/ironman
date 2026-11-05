@@ -5,6 +5,8 @@ import { Platform, StyleSheet, View } from 'react-native';
 import type { ISODate } from '@/domain/types';
 import { Button, Text, TextField, radius, space, useTheme } from '@/ui';
 
+import { FormLabel } from './FormLabel';
+
 import { formatDateShort } from './format';
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -57,11 +59,9 @@ function IosDateField({ label, value, onChange, minimumDate, error }: DateFieldP
   };
   return (
     <View style={styles.field}>
-      <Text variant="overline" color="textMuted">
-        {label}
-      </Text>
-      <View style={[styles.iosRow, { borderColor: error ? colors.danger : colors.border, backgroundColor: colors.surface }]}>
-        <Text variant="body" color={value ? 'text' : 'textFaint'}>
+      <FormLabel>{label}</FormLabel>
+      <View style={[styles.iosRow, { borderColor: error ? colors.danger : colors.borderStrong, backgroundColor: colors.surface }]}>
+        <Text variant="body" color={value ? 'text' : 'textMuted'}>
           {value ? formatDateShort(value) : 'Sin fecha'}
         </Text>
         {value ? (
@@ -112,7 +112,7 @@ function TextDateField({ label, value, onChange, error }: Omit<DateFieldProps, '
 const styles = StyleSheet.create({
   field: { gap: space.xs },
   iosRow: {
-    minHeight: 50,
+    minHeight: 48,
     borderRadius: radius.md,
     borderWidth: 1,
     paddingHorizontal: space.md,

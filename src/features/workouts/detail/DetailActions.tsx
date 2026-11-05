@@ -14,6 +14,9 @@ export interface DetailActionsProps {
   onMove: () => void;
 }
 
+/** Divider inset that lines up with `ListRow` text (padding 4 + icon tile 32 + gap 12). */
+const LIST_ICON_INSET = 48;
+
 /** Primary actions (Hecho / Saltar / Mover or Reabrir) + secondary list. */
 export function DetailActions({ workout, actions, onComplete, onMove }: DetailActionsProps) {
   const isPlanned = workout.status === 'planned';
@@ -34,11 +37,11 @@ export function DetailActions({ workout, actions, onComplete, onMove }: DetailAc
       ) : null}
       <Card padding="sm">
         <ListRow title="Editar" icon="edit" onPress={() => router.push(`/workout/edit?id=${workout.id}`)} />
-        <Divider inset={46} />
+        <Divider inset={LIST_ICON_INSET} />
         {isPlanned && isRest ? (
           <>
             <ListRow title="Mover" icon="move" onPress={onMove} />
-            <Divider inset={46} />
+            <Divider inset={LIST_ICON_INSET} />
           </>
         ) : null}
         <ListRow
@@ -53,11 +56,11 @@ export function DetailActions({ workout, actions, onComplete, onMove }: DetailAc
         />
         {isPlanned && !isRest && !workout.jointSessionId ? (
           <>
-            <Divider inset={46} />
+            <Divider inset={LIST_ICON_INSET} />
             <ListRow title="Invitar a un amigo" subtitle="Proponer una quedada" icon="together" onPress={() => actions.invite(workout)} />
           </>
         ) : null}
-        <Divider inset={46} />
+        <Divider inset={LIST_ICON_INSET} />
         <ListRow
           title="Borrar"
           icon="trash"

@@ -32,7 +32,9 @@ export function ModalCancel({ label = 'Cancelar', onPress = closeModal }: ModalC
         onPress();
       }}
       style={styles.button}>
-      <Text variant="bodyStrong">{label}</Text>
+      <Text variant="body" color="accentInk">
+        {label}
+      </Text>
     </Pressable>
   );
 }

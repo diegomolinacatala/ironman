@@ -63,6 +63,7 @@ export function HealthCard() {
           <View style={styles.actions}>
             <Button
               label="Sincronizar"
+              variant="secondary"
               icon="refresh"
               loading={health.busy}
               onPress={() => void run(() => health.syncNow(), 'No se pudo leer Salud.')}
@@ -73,6 +74,7 @@ export function HealthCard() {
       ) : (
         <Button
           label="Conectar Apple Salud"
+          variant="secondary"
           icon="health"
           loading={health.busy}
           onPress={() => void run(() => health.connect(), 'No se pudo conectar con Salud.')}

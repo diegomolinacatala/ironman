@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Text, radius, space, useTheme } from '@/ui';
+import { Text, fonts, radius, space, useTheme } from '@/ui';
 
 import { PHASE_TIMELINE, timelineIndex } from './raceModel';
 
@@ -8,18 +8,26 @@ export interface PhaseTimelineProps {
   phase: string;
   /** Spanish label of the current phase (for off-arc phases like recovery). */
   phaseName: string;
-  /** Render on the ink (inverse) card. */
-  inverse?: boolean;
 }
 
-/** Base → Construcción → Pico → Puesta a punto → Carrera, with "you are here". */
-export function PhaseTimeline({ phase, phaseName, inverse = false }: PhaseTimelineProps) {
-  const { colors, isDark } = useTheme();
+interface TimelineColors {
+  current: string;
+  past: string;
+  future: string;
+  futureOpacity: number;
+  label: string;
+  currentLabel: string;
+}
+
+function useTimelineColors(): TimelineColors {
+  const { colors } = useTheme();
+  return { current: colors.accent, past: colors.accentInk, future: colors.borderStrong, futureOpacity: 0.6, label: colors.textMuted, currentLabel: colors.accentInk };
+}
+
+/** Base → Construcción → Pico → Puesta a punto → Carrera, with "you are here" in the accent. */
+export function PhaseTimeline({ phase, phaseName }: PhaseTimelineProps) {
+  const palette = useTimelineColors();
   const current = timelineIndex(phase);
-  // On an inverse card in dark mode the surface is light paper: lime would vanish, use the deep accent ink.
-  const currentColor = inverse && isDark ? '#4B6B00' : colors.accent;
-  const fg = inverse ? colors.inverseText : colors.text;
-  const faint = inverse ? 'rgba(127,127,127,0.45)' : colors.border;
   const label =
     current == null
       ? `Fase actual: ${phaseName}, fuera del ciclo hacia la carrera.`
@@ -31,13 +39,12 @@ export function PhaseTimeline({ phase, phaseName, inverse = false }: PhaseTimeli
         {PHASE_TIMELINE.map((step, i) => {
           const isCurrent = current === i;
           const isPast = current != null && i < current;
+          const color = isCurrent ? palette.current : isPast ? palette.past : palette.future;
           return (
             <View
               key={step.key}
-              style={[
-                styles.segment,
-                { flex: step.weight, backgroundColor: isCurrent ? currentColor : isPast ? fg : faint, opacity: isPast ? 0.55 : 1 },
-              ]}
+              testID={isCurrent ? 'phase-current' : undefined}
+              style={[styles.segment, { flex: step.weight, backgroundColor: color, opacity: isPast ? 0.4 : isCurrent ? 1 : palette.futureOpacity }]}
             />
           );
         })}
@@ -46,15 +53,19 @@ export function PhaseTimeline({ phase, phaseName, inverse = false }: PhaseTimeli
         {PHASE_TIMELINE.map((step, i) => (
           <Text
             key={step.key}
-            variant="overline"
+            variant="caption"
             numberOfLines={1}
-            style={[styles.label, { flex: step.weight, color: fg, opacity: current === i ? 1 : 0.55, fontSize: 10 }]}>
+            style={[
+              styles.label,
+              { flex: step.weight, color: current === i ? palette.currentLabel : palette.label },
+              current === i ? styles.currentLabel : null,
+            ]}>
             {step.label}
           </Text>
         ))}
       </View>
       {current == null || current === -1 ? (
-        <Text variant="caption" style={{ color: fg, opacity: 0.75 }}>
+        <Text variant="caption" style={{ color: palette.label }}>
           {current === -1 ? `Ahora: ${phaseName}, antes de la base.` : `Ahora: ${phaseName}.`}
         </Text>
       ) : null}
@@ -65,7 +76,8 @@ export function PhaseTimeline({ phase, phaseName, inverse = false }: PhaseTimeli
 const styles = StyleSheet.create({
   wrap: { gap: space.xs },
   track: { flexDirection: 'row', gap: 3 },
-  segment: { height: 8, borderRadius: radius.pill },
+  segment: { height: 6, borderRadius: radius.pill },
   labels: { flexDirection: 'row', gap: 3 },
-  label: { textAlign: 'center', letterSpacing: 0.3 },
+  label: { textAlign: 'center', fontSize: 11, lineHeight: 14 },
+  currentLabel: { fontFamily: fonts.bodySemibold },
 });

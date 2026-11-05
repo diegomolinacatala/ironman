@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Card, Divider, Text, space, useTheme } from '@/ui';
+import { Button, Card, Divider, Text, fonts, intensityColor, space, useTheme, type Theme } from '@/ui';
 
 import {
   RECOVERY_DAYS,
@@ -14,20 +14,21 @@ import {
 } from './recoveryModel';
 import { Sparkline } from './Sparkline';
 
-const SERIES_COLOR: Record<RecoverySeries['key'], 'info' | 'text' | 'textMuted'> = {
-  hrvMs: 'info',
-  restingHr: 'text',
-  sleepHours: 'textMuted',
-};
+/** Calm, distinct hues per series (brand ink, rose for heart rate, violet for sleep). */
+function seriesColor(key: RecoverySeries['key'], colors: Theme['colors']): string {
+  if (key === 'hrvMs') return colors.accentInk;
+  if (key === 'restingHr') return intensityColor.threshold;
+  return intensityColor.tempo;
+}
 
 function MetricRow({ series, showSource }: { series: RecoverySeries; showSource: boolean }) {
   const { colors } = useTheme();
-  const color = colors[SERIES_COLOR[series.key]];
+  const color = seriesColor(series.key, colors);
   const delta = deltaText(series.deltaPct);
   return (
     <View style={styles.row} accessible accessibilityLabel={recoverySummary(series)}>
       <View style={styles.valueCol}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted" style={styles.label}>
           {series.label}
         </Text>
         <View style={styles.valueRow}>
@@ -36,11 +37,11 @@ function MetricRow({ series, showSource }: { series: RecoverySeries; showSource:
             {series.unit}
           </Text>
         </View>
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           {delta ?? 'Sin datos'}
         </Text>
         {showSource && series.sources.length > 0 ? (
-          <Text variant="caption" color="textFaint">
+          <Text variant="caption" color="textMuted">
             {series.sources.map(sourceLabel).join(' · ')}
           </Text>
         ) : null}
@@ -65,7 +66,7 @@ export function RecoveryCard({ series }: { series: readonly RecoverySeries[] }) 
           {`Últimos ${RECOVERY_DAYS} días`}
         </Text>
         {attribution ? (
-          <Text variant="caption" color="textFaint">
+          <Text variant="caption" color="textMuted">
             {attribution}
           </Text>
         ) : null}
@@ -86,7 +87,7 @@ export function RecoveryCard({ series }: { series: readonly RecoverySeries[] }) 
         </View>
       )}
       {hasAny ? (
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           Línea discontinua: tu media del periodo.
         </Text>
       ) : null}
@@ -100,6 +101,7 @@ const styles = StyleSheet.create({
   item: { gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   valueCol: { width: 136, gap: 0 },
+  label: { fontFamily: fonts.bodySemibold },
   valueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   sparkCol: { flex: 1 },
   empty: { gap: space.md, alignItems: 'flex-start' },

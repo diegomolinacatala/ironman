@@ -2,7 +2,7 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { AI_PROVIDER_DETAIL, AI_TERMS_NOTE } from '@/features/coach/aiConsent';
 import { AiSharedDataList } from '@/features/coach/AiSharedDataList';
-import { Button, Card, ErrorNotice, Icon, Loading, Text, radius, space, useTheme } from '@/ui';
+import { Button, Card, ErrorNotice, Icon, Loading, Text, iconSize, radius, space, useTheme } from '@/ui';
 
 import { formatRelativeTime } from '../../settings/format';
 import { NumberedSteps, StatusLine, SuccessHero, type GuideItem } from '../GuideParts';
@@ -69,34 +69,29 @@ export function ClaudeConnectPanel({ claude, isDemo, showOpenButton = false }: {
   );
 }
 
-function useInkText(): { ink: string; paper: string; muted: string } {
-  const { colors, isDark } = useTheme();
-  return {
-    ink: isDark ? colors.surfaceAlt : colors.inverseBg,
-    paper: isDark ? colors.text : colors.inverseText,
-    muted: isDark ? colors.textMuted : colors.inverseText,
-  };
-}
-
+/** The personal link sits on a soft brand panel (accentSoft): it is the thing to act on in this step. */
 function LinkBox({ claude }: { claude: ClaudeConnect }) {
   const { colors } = useTheme();
-  const { ink, paper, muted } = useInkText();
   const url = claude.created?.url ?? '';
   return (
-    <View style={[styles.linkBox, { backgroundColor: ink }]}>
+    <View style={[styles.linkBox, { backgroundColor: colors.accentSoft }]}>
       <View style={styles.linkHead}>
-        <Icon name={claude.copied ? 'checkCircle' : 'link'} size={18} color={colors.accent} />
-        <Text variant="bodyStrong" style={[styles.flex, { color: paper }]} accessibilityLiveRegion="polite">
+        <Icon
+          name={claude.copied ? 'checkCircle' : 'link'}
+          size={iconSize.md}
+          color={claude.copied ? colors.success : colors.onAccentSoft}
+        />
+        <Text variant="bodyStrong" color="onAccentSoft" style={styles.flex} accessibilityLiveRegion="polite">
           {claude.copied ? 'Copiado. Tu enlace ya está listo para pegar' : 'Tu enlace personal'}
         </Text>
       </View>
-      <Text selectable numberOfLines={2} style={[styles.mono, { color: colors.accent, fontFamily: MONO }]} accessibilityLabel={`Tu enlace: ${url}`}>
+      <Text selectable numberOfLines={2} style={[styles.mono, { color: colors.accentInk, fontFamily: MONO }]} accessibilityLabel={`Tu enlace: ${url}`}>
         {url}
       </Text>
       <View style={styles.linkActions}>
         <Button label={claude.copied ? 'Copiado' : 'Copiar otra vez'} icon={claude.copied ? 'check' : 'copy'} size="sm" variant="secondary" onPress={() => void claude.copy()} />
       </View>
-      <Text variant="caption" style={{ color: muted, opacity: 0.75 }}>
+      <Text variant="caption" color="textMuted">
         Es como una contraseña: no la compartas con nadie.
       </Text>
     </View>
@@ -106,17 +101,16 @@ function LinkBox({ claude }: { claude: ClaudeConnect }) {
 /** A link created earlier and not used yet: its URL is shown only once, so offer a fresh one. */
 function PendingLinkBox({ claude }: { claude: ClaudeConnect }) {
   const { colors } = useTheme();
-  const { ink, paper, muted } = useInkText();
   const createdAt = claude.pending?.createdAt ?? null;
   return (
-    <View style={[styles.linkBox, { backgroundColor: ink }]}>
+    <View style={[styles.linkBox, { backgroundColor: colors.accentSoft }]}>
       <View style={styles.linkHead}>
-        <Icon name="link" size={18} color={colors.accent} />
-        <Text variant="bodyStrong" style={[styles.flex, { color: paper }]}>
+        <Icon name="link" size={iconSize.md} color={colors.onAccentSoft} />
+        <Text variant="bodyStrong" color="onAccentSoft" style={styles.flex}>
           {`Ya tienes un enlace sin estrenar${createdAt ? ` (creado ${formatRelativeTime(createdAt)})` : ''}`}
         </Text>
       </View>
-      <Text variant="callout" style={{ color: muted, opacity: 0.85 }}>
+      <Text variant="callout" color="textMuted">
         Por seguridad solo se enseña una vez. Si ya lo pegaste en Claude, termina allí; si no, crea uno nuevo.
       </Text>
       <View style={styles.linkActions}>

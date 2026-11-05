@@ -4,7 +4,17 @@ import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'rea
 import { haptics } from './haptics';
 import { Icon } from './Icon';
 import { Text } from './Text';
-import { fonts, radius, space, useTheme } from './theme';
+import { readableTextOn } from './color';
+import { complianceColor, fonts, radius, space, useTheme } from './theme';
+
+/** Sentence-case label above a form control (not an uppercase overline). */
+function FieldLabel({ children }: { children: string }) {
+  return (
+    <Text variant="caption" color="textMuted" style={styles.label}>
+      {children}
+    </Text>
+  );
+}
 
 export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -17,11 +27,7 @@ export function TextField({ label, hint, error, multiline, onFocus, onBlur, acce
   const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
-      {label ? (
-        <Text variant="overline" color="textMuted">
-          {label}
-        </Text>
-      ) : null}
+      {label ? <FieldLabel>{label}</FieldLabel> : null}
       <TextInput
         placeholderTextColor={colors.textFaint}
         selectionColor={colors.accentInk}
@@ -43,7 +49,7 @@ export function TextField({ label, hint, error, multiline, onFocus, onBlur, acce
           {
             color: colors.text,
             backgroundColor: colors.surface,
-            borderColor: error ? colors.danger : focused ? colors.text : colors.border,
+            borderColor: error ? colors.danger : focused ? colors.accentInk : colors.borderStrong,
           },
         ]}
       />
@@ -82,12 +88,17 @@ export function Segmented<T extends string>({ options, value, onChange, accessib
             accessibilityRole="tab"
             accessibilityLabel={option.label}
             accessibilityState={{ selected }}
+            hitSlop={{ top: 4, bottom: 4 }}
             onPress={() => {
               haptics.tap();
               onChange(option.value);
             }}
-            style={[styles.segment, selected && { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text variant="caption" color={selected ? 'text' : 'textMuted'} numberOfLines={1}>
+            style={[styles.segment, selected && { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
+            <Text
+              variant="caption"
+              color={selected ? 'text' : 'textMuted'}
+              style={selected ? styles.segmentSelected : undefined}
+              numberOfLines={1}>
               {option.label}
             </Text>
           </Pressable>
@@ -119,19 +130,15 @@ export function Stepper({ value, onChange, step = 5, min = 0, max = 1000, format
   };
   return (
     <View style={styles.field}>
-      {label ? (
-        <Text variant="overline" color="textMuted">
-          {label}
-        </Text>
-      ) : null}
-      <View style={[styles.stepper, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Pressable accessibilityLabel="Restar" accessibilityRole="button" onPress={() => set(value - step)} hitSlop={8} style={styles.stepBtn}>
+      {label ? <FieldLabel>{label}</FieldLabel> : null}
+      <View style={[styles.stepper, { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
+        <Pressable accessibilityLabel="Restar" accessibilityRole="button" onPress={() => set(value - step)} hitSlop={4} style={styles.stepBtn}>
           <Icon name="chevronLeft" size={18} color={colors.text} />
         </Pressable>
         <Text variant="metricSmall" accessibilityLiveRegion="polite">
           {format ? format(value) : String(value)}
         </Text>
-        <Pressable accessibilityLabel="Sumar" accessibilityRole="button" onPress={() => set(value + step)} hitSlop={8} style={styles.stepBtn}>
+        <Pressable accessibilityLabel="Sumar" accessibilityRole="button" onPress={() => set(value + step)} hitSlop={4} style={styles.stepBtn}>
           <Icon name="chevronRight" size={18} color={colors.text} />
         </Pressable>
       </View>
@@ -151,12 +158,11 @@ export interface ScorePickerProps {
 
 export function ScorePicker({ label, value, onChange, ends, inverted = false }: ScorePickerProps) {
   const { colors } = useTheme();
-  const scale = [colors.danger, colors.warning, '#B9C23A', colors.success, colors.success];
+  // Bad → good: red, orange, amber, green, green (status colours; the number is the label).
+  const scale = [colors.danger, complianceColor.off, complianceColor.partial, colors.success, colors.success];
   return (
     <View style={styles.field}>
-      <Text variant="overline" color="textMuted">
-        {label}
-      </Text>
+      <FieldLabel>{label}</FieldLabel>
       <View style={styles.scoreRow}>
         {([1, 2, 3, 4, 5] as const).map((n) => {
           const selected = value === n;
@@ -175,7 +181,7 @@ export function ScorePicker({ label, value, onChange, ends, inverted = false }: 
                 styles.score,
                 { borderColor: selected ? tone : colors.border, backgroundColor: selected ? tone : colors.surface },
               ]}>
-              <Text variant="metricSmall" style={{ color: selected ? '#FFFFFF' : colors.text }}>
+              <Text variant="metricSmall" style={{ color: selected ? readableTextOn(tone) : colors.text }}>
                 {n}
               </Text>
             </Pressable>
@@ -183,10 +189,10 @@ export function ScorePicker({ label, value, onChange, ends, inverted = false }: 
         })}
       </View>
       <View style={styles.scoreEnds}>
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           {ends[0]}
         </Text>
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           {ends[1]}
         </Text>
       </View>
@@ -195,9 +201,10 @@ export function ScorePicker({ label, value, onChange, ends, inverted = false }: 
 }
 
 const styles = StyleSheet.create({
-  field: { gap: space.xs },
+  field: { gap: space.xs + 2 },
+  label: { fontFamily: fonts.bodySemibold },
   input: {
-    minHeight: 50,
+    minHeight: 48,
     borderRadius: radius.md,
     borderWidth: 1,
     paddingHorizontal: space.md,
@@ -209,13 +216,14 @@ const styles = StyleSheet.create({
   segmented: { flexDirection: 'row', borderRadius: radius.pill, padding: 3 },
   segment: {
     flex: 1,
-    height: 32,
+    height: 34,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'transparent',
   },
+  segmentSelected: { fontFamily: fonts.bodySemibold },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -225,7 +233,7 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: space.sm,
   },
-  stepBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  stepBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   scoreRow: { flexDirection: 'row', gap: space.sm },
   score: { flex: 1, height: 48, borderRadius: radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   scoreEnds: { flexDirection: 'row', justifyContent: 'space-between' },

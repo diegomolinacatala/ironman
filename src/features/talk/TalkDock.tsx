@@ -22,7 +22,7 @@ function ModeToggle({ icon, label, hint, onPress }: { icon: IconName; label: str
         onPress();
       }}
       style={({ pressed }) => [styles.toggle, { backgroundColor: pressed ? colors.surfacePressed : 'transparent' }]}>
-      <Icon name={icon} size={22} color={colors.text} />
+      <Icon name={icon} size={22} color={colors.accentInk} />
       <Text variant="caption" color="textMuted">
         {label}
       </Text>
@@ -37,9 +37,9 @@ export function NoticeBanner({ text }: { text: string }) {
       <View
         accessibilityRole="alert"
         accessibilityLiveRegion="polite"
-        style={[styles.notice, { backgroundColor: colors.inverseBg }]}>
-        <Icon name="checkCircle" size={18} color={colors.accent} />
-        <Text variant="callout" style={[styles.flex, { color: colors.inverseText }]}>
+        style={[styles.notice, { backgroundColor: colors.accentSoft }]}>
+        <Icon name="checkCircle" size={18} color={colors.accentInk} />
+        <Text variant="callout" color="onAccentSoft" style={styles.flex}>
           {text}
         </Text>
       </View>
@@ -50,7 +50,7 @@ export function NoticeBanner({ text }: { text: string }) {
 function VoiceError({ message, onType }: { message: string; onType: () => void }) {
   const { colors } = useTheme();
   return (
-    <View accessibilityRole="alert" style={[styles.voiceError, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+    <View accessibilityRole="alert" style={[styles.voiceError, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.row}>
         <Icon name="micOff" size={18} color={colors.danger} />
         <Text variant="callout" style={styles.flex}>
@@ -118,7 +118,7 @@ function TextComposer({ voice, quiet, draft, onDraft, onSendText, onMode }: Pick
         multiline
         maxLength={MAX_MESSAGE_LENGTH}
         maxFontSizeMultiplier={1.4}
-        style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.borderStrong }]}
       />
       <IconButton
         icon="send"
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   notice: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.md },
-  voiceError: { gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1 },
+  voiceError: { gap: space.sm, padding: space.md, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   flex: { flex: 1 },
 });

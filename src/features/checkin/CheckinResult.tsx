@@ -39,8 +39,10 @@ export function CheckinResult({ readiness, date }: { readiness: Readiness; date:
         <Text variant="body">{readiness.recommendation}</Text>
       </Card>
       {adjust.message ? (
-        <Card variant="tinted" padding="md">
-          <Text variant="callout">{adjust.message}</Text>
+        <Card variant="tinted" tint={colors.accentSoft} padding="md">
+          <Text variant="callout" color="onAccentSoft">
+            {adjust.message}
+          </Text>
         </Card>
       ) : null}
       {isRed ? (

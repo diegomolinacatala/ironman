@@ -102,6 +102,12 @@ const ICONS = {
   arrowRight: { ios: 'arrow.right', md: 'arrow_forward' },
   arrowUp: { ios: 'arrow.up', md: 'arrow_upward' },
   arrowDown: { ios: 'arrow.down', md: 'arrow_downward' },
+  // 2026-11 rebrand: appearance + quick actions
+  appearance: { ios: 'circle.lefthalf.filled', md: 'contrast' },
+  sun: { ios: 'sun.max', md: 'light_mode' },
+  moonPlain: { ios: 'moon', md: 'dark_mode' },
+  checkin: { ios: 'heart.text.clipboard', md: 'assignment_turned_in' },
+  eventAdd: { ios: 'exclamationmark.bubble', md: 'report' },
 } as const;
 
 export type IconName = keyof typeof ICONS;

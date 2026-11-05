@@ -16,7 +16,7 @@ import { useActionSheet } from '@/features/workouts/actionSheet';
 import { partnerNameFor } from '@/features/workouts/draft';
 import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
 import { errorMessage } from '@/lib/logger';
-import { Button, EmptyState, ErrorNotice, Loading, Screen, space } from '@/ui';
+import { EmptyState, ErrorNotice, Loading, Screen, space } from '@/ui';
 
 /** "Esta semana" / "Semana que viene" / "Semana 45". */
 function weekOverline(weekStart: ISODate, currentWeekStart: ISODate): string {
@@ -53,6 +53,14 @@ export default function WeekScreen() {
 
   const days = daysInRange(weekRange(weekStart));
   const isEmpty = !data.isLoading && !data.error && data.workouts.length === 0;
+  const toolbar = (
+    <WeekToolbar
+      weekStart={weekStart}
+      defaultDate={days.includes(data.today) ? data.today : weekStart}
+      onPlan={() => void planner.plan(weekStart, data)}
+      planning={planner.busy}
+    />
+  );
 
   return (
     <Screen
@@ -70,18 +78,13 @@ export default function WeekScreen() {
           icon="week"
           title="Semana en blanco"
           message="Genera una propuesta con tu disponibilidad y tu fase, o planifícala hablando con el coach."
-          action={
-            <View style={styles.emptyActions}>
-              <WeekToolbar weekStart={weekStart} onPlan={() => void planner.plan(weekStart, data)} planning={planner.busy} />
-              <Button label="Añadir a mano" icon="add" variant="ghost" size="sm" onPress={() => router.push(`/workout/edit?date=${weekStart}`)} />
-            </View>
-          }
+          action={<View style={styles.emptyActions}>{toolbar}</View>}
         />
       ) : null}
       {!data.isLoading && !data.error && !isEmpty ? (
         <>
           <WeekTotals summary={data.summary} targetHours={data.targetHours} />
-          <WeekToolbar weekStart={weekStart} onPlan={() => void planner.plan(weekStart, data)} planning={planner.busy} />
+          {toolbar}
         </>
       ) : null}
       {!data.isLoading && !data.error ? (

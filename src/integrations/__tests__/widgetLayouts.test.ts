@@ -148,3 +148,43 @@ describe('BriefingWidget content', () => {
     expect(link?.args[0]).toBe('roadtoironman://briefing?play=1');
   });
 });
+
+describe('widget branding mirrors the app theme', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { makeTheme, sportColor } = require('@/ui/theme') as typeof import('@/ui/theme');
+  const themeValues = [makeTheme(false), makeTheme(true)].flatMap((t) => Object.values(t.colors));
+  const allowed = new Set(
+    [...themeValues, ...Object.values(sportColor).map((s) => s.base)]
+      .filter((v): v is string => typeof v === 'string' && v.startsWith('#'))
+      .map((v) => v.toUpperCase()),
+  );
+
+  function sourceOf(modulePath: string): string {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require(modulePath) as { default: { layout: string } }).default.layout;
+  }
+
+  test.each(cases.map((c) => [c.name, c.module]))('%s only uses theme colours (no hi-vis lime)', (_name, module) => {
+    const source = sourceOf(module);
+    const hexes = source.match(/#[0-9A-Fa-f]{6}\b/g) ?? [];
+    expect(source).not.toMatch(/D4FF3A/i);
+    for (const hex of hexes) expect(allowed).toContain(hex.toUpperCase());
+  });
+
+  test.each(cases.map((c) => [c.name, c.module]))('%s has no italic, tracked or all-caps labels', (_name, module) => {
+    const source = sourceOf(module);
+    expect(source).not.toMatch(/italic\(|kerning\(|toUpperCase\(/);
+  });
+
+  test('the "Hoy" pill of the Today widget uses the soft brand tint in both schemes', () => {
+    const layout = loadLayout('../widgets/TodayWidget');
+    for (const isDark of [false, true]) {
+      const { colors } = makeTheme(isDark);
+      const root = layout(todayVariants[0], { widgetFamily: 'systemSmall', colorScheme: isDark ? 'dark' : 'light' });
+      const json = JSON.stringify(root);
+      expect(json).toContain(colors.accentSoft);
+      expect(json).toContain(colors.onAccentSoft);
+      expect(containerBackgroundOf(root)?.args[0]).toBe(colors.bg);
+    }
+  });
+});

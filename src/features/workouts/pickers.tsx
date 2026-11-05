@@ -2,7 +2,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { intensityLabel, sportLabel } from '@/domain/labels';
 import { INTENSITIES, SPORTS, type Intensity, type Sport } from '@/domain/types';
-import { Chip, SportBadge, Text, haptics, intensityColor, radius, space, useTheme } from '@/ui';
+import { Chip, SportBadge, Text, fonts, haptics, intensityColor, radius, space, useTheme } from '@/ui';
 
 export function SportPicker({ value, onChange }: { value: Sport; onChange: (s: Sport) => void }) {
   return (
@@ -21,7 +21,6 @@ export function SportPicker({ value, onChange }: { value: Sport; onChange: (s: S
 
 function SportOption({ sport, selected, onPress }: { sport: Sport; selected: boolean; onPress: () => void }) {
   const theme = useTheme();
-  const c = theme.sport(sport);
   return (
     <Pressable
       accessibilityRole="radio"
@@ -34,12 +33,12 @@ function SportOption({ sport, selected, onPress }: { sport: Sport; selected: boo
       style={({ pressed }) => [
         styles.sport,
         {
-          borderColor: selected ? c.base : theme.colors.border,
-          backgroundColor: selected ? c.tint : pressed ? theme.colors.surfacePressed : theme.colors.surface,
+          borderColor: selected ? theme.colors.accent : theme.colors.border,
+          backgroundColor: selected ? theme.colors.accentSoft : pressed ? theme.colors.surfacePressed : theme.colors.surface,
         },
       ]}>
       <SportBadge sport={sport} size={36} tone={selected ? 'solid' : 'tint'} />
-      <Text variant="caption" color={selected ? 'text' : 'textMuted'} numberOfLines={1}>
+      <Text variant="caption" color={selected ? 'onAccentSoft' : 'textMuted'} numberOfLines={1} style={selected ? styles.selectedLabel : undefined}>
         {sportLabel(sport)}
       </Text>
     </Pressable>
@@ -66,5 +65,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
   },
+  selectedLabel: { fontFamily: fonts.bodySemibold },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });

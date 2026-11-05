@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { formatDayLabel } from '@/domain/dates';
 import type { ISODate } from '@/domain/types';
-import { Text, space } from '@/ui';
+import { Text, fonts, space } from '@/ui';
 
 import { slotsByDay } from './compareModel';
 import { SlotPill } from './SlotPill';
@@ -17,7 +17,7 @@ export interface CommonSlotsListProps {
   maxDays?: number;
 }
 
-/** "Huecos comunes": one row per day with lime bands you can tap to propose. */
+/** "Huecos comunes": one row per day with soft brand bands you can tap to propose. */
 export function CommonSlotsList({ slots, today, friendName, onPropose, maxDays = 7 }: CommonSlotsListProps) {
   const days = slotsByDay(slots);
   if (days.length === 0) {
@@ -33,7 +33,7 @@ export function CommonSlotsList({ slots, today, friendName, onPropose, maxDays =
     <View style={styles.list}>
       {shown.map((day) => (
         <View key={day.date} style={styles.day}>
-          <Text variant="overline" color={day.date === today ? 'accentInk' : 'textMuted'} style={styles.dayLabel}>
+          <Text variant="caption" color={day.date === today ? 'accentInk' : 'textMuted'} style={styles.dayLabel}>
             {formatDayLabel(day.date, today)}
           </Text>
           <View style={styles.pills}>
@@ -55,6 +55,6 @@ export function CommonSlotsList({ slots, today, friendName, onPropose, maxDays =
 const styles = StyleSheet.create({
   list: { gap: space.md },
   day: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  dayLabel: { width: 72, paddingTop: 15 },
+  dayLabel: { width: 72, paddingTop: 13, fontFamily: fonts.bodySemibold },
   pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });

@@ -5,7 +5,7 @@ import { addDays } from '@/domain/dates';
 import type { DateRange, ISODate, UUID } from '@/domain/types';
 import { useJointSessions } from '@/data/queries';
 import { errorMessage } from '@/lib/logger';
-import { ErrorNotice, Loading, SectionHeader, Text, space } from '@/ui';
+import { ErrorNotice, Loading, SectionHeader, Text, fonts, space } from '@/ui';
 
 import { JointSessionRow } from './JointSessionRow';
 import { splitSessions } from './jointModel';
@@ -24,7 +24,7 @@ export interface JointSessionsSectionProps {
   onPropose?: () => void;
 }
 
-/** "Quedadas": my pending invites (with inline answers) and upcoming sessions. */
+/** "Próximas quedadas": my pending invites first (with inline answers), then upcoming sessions. */
 export function JointSessionsSection({ myId, today, onPropose }: JointSessionsSectionProps) {
   const sessions = useJointSessions(upcomingJointRange(today));
   const { invites, upcoming } = splitSessions(sessions.data, myId, today);
@@ -32,7 +32,7 @@ export function JointSessionsSection({ myId, today, onPropose }: JointSessionsSe
 
   return (
     <View style={styles.section}>
-      <SectionHeader title="Quedadas" action={onPropose ? { label: 'Proponer', onPress: onPropose } : undefined} />
+      <SectionHeader title="Próximas quedadas" action={onPropose ? { label: 'Proponer', onPress: onPropose } : undefined} />
       {sessions.isLoading ? <Loading label="Cargando quedadas" /> : null}
       {sessions.error ? (
         <ErrorNotice
@@ -42,11 +42,11 @@ export function JointSessionsSection({ myId, today, onPropose }: JointSessionsSe
       ) : null}
       {!sessions.isLoading && !sessions.error && invites.length + upcoming.length === 0 ? (
         <Text variant="callout" color="textMuted">
-          Sin quedadas a la vista. Propón una desde un hueco común o una oportunidad.
+          Sin quedadas a la vista. Propón una o búscala en los huecos comunes con tus amigos.
         </Text>
       ) : null}
       {invites.length > 0 ? (
-        <Text variant="caption" color="accentInk" accessibilityRole="header">
+        <Text variant="caption" color="accentInk" accessibilityRole="header" style={styles.subhead}>
           {invites.length === 1 ? 'Te han invitado' : `Te han invitado a ${invites.length}`}
         </Text>
       ) : null}
@@ -62,4 +62,5 @@ export function JointSessionsSection({ myId, today, onPropose }: JointSessionsSe
 
 const styles = StyleSheet.create({
   section: { gap: space.sm },
+  subhead: { fontFamily: fonts.bodySemibold },
 });

@@ -56,7 +56,7 @@ export function CalendarCard() {
         Leemos tus clases, trabajo y planes para no plantarte un entreno encima y para encontrar huecos con tus amigos.
       </Text>
       <View style={styles.privacy}>
-        <Icon name="lock" size={14} color={permission === 'granted' ? colors.success : colors.textFaint} />
+        <Icon name="lock" size={14} color={permission === 'granted' ? colors.success : colors.textMuted} />
         <Text variant="caption" color="textMuted" style={styles.flex}>
           {calendarPrivacyNote()}
         </Text>
@@ -73,6 +73,7 @@ export function CalendarCard() {
           </Text>
           <Button
             label="Sincronizar"
+            variant="secondary"
             icon="refresh"
             loading={calendar.busy}
             disabled={calendar.selectedIds.length === 0}
@@ -89,6 +90,7 @@ export function CalendarCard() {
       ) : (
         <Button
           label="Dar acceso al calendario"
+          variant="secondary"
           icon="week"
           loading={calendar.busy}
           onPress={() => void run(() => calendar.request(), 'No se pudo pedir el permiso.')}
@@ -140,8 +142,8 @@ export function CalendarList({ calendars: all, selectedIds, onToggle }: Calendar
                 {cal.source}
               </Text>
             </View>
-            <View style={[styles.box, { borderColor: checked ? colors.text : colors.borderStrong, backgroundColor: checked ? colors.text : 'transparent' }]}>
-              {checked ? <Icon name="check" size={12} color={colors.bg} weight="bold" /> : null}
+            <View style={[styles.box, { borderColor: checked ? colors.accent : colors.borderStrong, backgroundColor: checked ? colors.accent : 'transparent' }]}>
+              {checked ? <Icon name="check" size={12} color={colors.onAccent} weight="bold" /> : null}
             </View>
           </Pressable>
         );

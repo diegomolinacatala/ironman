@@ -2,11 +2,14 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { lifeEventLabel } from '@/domain/labels';
 import { LIFE_EVENT_KINDS, type LifeEventKind } from '@/domain/types';
-import { Icon, Text, haptics, radius, space, useTheme } from '@/ui';
+import { Icon, Text, fonts, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
 import { lifeEventIcon } from './kinds';
 
-/** 3-column grid of imprevisto kinds with icons. */
+/**
+ * 3-column grid of imprevisto kinds with icons. Selected tile = `accentSoft` surface with an
+ * `accent` border and `onAccentSoft` content (large-area selection never uses a saturated fill).
+ */
 export function KindGrid({ value, onChange }: { value: LifeEventKind; onChange: (k: LifeEventKind) => void }) {
   return (
     <View style={styles.grid} accessibilityRole="radiogroup" accessibilityLabel="Tipo de imprevisto">
@@ -19,7 +22,7 @@ export function KindGrid({ value, onChange }: { value: LifeEventKind; onChange: 
 
 function KindTile({ kind, selected, onPress }: { kind: LifeEventKind; selected: boolean; onPress: () => void }) {
   const { colors } = useTheme();
-  const fg = selected ? colors.inverseText : colors.text;
+  const fg = selected ? colors.onAccentSoft : colors.text;
   return (
     <Pressable
       accessibilityRole="radio"
@@ -32,12 +35,12 @@ function KindTile({ kind, selected, onPress }: { kind: LifeEventKind; selected: 
       style={({ pressed }) => [
         styles.tile,
         {
-          backgroundColor: selected ? colors.inverseBg : pressed ? colors.surfacePressed : colors.surface,
-          borderColor: selected ? colors.inverseBg : colors.border,
+          backgroundColor: selected ? colors.accentSoft : pressed ? colors.surfacePressed : colors.surface,
+          borderColor: selected ? colors.accent : colors.border,
         },
       ]}>
-      <Icon name={lifeEventIcon(kind)} size={22} color={fg} />
-      <Text variant="caption" style={{ color: fg }} numberOfLines={2} align="center">
+      <Icon name={lifeEventIcon(kind)} size={iconSize.lg} color={selected ? colors.onAccentSoft : colors.textMuted} />
+      <Text variant="caption" style={[{ color: fg }, selected && styles.selectedLabel]} numberOfLines={2} align="center">
         {lifeEventLabel(kind)}
       </Text>
     </Pressable>
@@ -55,6 +58,7 @@ const styles = StyleSheet.create({
     gap: space.xs,
     padding: space.sm,
     borderRadius: radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
+  selectedLabel: { fontFamily: fonts.bodySemibold },
 });

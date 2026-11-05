@@ -8,6 +8,7 @@ import { errorMessage, logger } from '@/lib/logger';
 import { Button, Chip, ErrorNotice, Stepper, Text, TextField, haptics, space } from '@/ui';
 
 import { distanceUnit, formatDistanceInput, parseDistanceInput } from './draft';
+import { FormLabel } from './FormLabel';
 import { RPE_VALUES, rpeLabel, type Rpe } from './rpe';
 import { SheetModal } from './SheetModal';
 
@@ -20,7 +21,7 @@ export interface CompleteSheetProps {
 
 const MAX_DURATION_MIN = 12 * 60;
 
-/** Quick "✓ Hecho" form: real duration, distance, RPE and notes. */
+/** Quick "Hecho" form: real duration, distance, RPE and notes. */
 export function CompleteSheet({ workout, visible, onClose, onDone }: CompleteSheetProps) {
   const complete = useCompleteWorkout();
   const [durationMin, setDurationMin] = useState(workout.completed?.durationMin ?? workout.durationMin);
@@ -87,9 +88,7 @@ export function CompleteSheet({ workout, visible, onClose, onDone }: CompleteShe
 export function RpePicker({ value, onChange }: { value: Rpe | null; onChange: (rpe: Rpe) => void }) {
   return (
     <View style={styles.block}>
-      <Text variant="overline" color="textMuted">
-        Esfuerzo percibido (RPE)
-      </Text>
+      <FormLabel>Esfuerzo percibido (RPE)</FormLabel>
       <View style={styles.grid} accessibilityRole="radiogroup" accessibilityLabel="Esfuerzo percibido del 1 al 10">
         {RPE_VALUES.map((n) => (
           <Chip key={n} label={String(n)} selected={value === n} onPress={() => onChange(n)} />

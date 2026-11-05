@@ -44,7 +44,7 @@ export function useMorningPrefs(profile: Profile): MorningPrefsState {
   const [error, setError] = useState<string | null>(null);
   const { morningSummary, morningTime } = profile.notificationPrefs;
 
-  // Follow changes made elsewhere (Avisos screen, another device) while nothing is pending here.
+  // Follow changes made elsewhere (Notificaciones screen, another device) while nothing is pending here.
   useEffect(() => {
     if (inFlight.current > 0 || timer.current) return;
     const next = morningOf(profileRef.current);

@@ -15,7 +15,7 @@ export interface RaceRowProps {
   onPress: () => void;
 }
 
-/** Race card: big countdown, A/B/C bib, distance + detail, place. */
+/** Race card: countdown, A/B/C badge, distance + detail, place. */
 export function RaceRow({ race, today, past = false, onPress }: RaceRowProps) {
   const { colors } = useTheme();
   const cd = countdown(race.date, today);
@@ -35,16 +35,16 @@ export function RaceRow({ race, today, past = false, onPress }: RaceRowProps) {
     <Card
       variant={race.priority === 'A' && !past ? 'raised' : 'flat'}
       padding="lg"
-      rail={past ? undefined : race.priority === 'A' ? colors.text : undefined}
+      rail={past ? undefined : race.priority === 'A' ? colors.accent : undefined}
       onPress={onPress}
       accessibilityLabel={`${label}. Editar carrera.`}
       style={past ? styles.past : undefined}>
       <View style={styles.row}>
         <View style={styles.count}>
-          <Text variant={past ? 'metric' : 'display'} color={past ? 'textMuted' : 'text'}>
+          <Text variant="metric" color={past ? 'textMuted' : 'text'}>
             {cd.value}
           </Text>
-          <Text variant="overline" color="textMuted">
+          <Text variant="caption" color="textMuted">
             {past ? `${cd.unit} atrás` : cd.unit}
           </Text>
         </View>
@@ -66,7 +66,7 @@ export function RaceRow({ race, today, past = false, onPress }: RaceRowProps) {
           ) : null}
           {race.location ? (
             <View style={styles.meta}>
-              <Icon name="location" size={12} color={colors.textMuted} />
+              <Icon name="location" size={14} color={colors.textMuted} />
               <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.flex}>
                 {race.location}
               </Text>
@@ -74,7 +74,7 @@ export function RaceRow({ race, today, past = false, onPress }: RaceRowProps) {
           ) : null}
           {race.goal ? (
             <View style={styles.meta}>
-              <Icon name="trophy" size={12} color={colors.textMuted} />
+              <Icon name="trophy" size={14} color={colors.textMuted} />
               <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.flex}>
                 {race.goal}
               </Text>
@@ -89,7 +89,7 @@ export function RaceRow({ race, today, past = false, onPress }: RaceRowProps) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
-  count: { width: 78, alignItems: 'flex-start' },
+  count: { width: 72, alignItems: 'flex-start' },
   info: { flex: 1, gap: 3 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },

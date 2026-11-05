@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { addDays, daysInRange, formatDayLong, weekdayOf } from '@/domain/dates';
 import { weekdayShort } from '@/domain/labels';
 import type { ISODate } from '@/domain/types';
-import { Text, haptics, radius, space, useTheme } from '@/ui';
+import { Text, fonts, haptics, radius, space, useTheme } from '@/ui';
 
 export interface DayChipsProps {
   value: ISODate;
@@ -36,17 +36,18 @@ export function DayChips({ value, today, onChange, days = 21 }: DayChipsProps) {
             style={({ pressed }) => [
               styles.chip,
               {
-                backgroundColor: selected ? colors.inverseBg : pressed ? colors.surfacePressed : colors.surface,
-                borderColor: selected ? colors.inverseBg : colors.border,
+                backgroundColor: selected ? colors.accent : pressed ? colors.surfacePressed : colors.surface,
+                borderColor: selected ? colors.accent : colors.borderStrong,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
               },
             ]}>
-            <Text variant="overline" style={{ color: selected ? colors.inverseText : colors.textMuted, fontSize: 11 }}>
+            <Text variant="caption" style={[styles.weekday, { color: selected ? colors.onAccent : colors.textMuted }]}>
               {weekdayShort(weekdayOf(date))}
             </Text>
-            <Text variant="metricSmall" style={{ color: selected ? colors.inverseText : colors.text }}>
+            <Text variant="metricSmall" style={{ color: selected ? colors.onAccent : colors.text }}>
               {Number(date.slice(8, 10))}
             </Text>
-            <View style={[styles.todayDot, { backgroundColor: isToday ? colors.accent : 'transparent' }]} />
+            <View style={[styles.todayDot, { backgroundColor: isToday ? (selected ? colors.onAccent : colors.accentInk) : 'transparent' }]} />
           </Pressable>
         );
       })}
@@ -66,5 +67,6 @@ const styles = StyleSheet.create({
     gap: 2,
     paddingVertical: space.sm,
   },
+  weekday: { fontFamily: fonts.bodySemibold },
   todayDot: { width: 6, height: 6, borderRadius: 3 },
 });

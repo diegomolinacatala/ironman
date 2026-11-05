@@ -57,7 +57,7 @@ function OpenQuedadaCard({ session, today }: { session: JointSession; today: ISO
             {openQuedadaLine(session, today)}
           </Text>
         </View>
-        <Button label="Me apunto" size="sm" icon="check" onPress={() => void onJoin()} loading={join.isPending} />
+        <Button label="Me apunto" size="sm" icon="check" variant="secondary" onPress={() => void onJoin()} loading={join.isPending} />
       </View>
       {error ? <ErrorNotice message={error} /> : null}
     </Card>

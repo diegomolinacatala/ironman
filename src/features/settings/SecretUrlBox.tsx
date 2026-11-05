@@ -3,6 +3,8 @@ import { Platform, StyleSheet, View } from 'react-native';
 
 import { Button, Icon, Text, radius, space, useTheme } from '@/ui';
 
+import { FormLabel } from './FormLabel';
+
 import { useCopy } from './useCopy';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace, Menlo, monospace' });
@@ -19,21 +21,17 @@ export interface SecretUrlBoxProps {
 
 /** Monospace box showing a secret URL ONCE, with a copy button and a warning. */
 export function SecretUrlBox({ url, label, warning, children }: SecretUrlBoxProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { copiedKey, error, copy } = useCopy();
-  // Always an ink box so the lime URL keeps its contrast in both schemes.
-  const ink = isDark ? colors.surfaceAlt : colors.inverseBg;
   const copied = copiedKey === 'url';
   return (
     <View style={styles.wrap}>
-      <Text variant="overline" color="textMuted">
-        {label}
-      </Text>
-      <View style={[styles.box, { backgroundColor: ink }]}>
+      <FormLabel>{label}</FormLabel>
+      <View style={[styles.box, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
         <Text
           selectable
           accessibilityLabel={`${label}: ${url}`}
-          style={[styles.mono, { color: colors.accent, fontFamily: MONO }]}>
+          style={[styles.mono, { color: colors.text, fontFamily: MONO }]}>
           {url}
         </Text>
       </View>
@@ -65,7 +63,7 @@ export function SecretUrlBox({ url, label, warning, children }: SecretUrlBoxProp
 
 const styles = StyleSheet.create({
   wrap: { gap: space.sm },
-  box: { borderRadius: radius.md, padding: space.md },
+  box: { borderRadius: radius.md, padding: space.md, borderWidth: StyleSheet.hairlineWidth },
   mono: { fontSize: 13, lineHeight: 19 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   warning: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', padding: space.md, borderRadius: radius.md, borderWidth: 1 },

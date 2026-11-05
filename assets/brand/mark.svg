@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Road to Ironman mark (2026-11): a road converging to the horizon under a rising sun. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#28497F"/>
+      <stop offset="1" stop-color="#1F3A68"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#162B4E"/>
+      <stop offset="1" stop-color="#10203B"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F6D3A1"/>
+      <stop offset="1" stop-color="#EDB27A"/>
+    </linearGradient>
+    <clipPath id="above"><rect x="0" y="0" width="1024" height="604"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#sky)"/>
+  <circle cx="512" cy="604" r="196" fill="url(#sun)" clip-path="url(#above)"/>
+  <rect x="0" y="604" width="1024" height="420" fill="url(#ground)"/>
+  <!-- road surface -->
+  <polygon points="498,604 526,604 840,1024 184,1024" fill="#24467D"/>
+  <!-- road edges -->
+  <polygon points="494,604 504,604 236,1024 176,1024" fill="#F6F5F1"/>
+  <polygon points="520,604 530,604 848,1024 788,1024" fill="#F6F5F1"/>
+  <!-- centre dashes, growing toward the viewer -->
+  <polygon points="509,640 515,640 517,668 507,668" fill="#F2C38B"/>
+  <polygon points="506,700 518,700 521,748 503,748" fill="#F2C38B"/>
+  <polygon points="501,792 523,792 528,866 496,866" fill="#F2C38B"/>
+  <polygon points="493,920 531,920 539,1024 485,1024" fill="#F2C38B"/>
+</svg>

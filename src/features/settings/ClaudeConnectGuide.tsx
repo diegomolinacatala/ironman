@@ -6,8 +6,8 @@ import { Button, Card, Text, space } from '@/ui';
 /** How "Tu Claude" differs from the in-app Coach IA. Only shown while the AI coach is switched on. */
 export function CoachDifferenceCard() {
   return (
-    <Card padding="lg" variant="tinted">
-      <Text variant="overline" color="textMuted">
+    <Card padding="lg">
+      <Text variant="heading" accessibilityRole="header">
         ¿Y el Coach IA de la app?
       </Text>
       <View style={styles.compare}>

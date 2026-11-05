@@ -257,7 +257,10 @@ findOpportunities(input: { range: DateRange; myWorkouts: Workout[]; friendItems:
 
 Root Stack (orchestrator) already declares titles/presentation for each route below. Screens inside
 a native header or modal render `<Screen inSheet>`; tab screens render `<Screen title=… overline=…>`.
-Navigate with `router.push('/workout/123')`, params via `useLocalSearchParams<{…}>()`.
+Navigate with `router.push('/workout/123')`, params via `useLocalSearchParams<{…}>()`. Tab
+routes are reached with `router.navigate('/together')` (or `router.dismissTo` from a screen on top
+of the tabs), never `router.push`, which would stack a second tab navigator. Five tabs since the
+2026-11 rebrand: Hoy · Plan · Juntos · Progreso · Tú (`docs/DESIGN.md` §6).
 
 | Route | Owner | Purpose / params |
 |---|---|---|
@@ -265,15 +268,18 @@ Navigate with `router.push('/workout/123')`, params via `useLocalSearchParams<{�
 | `sign-in`, `verify` (`?email`) | ui-account | email OTP + Apple; demo hint |
 | `onboarding` | ui-account | multi-step profile setup, sets `onboardedAt` |
 | `(tabs)/today` | ui-plan | Hoy |
-| `(tabs)/week` (`?week=YYYY-MM-DD`) | ui-plan | Semana |
-| `(tabs)/together` | ui-together | Juntos |
-| `(tabs)/progress` | ui-coach | Progreso |
-| `(tabs)/me` | ui-account | Yo |
+| `(tabs)/week` (`?week=YYYY-MM-DD`) | ui-plan | Plan |
+| `(tabs)/together` (`?friend`) | ui-together | Juntos (tab): requests, quedadas, compare, shared races, feed |
+| `(tabs)/progress` | ui-coach | Progreso (tab): PMC, volume, recovery, nutrition, races |
+| `(tabs)/me` | ui-account | Tú (tab): settings hub incl. Apariencia (automático / claro / oscuro) |
 | `workout/[id]` | ui-plan | detail + complete/skip/move/edit/delete/invite |
 | `workout/edit` (`?id` or `?date&sport`) | ui-plan | create/edit (modal) |
 | `event/edit` (`?id` or `?date&kind`) | ui-plan | imprevisto (modal) → offers re-plan |
 | `checkin` (`?date`) | ui-plan | daily check-in (modal) |
-| `coach` (`?mode&weekStart&lifeEventId&message`) | ui-coach | AI/rules coach chat + quick actions |
+| `talk` (`?message…`) | ui-talk | voice coach (full-screen modal) |
+| `meal` (`?source&date`) | ui-talk | meal photo / description (modal) |
+| `briefing` (`?play=1`) | ui-today | morning report (modal) |
+| `coach` (`?mode&weekStart&lifeEventId&message`) | ui-coach | v1 links; prepares the request and hands over to `/talk` |
 | `proposal/[id]` | ui-coach | diff review, apply selected / all / discard (modal) |
 | `races/index`, `races/edit` (`?id`) | ui-coach | races list / form |
 | `nutrition` (`?date`) | ui-coach | nutrition log + fueling tips |
@@ -281,13 +287,14 @@ Navigate with `router.push('/workout/123')`, params via `useLocalSearchParams<{�
 | `friends/[id]` (`?week`) | ui-together | full week compare + huecos + oportunidades |
 | `joint/new` (`?friendId&date&sport&startTime&durationMin&fromWorkoutId&title`) | ui-together | propose quedada (modal) |
 | `joint/[id]` | ui-together | quedada detail, accept/decline/cancel |
-| `notifications` | ui-together | inbox; tap → `data.url` |
+| `notifications` | ui-together | **Avisos** inbox (bell on Hoy and Juntos); tap → `data.url` (tab paths via `dismissTo`) |
 | `settings/profile` | ui-account | name, username, level, sports, thresholds, coach notes |
 | `settings/availability` | ui-account | weekly hours, rest/long/pool days, windows |
-| `settings/notifications` | ui-account | prefs (stored in profile) |
+| `settings/notifications` | ui-account | **Notificaciones** prefs (stored in profile) |
 | `settings/integrations` | ui-account | Garmin Personal API, Apple Salud, Calendario |
 | `settings/claude` | ui-account | "Conecta tu Claude" (MCP URL generator + guide) |
-| `settings/calendar-feed` | ui-account | ICS subscription URL (webcal) |
+| `settings/calendar-feed` | ui-account | Suscripción de calendario: ICS subscription URL (webcal) |
+| `privacy` | ui-account | Privacidad y datos |
 
 Shared feature components (owned by **ui-plan**, importable by others — implement exactly):
 ```ts
@@ -493,11 +500,12 @@ Widget deep links: `rebufo://workout/<id>`, `rebufo://today`, `rebufo://together
 
 ## 10. UI rules (all UI agents)
 
-- Direction: **race-day hi-vis on ink & paper**. Barlow Condensed for display/numbers (use `variant`
-  `hero/display/title/metric/overline`), Barlow for text. Lime (`colors.accent`) only for the
-  primary action, "today" and "juntos" highlights. Sports colour-coded via `useTheme().sport(s)` /
-  `SportBadge`. Compliance colours only for compliance, always with an icon.
-- Hierarchy through scale contrast (big condensed numbers, small overlines), intentional rhythm
+- Direction: **calm endurance** (2026-11 rebrand) — the binding spec is `docs/DESIGN.md`. Inter
+  everywhere (`variant` `hero/display/title/heading/body/caption/metric/...`). Navy accent
+  (`colors.accent`) only for the one primary action per screen; "today", "juntos" and selection use
+  `accentSoft` + `onAccentSoft`. Sports colour-coded via `useTheme().sport(s)` / `SportBadge`.
+  Compliance colours only for compliance, always with an icon. Light and dark are both designed.
+- Hierarchy through scale contrast (tabular metrics, sentence-case headings), intentional rhythm
   (not uniform padding), cards with sport rails, pressed states (already in primitives), haptics.
 - Every screen handles **loading / empty / error** (`Loading`, `EmptyState`, `ErrorNotice` with retry).
 - Accessibility: labels on icon buttons, roles, ≥44 pt targets, dynamic type tolerant (no fixed

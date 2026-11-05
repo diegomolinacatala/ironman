@@ -12,14 +12,18 @@ const SHOW_HINT_AFTER_S = 15;
 
 /** What you are saying, in large type, while the mic is live. */
 export function ListeningCard({ transcript }: { transcript: string }) {
+  const { colors } = useTheme();
   return (
     <FadeIn style={styles.listening}>
-      <Text variant="overline" color="accentInk">
-        Te escucho
-      </Text>
+      <View style={styles.row}>
+        <View style={[styles.dot, { backgroundColor: colors.accentInk }]} />
+        <Text variant="callout" color="accentInk">
+          Te escucho
+        </Text>
+      </View>
       <Text
         variant="heading"
-        color={transcript ? 'text' : 'textFaint'}
+        color={transcript ? 'text' : 'textMuted'}
         style={styles.transcript}
         accessibilityLiveRegion="polite">
         {transcript || 'Habla con normalidad…'}
@@ -47,12 +51,12 @@ export function ThinkingCard() {
         accessibilityLiveRegion="polite"
         style={[styles.thinking, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.row}>
-          <ActivityIndicator color={colors.textMuted} />
+          <ActivityIndicator color={colors.accentInk} />
           <Text variant="bodyStrong" style={styles.flex}>
             {thinkingLine(seconds * 1000)}
           </Text>
           {seconds >= SHOW_ELAPSED_AFTER_S ? (
-            <Text variant="metricSmall" color="textFaint">
+            <Text variant="metricSmall" color="textMuted">
               {`${seconds}s`}
             </Text>
           ) : null}
@@ -69,8 +73,15 @@ export function ThinkingCard() {
 
 const styles = StyleSheet.create({
   listening: { gap: space.sm, paddingVertical: space.md },
-  transcript: { fontSize: 26, lineHeight: 34 },
-  thinking: { gap: space.sm, padding: space.lg, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth },
+  transcript: { fontSize: 24, lineHeight: 32 },
+  thinking: {
+    gap: space.sm,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderTopLeftRadius: radius.sm / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  dot: { width: 8, height: 8, borderRadius: radius.pill, marginRight: -space.xs },
   flex: { flex: 1 },
 });

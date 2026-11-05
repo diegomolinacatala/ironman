@@ -21,8 +21,8 @@ function OutcomeBanner({ outcome }: { outcome: ApplyOutcome }) {
   return (
     <View
       accessibilityRole="alert"
-      style={[styles.banner, { backgroundColor: colors.surfaceAlt, borderColor: ok ? colors.text : colors.warning }]}>
-      <Icon name={ok ? 'checkCircle' : 'warning'} size={20} color={ok ? colors.text : colors.warning} />
+      style={[styles.banner, { backgroundColor: colors.surface, borderColor: ok ? colors.border : colors.warning }]}>
+      <Icon name={ok ? 'checkCircle' : 'warning'} size={20} color={ok ? colors.success : colors.warning} />
       <View style={styles.flex}>
         <Text variant="bodyStrong">
           {outcome.applied === 1 ? '1 cambio aplicado' : `${outcome.applied} cambios aplicados`}
@@ -61,7 +61,7 @@ export function ProposalReview({ proposal }: { proposal: PlanProposal }) {
 
   // Apply/discard errors sit next to the buttons: the top of a long diff may be scrolled away.
   const footer = readOnly ? (
-    <Button label="Cerrar" variant="inverse" fullWidth onPress={closeModal} />
+    <Button label="Cerrar" variant="secondary" size="lg" fullWidth onPress={closeModal} />
   ) : (
     <View style={styles.footer} testID="proposal-footer">
       {review.actionError ? <ErrorNotice message={review.actionError} /> : null}
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.md,
     padding: space.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });

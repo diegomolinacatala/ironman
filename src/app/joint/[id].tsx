@@ -14,7 +14,7 @@ import type { JointSession, UUID } from '@/domain/types';
 import { IntensityTag } from '@/features/workouts/IntensityTag';
 import { JointComments } from '@/features/together/JointComments';
 import { isOrganizer, myParticipant, sessionStatusCopy, sessionTimeLabel } from '@/features/together/jointModel';
-import { openWorkout } from '@/features/together/navigation';
+import { openWorkout, returnToTogether } from '@/features/together/navigation';
 import { ParticipantRow } from '@/features/together/ParticipantRow';
 import { StatusTag } from '@/features/together/StatusTag';
 import { useJointActions } from '@/features/together/useJointActions';
@@ -27,7 +27,7 @@ function InfoRow({ icon, label, value }: { icon: IconName; label: string; value:
     <View style={styles.info} accessible accessibilityLabel={`${label}: ${value}`}>
       <Icon name={icon} size={18} color={colors.textMuted} />
       <View style={styles.flex}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted">
           {label}
         </Text>
         <Text variant="body">{value}</Text>
@@ -40,12 +40,14 @@ function Hero({ session }: { session: JointSession }) {
   const theme = useTheme();
   return (
     <View style={styles.hero}>
-      <SportBadge sport={session.sport} size={72} tone="solid" />
-      <View style={styles.heroText}>
-        <Text variant="overline" style={{ color: theme.sport(session.sport).base }}>
+      <View style={styles.heroTop}>
+        <SportBadge sport={session.sport} size={56} />
+        <Text variant="overline" color="textMuted" style={styles.flex}>
           {sportLabel(session.sport)} · Quedada
         </Text>
-        <Text variant="display" accessibilityRole="header">
+      </View>
+      <View style={styles.heroText}>
+        <Text variant="title" accessibilityRole="header">
           {session.title}
         </Text>
         <View style={styles.tags}>
@@ -123,7 +125,7 @@ export default function JointSessionScreen() {
             icon="together"
             title="Quedada no encontrada"
             message="Puede que la hayan cancelado o que ya no participes."
-            action={<Button label="Volver a Juntos" onPress={() => router.replace('/together')} />}
+            action={<Button label="Volver a Juntos" onPress={returnToTogether} />}
           />
         )}
       </Screen>
@@ -180,6 +182,7 @@ export default function JointSessionScreen() {
 
 const styles = StyleSheet.create({
   hero: { gap: space.md },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   heroText: { gap: space.xs },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs },
   info: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, paddingVertical: space.sm },

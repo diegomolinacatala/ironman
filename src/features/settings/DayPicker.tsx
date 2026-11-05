@@ -2,7 +2,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { weekdayInitial, weekdayLabel } from '@/domain/labels';
 import type { Weekday } from '@/domain/types';
-import { Text, haptics, radius, space, useTheme } from '@/ui';
+import { Text, haptics, radius, readableTextOn, space, useTheme } from '@/ui';
+
+import { FormLabel } from './FormLabel';
 
 import { WEEKDAYS } from './availabilityModel';
 
@@ -13,20 +15,18 @@ export interface DayPickerProps {
   onToggle: (day: Weekday) => void;
   /** Days shown disabled (e.g. the rest day for long sessions). */
   disabledDays?: readonly Weekday[];
-  /** Selected colour (defaults to ink). */
+  /** Selected colour (defaults to the accent; e.g. the swim colour for pool days). */
   color?: string;
 }
 
 /** Seven round toggles, one per weekday (Mon → Sun). */
 export function DayPicker({ label, hint, selected, onToggle, disabledDays = [], color }: DayPickerProps) {
   const { colors } = useTheme();
-  const activeBg = color ?? colors.inverseBg;
-  const activeFg = color ? '#FFFFFF' : colors.inverseText;
+  const activeBg = color ?? colors.accent;
+  const activeFg = color ? readableTextOn(color) : colors.onAccent;
   return (
     <View style={styles.wrap}>
-      <Text variant="overline" color="textMuted">
-        {label}
-      </Text>
+      <FormLabel>{label}</FormLabel>
       <View style={styles.row} accessibilityRole="none">
         {WEEKDAYS.map((day) => {
           const isOn = selected.includes(day);

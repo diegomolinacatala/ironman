@@ -26,7 +26,7 @@ function close(): void {
   else router.replace('/today');
 }
 
-/** "Cuéntaselo a tu coach": full-screen voice conversation that adjusts the plan. */
+/** "Habla con tu coach": calm full-screen voice conversation that adjusts the plan. */
 export default function TalkScreen() {
   const params = useLocalSearchParams<CoachRouteParams>();
   const { colors } = useTheme();
@@ -88,7 +88,7 @@ export default function TalkScreen() {
     <View style={[styles.root, { backgroundColor: colors.bg, paddingTop: insets.top + space.xs }]}>
       <View style={styles.header}>
         <IconButton icon="close" variant="filled" size={44} accessibilityLabel="Cerrar" onPress={close} />
-        <Text variant="overline" color="textMuted" style={styles.title} accessibilityRole="header">
+        <Text variant="heading" style={styles.title} accessibilityRole="header">
           Tu coach
         </Text>
         {hasConversation ? (
@@ -175,6 +175,6 @@ const styles = StyleSheet.create({
   },
   title: { flex: 1, textAlign: 'center' },
   headerSpacer: { width: 44 },
-  content: { gap: space.xl, paddingHorizontal: space.lg, paddingBottom: space.lg, width: '100%', maxWidth: 720, alignSelf: 'center' },
+  content: { gap: space.xl, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.lg, width: '100%', maxWidth: 720, alignSelf: 'center' },
   dock: { paddingHorizontal: space.lg, width: '100%', maxWidth: 720, alignSelf: 'center' },
 });

@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Icon, Text, radius, space, useTheme } from '@/ui';
+import { Icon, Text, radius, readableTextOn, space, useTheme } from '@/ui';
 
 import { Skeleton } from './Skeleton';
 
@@ -17,9 +17,13 @@ export function PreparingSteps({ steps, step }: { steps: readonly string[]; step
           return (
             <View key={text} style={styles.step}>
               <View style={[styles.dot, { backgroundColor: done ? colors.success : active ? colors.accent : colors.surfaceAlt }]}>
-                <Icon name={done ? 'check' : active ? 'waveform' : 'clock'} size={12} color={done ? colors.inverseText : active ? colors.onAccent : colors.textFaint} />
+                <Icon
+                  name={done ? 'check' : active ? 'waveform' : 'clock'}
+                  size={12}
+                  color={done ? readableTextOn(colors.success) : active ? colors.onAccent : colors.textMuted}
+                />
               </View>
-              <Text variant={active ? 'bodyStrong' : 'callout'} color={done || active ? 'text' : 'textFaint'}>
+              <Text variant={active ? 'bodyStrong' : 'callout'} color={done || active ? 'text' : 'textMuted'}>
                 {text}
               </Text>
             </View>

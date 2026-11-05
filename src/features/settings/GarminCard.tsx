@@ -41,7 +41,7 @@ export function GarminCard() {
           <GarminFlow garmin={garmin} isDemo={isDemo} lastSyncAt={garmin.status?.lastSyncAt ?? null} />
         </>
       )}
-      <Text variant="caption" color="textFaint">
+      <Text variant="caption" color="textMuted">
         Datos de Garmin. Garmin y Garmin Connect son marcas de Garmin Ltd.
       </Text>
     </IntegrationCard>

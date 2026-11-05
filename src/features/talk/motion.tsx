@@ -97,5 +97,5 @@ export function Shimmer({ style }: { style?: StyleProp<ViewStyle> }) {
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   abs: { position: 'absolute' },
-  ring: { borderWidth: 3 },
+  ring: { borderWidth: 2 },
 });

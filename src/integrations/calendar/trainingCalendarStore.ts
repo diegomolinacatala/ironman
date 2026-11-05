@@ -12,8 +12,11 @@ import { readJson, writeJson } from '@/lib/storage';
 import { readUserJson, removeUserKey, userIdsWithKey, writeUserJson } from '../deviceState';
 
 export const TRAINING_CALENDAR_TITLE = 'Road to Ironman';
-/** Deep lime: the brand accent, dark enough to read in Calendar on both themes. */
-export const TRAINING_CALENDAR_COLOR = '#9CC20F';
+/**
+ * Brand blue, mid-tone between the light (navy) and dark (sky) accents so it reads in Calendar on
+ * both themes. Only applied to calendars this app creates; existing ones keep their colour.
+ */
+export const TRAINING_CALENDAR_COLOR = '#4A74C9';
 export const DEFAULT_ALARM_MINUTES = 30;
 export const MAX_ALARM_MINUTES = 24 * 60;
 

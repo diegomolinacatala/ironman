@@ -132,7 +132,7 @@ function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
         </Text>
       </Appear>
       <Appear index={3} style={styles.block}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="heading" accessibilityRole="header">
           Qué entrenas
         </Text>
         <View style={styles.chips}>

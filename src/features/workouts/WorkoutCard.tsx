@@ -23,8 +23,8 @@ export interface WorkoutCardProps {
 }
 
 /**
- * Session card with sport rail, compliance dot (colour + glyph), intensity,
- * key and "juntos" markers. `compact` is the one-row variant used in lists.
+ * Session card: sport rail + tinted sport badge, title (`heading`), meta caption, compliance
+ * dot (colour + glyph), intensity, key and "juntos" markers. `compact` is the list variant.
  */
 export function WorkoutCard({
   workout,
@@ -50,14 +50,14 @@ export function WorkoutCard({
       accessibilityLabel={label}
       style={isSkipped ? styles.dimmed : undefined}>
       <View style={styles.row}>
-        <SportBadge sport={workout.sport} size={compact ? 34 : 42} />
+        <SportBadge sport={workout.sport} size={compact ? BADGE_COMPACT : 40} />
         <View style={styles.body}>
           {compact ? null : (
-            <Text variant="overline" color="textMuted" numberOfLines={1}>
+            <Text variant="caption" color="textMuted" numberOfLines={1}>
               {sportLabel(workout.sport)}
             </Text>
           )}
-          <Text variant={compact ? 'bodyStrong' : 'heading'} numberOfLines={2} style={titleStyle}>
+          <Text variant="heading" numberOfLines={2} style={titleStyle}>
             {workout.title}
           </Text>
           <Text variant="caption" color="textMuted" numberOfLines={1}>
@@ -69,7 +69,7 @@ export function WorkoutCard({
             {workout.sport === 'rest' ? '' : formatDuration(displayDurationMin(workout))}
           </Text>
         )}
-        <ComplianceDot state={compliance} size={compact ? 18 : 22} />
+        <ComplianceDot state={compliance} size={compact ? 20 : 22} />
       </View>
       <CardTags workout={workout} partnerName={partnerName} compact={compact} />
     </Card>
@@ -96,11 +96,13 @@ function CardTags({
   );
 }
 
+const BADGE_COMPACT = 36;
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   body: { flex: 1, gap: 2 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: space.md },
-  tagsCompact: { marginTop: space.sm, marginLeft: 34 + space.md },
+  tagsCompact: { marginTop: space.sm, marginLeft: BADGE_COMPACT + space.md },
   skipped: { textDecorationLine: 'line-through' },
   dimmed: { opacity: 0.72 },
 });

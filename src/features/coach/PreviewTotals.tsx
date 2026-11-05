@@ -15,12 +15,12 @@ interface MetricProps {
 function Metric({ label, before, after, delta }: MetricProps) {
   return (
     <View style={styles.metric} accessible accessibilityLabel={`${label}: antes ${before}, después ${after}`}>
-      <Text variant="overline" color="textMuted">
+      <Text variant="caption" color="textMuted">
         {label}
       </Text>
       <View style={styles.values}>
         {before !== after ? (
-          <Text variant="callout" color="textFaint" style={styles.strike}>
+          <Text variant="callout" color="textMuted" style={styles.strike}>
             {before}
           </Text>
         ) : null}
@@ -50,7 +50,7 @@ export function PreviewTotals({ preview, selectedCount }: { preview: PreviewResu
   const { before, after } = preview;
   return (
     <View style={[styles.box, { backgroundColor: colors.surfaceAlt }]}>
-      <Text variant="overline" color="textMuted">
+      <Text variant="heading" accessibilityRole="header">
         {selectedCount === 0 ? 'Sin cambios seleccionados' : 'Tu semana si aplicas'}
       </Text>
       <View style={styles.grid}>
@@ -68,7 +68,7 @@ export function PreviewTotals({ preview, selectedCount }: { preview: PreviewResu
 }
 
 const styles = StyleSheet.create({
-  box: { borderRadius: radius.lg, padding: space.lg, gap: space.sm },
+  box: { borderRadius: radius.lg, padding: space.lg, gap: space.md },
   grid: { flexDirection: 'row', gap: space.lg },
   metric: { flex: 1, gap: 2 },
   values: { gap: 0 },

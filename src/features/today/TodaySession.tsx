@@ -37,13 +37,16 @@ function CalendarBadge() {
   );
 }
 
-/** Today's next session: time, duration, intensity and structure in one calm card. */
+/**
+ * Today's next session — the one primary action on Hoy ("Hecho"). Raised card with the sport
+ * rail; time, duration, intensity and structure in one calm block.
+ */
 export function TodaySession({ workout, partnerName, inCalendar, onOpen, onComplete, onMore, busy }: TodaySessionProps) {
   const theme = useTheme();
   const time = timeRangeLabel(workout);
   const structure = structureSummary(workout) ?? workout.description;
   return (
-    <Card padding="lg" rail={theme.sport(workout.sport).base} style={styles.card}>
+    <Card variant="raised" padding="lg" rail={theme.sport(workout.sport).base} style={styles.card}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Tu entreno de hoy: ${workoutA11yLabel(workout, { partnerName })}${inCalendar ? ', en tu calendario' : ''}`}
@@ -56,7 +59,7 @@ export function TodaySession({ workout, partnerName, inCalendar, onOpen, onCompl
               {`${sportLabel(workout.sport)} · ${time ?? 'hora flexible'}`}
             </Text>
             <View style={styles.metricRow}>
-              <Text variant="display">{formatDuration(workout.durationMin)}</Text>
+              <Text variant="metric">{formatDuration(workout.durationMin)}</Text>
               {workout.distanceM ? (
                 <Text variant="metricSmall" color="textMuted">
                   {formatDistance(workout.distanceM, workout.sport)}
@@ -82,7 +85,7 @@ export function TodaySession({ workout, partnerName, inCalendar, onOpen, onCompl
         </View>
       </Pressable>
       <View style={styles.actions}>
-        <Button label="Hecho" icon="check" variant="inverse" onPress={onComplete} disabled={busy} style={styles.flex} />
+        <Button label="Hecho" icon="check" onPress={onComplete} disabled={busy} style={styles.flex} />
         <IconButton icon="more" variant="filled" size={48} accessibilityLabel="Más opciones: saltar o mover" onPress={onMore} disabled={busy} />
       </View>
     </Card>
@@ -102,7 +105,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
   },
   actions: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
 });

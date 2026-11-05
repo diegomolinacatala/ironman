@@ -39,7 +39,7 @@ export function PrivacyCard({ value }: { value: CalendarVisibility }) {
   return (
     <Card padding="lg">
       <View style={styles.head}>
-        <Icon name="eye" size={18} color={colors.text} />
+        <Icon name="eye" size={18} color={colors.textMuted} />
         <Text variant="bodyStrong" style={styles.flex}>
           Qué ven tus amigos
         </Text>

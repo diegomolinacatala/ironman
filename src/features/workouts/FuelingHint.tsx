@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { fuelingHint } from '@/domain/fueling';
 import type { Workout } from '@/domain/types';
-import { Card, Icon, Text, haptics, space, useTheme } from '@/ui';
+import { Card, Icon, Text, fonts, haptics, iconSize, space, useTheme } from '@/ui';
 
 /** Sessions from this length show the fueling hint on Hoy. */
 export const FUELING_MIN_DURATION = 75;
@@ -32,7 +32,9 @@ export function FuelingHint({ workout, defaultOpen = false }: FuelingHintProps) 
           setOpen((v) => !v);
         }}
         style={styles.header}>
-        <Icon name="food" size={18} color={colors.text} />
+        <View style={[styles.tile, { backgroundColor: colors.surface }]}>
+          <Icon name="food" size={iconSize.sm} color={colors.textMuted} />
+        </View>
         <View style={styles.headerText}>
           <Text variant="overline" color="textMuted">
             Nutrición
@@ -46,7 +48,7 @@ export function FuelingHint({ workout, defaultOpen = false }: FuelingHintProps) 
           <FuelLine label="Antes" text={hint.before} />
           {hint.during ? <FuelLine label="Durante" text={hint.during} /> : null}
           <FuelLine label="Después" text={hint.after} />
-          <Text variant="caption" color="textFaint">
+          <Text variant="caption" color="textMuted">
             Pautas generales, no consejo médico.
           </Text>
         </View>
@@ -58,7 +60,7 @@ export function FuelingHint({ workout, defaultOpen = false }: FuelingHintProps) 
 function FuelLine({ label, text }: { label: string; text: string }) {
   return (
     <View style={styles.line}>
-      <Text variant="overline" color="textMuted" style={styles.lineLabel}>
+      <Text variant="caption" color="textMuted" style={styles.lineLabel}>
         {label}
       </Text>
       <Text variant="callout" style={styles.lineText}>
@@ -74,6 +76,7 @@ const styles = StyleSheet.create({
   rotated: { transform: [{ rotate: '180deg' }] },
   body: { gap: space.md, marginTop: space.md },
   line: { flexDirection: 'row', gap: space.md },
-  lineLabel: { width: 64, paddingTop: 3 },
+  lineLabel: { width: 64, paddingTop: 2, fontFamily: fonts.bodySemibold },
+  tile: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   lineText: { flex: 1 },
 });

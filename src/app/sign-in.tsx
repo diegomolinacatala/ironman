@@ -89,9 +89,14 @@ export default function SignInScreen() {
         <View style={styles.form}>
           {mode === 'demo' ? <DemoBanner onEnter={() => void enterDemo()} loading={busy === 'demo'} /> : null}
           <View style={styles.block}>
-            <Text variant="overline" color="textMuted" accessibilityRole="header">
-              Entra o crea tu cuenta
-            </Text>
+            <View style={styles.heading}>
+              <Text variant="title" accessibilityRole="header">
+                Entra o crea tu cuenta
+              </Text>
+              <Text variant="callout" color="textMuted">
+                Te mandamos un código de 6 dígitos. Sin contraseñas.
+              </Text>
+            </View>
             <TextField
               label="Email"
               value={email}
@@ -117,9 +122,6 @@ export default function SignInScreen() {
               disabled={!isPlausibleEmail(trimmed) || busy !== null}
               onPress={() => void sendCode()}
             />
-            <Text variant="caption" color="textMuted">
-              Te mandamos un código de 6 dígitos. Sin contraseñas.
-            </Text>
           </View>
           {appleAvailable ? (
             <View style={styles.block}>
@@ -128,8 +130,8 @@ export default function SignInScreen() {
             </View>
           ) : null}
           {error ? <ErrorNotice message={error} /> : null}
-          <Text variant="caption" color="textFaint" align="center">
-            Tus datos son tuyos: puedes borrar la cuenta y todo su contenido cuando quieras desde Yo.
+          <Text variant="caption" color="textMuted" align="center">
+            Tus datos son tuyos: puedes borrar la cuenta y todo su contenido cuando quieras desde Tú.
           </Text>
           <Button label="Política de privacidad" variant="ghost" size="sm" onPress={() => router.push('/privacy')} />
         </View>
@@ -144,7 +146,7 @@ function OrDivider() {
       <View style={styles.flex}>
         <Divider />
       </View>
-      <Text variant="overline" color="textFaint">
+      <Text variant="caption" color="textMuted">
         o
       </Text>
       <View style={styles.flex}>
@@ -158,6 +160,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   form: { paddingHorizontal: space.lg, paddingTop: space.xl, gap: space.xl, width: '100%', maxWidth: 560, alignSelf: 'center' },
   block: { gap: space.md },
+  heading: { gap: space.xs },
   or: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   flex: { flex: 1 },
 });

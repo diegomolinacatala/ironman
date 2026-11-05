@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import { useState, type Ref } from 'react';
 import { Platform, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 
 import { Text, fonts, radius, space, useTheme } from '@/ui';
@@ -14,14 +14,17 @@ export interface CodeInputProps {
 }
 
 /**
- * Single text input for the 6-digit email code: big letter-spaced condensed
+ * Single text input for the 6-digit email code: large letter-spaced tabular
  * numbers, iOS one-time-code autofill, digits only.
  */
 export function CodeInput({ value, onChange, error, editable = true, ref }: CodeInputProps) {
   const { colors } = useTheme();
+  const [focused, setFocused] = useState(false);
+  const complete = value.length === CODE_LENGTH;
+  const borderColor = error ? colors.danger : focused || complete ? colors.accentInk : colors.borderStrong;
   return (
     <View style={styles.wrap}>
-      <Text variant="overline" color="textMuted" nativeID="code-label">
+      <Text variant="caption" color="textMuted" nativeID="code-label" style={styles.label}>
         Código de 6 dígitos
       </Text>
       <TextInput
@@ -36,7 +39,9 @@ export function CodeInput({ value, onChange, error, editable = true, ref }: Code
         textContentType="oneTimeCode"
         maxLength={CODE_LENGTH}
         placeholder="000000"
-        placeholderTextColor={colors.border}
+        placeholderTextColor={colors.textFaint}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         selectionColor={colors.accentInk}
         accessibilityLabel="Código de 6 dígitos"
         accessibilityLabelledBy="code-label"
@@ -46,7 +51,7 @@ export function CodeInput({ value, onChange, error, editable = true, ref }: Code
           {
             color: colors.text,
             backgroundColor: colors.surface,
-            borderColor: error ? colors.danger : value.length === CODE_LENGTH ? colors.text : colors.border,
+            borderColor,
           },
         ]}
       />
@@ -61,14 +66,16 @@ export function CodeInput({ value, onChange, error, editable = true, ref }: Code
 
 const styles = StyleSheet.create({
   wrap: { gap: space.xs },
+  label: { fontFamily: fonts.bodySemibold },
   input: {
-    minHeight: 84,
-    borderRadius: radius.lg,
-    borderWidth: 2,
+    minHeight: 72,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
     paddingHorizontal: space.lg,
-    fontFamily: fonts.displayItalic,
-    fontSize: 52,
-    letterSpacing: 14,
+    fontFamily: fonts.numeric,
+    fontVariant: ['tabular-nums'],
+    fontSize: 40,
+    letterSpacing: 12,
     textAlign: 'center',
   },
 });

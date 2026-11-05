@@ -21,8 +21,8 @@ export function IntegrationCard({ icon, title, badge, status, children }: Integr
   return (
     <Card padding="lg" variant="raised">
       <View style={styles.head}>
-        <View style={[styles.icon, { backgroundColor: colors.inverseBg }]}>
-          <Icon name={icon} size={20} color={colors.inverseText} />
+        <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
+          <Icon name={icon} size={20} color={colors.onAccentSoft} />
         </View>
         <View style={styles.titles}>
           <View style={styles.titleRow}>
@@ -41,7 +41,7 @@ export function IntegrationCard({ icon, title, badge, status, children }: Integr
 
 const styles = StyleSheet.create({
   head: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-  icon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   titles: { flex: 1, gap: space.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm },
   body: { marginTop: space.lg, gap: space.md },

@@ -9,7 +9,7 @@ import { errorMessage, logger } from '@/lib/logger';
 import { ErrorNotice, Text, haptics, space } from '@/ui';
 
 import { Appear } from '../Appear';
-import { NumberedSteps, type GuideItem } from '../GuideParts';
+import { NumberedSteps, StatusLine, type GuideItem } from '../GuideParts';
 import { DEFAULT_MORNING_TIME } from '../onboardingModel';
 import { NotificationPreview } from '../PreviewCards';
 import { StepLayout, type StepNav } from '../StepLayout';
@@ -65,12 +65,14 @@ export function MorningStep({ nav, profile }: { nav: StepNav; profile: Profile }
         <NotificationPreview time={time} />
       </Appear>
       {notifications.status === 'denied' ? (
-        <Text variant="caption" color="warning">
-          Tienes los avisos desactivados en Ajustes › Road to Ironman. El widget funcionará igualmente.
-        </Text>
+        <StatusLine
+          icon="warning"
+          tone="warning"
+          text="Tienes los avisos desactivados en Ajustes › Road to Ironman. El widget funcionará igualmente."
+        />
       ) : null}
       <Appear index={2} style={styles.block}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="heading" accessibilityRole="header">
           Ponlo en tu pantalla de bloqueo
         </Text>
         <NumberedSteps items={WIDGET_GUIDE} startIndex={3} />

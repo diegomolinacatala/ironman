@@ -3,12 +3,15 @@ import { Linking, Platform, StyleSheet, View } from 'react-native';
 import type { ISOTime, Profile } from '@/domain/types';
 import { TimeField } from '@/features/workouts/DateField';
 import { useNotificationPermission } from '@/integrations/hooks';
-import { Button, Card, ErrorNotice, Text, space } from '@/ui';
+import { Button, ErrorNotice, Icon, Text, iconSize, space, useTheme } from '@/ui';
 
 import { SwitchRow } from '../settings/SwitchRow';
 import { useMorningPrefs } from './useMorningPrefs';
 
-/** Morning report on/off + time: optimistic, time debounced, saves serialized (see `useMorningPrefs`). */
+/**
+ * Morning report on/off + time, as a row of the "Tu coach" group: optimistic, time
+ * debounced, saves serialized (see `useMorningPrefs`).
+ */
 export function MorningSection({ profile }: { profile: Profile }) {
   const notifications = useNotificationPermission();
   const { prefs, error, setEnabled, setTime } = useMorningPrefs(profile);
@@ -20,39 +23,47 @@ export function MorningSection({ profile }: { profile: Profile }) {
   };
 
   return (
-    <View style={styles.wrap}>
-      <Card padding="md">
-        <SwitchRow
-          icon="sunrise"
-          title="Informe de cada mañana"
-          subtitle={prefs.morningSummary ? `Cada día a las ${prefs.morningTime}: cómo has dormido y qué toca.` : 'Cómo has dormido y qué toca hoy, en un aviso.'}
-          value={prefs.morningSummary}
-          onChange={(on) => void toggle(on)}>
-          <TimeField
-            label="Hora del informe"
-            value={prefs.morningTime}
-            optional={false}
-            onChange={(time: ISOTime | null) => {
-              if (time && time !== prefs.morningTime) setTime(time);
-            }}
-          />
-        </SwitchRow>
-      </Card>
-      {denied && prefs.morningSummary ? (
-        <View style={styles.denied}>
-          <Text variant="caption" color="warning" style={styles.flex}>
-            Los avisos están desactivados en Ajustes: no te llegará el informe.
-          </Text>
-          <Button label="Abrir Ajustes" size="sm" variant="secondary" onPress={() => void Linking.openSettings()} />
+    <View>
+      <SwitchRow
+        icon="sunrise"
+        title="Informe de cada mañana"
+        subtitle={prefs.morningSummary ? `Cada día a las ${prefs.morningTime}: cómo has dormido y qué toca.` : 'Cómo has dormido y qué toca hoy, en un aviso.'}
+        value={prefs.morningSummary}
+        onChange={(on) => void toggle(on)}>
+        <TimeField
+          label="Hora del informe"
+          value={prefs.morningTime}
+          optional={false}
+          onChange={(time: ISOTime | null) => {
+            if (time && time !== prefs.morningTime) setTime(time);
+          }}
+        />
+      </SwitchRow>
+      {denied && prefs.morningSummary ? <DeniedNotice /> : null}
+      {error ? (
+        <View style={styles.notice}>
+          <ErrorNotice message={error} />
         </View>
       ) : null}
-      {error ? <ErrorNotice message={error} /> : null}
+    </View>
+  );
+}
+
+function DeniedNotice() {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.notice, styles.denied]}>
+      <Icon name="warning" size={iconSize.sm} color={colors.warning} />
+      <Text variant="caption" style={[styles.flex, { color: colors.text }]}>
+        Los avisos están desactivados en Ajustes: no te llegará el informe.
+      </Text>
+      <Button label="Abrir Ajustes" size="sm" variant="secondary" onPress={() => void Linking.openSettings()} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: space.sm },
   flex: { flex: 1 },
+  notice: { paddingHorizontal: space.xs, paddingBottom: space.md },
   denied: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
 });

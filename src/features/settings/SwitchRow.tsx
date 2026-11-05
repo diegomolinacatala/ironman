@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Platform, StyleSheet, Switch, View } from 'react-native';
 
-import { Icon, Text, haptics, radius, space, useTheme, type IconName } from '@/ui';
+import { Icon, Text, haptics, space, useTheme, type IconName } from '@/ui';
 
 export interface SwitchRowProps {
   icon: IconName;
@@ -14,15 +14,19 @@ export interface SwitchRowProps {
   children?: ReactNode;
 }
 
+const TILE = 32;
+
+/** Settings row with an icon tile and a switch (accent track when on). */
 export function SwitchRow({ icon, title, subtitle, value, onChange, disabled, children }: SwitchRowProps) {
   const { colors } = useTheme();
-  // react-native-web ignores thumbColor for the "on" state and uses its own props.
-  const webColors = Platform.OS === 'web' ? { activeThumbColor: colors.accent, activeTrackColor: colors.text } : {};
+  // iOS keeps its native white thumb; react-native-web ignores thumbColor for "on" and uses its own props.
+  const thumbColor = Platform.OS === 'ios' ? undefined : value ? colors.onAccent : colors.surface;
+  const webColors = Platform.OS === 'web' ? { activeThumbColor: colors.onAccent, activeTrackColor: colors.accent } : {};
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
         <View style={[styles.icon, { backgroundColor: colors.surfaceAlt }]}>
-          <Icon name={icon} size={18} color={colors.text} />
+          <Icon name={icon} size={18} color={colors.textMuted} />
         </View>
         <View style={styles.text}>
           <Text variant="bodyStrong">{title}</Text>
@@ -38,9 +42,9 @@ export function SwitchRow({ icon, title, subtitle, value, onChange, disabled, ch
             haptics.tap();
             onChange(next);
           }}
-          trackColor={{ false: colors.border, true: colors.text }}
-          thumbColor={value ? colors.accent : colors.surface}
-          ios_backgroundColor={colors.border}
+          trackColor={{ false: colors.borderStrong, true: colors.accent }}
+          thumbColor={thumbColor}
+          ios_backgroundColor={colors.borderStrong}
           {...webColors}
         />
       </View>
@@ -50,9 +54,9 @@ export function SwitchRow({ icon, title, subtitle, value, onChange, disabled, ch
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingVertical: space.md, gap: space.md },
+  wrap: { paddingVertical: space.md, paddingHorizontal: space.xs, gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  icon: { width: 34, height: 34, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: TILE, height: TILE, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, gap: 2 },
-  extra: { paddingLeft: 34 + space.md, gap: space.sm },
+  extra: { paddingLeft: TILE + space.md, gap: space.sm },
 });

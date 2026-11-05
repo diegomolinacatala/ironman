@@ -49,6 +49,15 @@ export function claudeConnectionView(tokens: readonly PersonalToken[] | undefine
   return { tone: 'muted', status: 'Sin conectar', detail: 'Habla con Claude de tu plan y lo cambia por ti.', action: OPEN('Conectar') };
 }
 
+/** Suscripción de calendario (webcal/ICS): active links, or how to get one. */
+export function calendarFeedConnectionView(tokens: readonly PersonalToken[] | undefined): ConnectionView {
+  const active = (tokens ?? []).filter((t) => t.scope === 'ics' && !t.revokedAt).length;
+  if (active > 0) {
+    return { tone: 'success', status: active === 1 ? 'Activa' : `${active} enlaces`, detail: 'Tus entrenos en cualquier app de calendario.', action: null };
+  }
+  return { tone: 'muted', status: 'Sin enlace', detail: 'Tus entrenos en Google Calendar, Outlook o cualquier app.', action: null };
+}
+
 export interface TrainingCalendarLike {
   available: boolean;
   enabled: boolean;

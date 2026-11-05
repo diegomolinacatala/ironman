@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Chip, Text, space } from '@/ui';
+import { Chip, Icon, Text, radius, space, useTheme } from '@/ui';
 
 import { FadeIn } from './motion';
 import { EXAMPLE_PROMPTS } from './talkSession';
@@ -13,9 +13,13 @@ export interface TalkGreetingProps {
 
 /** Empty conversation: one question, three examples that prefill the composer. */
 export function TalkGreeting({ showExamples, onPick }: TalkGreetingProps) {
+  const { colors } = useTheme();
   return (
     <View style={styles.root}>
-      <FadeIn index={0}>
+      <FadeIn index={0} style={styles.intro}>
+        <View style={[styles.mark, { backgroundColor: colors.accentSoft }]} accessibilityElementsHidden importantForAccessibility="no">
+          <Icon name="coach" size={24} color={colors.onAccentSoft} />
+        </View>
         <Text variant="display" accessibilityRole="header">
           ¿Qué te cuentas?
         </Text>
@@ -27,7 +31,7 @@ export function TalkGreeting({ showExamples, onPick }: TalkGreetingProps) {
       </FadeIn>
       {showExamples ? (
         <FadeIn index={2} style={styles.examples}>
-          <Text variant="overline" color="textMuted">
+          <Text variant="caption" color="textMuted">
             Por ejemplo
           </Text>
           <View style={styles.chips}>
@@ -43,6 +47,8 @@ export function TalkGreeting({ showExamples, onPick }: TalkGreetingProps) {
 
 const styles = StyleSheet.create({
   root: { gap: space.md, paddingTop: space.xl },
+  intro: { gap: space.lg },
+  mark: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   examples: { gap: space.sm, marginTop: space.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });

@@ -3,9 +3,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { addDays, formatDayLabel, formatDayShort } from '@/domain/dates';
 import type { ISODate } from '@/domain/types';
-import { Button, Chip, Text, space } from '@/ui';
+import { Button, Chip, space } from '@/ui';
 
 import { DateField } from './DateField';
+import { FormLabel } from './FormLabel';
 import { SheetModal } from './SheetModal';
 
 const DAYS_AHEAD = 14;
@@ -44,9 +45,7 @@ export function MoveSheet({ visible, onClose, onSelect, fromDate, today, busy = 
         />
       ) : null}
       <View style={styles.block}>
-        <Text variant="overline" color="textMuted">
-          Elegir día
-        </Text>
+        <FormLabel>Elegir día</FormLabel>
         <View style={styles.grid}>
           {options.map((date) => (
             <Chip key={date} label={formatDayLabel(date, today)} onPress={() => onSelect(date)} disabled={busy} />

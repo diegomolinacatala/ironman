@@ -19,8 +19,8 @@ function SourceOption({ icon, title, subtitle, onPress, index }: { icon: IconNam
           styles.option,
           { backgroundColor: pressed ? colors.surfacePressed : colors.surface, borderColor: colors.border },
         ]}>
-        <View style={[styles.icon, { backgroundColor: colors.surfaceAlt }]}>
-          <Icon name={icon} size={22} color={colors.text} />
+        <View style={[styles.icon, { backgroundColor: colors.accentSoft }]}>
+          <Icon name={icon} size={20} color={colors.onAccentSoft} />
         </View>
         <View style={styles.text}>
           <Text variant="bodyStrong">{title}</Text>
@@ -85,9 +85,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
-  icon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, gap: 2 },
   error: { gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1, alignItems: 'flex-start' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

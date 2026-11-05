@@ -14,7 +14,9 @@ export function HeaderCloseButton({ onPress, label = 'Cerrar' }: { onPress: () =
         onPress();
       }}
       style={styles.button}>
-      <Text variant="bodyStrong">{label}</Text>
+      <Text variant="bodyStrong" color="accentInk">
+        {label}
+      </Text>
     </Pressable>
   );
 }

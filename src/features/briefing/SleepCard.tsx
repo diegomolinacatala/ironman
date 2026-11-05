@@ -23,7 +23,7 @@ function ScoreRing({ score, verdict }: { score: number; verdict: SleepVerdict })
     <View accessible accessibilityLabel={`Puntuación de sueño: ${Math.round(score)} de 100`}>
       <ProgressRing value={score / 100} size={RING_SIZE} stroke={8} color={verdictColor(verdict, colors)}>
         <Text variant="metric">{String(Math.round(score))}</Text>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted">
           de 100
         </Text>
       </ProgressRing>
@@ -79,7 +79,7 @@ export function SleepCard({ sleep, verdict }: { sleep: SleepSnapshot; verdict: S
             Anoche
           </Text>
           {hours && sleep.hours != null ? (
-            <Text variant="display" accessibilityLabel={`Has dormido ${spokenDuration(sleep.hours * 60)}`}>
+            <Text variant="metric" accessibilityLabel={`Has dormido ${spokenDuration(sleep.hours * 60)}`}>
               {hours}
             </Text>
           ) : null}

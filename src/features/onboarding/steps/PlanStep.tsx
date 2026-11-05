@@ -3,10 +3,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { todayISO } from '@/domain/dates';
 import { errorMessage, logger } from '@/lib/logger';
-import { ErrorNotice, Icon, ProgressBar, Text, haptics, space, useTheme } from '@/ui';
+import { ErrorNotice, Icon, ProgressBar, Text, haptics, iconSize, space, useTheme } from '@/ui';
 
 import { Appear } from '../Appear';
-import { SuccessHero, WorkingState, useInk } from '../GuideParts';
+import { SuccessHero, WorkingState } from '../GuideParts';
 import { StepLayout, type StepAction, type StepNav } from '../StepLayout';
 import { usePlanGeneration, type PlanGeneration } from '../usePlanGeneration';
 
@@ -77,14 +77,13 @@ function PlanProgress() {
 
 function PlanReady({ summary }: { summary: readonly string[] }) {
   const { colors } = useTheme();
-  const { paper } = useInk();
   return (
     <SuccessHero title="Tu plan está listo" message="Lo tienes en Hoy y en Plan. Si algo cambia, cuéntaselo a tu coach.">
       <View style={styles.bullets} accessibilityRole="list">
         {summary.map((line) => (
           <View key={line} style={styles.bullet}>
-            <Icon name="checkCircle" size={18} color={colors.accent} />
-            <Text variant="bodyStrong" style={[styles.flex, { color: paper }]}>
+            <Icon name="checkCircle" size={iconSize.md} color={colors.success} />
+            <Text variant="bodyStrong" style={styles.flex}>
               {line}
             </Text>
           </View>

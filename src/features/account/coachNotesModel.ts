@@ -46,3 +46,10 @@ export function editNote(lines: readonly string[], index: number, text: string):
 export function removeNote(lines: readonly string[], index: number): string[] {
   return lines.filter((_, i) => i !== index);
 }
+
+/** Collapsed row of "Lo que tu coach sabe de ti": how many facts and the first one. */
+export function notesSummary(lines: readonly string[]): string {
+  if (lines.length === 0) return 'Aún nada: cuéntale tus horarios, lesiones o preferencias';
+  const count = lines.length === 1 ? '1 cosa' : `${lines.length} cosas`;
+  return `${count} · ${lines[0]}`;
+}

@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
-import TogetherScreen from '@/app/together';
+import TogetherScreen from '@/app/(tabs)/together';
 import FriendWeekScreen from '@/app/friends/[id]';
 import AddFriendScreen from '@/app/friends/add';
 import JointSessionScreen from '@/app/joint/[id]';
@@ -16,10 +16,19 @@ import { AuthContext, RepositoryContext } from '@/data/context';
 import type { Repository } from '@/data/repository';
 import { addDays, todayISO } from '@/domain/dates';
 import type { JointSession, JointSessionDraft, Profile } from '@/domain/types';
+import * as confirm from '@/features/social/confirm';
 
 import { ALEX, feedItem, friend, friendItem, jointSession, ME, notification, participant, workout } from './fixtures';
 
-const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), setParams: jest.fn() };
+const mockRouter = {
+  push: jest.fn(),
+  replace: jest.fn(),
+  back: jest.fn(),
+  setParams: jest.fn(),
+  dismissTo: jest.fn(),
+  navigate: jest.fn(),
+  canGoBack: jest.fn(() => true),
+};
 let mockParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
@@ -27,7 +36,11 @@ jest.mock('expo-router', () => ({
     return mockRouter;
   },
   useLocalSearchParams: () => mockParams,
-  Stack: { Screen: () => null },
+  // Render the header button so its actions (e.g. "Opciones de amistad") can be pressed.
+  Stack: {
+    Screen: ({ options }: { options?: { headerRight?: () => unknown } }) =>
+      typeof options?.headerRight === 'function' ? options.headerRight() : null,
+  },
 }));
 
 jest.mock(
@@ -134,6 +147,32 @@ describe('Juntos', () => {
     expect(await screen.findByText('Te han invitado')).toBeTruthy();
   });
 
+  test('actionable blocks come first, each with a sentence-case header', async () => {
+    await render(<TogetherScreen />, { wrapper: Providers });
+    await screen.findByText('Álex completó Rodaje Z2');
+    await screen.findByText('Huecos comunes');
+    const headers = screen.getAllByRole('header').map((h) => {
+      const children = h.props.children as unknown;
+      return Array.isArray(children) ? children.join('') : String(children);
+    });
+    const order = ['Solicitud de amistad', 'Próximas quedadas', 'Tú y Álex', 'Actividad'].map((title) => headers.indexOf(title));
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(headers.filter((h) => h.length > 3 && h === h.toUpperCase())).toEqual([]);
+  });
+
+  test('"Proponer quedada" is the primary action and prefills the selected friend', async () => {
+    await render(<TogetherScreen />, { wrapper: Providers });
+    // The quick action comes first; opportunity cards below repeat it as secondary buttons.
+    const [primary] = await screen.findAllByRole('button', { name: 'Proponer quedada' });
+    await fireEvent.press(primary as never);
+    expect(mockRouter.push).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/joint/new', params: expect.objectContaining({ friendId: ALEX }) }),
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir amigo' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/friends/add');
+  });
+
   test('accepting an invite inline calls the repository', async () => {
     await render(<TogetherScreen />, { wrapper: Providers });
     const accept = await screen.findAllByRole('button', { name: 'Aceptar' });
@@ -158,6 +197,22 @@ describe('friend week', () => {
     mockParams = { id: 'nobody' };
     await render(<FriendWeekScreen />, { wrapper: Providers });
     expect(await screen.findByText('No es tu amigo todavía')).toBeTruthy();
+  });
+
+  test('removing a friend returns to the Juntos tab without stacking another tab bar', async () => {
+    const confirmSpy = jest.spyOn(confirm, 'confirmAction').mockResolvedValue(true);
+    const menuSpy = jest
+      .spyOn(confirm, 'showActionMenu')
+      .mockImplementation((_title, options) => options[0]?.onSelect());
+    mockParams = { id: ALEX };
+    await render(<FriendWeekScreen />, { wrapper: Providers });
+    await screen.findByText('Álex García');
+    await fireEvent.press(screen.getByRole('button', { name: 'Opciones de amistad' }));
+    await waitFor(() => expect(repo.removeFriend).toHaveBeenCalled());
+    await waitFor(() => expect(mockRouter.dismissTo).toHaveBeenCalledWith('/together'));
+    expect(mockRouter.push).not.toHaveBeenCalledWith('/together');
+    confirmSpy.mockRestore();
+    menuSpy.mockRestore();
   });
 });
 
@@ -194,6 +249,14 @@ describe('joint/[id]', () => {
     expect(screen.getByText('Invitado')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Aceptar' }));
     await waitFor(() => expect(repo.respondJointSession).toHaveBeenCalledWith('j-invite', true));
+  });
+
+  test('a missing quedada goes back to the Juntos tab', async () => {
+    repo.getJointSession.mockResolvedValueOnce(null as never);
+    mockParams = { id: 'gone' };
+    await render(<JointSessionScreen />, { wrapper: Providers });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Volver a Juntos' }));
+    expect(mockRouter.dismissTo).toHaveBeenCalledWith('/together');
   });
 });
 

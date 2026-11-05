@@ -7,6 +7,7 @@ import { Chip, Stepper, Text, TextField, space } from '@/ui';
 import { DateField, TimeField } from './DateField';
 import { distanceUnit } from './draft';
 import { applyTemplate, changeSport, type WorkoutFormState } from './form';
+import { FormLabel } from './FormLabel';
 import { IntensityPicker, SportPicker } from './pickers';
 import { StepsEditor } from './StepsEditor';
 import { templatesFor } from './templates';
@@ -86,11 +87,7 @@ export function WorkoutForm({ state, onChange, titleError }: WorkoutFormProps) {
           </Section>
           <Section label="Marcas">
             <View style={styles.chipsWrap}>
-              <Chip
-                label="★ Clave"
-                selected={state.isKey}
-                onPress={() => set('isKey', !state.isKey)}
-              />
+              <Chip label="Sesión clave" icon="key" selected={state.isKey} onPress={() => set('isKey', !state.isKey)} />
             </View>
             <Text variant="caption" color="textMuted">
               Las sesiones clave se protegen al reorganizar la semana.
@@ -120,9 +117,7 @@ export function WorkoutForm({ state, onChange, titleError }: WorkoutFormProps) {
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text variant="overline" color="textMuted">
-        {label}
-      </Text>
+      <FormLabel>{label}</FormLabel>
       {children}
     </View>
   );

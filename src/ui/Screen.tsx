@@ -7,9 +7,9 @@ import { space, useTheme } from './theme';
 
 export interface ScreenProps {
   children: ReactNode;
-  /** Big condensed title at the top of the scroll content. */
+  /** Large title (`display`, sentence case) at the top of the scroll content. */
   title?: string;
-  /** Small uppercase line above the title (e.g. "SEMANA 43"). */
+  /** Small context line above the title in `textMuted` (e.g. "Semana 43"). */
   overline?: string;
   /** Element rendered at the right of the title row (buttons). */
   headerRight?: ReactNode;
@@ -27,8 +27,10 @@ export interface ScreenProps {
 }
 
 /**
- * Base screen: paper/ink background, safe areas, optional large title and
- * pull-to-refresh. Content gets a 16pt side gutter.
+ * Base screen: paper / night background, safe areas, optional large title and
+ * pull-to-refresh. Content gets a 16 pt side gutter and 16 pt between blocks
+ * (section headers add 8 pt on top, so sections sit 24 pt apart).
+ * The header sits 12 pt below the safe area and 20 pt above the first block.
  */
 export function Screen({
   children,
@@ -57,7 +59,7 @@ export function Screen({
             </Text>
           ) : null}
           {title ? (
-            <Text variant="display" accessibilityRole="header">
+            <Text variant="display" accessibilityRole="header" numberOfLines={2}>
               {title}
             </Text>
           ) : null}
@@ -108,9 +110,15 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   fill: { flex: 1 },
   content: { paddingHorizontal: space.lg, gap: space.lg, width: '100%', maxWidth: 720, alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space.md, marginBottom: space.xs },
-  headerText: { flex: 1, gap: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingBottom: 4 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: space.md,
+    marginBottom: space.xs,
+  },
+  headerText: { flex: 1, gap: space.xxs },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingBottom: space.xxs },
   footer: {
     position: 'absolute',
     left: 0,

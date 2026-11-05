@@ -30,10 +30,10 @@ function Column({ week, cx, colW, barW, y }: ColumnProps) {
     return [...acc, { sport: part.sport, y: below - h, h }];
   }, []);
   const topMinutes = Math.max(week.plannedMin, week.completedMin);
-  const labelColor = week.isCurrent ? colors.text : colors.textFaint;
+  const labelColor = week.isCurrent ? colors.onAccentSoft : colors.textMuted;
   return (
     <G>
-      {week.isCurrent ? <Rect x={cx - colW / 2 + 2} y={TOP - 18} width={colW - 4} height={HEIGHT - TOP + 18} rx={8} fill={colors.surfaceAlt} /> : null}
+      {week.isCurrent ? <Rect x={cx - colW / 2 + 2} y={TOP - 18} width={colW - 4} height={HEIGHT - TOP + 18} rx={8} fill={colors.accentSoft} /> : null}
       {stacks.map((s) => (
         <Rect key={s.sport} x={cx - barW / 2} y={s.y} width={barW} height={Math.max(s.h, 0.5)} fill={theme.sport(s.sport).base} />
       ))}
@@ -51,11 +51,11 @@ function Column({ week, cx, colW, barW, y }: ColumnProps) {
         />
       ) : null}
       {topMinutes > 0 ? (
-        <SvgText x={cx} y={y(topMinutes) - 6} fontSize={13} fill={week.isCurrent ? colors.text : colors.textMuted} fontFamily={fonts.displayItalic} textAnchor="middle">
+        <SvgText x={cx} y={y(topMinutes) - 6} fontSize={13} fill={week.isCurrent ? colors.onAccentSoft : colors.textMuted} fontFamily={fonts.numeric} textAnchor="middle">
           {formatDecimal(week.completedMin / 60, 1)}
         </SvgText>
       ) : null}
-      <SvgText x={cx} y={HEIGHT - 6} fontSize={10.5} fill={labelColor} fontFamily={week.isCurrent ? fonts.display : fonts.displayMedium} textAnchor="middle">
+      <SvgText x={cx} y={HEIGHT - 6} fontSize={11} fill={labelColor} fontFamily={week.isCurrent ? fonts.bodySemibold : fonts.bodyMedium} textAnchor="middle">
         {week.label}
       </SvgText>
     </G>
@@ -75,7 +75,7 @@ export function VolumeChart({ weeks }: { weeks: readonly VolumeWeek[] }) {
     <View onLayout={onLayout} accessible accessibilityRole="image" accessibilityLabel={volumeSummary(weeks)} style={{ height: HEIGHT }}>
       {width > 0 ? (
         <Svg width={width} height={HEIGHT}>
-          <Rect x={0} y={BOTTOM} width={width} height={1} fill={colors.border} />
+          <Rect x={0} y={BOTTOM} width={width} height={1} fill={colors.borderStrong} />
           {weeks.map((week, i) => (
             <Column key={week.weekStart} week={week} cx={colW * (i + 0.5)} colW={colW} barW={barW} y={y} />
           ))}

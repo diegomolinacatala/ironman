@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatDayLabel, formatTime } from '@/domain/dates';
 import type { ISODate, JointSession, PlanProposal } from '@/domain/types';
-import { Icon, Text, haptics, radius, space, useTheme, type IconName } from '@/ui';
+import { Icon, Text, haptics, iconSize, radius, space, useTheme, type IconName } from '@/ui';
 
 import { organizerName } from './selectors';
 
@@ -70,8 +70,10 @@ function Banner({
 }) {
   const { colors } = useTheme();
   const isJuntos = tone === 'juntos';
-  const bg = isJuntos ? colors.accent : colors.surface;
-  const fg = isJuntos ? colors.onAccent : colors.text;
+  // "Juntos" invites are a soft brand highlight (accentSoft), never a saturated fill.
+  const bg = isJuntos ? colors.accentSoft : colors.surface;
+  const fg = isJuntos ? colors.onAccentSoft : colors.text;
+  const meta = isJuntos ? colors.onAccentSoft : colors.textMuted;
   return (
     <Pressable
       accessibilityRole="button"
@@ -82,23 +84,27 @@ function Banner({
       }}
       style={({ pressed }) => [
         styles.banner,
-        { backgroundColor: bg, borderColor: isJuntos ? colors.accent : colors.border, opacity: pressed ? 0.85 : 1 },
+        {
+          backgroundColor: pressed ? colors.surfacePressed : bg,
+          borderColor: isJuntos ? colors.accentSoft : colors.border,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+        },
       ]}>
-      <View style={[styles.icon, { backgroundColor: isJuntos ? colors.onAccent : colors.surfaceAlt }]}>
-        <Icon name={icon} size={18} color={isJuntos ? colors.accent : colors.text} />
+      <View style={[styles.icon, { backgroundColor: isJuntos ? colors.surface : colors.surfaceAlt }]}>
+        <Icon name={icon} size={iconSize.md} color={isJuntos ? colors.accentInk : colors.textMuted} />
       </View>
       <View style={styles.body}>
-        <Text variant="overline" style={{ color: fg, opacity: 0.75 }} numberOfLines={1}>
+        <Text variant="caption" style={{ color: meta }} numberOfLines={1}>
           {overline}
         </Text>
         <Text variant="bodyStrong" style={{ color: fg }} numberOfLines={2}>
           {title}
         </Text>
-        <Text variant="caption" style={{ color: fg, opacity: 0.75 }}>
+        <Text variant="caption" style={{ color: meta }}>
           {detail}
         </Text>
       </View>
-      <Icon name="chevronRight" size={14} color={fg} />
+      <Icon name="chevronRight" size={14} color={meta} />
     </Pressable>
   );
 }
@@ -113,6 +119,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
   },
-  icon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, gap: 2 },
 });

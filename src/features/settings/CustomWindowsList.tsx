@@ -4,6 +4,8 @@ import { weekdayLabel, weekdayShort } from '@/domain/labels';
 import type { TrainingWindow } from '@/domain/types';
 import { Icon, Text, haptics, radius, space, useTheme } from '@/ui';
 
+import { FormLabel } from './FormLabel';
+
 export interface CustomWindowsListProps {
   windows: readonly TrainingWindow[];
   onRemove: (window: TrainingWindow) => void;
@@ -18,15 +20,14 @@ export function CustomWindowsList({ windows, onRemove }: CustomWindowsListProps)
   if (windows.length === 0) return null;
   return (
     <View style={styles.wrap}>
-      <Text variant="overline" color="textMuted">
-        Otras franjas
-      </Text>
+      <FormLabel>Otras franjas</FormLabel>
       <View style={styles.chips}>
         {windows.map((w) => (
           <Pressable
             key={`${w.weekday}-${w.start}-${w.end}`}
             accessibilityRole="button"
             accessibilityLabel={`Quitar franja ${weekdayLabel(w.weekday)} de ${w.start} a ${w.end}`}
+            hitSlop={4}
             onPress={() => {
               haptics.tap();
               onRemove(w);

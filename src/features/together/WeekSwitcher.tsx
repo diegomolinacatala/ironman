@@ -10,7 +10,7 @@ export interface WeekSwitcherProps {
   onChange: (weekStart: ISODate) => void;
 }
 
-/** ‹ SEMANA 44 · 26 oct – 1 nov › — never goes before the current week. */
+/** ‹ Semana 44 · 26 oct – 1 nov › — never goes before the current week. */
 export function WeekSwitcher({ weekStart, today, onChange }: WeekSwitcherProps) {
   const currentWeek = startOfWeek(today);
   const canGoBack = weekStart > currentWeek;

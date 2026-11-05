@@ -8,10 +8,11 @@ export interface MetricTileProps {
   value: string;
   /** Small text under the value (unit, comparison…). */
   hint?: string;
+  /** Identity colour shown as a dot before the value (e.g. intensity zone). */
   accent?: string;
 }
 
-/** Big condensed number with an overline label (race-bib style). */
+/** Number tile: muted sentence-case label over a tabular `metricSmall` value. */
 export function MetricTile({ label, value, hint, accent }: MetricTileProps) {
   const { colors } = useTheme();
   return (
@@ -19,11 +20,11 @@ export function MetricTile({ label, value, hint, accent }: MetricTileProps) {
       accessible
       accessibilityLabel={`${label}: ${value}${hint ? `, ${hint}` : ''}`}
       style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text variant="overline" color="textMuted" numberOfLines={1}>
+      <Text variant="caption" color="textMuted" numberOfLines={1}>
         {label}
       </Text>
       <View style={styles.valueRow}>
-        {accent ? <View style={[styles.accent, { backgroundColor: accent }]} /> : null}
+        {accent ? <View style={[styles.dot, { backgroundColor: accent }]} /> : null}
         <Text variant="metricSmall" numberOfLines={1} adjustsFontSizeToFit style={styles.value}>
           {value}
         </Text>
@@ -41,6 +42,8 @@ export function MetricGrid({ children }: { children: ReactNode }) {
   return <View style={styles.grid}>{children}</View>;
 }
 
+const DOT = 10;
+
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   tile: {
@@ -50,9 +53,9 @@ const styles = StyleSheet.create({
     padding: space.md,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: 2,
+    gap: space.xs,
   },
-  valueRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  accent: { width: 4, height: 18, borderRadius: 2 },
+  valueRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  dot: { width: DOT, height: DOT, borderRadius: DOT / 2 },
   value: { flexShrink: 1 },
 });

@@ -1,6 +1,7 @@
 /**
- * Colour helpers for the Juntos visuals. Lime is the "juntos" highlight
- * (common slots, shared sessions); status tones reuse theme semantics.
+ * Colour helpers for the Juntos visuals. "Juntos" highlights (common free slots, shared
+ * sessions) use the soft brand tint (`accentSoft`) with `accentInk` edges, so they read as
+ * highlighted without shouting; busy time stays neutral; status tones reuse theme semantics.
  */
 import type { Theme } from '@/ui';
 
@@ -8,14 +9,24 @@ import type { Tone } from './jointModel';
 
 type Colors = Theme['colors'];
 
-/** Soft lime band used for common free slots. */
+/** Soft brand band used for common free slots ("huecos comunes"). */
 export function slotTint(colors: Colors): string {
-  return colors.scheme === 'dark' ? `${colors.accent}40` : `${colors.accent}8C`;
+  return colors.accentSoft;
 }
 
-/** Stronger lime used for slot edges and "juntos" accents. */
+/** Edge of slot bands and the colour of "juntos" marks (icons, outlines). */
 export function slotEdge(colors: Colors): string {
-  return colors.scheme === 'dark' ? colors.accent : colors.accentInk;
+  return colors.accentInk;
+}
+
+/** Text drawn on a slot band. */
+export function slotInk(colors: Colors): string {
+  return colors.onAccentSoft;
+}
+
+/** Neutral hatch for busy ("Ocupado") time: stripes + fill. */
+export function busyHatch(colors: Colors): { color: string; background: string } {
+  return { color: colors.borderStrong, background: colors.surfaceAlt };
 }
 
 export function toneColor(tone: Tone, colors: Colors): string {

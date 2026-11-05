@@ -1,18 +1,22 @@
 import { StyleSheet, View } from 'react-native';
 
 import { formatDuration } from '@/domain/dates';
-import { Text, radius, space, useTheme, type Theme } from '@/ui';
+import { Text, intensityColor, radius, space, useTheme, type Theme } from '@/ui';
 
 import { spokenDuration, type SleepStage, type SleepStageKey } from './briefingModel';
 
 const BAR_HEIGHT = 14;
 
-/** Stage palette from theme tokens: deep = info, REM = violet, light = soft info, awake = warning. */
+/**
+ * Stage palette (sport-free): deep = brand accent (navy / sky), REM = violet chart hue,
+ * light = neutral grey, awake = warning. Each stage also has its label, so colour is never the
+ * only signal.
+ */
 export function stageColor(key: SleepStageKey, theme: Theme): string {
   const { colors } = theme;
-  if (key === 'deep') return colors.info;
-  if (key === 'rem') return theme.sport('bike').base;
-  if (key === 'light') return `${colors.info}66`;
+  if (key === 'deep') return colors.accent;
+  if (key === 'rem') return intensityColor.tempo;
+  if (key === 'light') return colors.textFaint;
   return colors.warning;
 }
 

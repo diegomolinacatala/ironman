@@ -55,7 +55,7 @@ function parseBody(text: string): { ok: true; value: unknown } | { ok: false } {
 async function authorize(req: Request, deps: McpEndpointDeps): Promise<{ userId: UUID } | Response> {
   const secret = extractMcpSecret(new URL(req.url).pathname);
   if (!secret) {
-    return toResponse(rpcError(404, null, RPC.INVALID_REQUEST, 'URL de conector no válida. Copia la URL completa desde la app (Yo › Conecta tu Claude).'));
+    return toResponse(rpcError(404, null, RPC.INVALID_REQUEST, 'URL de conector no válida. Copia la URL completa desde la app (Tú › Conexiones › Claude).'));
   }
   const tokenHash = await sha256Hex(secret);
   const auth = await authorizeToken(deps.rateLimiter, deps.resolveUserId, { tokenHash, clientKey: clientKeyOf(req.headers), nowMs: deps.now().getTime() });
@@ -65,7 +65,7 @@ async function authorize(req: Request, deps: McpEndpointDeps): Promise<{ userId:
       'Retry-After': String(auth.retryAfterSec),
     });
   }
-  return toResponse(rpcError(403, null, RPC.INVALID_REQUEST, 'Esta URL de conector está revocada o no existe. Genera una nueva en la app (Yo › Conecta tu Claude) y actualiza el conector en Claude.'));
+  return toResponse(rpcError(403, null, RPC.INVALID_REQUEST, 'Esta URL de conector está revocada o no existe. Genera una nueva en la app (Tú › Conexiones › Claude) y actualiza el conector en Claude.'));
 }
 
 export async function handleMcpHttp(req: Request, deps: McpEndpointDeps): Promise<Response> {

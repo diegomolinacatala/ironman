@@ -7,7 +7,7 @@ import { authErrorMessage } from '@/features/account/authErrors';
 import { CODE_LENGTH, CodeInput } from '@/features/account/CodeInput';
 import { useCountdown } from '@/features/account/useCountdown';
 import { logger } from '@/lib/logger';
-import { Button, ErrorNotice, Screen, Text, haptics, space } from '@/ui';
+import { Button, ErrorNotice, Icon, Screen, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
 const RESEND_COOLDOWN_S = 30;
 
@@ -15,6 +15,7 @@ export default function VerifyScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const email = typeof params.email === 'string' ? params.email : '';
   const { auth } = useAuth();
+  const { colors } = useTheme();
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
@@ -86,9 +87,9 @@ export default function VerifyScreen() {
   return (
     <Screen inSheet>
       <View style={styles.head}>
-        <Text variant="overline" color="textMuted">
-          Revisa tu correo
-        </Text>
+        <View style={[styles.mailTile, { backgroundColor: colors.accentSoft }]}>
+          <Icon name="mail" size={iconSize.lg} color={colors.onAccentSoft} />
+        </View>
         <Text variant="display" accessibilityRole="header">
           Revisa tu correo
         </Text>
@@ -127,6 +128,14 @@ export default function VerifyScreen() {
 }
 
 const styles = StyleSheet.create({
-  head: { gap: space.xs },
+  head: { gap: space.sm },
+  mailTile: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.xs,
+  },
   secondary: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });

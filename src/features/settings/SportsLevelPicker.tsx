@@ -2,7 +2,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { levelLabel, sportLabel } from '@/domain/labels';
 import { TRAINABLE_SPORTS, type AthleteLevel, type TrainableSport } from '@/domain/types';
-import { Icon, Segmented, Text, haptics, radius, space, useTheme } from '@/ui';
+import { Icon, Segmented, Text, haptics, radius, readableTextOn, space, useTheme } from '@/ui';
+
+import { FormLabel } from './FormLabel';
 
 import { toggleSport } from '../onboarding/onboardingModel';
 
@@ -26,9 +28,7 @@ export function SportsLevelPicker({ sports, level, onChangeSports, onChangeLevel
   return (
     <View style={styles.wrap}>
       <View style={styles.block}>
-        <Text variant="overline" color="textMuted">
-          Deportes
-        </Text>
+        <FormLabel>Deportes</FormLabel>
         <View style={styles.grid}>
           {TRAINABLE_SPORTS.map((sport) => (
             <SportTile
@@ -46,9 +46,7 @@ export function SportsLevelPicker({ sports, level, onChangeSports, onChangeLevel
         ) : null}
       </View>
       <View style={styles.block}>
-        <Text variant="overline" color="textMuted">
-          Nivel
-        </Text>
+        <FormLabel>Nivel</FormLabel>
         <Segmented
           accessibilityLabel="Nivel"
           options={LEVELS.map((l) => ({ value: l, label: levelLabel(l) }))}
@@ -78,16 +76,19 @@ function SportTile({ sport, selected, onPress }: { sport: TrainableSport; select
       style={({ pressed }) => [
         styles.tile,
         {
-          backgroundColor: selected ? c.base : pressed ? theme.colors.surfacePressed : theme.colors.surface,
+          // Sports keep their hue as a soft tint + coloured border, never a large saturated fill.
+          backgroundColor: selected ? c.tint : pressed ? theme.colors.surfacePressed : theme.colors.surface,
           borderColor: selected ? c.base : theme.colors.border,
         },
       ]}>
-      <Icon name={sport} size={26} color={selected ? '#FFFFFF' : c.base} />
-      <Text variant="bodyStrong" style={{ color: selected ? '#FFFFFF' : theme.colors.text }}>
-        {sportLabel(sport)}
-      </Text>
-      <View style={[styles.check, { borderColor: selected ? '#FFFFFF' : theme.colors.borderStrong }]}>
-        {selected ? <Icon name="check" size={12} color="#FFFFFF" weight="bold" /> : null}
+      <Icon name={sport} size={26} color={c.base} />
+      <Text variant="bodyStrong">{sportLabel(sport)}</Text>
+      <View
+        style={[
+          styles.check,
+          { borderColor: selected ? c.base : theme.colors.borderStrong, backgroundColor: selected ? c.base : 'transparent' },
+        ]}>
+        {selected ? <Icon name="check" size={12} color={readableTextOn(c.base)} weight="bold" /> : null}
       </View>
     </Pressable>
   );
@@ -102,7 +103,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minHeight: 92,
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: space.md,
     justifyContent: 'space-between',
     gap: space.sm,

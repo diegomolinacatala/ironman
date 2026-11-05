@@ -5,6 +5,7 @@ import { Alert, type AlertButton } from 'react-native';
 import MeScreen from '@/app/(tabs)/me';
 import { addDays, todayISO } from '@/domain/dates';
 import type { IntegrationStatus, PersonalToken, Profile, Race } from '@/domain/types';
+import { getAppearancePreference, resetAppearanceForTests } from '@/ui/appearance';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockUpdateProfile = jest.fn(async (patch: Record<string, unknown>) => patch);
@@ -119,15 +120,34 @@ beforeEach(() => {
 });
 
 describe('Tú', () => {
-  test('header: name, demo badge and the countdown to the next race', async () => {
+  test('compact header: name, @user and demo badge; tap opens the profile', async () => {
+    await render(<MeScreen />);
+    expect(screen.getByText('Diego')).toBeTruthy();
+    expect(screen.getByText('@diego')).toBeTruthy();
+    expect(screen.getByText('Modo demo')).toBeTruthy();
+    // The big race countdown lives on Hoy now.
+    expect(screen.queryByText('128 días')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: /^Diego, @diego, modo demo. Editar perfil/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/profile');
+  });
+
+  test('Entrenamiento: race with its countdown, availability and sport profile', async () => {
     mockData.races = [
       { id: 'r1', userId: 'u1', name: 'Valencia', date: addDays(todayISO(), 128), distance: 'olympic', priority: 'A', location: null, goal: null, notes: null, createdAt: '' },
     ];
     await render(<MeScreen />);
-    expect(screen.getByText('Diego')).toBeTruthy();
-    expect(screen.getByText('Modo demo')).toBeTruthy();
-    expect(screen.getByText('128 días')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: /Faltan 128 días para Valencia/ }));
+    expect(screen.getByText('Entrenamiento')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: /^Tu carrera\. Valencia · .* · faltan 128 días/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/races');
+    await fireEvent.press(screen.getByRole('button', { name: /^Disponibilidad\. 9 h\/semana · descanso el lunes/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/availability');
+    await fireEvent.press(screen.getByRole('button', { name: /^Perfil deportivo\. Natación, Bici, Carrera/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/profile');
+  });
+
+  test('without a race the row asks to add one', async () => {
+    await render(<MeScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: /^Añade tu carrera/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/races');
   });
 
@@ -145,6 +165,18 @@ describe('Tú', () => {
     // Claude is not connected: one tap to fix it.
     await fireEvent.press(screen.getByRole('button', { name: 'Conectar' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/claude');
+    // Tapping a row opens its settings.
+    await fireEvent.press(screen.getByLabelText(/^Garmin: Conectado/));
+    expect(mockRouter.push).toHaveBeenLastCalledWith('/settings/integrations');
+  });
+
+  test('the calendar subscription is reachable from Conexiones', async () => {
+    mockData.tokens = [
+      { id: 'c', scope: 'ics', label: 'Calendario', prefix: 'rb', createdAt: '2026-10-01T00:00:00Z', lastUsedAt: null, revokedAt: null },
+    ];
+    await render(<MeScreen />);
+    await fireEvent.press(screen.getByLabelText(/^Suscripción de calendario: Activa/));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/calendar-feed');
   });
 
   test('an expired Garmin key asks to renew it', async () => {
@@ -201,6 +233,10 @@ describe('Tú', () => {
   test('what the coach knows: one line per fact, add / edit / delete', async () => {
     confirmEverything();
     await render(<MeScreen />);
+    // Collapsed: a count and the first fact, so it isn't the heaviest block of the screen.
+    const header = screen.getByRole('button', { name: /^Lo que tu coach sabe de ti\. 2 cosas · Vegetariano/ });
+    expect(screen.queryByLabelText('Algo que tu coach deba saber')).toBeNull();
+    await fireEvent.press(header);
     expect(screen.getByText('Vegetariano')).toBeTruthy();
     expect(screen.getByText('No nado los lunes')).toBeTruthy();
 
@@ -221,20 +257,39 @@ describe('Tú', () => {
 
   test('a duplicate fact is not added twice', async () => {
     await render(<MeScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: /^Lo que tu coach sabe de ti/ }));
     await fireEvent.changeText(screen.getByLabelText('Algo que tu coach deba saber'), 'vegetariano');
     await fireEvent.press(screen.getByRole('button', { name: 'Añadir' }));
     expect(await screen.findByText('Tu coach ya lo sabe')).toBeTruthy();
     expect(mockUpdateProfile).not.toHaveBeenCalled();
   });
 
-  test('"Más" links to Juntos, Progreso and the settings', async () => {
+  test('no Juntos / Progreso rows: they are tabs now', async () => {
     await render(<MeScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: /^Juntos/ }));
-    expect(mockRouter.push).toHaveBeenCalledWith('/together');
-    await fireEvent.press(screen.getByRole('button', { name: /^Progreso/ }));
-    expect(mockRouter.push).toHaveBeenCalledWith('/progress');
+    expect(screen.queryByRole('button', { name: /^Juntos/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Progreso/ })).toBeNull();
+  });
+
+  test('Preferencias opens Notificaciones; Privacidad opens the privacy screen', async () => {
+    await render(<MeScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: /^Notificaciones/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/notifications');
     await fireEvent.press(screen.getByRole('button', { name: /^Privacidad/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/privacy');
+  });
+
+  test('Apariencia switches between automatic, light and dark', async () => {
+    resetAppearanceForTests();
+    await render(<MeScreen />);
+    expect(screen.getByRole('tab', { name: 'Automático' }).props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByText('Sigue el modo claro u oscuro de tu iPhone.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Oscuro' }));
+    expect(getAppearancePreference()).toBe('dark');
+    expect(await screen.findByText('Siempre en modo oscuro.')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Oscuro' }).props.accessibilityState).toMatchObject({ selected: true });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Claro' }));
+    expect(getAppearancePreference()).toBe('light');
+    await act(async () => resetAppearanceForTests());
   });
 
   test('sign out asks for confirmation and goes to sign-in', async () => {

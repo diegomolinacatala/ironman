@@ -53,7 +53,7 @@ export function PermissionRow({ icon, title, description, state, actionLabel, on
   return (
     <View style={styles.row}>
       <View style={[styles.icon, { backgroundColor: colors.surfaceAlt }]}>
-        <Icon name={icon} size={20} color={colors.text} />
+        <Icon name={icon} size={18} color={colors.textMuted} />
       </View>
       <View style={styles.body}>
         <View style={styles.titleRow}>
@@ -86,8 +86,8 @@ export function PermissionRow({ icon, title, description, state, actionLabel, on
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: space.md, paddingVertical: space.md },
-  icon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', gap: space.md, paddingVertical: space.md, paddingHorizontal: space.xs },
+  icon: { width: 32, height: 32, borderRadius: radius.md - 2, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, gap: space.xs },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   flex: { flex: 1 },

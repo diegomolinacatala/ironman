@@ -10,7 +10,8 @@
  * containerBackground API" placeholder otherwise): clear on the lock screen so vibrant
  * rendering stays intact, paper on the home screen.
  *
- * Isolated widget runtime: everything is declared inside the function.
+ * Isolated widget runtime: everything is declared inside the function. Colours MIRROR
+ * `src/ui/theme.ts` (bg / text / textMuted / accentInk).
  */
 import { AccessoryWidgetBackground, HStack, Image, Spacer, Text, VStack, ZStack } from '@expo/ui/swift-ui';
 import {
@@ -18,7 +19,6 @@ import {
   font,
   foregroundStyle,
   frame,
-  kerning,
   lineLimit,
   minimumScaleFactor,
   widgetURL,
@@ -58,7 +58,7 @@ const BriefingWidget = (props: BriefingWidgetProps, environment: WidgetEnvironme
         <AccessoryWidgetBackground />
         <VStack spacing={1}>
           <Image systemName={hasHeadline ? 'waveform' : 'sunrise.fill'} size={18} />
-          <Text modifiers={[font({ size: 9, weight: 'semibold' })]}>{hasHeadline ? 'OÍR' : 'HOY'}</Text>
+          <Text modifiers={[font({ size: 10, weight: 'semibold' })]}>{hasHeadline ? 'Oír' : 'Hoy'}</Text>
         </VStack>
       </ZStack>
     );
@@ -80,20 +80,21 @@ const BriefingWidget = (props: BriefingWidgetProps, environment: WidgetEnvironme
 
   // systemSmall
   const dark = environment.colorScheme === 'dark';
-  const ink = dark ? '#F2EFE8' : '#15171A';
-  const paper = dark ? '#0D0F12' : '#F4F1EA';
-  const muted = dark ? '#A3A6AD' : '#5E6066';
+  const ink = dark ? '#ECEFF3' : '#121826';
+  const paper = dark ? '#0E1116' : '#F6F5F1';
+  const muted = dark ? '#A2AAB5' : '#555D6B';
+  const accentInk = dark ? '#A9C1EE' : '#2A4E8C';
   return (
     <VStack alignment="leading" spacing={4} modifiers={[containerBackground(paper, 'widget'), widgetURL(url)]}>
-      <Image systemName="sunrise.fill" size={22} color={ink} />
-      <Text modifiers={[font({ size: 11, weight: 'heavy' }), kerning(1.2), foregroundStyle(muted)]}>INFORME DE HOY</Text>
+      <Image systemName="sunrise.fill" size={22} color={accentInk} />
+      <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(muted)]}>Informe de hoy</Text>
       <Spacer />
       <Text modifiers={[font({ size: 15, weight: 'bold' }), foregroundStyle(ink), lineLimit(4), minimumScaleFactor(0.8)]}>
         {hasHeadline ? headline : 'Cómo has dormido y qué te toca hoy'}
       </Text>
       <HStack spacing={4}>
-        <Image systemName="play.circle.fill" size={14} color={muted} />
-        <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(muted), lineLimit(1)]}>{cta}</Text>
+        <Image systemName="play.circle.fill" size={14} color={accentInk} />
+        <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(accentInk), lineLimit(1)]}>{cta}</Text>
       </HStack>
     </VStack>
   );

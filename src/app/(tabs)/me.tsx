@@ -1,17 +1,20 @@
-import { StyleSheet, View } from 'react-native';
-
 import { useAuth } from '@/data/context';
 import { useIntegrations, useProfile, useRaces, useTokens } from '@/data/queries';
+import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { AccountActions } from '@/features/account/AccountActions';
 import { CoachNotesSection } from '@/features/account/CoachNotesSection';
 import { ConnectionsSection } from '@/features/account/ConnectionsSection';
+import { PreferencesGroup, PrivacyGroup, TrainingGroup } from '@/features/account/HubSections';
 import { MorningSection } from '@/features/account/MorningSection';
-import { GoalSection, MoreSection } from '@/features/account/MoreSection';
 import { ProfileHero } from '@/features/account/ProfileHero';
+import { GroupDivider, SettingsGroup } from '@/features/account/SettingsGroup';
 import { errorMessage } from '@/lib/logger';
-import { EmptyState, ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
+import { EmptyState, ErrorNotice, Loading, Screen } from '@/ui';
 
-/** Tú: a calm, scannable hub — who you are, your connections, your morning report, what your coach knows. */
+/**
+ * Tú: the settings hub — who you are, then grouped lists (Entrenamiento, Tu coach,
+ * Conexiones, Preferencias, Privacidad) and, apart, Cuenta. See docs/DESIGN.md §6.
+ */
 export default function MeScreen() {
   const { mode } = useAuth();
   const profile = useProfile();
@@ -19,6 +22,9 @@ export default function MeScreen() {
   const integrations = useIntegrations();
   const tokens = useTokens();
   const isDemo = mode === 'demo';
+  const bottomPadding = useTabBottomPadding();
+  // Room for the iOS 26 tab bar + coach accessory, so Cuenta and the version line stay reachable.
+  const contentStyle = bottomPadding != null ? { paddingBottom: bottomPadding } : undefined;
   const refresh = () => {
     void profile.refetch();
     void races.refetch();
@@ -28,14 +34,14 @@ export default function MeScreen() {
 
   if (profile.isLoading) {
     return (
-      <Screen title="Tú">
+      <Screen title="Tú" contentStyle={contentStyle}>
         <Loading label="Cargando tu perfil" />
       </Screen>
     );
   }
   if (!profile.data) {
     return (
-      <Screen title="Tú">
+      <Screen title="Tú" contentStyle={contentStyle}>
         {profile.isError ? (
           <ErrorNotice message={errorMessage(profile.error)} onRetry={() => void profile.refetch()} />
         ) : (
@@ -48,32 +54,18 @@ export default function MeScreen() {
 
   const me = profile.data;
   return (
-    <Screen title="Tú" onRefresh={refresh} refreshing={profile.isRefetching}>
-      <ProfileHero profile={me} races={races.data} isDemo={isDemo} />
-
-      <SectionHeader title="Conexiones" />
+    <Screen title="Tú" onRefresh={refresh} refreshing={profile.isRefetching} contentStyle={contentStyle}>
+      <ProfileHero profile={me} isDemo={isDemo} />
+      <TrainingGroup profile={me} races={races.data} />
+      <SettingsGroup title="Tu coach">
+        <MorningSection profile={me} />
+        <GroupDivider />
+        <CoachNotesSection notes={me.coachNotes} />
+      </SettingsGroup>
       <ConnectionsSection />
-
-      <SectionHeader title="Cada mañana" />
-      <MorningSection profile={me} />
-
-      <SectionHeader title="Tu objetivo" />
-      <GoalSection profile={me} />
-
-      <SectionHeader title="Lo que tu coach sabe de ti" />
-      <CoachNotesSection notes={me.coachNotes} />
-
-      <SectionHeader title="Más" />
-      <MoreSection profile={me} />
-
-      <View style={styles.account}>
-        <SectionHeader title="Cuenta" />
-        <AccountActions isDemo={isDemo} />
-      </View>
+      <PreferencesGroup />
+      <PrivacyGroup />
+      <AccountActions isDemo={isDemo} />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  account: { marginTop: space.xl, gap: space.sm },
-});

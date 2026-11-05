@@ -5,9 +5,11 @@ import { diffDays } from '@/domain/dates';
 import { phaseLabel, raceDistanceLabel } from '@/domain/labels';
 import type { PhaseInfo } from '@/domain/periodization';
 import type { ISODate, Race } from '@/domain/types';
-import { Icon, Text, haptics, radius, space, useTheme } from '@/ui';
+import { Icon, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
 import { raceChipPalette } from './raceChipPalette';
+
+const TILE_SIZE = 32;
 
 export function daysLabel(days: number): string {
   if (days === 0) return 'Es hoy';
@@ -15,29 +17,37 @@ export function daysLabel(days: number): string {
   return `${days} días`;
 }
 
-/** Race-bib style countdown to the next race + current training phase. */
 /** "Media distancia · Triatlón de Valencia", without repeating the distance when the name already has it. */
 export function chipTitle(name: string, distance: string): string {
   return name.toLowerCase().includes(distance.toLowerCase()) ? name : `${distance} · ${name}`;
 }
 
+function AddRaceChip() {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Añade tu próxima carrera"
+      onPress={() => router.push('/races/edit')}
+      style={({ pressed }) => [
+        styles.chip,
+        { borderColor: colors.border, backgroundColor: pressed ? colors.surfacePressed : colors.surface },
+      ]}>
+      <View style={[styles.tile, { backgroundColor: colors.surfaceAlt }]}>
+        <Icon name="flag" size={iconSize.sm} color={colors.textMuted} />
+      </View>
+      <Text variant="callout" color="textMuted" style={styles.texts}>
+        Añade tu próxima carrera
+      </Text>
+      <Icon name="chevronRight" size={14} color={colors.textFaint} />
+    </Pressable>
+  );
+}
+
+/** Countdown to the next race + current training phase, as a calm brand-tinted row. */
 export function RaceChip({ race, phase, today }: { race: Race | null; phase: PhaseInfo | null; today: ISODate }) {
   const theme = useTheme();
-  const { colors } = theme;
-  if (!race) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Añade tu próxima carrera"
-        onPress={() => router.push('/races/edit')}
-        style={({ pressed }) => [styles.chip, { borderColor: colors.border, backgroundColor: pressed ? colors.surfacePressed : colors.surface }]}>
-        <Icon name="flag" size={16} color={colors.textMuted} />
-        <Text variant="caption" color="textMuted">
-          Añade tu próxima carrera
-        </Text>
-      </Pressable>
-    );
-  }
+  if (!race) return <AddRaceChip />;
   const ink = raceChipPalette(theme);
   const days = Math.max(0, diffDays(race.date, today));
   const phaseText = phase ? phaseLabel(phase.phase) : null;
@@ -50,22 +60,22 @@ export function RaceChip({ race, phase, today }: { race: Race | null; phase: Pha
         router.push('/races');
       }}
       style={({ pressed }) => [styles.chip, { backgroundColor: pressed ? ink.pressed : ink.background, borderColor: ink.border }]}>
-      <Icon name="flag" size={16} color={ink.accent} />
+      <View style={[styles.tile, { backgroundColor: ink.tile }]}>
+        <Icon name="flag" size={iconSize.sm} color={ink.accent} />
+      </View>
       <View style={styles.texts}>
-        <Text variant="overline" style={{ color: ink.text }} numberOfLines={1}>
+        <Text variant="callout" style={{ color: ink.text }} numberOfLines={1}>
           {chipTitle(race.name, raceDistanceLabel(race.distance))}
         </Text>
+        {phaseText ? (
+          <Text variant="caption" style={{ color: ink.text }} numberOfLines={1}>
+            {`Fase: ${phaseText}`}
+          </Text>
+        ) : null}
       </View>
       <Text variant="metricSmall" style={{ color: ink.accent }}>
         {daysLabel(days)}
       </Text>
-      {phaseText ? (
-        <View style={[styles.phase, { borderColor: ink.text }]}>
-          <Text variant="overline" style={{ color: ink.text, fontSize: 10 }}>
-            {phaseText}
-          </Text>
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -74,14 +84,14 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    minHeight: 44,
+    gap: space.md,
+    minHeight: 56,
     paddingHorizontal: space.md,
-    paddingVertical: space.xs,
-    borderRadius: radius.pill,
+    paddingVertical: space.sm,
+    borderRadius: radius.lg,
     borderWidth: 1,
     alignSelf: 'stretch',
   },
-  texts: { flex: 1 },
-  phase: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 6, paddingVertical: 1 },
+  tile: { width: TILE_SIZE, height: TILE_SIZE, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  texts: { flex: 1, gap: 2 },
 });

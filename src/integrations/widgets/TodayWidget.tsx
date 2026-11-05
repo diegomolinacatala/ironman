@@ -4,6 +4,11 @@
  * Runs in the expo-widgets isolated runtime: no hooks, no app imports and NO
  * references to module-scope values — every colour/helper lives inside the
  * function. Data arrives only through props (see `widgets/props.ts`).
+ *
+ * Colours MIRROR `src/ui/theme.ts` ("calm endurance"): bg / text / textMuted / border,
+ * accent (navy, sky in dark) for the week progress, accentSoft + onAccentSoft for "Hoy",
+ * accentInk for quedadas, success for done and `sportColor[*].base` for sports. The widget
+ * can't import them: keep both in sync (guarded by widgetLayouts.test.ts).
  */
 import {
   Circle,
@@ -25,8 +30,6 @@ import {
   font,
   foregroundStyle,
   frame,
-  italic,
-  kerning,
   lineLimit,
   padding,
   tint,
@@ -83,21 +86,24 @@ export interface TodayWidgetProps {
 const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) => {
   'widget';
   const dark = environment.colorScheme === 'dark';
-  const ink = dark ? '#F2EFE8' : '#15171A';
-  const paper = dark ? '#0D0F12' : '#F4F1EA';
-  const muted = dark ? '#A3A6AD' : '#5E6066';
-  const faint = dark ? '#2A2F37' : '#DCD6CA';
-  const lime = '#D4FF3A';
-  const limeInk = dark ? '#D4FF3A' : '#4B6B00';
+  const ink = dark ? '#ECEFF3' : '#121826';
+  const paper = dark ? '#0E1116' : '#F6F5F1';
+  const muted = dark ? '#A2AAB5' : '#555D6B';
+  const faint = dark ? '#29313B' : '#E3E1DA';
+  const accent = dark ? '#A9C1EE' : '#1F3A68';
+  const accentInk = dark ? '#A9C1EE' : '#2A4E8C';
+  const accentSoft = dark ? '#1B2638' : '#E5EBF5';
+  const onAccentSoft = dark ? '#C9D8F5' : '#1F3A68';
+  const success = dark ? '#3DBE7C' : '#187A47';
   const sportColors: Record<string, string> = {
-    swim: '#2F7BEA',
-    bike: '#8A5CF6',
-    run: '#0FA3A0',
-    brick: '#C04FD0',
-    strength: '#5B6474',
-    mobility: '#6C8CD5',
-    other: '#E0559B',
-    rest: '#9AA0A6',
+    swim: '#2F80C9',
+    bike: '#7B61D1',
+    run: '#12928C',
+    brick: '#B0529F',
+    strength: '#5D6776',
+    mobility: '#6A83C2',
+    other: '#C95A87',
+    rest: '#9AA1AB',
   };
   const sportSymbols: Record<string, SymbolName> = {
     swim: 'figure.pool.swim',
@@ -109,27 +115,27 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
     other: 'sportscourt',
     rest: 'bed.double',
   };
-  const colorOf = (sport: string): string => sportColors[sport] ?? '#9AA0A6';
+  const colorOf = (sport: string): string => sportColors[sport] ?? sportColors.rest;
   const symbolOf = (sport: string): SymbolName => sportSymbols[sport] ?? 'figure.mixed.cardio';
   const todayUrl = `${props.linkBase}today`;
   const workoutUrl = (id: string): string => `${props.linkBase}workout/${id}`;
   const meta = (s: WidgetSessionItem): string => (s.time ? `${s.time} · ${s.duration}` : s.duration);
 
+  // Small labels: sentence case, semibold, muted (no all-caps, no tracking).
   const overline = (label: string, color: string) => (
-    <Text modifiers={[font({ size: 11, weight: 'heavy' }), kerning(1.2), foregroundStyle(color)]}>{label}</Text>
+    <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(color), lineLimit(1)]}>{label}</Text>
   );
 
   const todayPill = () => (
     <Text
       modifiers={[
-        font({ size: 11, weight: 'heavy' }),
-        kerning(1.2),
-        foregroundStyle('#15171A'),
-        padding({ horizontal: 6, vertical: 2 }),
-        background(lime),
-        cornerRadius(6),
+        font({ size: 12, weight: 'semibold' }),
+        foregroundStyle(onAccentSoft),
+        padding({ horizontal: 7, vertical: 2 }),
+        background(accentSoft),
+        cornerRadius(7),
       ]}>
-      HOY
+      Hoy
     </Text>
   );
 
@@ -176,14 +182,14 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
         <VStack alignment="leading" spacing={8} modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
           <HStack spacing={6}>
             {todayPill()}
-            {overline(props.dateLabel.toUpperCase(), muted)}
+            {overline(props.dateLabel, muted)}
           </HStack>
           {list(props.today, 3, 'Día de descanso')}
           <Spacer />
         </VStack>
         <Divider />
         <VStack alignment="leading" spacing={8} modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
-          {overline('MAÑANA', muted)}
+          {overline('Mañana', muted)}
           {list(props.tomorrow, 3, 'Día de descanso')}
           <Spacer />
         </VStack>
@@ -196,10 +202,10 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
       <VStack key={`${d.letter}${d.day}`} spacing={4} modifiers={[frame({ maxWidth: Infinity })]}>
         <Text
           modifiers={[
-            font({ size: 11, weight: 'heavy' }),
-            foregroundStyle(d.isToday ? '#15171A' : muted),
+            font({ size: 11, weight: d.isToday ? 'bold' : 'medium' }),
+            foregroundStyle(d.isToday ? onAccentSoft : muted),
             frame({ width: 22, height: 22 }),
-            background(d.isToday ? lime : paper),
+            background(d.isToday ? accentSoft : paper),
             cornerRadius(11),
           ]}>
           {d.letter}
@@ -213,24 +219,24 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
             ))
           )}
         </HStack>
-        {d.done ? <Image systemName="checkmark.circle.fill" size={11} color={limeInk} /> : <Spacer minLength={11} />}
+        {d.done ? <Image systemName="checkmark.circle.fill" size={11} color={success} /> : <Spacer minLength={11} />}
       </VStack>
     );
     return (
       <VStack alignment="leading" spacing={10} modifiers={[containerBackground(paper, 'widget'), widgetURL(todayUrl)]}>
         <HStack spacing={6}>
           {todayPill()}
-          {overline(props.dateLabel.toUpperCase(), muted)}
+          {overline(props.dateLabel, muted)}
           <Spacer />
-          <Text modifiers={[font({ size: 22, weight: 'heavy' }), italic(), foregroundStyle(ink)]}>{`${props.weekPercent}%`}</Text>
+          <Text modifiers={[font({ size: 20, weight: 'semibold' }), foregroundStyle(ink)]}>{`${props.weekPercent}%`}</Text>
         </HStack>
         {list(props.today, 3, 'Día de descanso. Recupera bien.')}
         <Divider />
-        {overline('MAÑANA', muted)}
+        {overline('Mañana', muted)}
         {list(props.tomorrow, 2, 'Día de descanso')}
         <Spacer />
         <HStack spacing={0}>{props.week.map(weekDay)}</HStack>
-        <ProgressView value={props.weekPercent / 100} modifiers={[tint(lime)]} />
+        <ProgressView value={props.weekPercent / 100} modifiers={[tint(accent)]} />
         <Text modifiers={[font({ size: 11 }), foregroundStyle(muted), lineLimit(1)]}>{props.weekSummary}</Text>
       </VStack>
     );
@@ -246,26 +252,24 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
       <HStack spacing={6}>
         {todayPill()}
         <Spacer />
-        {overline(props.dateLabel.toUpperCase(), muted)}
+        {overline(props.dateLabel, muted)}
       </HStack>
       <Spacer />
       {next ? (
         <VStack alignment="leading" spacing={2}>
           <HStack spacing={4}>
             <Image systemName={symbolOf(next.sport)} size={13} color={colorOf(next.sport)} />
-            <Text modifiers={[font({ size: 11, weight: 'heavy' }), kerning(1), foregroundStyle(colorOf(next.sport))]}>
-              {next.sportLabel.toUpperCase()}
-            </Text>
+            <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(muted), lineLimit(1)]}>{next.sportLabel}</Text>
           </HStack>
           <Text modifiers={[font({ size: 17, weight: 'bold' }), foregroundStyle(ink), lineLimit(2)]}>{next.title}</Text>
-          <Text modifiers={[font({ size: 22, weight: 'heavy' }), italic(), foregroundStyle(ink), lineLimit(1)]}>{meta(next)}</Text>
+          <Text modifiers={[font({ size: 20, weight: 'semibold' }), foregroundStyle(ink), lineLimit(1)]}>{meta(next)}</Text>
           {next.partner ? (
-            <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(limeInk), lineLimit(1)]}>{next.partner}</Text>
+            <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(accentInk), lineLimit(1)]}>{next.partner}</Text>
           ) : null}
         </VStack>
       ) : props.allDoneToday ? (
         <VStack alignment="leading" spacing={2}>
-          <Image systemName="checkmark.circle.fill" size={18} color={limeInk} />
+          <Image systemName="checkmark.circle.fill" size={18} color={success} />
           <Text modifiers={[font({ size: 17, weight: 'bold' }), foregroundStyle(ink)]}>Todo hecho</Text>
           <Text modifiers={[font({ size: 12 }), foregroundStyle(muted)]}>Buen trabajo hoy.</Text>
         </VStack>

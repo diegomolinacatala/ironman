@@ -37,14 +37,16 @@ function Note({ icon, children }: { icon: 'info' | 'watch' | 'speaker'; children
 function FocusCard({ focus }: { focus: string }) {
   const { colors } = useTheme();
   return (
-    <Card variant="tinted" padding="lg" style={styles.focus}>
+    <Card variant="tinted" tint={colors.accentSoft} padding="lg" style={styles.focus}>
       <View style={styles.focusHead}>
-        <Icon name="lightbulb" size={18} color={colors.text} />
-        <Text variant="overline" color="textMuted">
+        <Icon name="lightbulb" size={18} color={colors.onAccentSoft} />
+        <Text variant="caption" color="onAccentSoft">
           Tu foco de hoy
         </Text>
       </View>
-      <Text variant="heading">{focus}</Text>
+      <Text variant="heading" color="onAccentSoft">
+        {focus}
+      </Text>
     </Card>
   );
 }

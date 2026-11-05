@@ -2,7 +2,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { errorMessage } from '@/lib/logger';
-import { Button, ErrorNotice, Icon, ProgressBar, Text, radius, space, useTheme, type IconName } from '@/ui';
+import { Button, ErrorNotice, Icon, ProgressBar, Text, iconSize, radius, space, useTheme, type IconName } from '@/ui';
 
 import { listenLabel, type PlayerMode } from './briefingModel';
 import { Skeleton } from './Skeleton';
@@ -14,7 +14,7 @@ export function CardOverline({ engine }: { engine?: 'ai' | 'rules' }) {
         Informe de hoy
       </Text>
       {engine === 'rules' ? (
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           Informe automático
         </Text>
       ) : null}
@@ -25,8 +25,8 @@ export function CardOverline({ engine }: { engine?: 'ai' | 'rules' }) {
 function Medallion({ icon }: { icon: IconName }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.medallion, { backgroundColor: colors.surfaceAlt }]}>
-      <Icon name={icon} size={24} color={colors.text} />
+    <View style={[styles.medallion, { backgroundColor: colors.accentSoft }]}>
+      <Icon name={icon} size={iconSize.lg} color={colors.onAccentSoft} />
     </View>
   );
 }
@@ -39,7 +39,7 @@ export interface ListenControlsProps {
   onOpen: () => void;
 }
 
-/** ▶ Escuchar (play / pause / resume) + "Ver informe", with progress while reading. */
+/** ▶ Escuchar (play / pause / resume) + "Ver informe", with progress while reading. Secondary: Hoy's primary is "Hecho". */
 export function ListenControls({ script, mode, progress, onToggle, onOpen }: ListenControlsProps) {
   const label = mode === 'playing' ? 'Pausa' : mode === 'paused' ? 'Seguir' : `Escuchar · ${listenLabel(script)}`;
   const a11y = mode === 'playing' ? 'Pausar el informe' : mode === 'paused' ? 'Seguir escuchando el informe' : 'Escuchar el informe';
@@ -49,11 +49,12 @@ export function ListenControls({ script, mode, progress, onToggle, onOpen }: Lis
         <Button
           label={label}
           icon={mode === 'playing' ? 'pause' : 'play'}
+          variant="secondary"
           onPress={onToggle}
           style={styles.primary}
           accessibilityHint={a11y}
         />
-        <Button label="Ver informe" variant="secondary" onPress={onOpen} style={styles.secondary} />
+        <Button label="Ver informe" variant="ghost" onPress={onOpen} style={styles.secondary} />
       </View>
       {mode !== 'idle' ? <ProgressBar value={progress} height={4} /> : null}
     </View>
@@ -78,7 +79,7 @@ export function ConnectGarminBody({
           ? 'Tu clave de Garmin ha caducado. Renuévala y cada mañana te cuento cómo has dormido.'
           : 'Con tu Garmin, cada mañana te cuento cómo has dormido y qué toca hoy.'}
       </Text>
-      <Button label={expired ? 'Renovar conexión' : 'Conectar Garmin'} icon="link" onPress={onConnect} fullWidth />
+      <Button label={expired ? 'Renovar conexión' : 'Conectar Garmin'} icon="link" variant="secondary" onPress={onConnect} fullWidth />
       <Button label="Prepararlo sin Garmin" variant="ghost" size="sm" onPress={onSkip} style={styles.center} />
     </View>
   );
@@ -92,7 +93,7 @@ export function EmptyBody({ onPrepare }: { onPrepare: () => void }) {
       <Text variant="callout" color="textMuted">
         Cómo has dormido y qué toca hoy, en un minuto. Te lo leo en voz alta si quieres.
       </Text>
-      <Button label="Preparar mi informe" icon="sparkles" onPress={onPrepare} fullWidth />
+      <Button label="Preparar mi informe" icon="sparkles" variant="secondary" onPress={onPrepare} fullWidth />
     </View>
   );
 }
@@ -126,7 +127,7 @@ export function BriefingError({ error, onRetry }: { error: unknown; onRetry: () 
 
 const styles = StyleSheet.create({
   overline: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.sm },
-  medallion: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  medallion: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   body: { gap: space.md },
   listen: { gap: space.md },
   actions: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },

@@ -38,7 +38,7 @@ export function useActionSheet(): { open: (config: ActionSheetConfig) => void; e
           options,
           cancelButtonIndex: options.length - 1,
           destructiveButtonIndex: destructive,
-          tintColor: colors.text,
+          tintColor: colors.accentInk,
           userInterfaceStyle: isDark ? 'dark' : 'light',
         },
         (index) => next.actions[index]?.onPress(),

@@ -1,6 +1,6 @@
 /**
- * Full week compare with one friend: two lanes per day, busy hatching, lime
- * common slots, opportunities and "Proponer quedada".
+ * Full week compare with one friend: two lanes per day, neutral busy hatching, common
+ * slots as soft brand bands, opportunities and "Proponer quedada".
  */
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
@@ -14,7 +14,7 @@ import { CompareDayCard } from '@/features/together/CompareDayCard';
 import { defaultCompareWeek } from '@/features/together/compareModel';
 import { CompareLegend } from '@/features/together/CompareLegend';
 import { prefillFromOpportunity, prefillFromSlot } from '@/features/together/jointForm';
-import { openJointNew, openWorkout } from '@/features/together/navigation';
+import { openJointNew, openWorkout, returnToTogether } from '@/features/together/navigation';
 import { OpportunityCard } from '@/features/together/OpportunityCard';
 import { useTogetherWeek, type TogetherWeek } from '@/features/together/useTogetherWeek';
 import { VisibilityNotice } from '@/features/together/VisibilityNotice';
@@ -45,7 +45,7 @@ function useRemoveFlow(friend: Friend | null) {
     if (!ok) return;
     try {
       await remove.mutateAsync(friend.friendshipId);
-      router.back();
+      returnToTogether();
     } catch (error) {
       logger.warn('remove friend failed', error);
       showNotice('No se ha podido eliminar', errorMessage(error));
@@ -58,7 +58,7 @@ function Header({ friend }: { friend: Friend }) {
     <View style={styles.header}>
       <Avatar name={friend.profile.displayName} size={48} />
       <View style={styles.headerText}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted">
           Tú y
         </Text>
         <Text variant="title" numberOfLines={1}>

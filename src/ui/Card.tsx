@@ -2,20 +2,51 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { haptics } from './haptics';
-import { radius, space, useTheme } from './theme';
+import { radius, space, useTheme, type ThemeColors } from './theme';
+
+export type CardVariant = 'flat' | 'raised' | 'tinted' | 'inverse';
 
 export interface CardProps {
   children: ReactNode;
   onPress?: () => void;
   onLongPress?: () => void;
-  /** 'flat' = bordered surface, 'raised' = shadowed, 'tinted' = custom bg (pass `tint`). */
-  variant?: 'flat' | 'raised' | 'tinted' | 'inverse';
+  /**
+   * 'flat' = surface + hairline border (default), 'raised' = surface + soft shadow (light mode
+   * only; dark keeps the hairline), 'tinted' = custom bg (pass `tint`, e.g. `accentSoft`),
+   * 'inverse' = high-emphasis inverse panel (rare).
+   */
+  variant?: CardVariant;
   tint?: string;
   /** Coloured left rail (e.g. sport colour). */
   rail?: string;
   padding?: keyof typeof space | 0;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+}
+
+const RAIL_WIDTH = 4;
+
+function cardSurface(variant: CardVariant, colors: ThemeColors, isDark: boolean, tint?: string): ViewStyle {
+  switch (variant) {
+    case 'tinted':
+      return { backgroundColor: tint ?? colors.surfaceAlt, borderColor: 'transparent' };
+    case 'inverse':
+      return { backgroundColor: colors.inverseBg, borderColor: 'transparent' };
+    case 'raised':
+      return isDark
+        ? { backgroundColor: colors.surface, borderColor: colors.border }
+        : {
+            backgroundColor: colors.surface,
+            borderColor: 'transparent',
+            shadowColor: colors.shadow,
+            shadowOpacity: 1,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 2,
+          };
+    case 'flat':
+      return { backgroundColor: colors.surface, borderColor: colors.border };
+  }
 }
 
 export function Card({
@@ -30,20 +61,18 @@ export function Card({
   accessibilityLabel,
 }: CardProps) {
   const { colors, isDark } = useTheme();
-  const bg =
-    variant === 'tinted' ? (tint ?? colors.surfaceAlt) : variant === 'inverse' ? colors.inverseBg : colors.surface;
+  const inner = padding === 0 ? 0 : space[padding];
+  // Raised cards must not clip (iOS would clip the shadow); their rail gets its own corners.
+  const clips = !(variant === 'raised' && !isDark);
   const base: ViewStyle = {
-    backgroundColor: bg,
-    borderColor: variant === 'flat' ? colors.border : 'transparent',
-    padding: padding === 0 ? 0 : space[padding],
-    paddingLeft: rail ? (padding === 0 ? 0 : space[padding]) + 6 : undefined,
-    ...(variant === 'raised' && !isDark
-      ? { shadowColor: colors.shadow, shadowOpacity: 1, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 3 }
-      : null),
+    ...cardSurface(variant, colors, isDark, tint),
+    padding: inner,
+    paddingLeft: rail ? inner + RAIL_WIDTH : undefined,
+    overflow: clips ? 'hidden' : 'visible',
   };
   const content = (
     <>
-      {rail ? <View style={[styles.rail, { backgroundColor: rail }]} /> : null}
+      {rail ? <View style={[styles.rail, !clips && styles.railRounded, { backgroundColor: rail }]} /> : null}
       {children}
     </>
   );
@@ -71,12 +100,7 @@ export function Card({
             }
           : undefined
       }
-      style={({ pressed }) => [
-        styles.card,
-        base,
-        pressed && { transform: [{ scale: 0.985 }], opacity: 0.92 },
-        style,
-      ]}>
+      style={({ pressed }) => [styles.card, base, pressed && styles.pressed, style]}>
       {content}
     </Pressable>
   );
@@ -86,7 +110,9 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
   },
-  rail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 5 },
+  // Transform + opacity only: no layout shift while pressed.
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  rail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: RAIL_WIDTH },
+  railRounded: { borderTopLeftRadius: radius.lg, borderBottomLeftRadius: radius.lg },
 });

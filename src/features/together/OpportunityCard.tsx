@@ -53,6 +53,8 @@ export function OpportunityCard({ opportunity, today, onPropose }: OpportunityCa
       <Button
         label="Proponer quedada"
         icon="send"
+        variant="secondary"
+        size="sm"
         onPress={onPropose}
         style={styles.cta}
         accessibilityHint="Abre el formulario de quedada con estos datos"

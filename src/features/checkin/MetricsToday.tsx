@@ -54,7 +54,7 @@ export function MetricsToday({ metrics }: { metrics: DailyMetrics | null }) {
         ))}
       </View>
       {metrics.source === 'garmin' ? (
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           Garmin y Body Battery son marcas de Garmin Ltd.
         </Text>
       ) : null}

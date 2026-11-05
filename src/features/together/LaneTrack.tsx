@@ -1,6 +1,6 @@
 /**
  * Horizontal day timeline for one person (06:00–22:00): sessions as sport
- * colour blocks, busy time hatched, common slots as lime bands underneath.
+ * colour blocks, busy time hatched (neutral), common slots as soft brand bands underneath.
  */
 import { StyleSheet, View, type DimensionValue } from 'react-native';
 
@@ -8,7 +8,7 @@ import { timeToMinutes } from '@/domain/dates';
 import { Text, radius, space, useTheme } from '@/ui';
 
 import { Hatch } from './Hatch';
-import { slotEdge, slotTint } from './palette';
+import { busyHatch, slotEdge, slotTint } from './palette';
 import type { LaneEntry, Slot } from './types';
 
 export const TRACK_START_MIN = 6 * 60;
@@ -64,7 +64,7 @@ export function LaneTrack({ entries, slots, nowMin = null, height = 18 }: LaneTr
         if (entry.kind !== 'workout') {
           return (
             <View key={entry.key} style={[styles.block, pos, styles.clip]}>
-              <Hatch color={colors.borderStrong} background={colors.surface} spacing={5} />
+              <Hatch {...busyHatch(colors)} spacing={5} />
             </View>
           );
         }
@@ -92,7 +92,7 @@ export function TrackAxis({ inset = TRACK_LABEL_WIDTH }: { inset?: number }) {
   return (
     <View style={[styles.axis, { marginLeft: inset }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {AXIS_LABELS.map((label) => (
-        <Text key={label} variant="caption" color="textFaint" style={styles.axisLabel}>
+        <Text key={label} variant="caption" color="textMuted" style={styles.axisLabel}>
           {label}
         </Text>
       ))}

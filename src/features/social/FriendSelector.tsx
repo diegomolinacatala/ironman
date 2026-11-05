@@ -1,11 +1,11 @@
 /**
- * Horizontal avatar strip to pick the friend to compare with. Selected friend
- * gets a lime ring; the last item opens "Añadir amigo".
+ * Horizontal avatar strip to pick the friend to compare with. The selected friend gets an
+ * `accentInk` ring and a brand-tinted avatar; the optional last item opens "Añadir amigo".
  */
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import type { Friend, UUID } from '@/domain/types';
-import { Avatar, Icon, Text, haptics, space, useTheme } from '@/ui';
+import { Avatar, Icon, Text, fonts, haptics, iconSize, space, useTheme } from '@/ui';
 
 import { firstName } from './friendModel';
 
@@ -13,11 +13,37 @@ export interface FriendSelectorProps {
   friends: readonly Friend[];
   selectedId: UUID | null;
   onSelect: (profileId: UUID) => void;
-  onAdd: () => void;
+  /** Shows a trailing "Añadir" item when given. */
+  onAdd?: () => void;
 }
 
-const AVATAR = 52;
-const RING = 3;
+const AVATAR = 48;
+const RING = 2;
+const GAP = 2;
+const ITEM_WIDTH = AVATAR + (RING + GAP) * 2 + 8;
+
+function AddItem({ onAdd }: { onAdd: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Añadir amigo"
+      onPress={() => {
+        haptics.tap();
+        onAdd();
+      }}
+      style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
+      <View style={[styles.ring, { borderColor: 'transparent' }]}>
+        <View style={[styles.add, { borderColor: colors.borderStrong, backgroundColor: colors.surface }]}>
+          <Icon name="add" size={iconSize.md} color={colors.accentInk} />
+        </View>
+      </View>
+      <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.name}>
+        Añadir
+      </Text>
+    </Pressable>
+  );
+}
 
 export function FriendSelector({ friends, selectedId, onSelect, onAdd }: FriendSelectorProps) {
   const { colors } = useTheme();
@@ -41,49 +67,37 @@ export function FriendSelector({ friends, selectedId, onSelect, onAdd }: FriendS
               onSelect(friend.profile.id);
             }}
             style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
-            <View style={[styles.ring, { borderColor: selected ? colors.accent : 'transparent' }]}>
-              <Avatar name={friend.profile.displayName} size={AVATAR} color={selected ? undefined : colors.textMuted} />
+            <View style={[styles.ring, { borderColor: selected ? colors.accentInk : 'transparent' }]}>
+              <Avatar name={friend.profile.displayName} size={AVATAR} color={selected ? undefined : colors.surfaceAlt} />
             </View>
-            <Text variant="caption" color={selected ? 'text' : 'textMuted'} numberOfLines={1} style={styles.name}>
+            <Text
+              variant="caption"
+              color={selected ? 'accentInk' : 'textMuted'}
+              numberOfLines={1}
+              style={[styles.name, selected && styles.selectedName]}>
               {firstName(friend.profile.displayName)}
             </Text>
           </Pressable>
         );
       })}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Añadir amigo"
-        onPress={() => {
-          haptics.tap();
-          onAdd();
-        }}
-        style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
-        <View style={[styles.ring, { borderColor: 'transparent' }]}>
-          <View style={[styles.add, { borderColor: colors.borderStrong, backgroundColor: colors.surface }]}>
-            <Icon name="add" size={22} color={colors.text} />
-          </View>
-        </View>
-        <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.name}>
-          Añadir
-        </Text>
-      </Pressable>
+      {onAdd ? <AddItem onAdd={onAdd} /> : null}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  strip: { gap: space.md, paddingRight: space.lg },
-  item: { alignItems: 'center', gap: space.xs, width: AVATAR + RING * 2 + 8 },
-  pressed: { opacity: 0.75, transform: [{ scale: 0.96 }] },
-  ring: { borderWidth: RING, borderRadius: (AVATAR + RING * 4) / 2, padding: 2 },
+  strip: { gap: space.sm, paddingRight: space.lg },
+  item: { alignItems: 'center', gap: space.xs, width: ITEM_WIDTH, minHeight: 44 },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
+  ring: { borderWidth: RING, borderRadius: (AVATAR + (RING + GAP) * 2) / 2, padding: GAP },
   add: {
     width: AVATAR,
     height: AVATAR,
     borderRadius: AVATAR / 2,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { maxWidth: AVATAR + 16, textAlign: 'center' },
+  name: { maxWidth: ITEM_WIDTH, textAlign: 'center' },
+  selectedName: { fontFamily: fonts.bodySemibold },
 });

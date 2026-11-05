@@ -6,7 +6,7 @@ import { mealLabel } from '@/domain/labels';
 import type { ISODate, NutritionLog } from '@/domain/types';
 import { MEAL_CAMERA_ROUTE } from '@/features/accessory/coachActions';
 import { mealPhotoUri } from '@/integrations/camera/mealPhoto';
-import { Icon, SectionHeader, Text, haptics, radius, space, useTheme } from '@/ui';
+import { Icon, SectionHeader, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
 import { formatThousands, mealTotals, mealTotalsA11y, mealTotalsLine } from './todayModel';
 
@@ -54,9 +54,11 @@ function AddPhotoTile() {
         router.push(MEAL_CAMERA_ROUTE);
       }}
       style={({ pressed }) => [styles.tile, { opacity: pressed ? 0.85 : 1 }]}>
-      <View style={[styles.thumb, styles.placeholder, styles.add, { borderColor: colors.borderStrong }]}>
-        <Icon name="camera" size={22} color={colors.text} />
-        <Text variant="caption">+ Foto</Text>
+      <View style={[styles.thumb, styles.placeholder, styles.add, { backgroundColor: colors.accentSoft }]}>
+        <Icon name="camera" size={iconSize.lg} color={colors.onAccentSoft} />
+        <Text variant="caption" color="onAccentSoft">
+          Añadir foto
+        </Text>
       </View>
     </Pressable>
   );
@@ -77,7 +79,7 @@ export function MealsStrip({ date, meals }: { date: ISODate; meals: NutritionLog
         ))}
       </ScrollView>
       {line ? (
-        <Text variant="callout" accessibilityLabel={mealTotalsA11y(totals)}>
+        <Text variant="callout" color="textMuted" accessibilityLabel={mealTotalsA11y(totals)}>
           {`Hoy llevas ${line}`}
         </Text>
       ) : meals.length === 0 ? (
@@ -97,5 +99,5 @@ const styles = StyleSheet.create({
   tile: { width: TILE_WIDTH, gap: 2 },
   thumb: { width: TILE_WIDTH, height: THUMB_HEIGHT, borderRadius: radius.md, marginBottom: space.xs },
   placeholder: { alignItems: 'center', justifyContent: 'center' },
-  add: { borderWidth: 1.5, borderStyle: 'dashed', gap: 2 },
+  add: { gap: space.xs },
 });

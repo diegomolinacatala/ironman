@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Icon, Text, radius, space, useTheme } from '@/ui';
+import { Button, Card, Icon, Text, iconSize, radius, space, useTheme } from '@/ui';
 
 import { useInviteActions } from './useInviteActions';
 
@@ -21,15 +21,17 @@ export function NoFriendsState({ username, pendingOutgoing, onAdd }: NoFriendsSt
   const { colors } = useTheme();
   const invite = useInviteActions(username);
   return (
-    <View style={[styles.box, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-      <Text variant="overline" color="accentInk">
+    <Card padding="xl" style={styles.box}>
+      <Text variant="overline" color="textMuted">
         Entrena con amigos
       </Text>
       <Text variant="title">Entrenar acompañado es más fácil</Text>
       <View style={styles.points}>
         {POINTS.map((point) => (
           <View key={point.icon} style={styles.point}>
-            <Icon name={point.icon} size={18} color={colors.accentInk} />
+            <View style={[styles.tile, { backgroundColor: colors.accentSoft }]}>
+              <Icon name={point.icon} size={iconSize.sm} color={colors.onAccentSoft} />
+            </View>
             <Text variant="callout" style={styles.flex}>
               {point.text}
             </Text>
@@ -52,13 +54,14 @@ export function NoFriendsState({ username, pendingOutgoing, onAdd }: NoFriendsSt
           fullWidth
         />
       ) : null}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  box: { borderWidth: 1, borderRadius: radius.lg, padding: space.xl, gap: space.md },
+  box: { gap: space.md },
   points: { gap: space.md, marginVertical: space.xs },
   point: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
+  tile: { width: 32, height: 32, borderRadius: radius.md - 2, alignItems: 'center', justifyContent: 'center' },
   flex: { flex: 1 },
 });

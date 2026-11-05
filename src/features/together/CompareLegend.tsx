@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { Text, space, useTheme } from '@/ui';
 
 import { Hatch } from './Hatch';
-import { slotEdge, slotTint } from './palette';
+import { busyHatch, slotEdge, slotTint } from './palette';
 
 /** Key for the compare tracks: session · ocupado · hueco común. */
 export function CompareLegend() {
@@ -11,7 +11,7 @@ export function CompareLegend() {
   const { colors } = theme;
   const run = theme.sport('run');
   return (
-    <View style={styles.row} accessibilityLabel="Leyenda: entreno en color de deporte, ocupado rayado, hueco común en lima">
+    <View style={styles.row} accessibilityLabel="Leyenda: entreno en color de deporte, ocupado rayado en gris, hueco común resaltado en azul">
       <View style={styles.item}>
         <View style={[styles.swatch, { backgroundColor: run.tint, borderColor: run.base }]} />
         <Text variant="caption" color="textMuted">
@@ -20,7 +20,7 @@ export function CompareLegend() {
       </View>
       <View style={styles.item}>
         <View style={[styles.swatch, styles.clip, { borderColor: colors.border }]}>
-          <Hatch color={colors.borderStrong} background={colors.surface} spacing={4} strokeWidth={1} />
+          <Hatch {...busyHatch(colors)} spacing={4} strokeWidth={1} />
         </View>
         <Text variant="caption" color="textMuted">
           Ocupado

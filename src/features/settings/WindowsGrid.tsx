@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { weekdayInitial, weekdayLabel } from '@/domain/labels';
 import type { TrainingWindow, Weekday } from '@/domain/types';
-import { Icon, Text, haptics, radius, space, useTheme } from '@/ui';
+import { Icon, Text, fonts, haptics, radius, space, useTheme } from '@/ui';
 
 import {
   WEEKDAYS,
@@ -44,7 +44,9 @@ export function WindowsGrid({ windows, restDay, onChange }: WindowsGridProps) {
               toggleColumn(preset);
             }}
             style={({ pressed }) => [styles.head, pressed && { backgroundColor: colors.surfacePressed }]}>
-            <Text variant="overline">{preset.label}</Text>
+            <Text variant="caption" style={styles.headLabel}>
+              {preset.label}
+            </Text>
             <Text variant="caption" color="textMuted">
               {preset.start}–{preset.end}
             </Text>
@@ -70,7 +72,7 @@ function DayRow({ day, isRest, windows, onChange }: DayRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.dayCol}>
-        <Text variant="bodyStrong" color={isRest ? 'textFaint' : 'text'}>
+        <Text variant="bodyStrong" color={isRest ? 'textMuted' : 'text'}>
           {weekdayInitial(day)}
         </Text>
       </View>
@@ -89,12 +91,12 @@ function DayRow({ day, isRest, windows, onChange }: DayRowProps) {
             style={({ pressed }) => [
               styles.cell,
               {
-                backgroundColor: isOn ? colors.inverseBg : pressed ? colors.surfacePressed : colors.surface,
-                borderColor: isOn ? colors.inverseBg : colors.border,
+                backgroundColor: isOn ? colors.accent : pressed ? colors.surfacePressed : colors.surface,
+                borderColor: isOn ? colors.accent : colors.border,
                 borderStyle: isRest && !isOn ? 'dashed' : 'solid',
               },
             ]}>
-            {isOn ? <Icon name="check" size={16} color={colors.inverseText} weight="bold" /> : null}
+            {isOn ? <Icon name="check" size={16} color={colors.onAccent} weight="bold" /> : null}
           </Pressable>
         );
       })}
@@ -107,5 +109,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dayCol: { width: 28, alignItems: 'center' },
   head: { flex: 1, alignItems: 'center', paddingVertical: space.xs, borderRadius: radius.sm, minHeight: 44, justifyContent: 'center' },
+  headLabel: { fontFamily: fonts.bodySemibold },
   cell: { flex: 1, height: 44, borderRadius: radius.sm, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

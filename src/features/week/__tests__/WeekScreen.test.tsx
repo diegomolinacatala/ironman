@@ -97,6 +97,29 @@ describe('Semana', () => {
     expect(mockRouter.push).toHaveBeenCalledWith(`/event/edit?id=e-today&date=${today}`);
   });
 
+  test('the toolbar adds a session or an imprevisto on today when it is in the week', async () => {
+    const today = todayISO();
+    mockData = data({ workouts: [makeWorkout({ id: 'w-1', date: today })], summary: { ...emptySummary, sessions: 1 } });
+    await render(<WeekScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir imprevisto' }));
+    expect(mockRouter.push).toHaveBeenCalledWith(`/event/edit?date=${today}`);
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir entreno' }));
+    expect(mockRouter.push).toHaveBeenCalledWith(`/workout/edit?date=${today}`);
+  });
+
+  test('empty week still offers adding an imprevisto', async () => {
+    mockData = data();
+    await render(<WeekScreen />);
+    expect(screen.getByRole('button', { name: 'Añadir imprevisto' })).toBeTruthy();
+  });
+
+  test('today is highlighted and headed in sentence case', async () => {
+    mockData = data();
+    await render(<WeekScreen />);
+    expect(screen.getByTestId('day-today')).toBeTruthy();
+    expect(screen.getByText(/^Hoy · /)).toBeTruthy();
+  });
+
   test('week switcher updates the ?week param', async () => {
     mockData = data();
     await render(<WeekScreen />);

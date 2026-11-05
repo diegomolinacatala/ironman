@@ -9,7 +9,7 @@ function Total({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.total}>
       <Text variant="metricSmall">{value}</Text>
-      <Text variant="overline" color="textMuted">
+      <Text variant="caption" color="textMuted">
         {label}
       </Text>
     </View>
@@ -32,6 +32,6 @@ export function DayTotalsBar({ totals }: { totals: DayTotals }) {
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', justifyContent: 'space-between', borderRadius: radius.lg, padding: space.lg, gap: space.sm },
+  bar: { flexDirection: 'row', justifyContent: 'space-between', borderRadius: radius.md, paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.sm },
   total: { alignItems: 'flex-start', gap: 0 },
 });

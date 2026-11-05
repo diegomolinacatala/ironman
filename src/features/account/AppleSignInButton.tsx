@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 
 import { logger } from '@/lib/logger';
-import { useTheme } from '@/ui';
+import { radius, useTheme } from '@/ui';
 
 const BUTTON_HEIGHT = 52;
 
@@ -25,7 +25,7 @@ export function useAppleSignInAvailable(): boolean {
   return available;
 }
 
-/** Apple's native "Continuar con Apple" button (system-localised, HIG compliant). */
+/** Apple's native "Continuar con Apple" button (system-localised, HIG compliant; same shape as our buttons). */
 export function AppleSignInButton({ onPress }: { onPress: () => void }) {
   const { isDark } = useTheme();
   return (
@@ -34,7 +34,7 @@ export function AppleSignInButton({ onPress }: { onPress: () => void }) {
       buttonStyle={
         isDark ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
       }
-      cornerRadius={BUTTON_HEIGHT / 2}
+      cornerRadius={radius.md}
       style={styles.button}
       onPress={onPress}
     />

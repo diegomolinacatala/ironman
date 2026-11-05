@@ -20,6 +20,7 @@ const mockActions = {
 };
 let mockData: TodayData;
 let mockCalendarEnabled = false;
+let mockInlineAccessory = false;
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -41,6 +42,11 @@ jest.mock('@/integrations/calendar/trainingCalendar', () => ({
 jest.mock('@/integrations/camera/mealPhoto', () => ({ mealPhotoUri: () => null }));
 jest.mock('@/data/queries', () => ({ useCompleteWorkout: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }) }));
 jest.mock('@/features/today/TodaySocialCard', () => ({ TodaySocialCard: () => null }));
+jest.mock('@/features/accessory/CoachAccessory', () => ({ CoachAccessory: () => null }));
+jest.mock('@/features/accessory/coachActions', () => ({
+  ...(jest.requireActual('@/features/accessory/coachActions') as object),
+  needsInlineAccessory: () => mockInlineAccessory,
+}));
 
 function meal(overrides: Partial<NutritionLog> = {}): NutritionLog {
   return {
@@ -73,6 +79,7 @@ function data(overrides: Partial<TodayData> = {}): TodayData {
     racesReady: true,
     phase: null,
     meals: [],
+    checkinDone: false,
     unread: 0,
     isLoading: false,
     error: null,
@@ -88,6 +95,7 @@ jest.setTimeout(30000);
 beforeEach(() => {
   jest.clearAllMocks();
   mockCalendarEnabled = false;
+  mockInlineAccessory = false;
 });
 
 describe('Hoy', () => {
@@ -168,5 +176,54 @@ describe('Hoy', () => {
     expect(screen.getByText('Sin conexión')).toBeTruthy();
     await fireEvent.press(screen.getByText('Reintentar'));
     expect(refresh).toHaveBeenCalled();
+  });
+
+  test('quick actions: check-in, imprevisto and comida', async () => {
+    mockData = data();
+    await render(<TodayScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Hacer el check-in de hoy' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/checkin');
+    await fireEvent.press(screen.getByRole('button', { name: 'Apuntar un imprevisto' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/event/edit');
+    await fireEvent.press(screen.getByRole('button', { name: 'Apuntar una comida' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/meal');
+  });
+
+  test("today's check-in already saved shows as done and still opens it", async () => {
+    mockData = data({ checkinDone: true });
+    await render(<TodayScreen />);
+    expect(screen.getByText('Check-in hecho')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Hacer el check-in de hoy' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Check-in de hoy hecho. Revisar' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/checkin');
+  });
+
+  test('no "Comida" tile when the coach bar (with its camera) is inline on Hoy', async () => {
+    mockInlineAccessory = true;
+    mockData = data();
+    await render(<TodayScreen />);
+    expect(screen.getByRole('button', { name: 'Hacer el check-in de hoy' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Apuntar una comida' })).toBeNull();
+  });
+
+  test('race countdown: name, phase and days, opening the races list', async () => {
+    mockData = data({
+      race: {
+        id: 'r1',
+        userId: ME,
+        name: 'Triatlón de Valencia',
+        date: '2026-11-04',
+        distance: 'half',
+        priority: 'A',
+        location: null,
+        goal: null,
+        notes: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    await render(<TodayScreen />);
+    expect(screen.getByText('10 días')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: /^Triatlón de Valencia, .*10 días/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/races');
   });
 });

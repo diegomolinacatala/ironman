@@ -30,9 +30,9 @@ function MacroInput({ field, value, onChange }: { field: MacroField; value: stri
   const step = macroStep(field.key);
   const unitText = field.unit === 'g' ? `${step} g` : `${step} kcal`;
   return (
-    <View style={[styles.macro, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text variant="overline" color="textMuted">
-        {`${field.label} · ${field.unit}`}
+    <View style={[styles.macro, { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
+      <Text variant="caption" color="textMuted" style={styles.label}>
+        {`${field.label} (${field.unit})`}
       </Text>
       <View style={styles.macroRow}>
         <StepButton icon="chevronLeft" label={`Restar ${unitText} de ${field.label}`} onPress={() => onChange(stepMacro(value, -step, field.max))} />
@@ -93,7 +93,7 @@ export function MealResultForm({ form, analysis, manualReason, onChange }: MealR
       </FadeIn>
       {analysis && analysis.items.length > 0 ? (
         <FadeIn index={1} style={styles.items}>
-          <Text variant="overline" color="textMuted">
+          <Text variant="caption" color="textMuted" style={styles.label}>
             Lo que veo
           </Text>
           {analysis.items.map((item) => (
@@ -110,7 +110,7 @@ export function MealResultForm({ form, analysis, manualReason, onChange }: MealR
       </FadeIn>
       {confidence ? <Hint icon="warning" text={confidence} /> : null}
       <FadeIn index={3} style={styles.items}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted" style={styles.label}>
           ¿Qué comida es?
         </Text>
         <View style={styles.chips} accessibilityRole="radiogroup">
@@ -120,9 +120,9 @@ export function MealResultForm({ form, analysis, manualReason, onChange }: MealR
         </View>
       </FadeIn>
       {analysis?.tip ? (
-        <Card variant="tinted" tint={colors.surfaceAlt} padding="md">
+        <Card variant="tinted" tint={colors.accentSoft} padding="md">
           <View style={styles.hint}>
-            <Icon name="lightbulb" size={18} color={colors.accentInk} />
+            <Icon name="lightbulb" size={18} color={colors.onAccentSoft} />
             <Text variant="callout" style={styles.flex}>
               {analysis.tip}
             </Text>
@@ -130,7 +130,7 @@ export function MealResultForm({ form, analysis, manualReason, onChange }: MealR
         </Card>
       ) : null}
       {analysis?.engine === 'rules' ? (
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           Estimación automática (sin IA)
         </Text>
       ) : null}
@@ -144,9 +144,10 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   macro: { flexGrow: 1, flexBasis: '45%', gap: space.xs, padding: space.sm, borderRadius: radius.md, borderWidth: 1 },
   macroRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  macroInput: { flex: 1, minHeight: 44, textAlign: 'center', fontFamily: fonts.displayItalic, fontSize: 26, paddingVertical: 4 },
+  macroInput: { flex: 1, minHeight: 44, textAlign: 'center', fontFamily: fonts.numeric, fontSize: 26, paddingVertical: 4, fontVariant: ['tabular-nums'] },
   step: { width: 36, height: 36, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   hint: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  label: { fontFamily: fonts.bodySemibold },
   flex: { flex: 1 },
 });

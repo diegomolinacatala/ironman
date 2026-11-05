@@ -23,12 +23,12 @@ function DictateButton({ voice, onPress }: { voice: VoiceInput; onPress: () => v
       style={({ pressed }) => [
         styles.mic,
         {
-          backgroundColor: listening ? colors.inverseBg : pressed ? colors.surfacePressed : colors.surface,
-          borderColor: colors.borderStrong,
+          backgroundColor: listening ? colors.accent : pressed ? colors.surfacePressed : colors.surface,
+          borderColor: listening ? colors.accent : colors.borderStrong,
           opacity: busy ? 0.5 : 1,
         },
       ]}>
-      <Icon name={listening ? 'stop' : 'mic'} size={22} color={listening ? colors.inverseText : colors.text} />
+      <Icon name={listening ? 'stop' : 'mic'} size={22} color={listening ? colors.onAccent : colors.text} />
     </Pressable>
   );
 }
@@ -66,7 +66,7 @@ export function DescribeMeal({ text, voice, onText, onMic }: DescribeMealProps) 
         {voice.available ? <DictateButton voice={voice} onPress={onMic} /> : null}
       </View>
       {live ? (
-        <Text variant="heading" color={voice.transcript ? 'text' : 'textFaint'} accessibilityLiveRegion="polite">
+        <Text variant="heading" color={voice.transcript ? 'text' : 'textMuted'} accessibilityLiveRegion="polite">
           {voice.transcript || 'Te escucho…'}
         </Text>
       ) : null}

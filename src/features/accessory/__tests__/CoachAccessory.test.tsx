@@ -36,8 +36,8 @@ describe('accessory platform rules', () => {
 describe('CoachAccessory', () => {
   test('regular: talk to the coach or photograph a meal', async () => {
     await render(<CoachAccessory placement="regular" surface="floating" />);
-    expect(screen.getByText('Cuéntaselo a tu coach')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Cuéntaselo a tu coach' }));
+    expect(screen.getByText('Habla con tu coach')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Habla con tu coach' }));
     expect(mockRouter.push).toHaveBeenCalledWith(TALK_ROUTE);
     await fireEvent.press(screen.getByRole('button', { name: 'Foto de tu comida' }));
     expect(mockRouter.push).toHaveBeenCalledWith(MEAL_CAMERA_ROUTE);
@@ -45,8 +45,8 @@ describe('CoachAccessory', () => {
 
   test('inline: icons only, still labelled', async () => {
     await render(<CoachAccessory placement="inline" surface="glass" />);
-    expect(screen.queryByText('Cuéntaselo a tu coach')).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'Cuéntaselo a tu coach' }));
+    expect(screen.queryByText('Habla con tu coach')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Habla con tu coach' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/talk');
     await fireEvent.press(screen.getByRole('button', { name: 'Foto de tu comida' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/meal?source=camera');

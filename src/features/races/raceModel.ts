@@ -16,7 +16,7 @@ export interface Countdown {
 
 export function countdown(raceDate: ISODate, today: ISODate): Countdown {
   const days = diffDays(raceDate, today);
-  if (days === 0) return { value: 'HOY', unit: 'es el día', spoken: 'Es hoy' };
+  if (days === 0) return { value: 'Hoy', unit: 'es el día', spoken: 'Es hoy' };
   if (days === 1) return { value: '1', unit: 'día', spoken: 'Falta 1 día' };
   if (days > 1) return { value: `${days}`, unit: 'días', spoken: `Faltan ${days} días` };
   const ago = Math.abs(days);

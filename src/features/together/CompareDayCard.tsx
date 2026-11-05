@@ -1,13 +1,13 @@
 /**
  * One day of the full compare view: two timeline tracks (me / friend) with
- * the common slots in lime, then two lanes of minis and the slot pills.
+ * the common slots as soft brand bands, then two lanes of minis and the slot pills.
  */
 import { StyleSheet, View } from 'react-native';
 
 import { formatDayLong, weekdayOf } from '@/domain/dates';
 import { weekdayShort } from '@/domain/labels';
 import type { ISODate } from '@/domain/types';
-import { Card, Tag, Text, space, useTheme } from '@/ui';
+import { Card, Tag, Text, fonts, space, useTheme } from '@/ui';
 
 import { LaneMini } from './LaneMini';
 import { LaneTrack, TRACK_LABEL_WIDTH, TrackAxis } from './LaneTrack';
@@ -31,7 +31,7 @@ function nowMinutes(): number {
 function TrackRow({ label, entries, day }: { label: string; entries: readonly LaneEntry[]; day: CompareDay }) {
   return (
     <View style={styles.trackRow}>
-      <Text variant="overline" color="textMuted" numberOfLines={1} style={styles.trackLabel}>
+      <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.trackLabel}>
         {label}
       </Text>
       <LaneTrack entries={entries} slots={day.slots} nowMin={day.isToday ? nowMinutes() : null} />
@@ -52,7 +52,7 @@ function Lane({
 }) {
   if (entries.length === 0) {
     return (
-      <Text variant="caption" color="textFaint" style={styles.free}>
+      <Text variant="caption" color="textMuted" style={styles.free}>
         Sin planes
       </Text>
     );
@@ -79,7 +79,7 @@ export function CompareDayCard({ day, friendName, today, onOpenWorkout, onPropos
     <Card
       padding="md"
       variant="flat"
-      style={[day.isToday && { borderColor: slotEdge(colors), borderWidth: 1.5 }, day.isPast && styles.past]}>
+      style={[day.isToday && { borderColor: colors.accentInk, borderWidth: 1.5 }, day.isPast && styles.past]}>
       <View style={styles.header} accessible accessibilityRole="header" accessibilityLabel={formatDayLong(day.date)}>
         <Text variant="overline" color="textMuted">
           {weekday}
@@ -105,14 +105,14 @@ export function CompareDayCard({ day, friendName, today, onOpenWorkout, onPropos
 
       <View style={styles.lanes}>
         <View style={styles.lane}>
-          <Text variant="overline" color="textFaint" style={styles.laneTitle}>
+          <Text variant="caption" color="textMuted" style={styles.laneTitle}>
             Yo
           </Text>
           <Lane entries={day.mine} isMe today={today} onOpen={onOpenWorkout} />
         </View>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <View style={styles.lane}>
-          <Text variant="overline" color="textFaint" numberOfLines={1} style={styles.laneTitle}>
+          <Text variant="caption" color="textMuted" numberOfLines={1} style={styles.laneTitle}>
             {friendName}
           </Text>
           <Lane entries={day.theirs} isMe={false} today={today} onOpen={onOpenWorkout} />
@@ -136,11 +136,11 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   tracks: { gap: space.xs, marginTop: space.md },
   trackRow: { flexDirection: 'row', alignItems: 'center' },
-  trackLabel: { width: TRACK_LABEL_WIDTH, fontSize: 10 },
+  trackLabel: { width: TRACK_LABEL_WIDTH, fontSize: 11, lineHeight: 14 },
   lanes: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
   lane: { flex: 1, minWidth: 0 },
   laneList: { gap: space.xs },
-  laneTitle: { fontSize: 10, marginBottom: space.xs },
+  laneTitle: { fontFamily: fonts.bodySemibold, marginBottom: space.xs },
   divider: { width: StyleSheet.hairlineWidth },
   free: { paddingVertical: space.sm },
   slots: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md },

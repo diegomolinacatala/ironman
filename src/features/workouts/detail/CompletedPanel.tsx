@@ -22,8 +22,8 @@ export function CompletedPanel({ workout, compliance }: { workout: Workout; comp
     return (
       <Card variant="tinted" padding="md">
         <View style={styles.row}>
-          <ComplianceDot state={compliance} />
-          <Text variant="bodyStrong" style={styles.flex}>
+          <ComplianceDot state={compliance} size={24} />
+          <Text variant="heading" style={styles.flex}>
             Saltado
           </Text>
         </View>
@@ -43,7 +43,7 @@ export function CompletedPanel({ workout, compliance }: { workout: Workout; comp
       <View style={styles.row}>
         <ComplianceDot state={compliance} size={24} />
         <View style={styles.flex}>
-          <Text variant="overline" color="textMuted">
+          <Text variant="caption" color="textMuted">
             Hecho
           </Text>
           <Text variant="heading">{meta.label}</Text>
@@ -77,10 +77,10 @@ export function CompletedPanel({ workout, compliance }: { workout: Workout; comp
 function CompareRow({ label, plan, real }: { label: string; plan: string; real: string }) {
   return (
     <View style={styles.compare} accessible accessibilityLabel={`${label}: ${real}${plan ? `, plan ${plan}` : ''}`}>
-      <Text variant="overline" color="textMuted" style={styles.compareLabel}>
+      <Text variant="callout" color="textMuted" style={styles.compareLabel}>
         {label}
       </Text>
-      <Text variant="caption" color="textMuted" style={styles.plan}>
+      <Text variant="caption" color="textMuted" style={[styles.plan, styles.tabular]}>
         {plan ? `plan ${plan}` : ''}
       </Text>
       <Text variant="metricSmall">{real}</Text>
@@ -94,6 +94,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   notes: { marginTop: space.xs },
   compare: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
-  compareLabel: { width: 76 },
+  compareLabel: { width: 84 },
+  tabular: { fontVariant: ['tabular-nums'] },
   plan: { flex: 1 },
 });

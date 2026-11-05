@@ -1,17 +1,19 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { AppNotification } from '@/domain/types';
-import { Icon, Text, haptics, radius, space, useTheme } from '@/ui';
+import { Icon, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
 import { notificationIcon } from './notificationModel';
 import { relativeTime } from './relativeTime';
+
+const ICON_TILE = 32;
 
 export interface NotificationRowProps {
   notification: AppNotification;
   onPress: () => void;
 }
 
-/** Inbox row: type icon, title/body, relative time and an unread dot. */
+/** Inbox row: type icon tile (brand-tinted when unread), title/body, relative time and an unread dot. */
 export function NotificationRow({ notification, onPress }: NotificationRowProps) {
   const { colors } = useTheme();
   const unread = notification.readAt === null;
@@ -28,8 +30,8 @@ export function NotificationRow({ notification, onPress }: NotificationRowProps)
         styles.row,
         { backgroundColor: pressed ? colors.surfacePressed : unread ? colors.surface : 'transparent' },
       ]}>
-      <View style={[styles.icon, { backgroundColor: unread ? colors.inverseBg : colors.surfaceAlt }]}>
-        <Icon name={notificationIcon(notification.type)} size={18} color={unread ? colors.inverseText : colors.textMuted} />
+      <View style={[styles.icon, { backgroundColor: unread ? colors.accentSoft : colors.surfaceAlt }]}>
+        <Icon name={notificationIcon(notification.type)} size={iconSize.sm} color={unread ? colors.onAccentSoft : colors.textMuted} />
       </View>
       <View style={styles.text}>
         <Text variant={unread ? 'bodyStrong' : 'body'} numberOfLines={2}>
@@ -40,11 +42,11 @@ export function NotificationRow({ notification, onPress }: NotificationRowProps)
             {notification.body}
           </Text>
         ) : null}
-        <Text variant="caption" color="textFaint">
+        <Text variant="caption" color="textMuted">
           {when}
         </Text>
       </View>
-      {unread ? <View style={[styles.dot, { backgroundColor: colors.accent, borderColor: colors.accentInk }]} /> : null}
+      {unread ? <View style={[styles.dot, { backgroundColor: colors.accentInk }]} /> : null}
     </Pressable>
   );
 }
@@ -59,7 +61,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     minHeight: 56,
   },
-  icon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  icon: { width: ICON_TILE, height: ICON_TILE, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, gap: 2 },
-  dot: { width: 10, height: 10, borderRadius: 5, marginTop: 6, borderWidth: 1 },
+  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 7 },
 });

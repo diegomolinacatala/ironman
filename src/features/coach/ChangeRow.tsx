@@ -1,10 +1,17 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Icon, SportBadge, Tag, Text, haptics, radius, space, useTheme, type IconName } from '@/ui';
+import { Icon, SportBadge, Tag, Text, fonts, haptics, radius, readableTextOn, space, useTheme, type IconName, type Theme } from '@/ui';
 
 import type { DiffOp, DiffRow } from './proposalDiff';
 
 const OP_ICON: Record<DiffOp, IconName> = { add: 'add', delete: 'trash', move: 'move', update: 'edit' };
+
+/** Diff colour of an operation: added = success, removed = danger, changed/moved = info. Always shown with its icon. */
+export function opColor(op: DiffOp, colors: Theme['colors']): string {
+  if (op === 'add') return colors.success;
+  if (op === 'delete') return colors.danger;
+  return colors.info;
+}
 
 export interface ChangeRowProps {
   row: DiffRow;
@@ -23,9 +30,9 @@ function Checkbox({ checked }: { checked: boolean }) {
     <View
       style={[
         styles.checkbox,
-        { borderColor: checked ? colors.text : colors.borderStrong, backgroundColor: checked ? colors.inverseBg : 'transparent' },
+        { borderColor: checked ? colors.accent : colors.borderStrong, backgroundColor: checked ? colors.accent : 'transparent' },
       ]}>
-      {checked ? <Icon name="check" size={14} color={colors.inverseText} weight="bold" /> : null}
+      {checked ? <Icon name="check" size={14} color={colors.onAccent} weight="bold" /> : null}
     </View>
   );
 }
@@ -51,13 +58,10 @@ function RowBody({ row, error, skipped }: { row: DiffRow; error?: string | null;
   return (
     <View style={styles.body}>
       <View style={styles.titleRow}>
-        <Text variant="overline" color="textMuted">
+        <Text variant="caption" color="textMuted" style={styles.opLabel}>
           {row.opLabel}
         </Text>
         {skipped ? <Tag label="No aplicado" color={colors.textMuted} tone="outline" /> : null}
-        {row.warnings.map((w) => (
-          <Tag key={w} label={w} color={colors.warning} tone="soft" icon="warning" />
-        ))}
       </View>
       <Text variant="bodyStrong" numberOfLines={2}>
         {row.title}
@@ -73,21 +77,31 @@ function RowBody({ row, error, skipped }: { row: DiffRow; error?: string | null;
           <Text variant="caption">{f.after}</Text>
         </View>
       ))}
+      {row.warnings.map((w) => (
+        <View key={w} style={styles.noteLine}>
+          <Icon name="warning" size={12} color={colors.warning} />
+          <Text variant="caption" style={styles.flex}>
+            {w}
+          </Text>
+        </View>
+      ))}
       {row.reason ? (
         <Text variant="callout" color="textMuted">
           {row.reason}
         </Text>
       ) : null}
       {error ? (
-        <Text variant="caption" color="danger">
-          {`No se puede aplicar: ${error}`}
-        </Text>
+        <View style={styles.noteLine}>
+          <Icon name="warning" size={12} color={colors.danger} />
+          <Text variant="caption" color="danger" style={styles.flex}>
+            {`No se puede aplicar: ${error}`}
+          </Text>
+        </View>
       ) : null}
     </View>
   );
 }
 
-/** One change of a proposal as a diff row with an optional checkbox. */
 /** Spoken summary of a row (avoids raw ISO dates of describeChange). */
 function rowLabel(row: DiffRow, skipped: boolean): string {
   const move = row.before && row.after ? `De ${row.before} a ${row.after}` : row.after;
@@ -97,22 +111,33 @@ function rowLabel(row: DiffRow, skipped: boolean): string {
     .join('. ');
 }
 
-export function ChangeRow({ row, checked, onToggle, error, skipped = false }: ChangeRowProps) {
+/** Sport badge with the coloured operation badge, or a tinted operation tile when there's no sport. */
+function OpGlyph({ row }: { row: DiffRow }) {
   const { colors } = useTheme();
-  const glyph = row.sport ? (
+  const tone = opColor(row.op, colors);
+  if (!row.sport) {
+    return (
+      <View style={styles.glyphCol}>
+        <View testID="change-op-glyph" style={[styles.opPlain, { backgroundColor: `${tone}1F` }]}>
+          <Icon name={OP_ICON[row.op]} size={16} color={tone} />
+        </View>
+      </View>
+    );
+  }
+  return (
     <View style={styles.glyphCol}>
       <SportBadge sport={row.sport} size={34} />
-      <View style={[styles.opBadge, { backgroundColor: colors.inverseBg, borderColor: colors.bg }]}>
-        <Icon name={OP_ICON[row.op]} size={10} color={colors.inverseText} weight="bold" />
-      </View>
-    </View>
-  ) : (
-    <View style={styles.glyphCol}>
-      <View style={[styles.opPlain, { backgroundColor: colors.surfaceAlt }]}>
-        <Icon name={OP_ICON[row.op]} size={16} color={colors.textMuted} />
+      <View testID="change-op-glyph" style={[styles.opBadge, { backgroundColor: tone, borderColor: colors.surface }]}>
+        <Icon name={OP_ICON[row.op]} size={10} color={readableTextOn(tone)} weight="bold" />
       </View>
     </View>
   );
+}
+
+/** One change of a proposal as a diff row with an optional checkbox. */
+export function ChangeRow({ row, checked, onToggle, error, skipped = false }: ChangeRowProps) {
+  const { colors } = useTheme();
+  const glyph = <OpGlyph row={row} />;
   const content = (
     <>
       {glyph}
@@ -158,7 +183,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     paddingHorizontal: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
   },
   glyphCol: { width: 38, alignItems: 'center', paddingTop: 2 },
   opBadge: {
@@ -172,7 +197,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  opPlain: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  opPlain: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  opLabel: { fontFamily: fonts.bodySemibold },
+  noteLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  flex: { flex: 1 },
   body: { flex: 1, gap: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.xs },
   diffLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },

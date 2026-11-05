@@ -2,10 +2,10 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { formatDayLong } from '@/domain/dates';
-import { raceDistanceDetail, raceDistanceLabel } from '@/domain/labels';
+import { raceDistanceLabel } from '@/domain/labels';
 import type { Phase } from '@/domain/periodization';
 import type { ISODate, Race } from '@/domain/types';
-import { Button, Card, EmptyState, Tag, Text, space, useTheme } from '@/ui';
+import { Card, Icon, ListRow, Tag, Text, radius, space, useTheme } from '@/ui';
 
 import { PhaseTimeline } from './PhaseTimeline';
 import { PriorityBadge } from './PriorityBadge';
@@ -24,74 +24,86 @@ export interface RaceCountdownCardProps {
   today: ISODate;
 }
 
-/** Ink "race bib" card: big countdown, race, season phase timeline. */
+const openRaces = () => router.push('/races');
+
+function CountdownTile({ value, unit }: { value: string; unit: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.tile, { backgroundColor: colors.accentSoft }]}>
+      <Text variant="metricSmall" color="onAccentSoft" numberOfLines={1}>
+        {value}
+      </Text>
+      <Text variant="caption" color="onAccentSoft" numberOfLines={1}>
+        {unit}
+      </Text>
+    </View>
+  );
+}
+
+function PhaseBlock({ phase }: { phase: PhaseSnapshot }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.phase}>
+      <PhaseTimeline phase={phase.phase} phaseName={phaseName(phase.phase)} />
+      {phase.isRecoveryWeek ? <Tag label="Semana de descarga" color={colors.info} tone="soft" icon="moon" /> : null}
+      <Text variant="caption" color="textMuted" numberOfLines={2}>
+        {phase.focus}
+      </Text>
+    </View>
+  );
+}
+
+/** Compact "next race" card (Progreso → Carreras): countdown, race, season phase. Opens Carreras. */
 export function RaceCountdownCard({ race, phase, today }: RaceCountdownCardProps) {
   const { colors } = useTheme();
   if (!race) {
     return (
-      <EmptyState
-        icon="flag"
-        title="Sin carrera a la vista"
-        message="Añade tu próxima carrera y el plan se organizará por fases hacia ella."
-        action={<Button label="Añadir carrera" icon="add" variant="secondary" onPress={() => router.push('/races/edit')} />}
-      />
+      <Card variant="flat" padding="sm">
+        <ListRow
+          icon="flag"
+          iconTint={colors.accentSoft}
+          iconColor={colors.onAccentSoft}
+          title="Sin carrera a la vista"
+          subtitle="Añade tu próxima carrera y el plan se organizará por fases hacia ella."
+          onPress={openRaces}
+        />
+      </Card>
     );
   }
   const cd = countdown(race.date, today);
-  const detail = raceDistanceDetail(race.distance);
-  const fg = { color: colors.inverseText };
   return (
-    <Card variant="inverse" padding="lg" style={styles.card} onPress={() => router.push('/races')} accessibilityLabel={`${cd.spoken} para ${race.name}. Ver carreras.`}>
+    <Card
+      variant="flat"
+      padding="lg"
+      style={styles.card}
+      onPress={openRaces}
+      accessibilityLabel={`${cd.spoken} para ${race.name}. Ver carreras.`}>
       <View style={styles.top}>
-        <View style={styles.count}>
-          <Text variant="hero" style={[fg, styles.countValue]}>
-            {cd.value}
-          </Text>
-          <Text variant="overline" style={[fg, styles.dim]}>
-            {cd.unit}
-          </Text>
-        </View>
-        <View style={styles.raceInfo}>
+        <CountdownTile value={cd.value} unit={cd.unit} />
+        <View style={styles.info}>
           <View style={styles.nameRow}>
-            <PriorityBadge priority={race.priority} size={24} inverse />
-            <Text variant="heading" style={[fg, styles.flex]} numberOfLines={2}>
+            <PriorityBadge priority={race.priority} size={20} />
+            <Text variant="heading" style={styles.flex} numberOfLines={2}>
               {race.name}
             </Text>
           </View>
-          <Text variant="caption" style={[fg, styles.dim]}>
-            {formatDayLong(race.date)}
-          </Text>
-          <Text variant="caption" style={[fg, styles.dim]}>
-            {detail ? `${raceDistanceLabel(race.distance)} · ${detail}` : raceDistanceLabel(race.distance)}
+          <Text variant="caption" color="textMuted" numberOfLines={2}>
+            {`${formatDayLong(race.date)} · ${raceDistanceLabel(race.distance)}`}
           </Text>
         </View>
+        <Icon name="chevronRight" size={14} color={colors.textFaint} />
       </View>
-      {phase ? (
-        <>
-          <PhaseTimeline phase={phase.phase} phaseName={phaseName(phase.phase)} inverse />
-          <View style={styles.focusRow}>
-            {phase.isRecoveryWeek ? <Tag label="Semana de descarga" color={colors.inverseText} tone="outline" /> : null}
-            <Text variant="callout" style={[fg, styles.flex]}>
-              {phase.focus}
-            </Text>
-          </View>
-        </>
-      ) : null}
-      <Text variant="caption" style={[fg, styles.dim]}>
-        Toca para ver todas tus carreras
-      </Text>
+      {phase ? <PhaseBlock phase={phase} /> : null}
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: space.lg },
-  top: { flexDirection: 'row', gap: space.lg, alignItems: 'flex-start' },
-  count: { alignItems: 'flex-start' },
-  countValue: { fontSize: 72, lineHeight: 70 },
-  raceInfo: { flex: 1, gap: 4, paddingTop: space.xs },
+  card: { gap: space.md },
+  top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  tile: { minWidth: 64, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, paddingVertical: space.sm, paddingHorizontal: space.sm },
+  info: { flex: 1, gap: space.xxs },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  focusRow: { gap: space.sm },
+  phase: { gap: space.sm },
   flex: { flex: 1 },
-  dim: { opacity: 0.72 },
 });

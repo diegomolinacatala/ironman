@@ -5,7 +5,8 @@ import Svg, { Circle } from 'react-native-svg';
 import { haptics } from './haptics';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
-import { radius, space, useTheme } from './theme';
+import { readableTextOn } from './color';
+import { fonts, iconSize, radius, space, useTheme } from './theme';
 
 export function Row({ children, gap = 'sm', style }: { children: ReactNode; gap?: keyof typeof space; style?: StyleProp<ViewStyle> }) {
   return <View style={[{ flexDirection: 'row', alignItems: 'center', gap: space[gap] }, style]}>{children}</View>;
@@ -20,15 +21,20 @@ export interface SectionHeaderProps {
   action?: { label: string; onPress: () => void };
 }
 
+/** Section title in sentence case (`heading`), with an optional brand-coloured text action. */
 export function SectionHeader({ title, action }: SectionHeaderProps) {
   return (
     <View style={styles.section}>
-      <Text variant="overline" color="textMuted" accessibilityRole="header">
+      <Text variant="heading" accessibilityRole="header" style={styles.sectionTitle}>
         {title}
       </Text>
       {action ? (
-        <Pressable accessibilityRole="button" onPress={action.onPress} hitSlop={8}>
-          <Text variant="caption" color="accentInk">
+        <Pressable
+          accessibilityRole="button"
+          onPress={action.onPress}
+          hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+          style={({ pressed }) => pressed && styles.pressedText}>
+          <Text variant="callout" color="accentInk" style={styles.sectionAction}>
             {action.label}
           </Text>
         </Pressable>
@@ -52,9 +58,9 @@ export interface EmptyStateProps {
 export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.empty, { borderColor: colors.border }]}>
+    <View style={styles.empty}>
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Icon name={icon} size={26} color={colors.textMuted} />
+        <Icon name={icon} size={iconSize.lg} color={colors.textMuted} />
       </View>
       <Text variant="heading" align="center">
         {title}
@@ -64,7 +70,7 @@ export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
           {message}
         </Text>
       ) : null}
-      {action}
+      {action ? <View style={styles.emptyAction}>{action}</View> : null}
     </View>
   );
 }
@@ -86,14 +92,18 @@ export function Loading({ label }: { label?: string }) {
 export function ErrorNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.error, { backgroundColor: `${colors.danger}14`, borderColor: `${colors.danger}55` }]} accessibilityRole="alert">
-      <Icon name="warning" size={18} color={colors.danger} />
+    <View style={[styles.error, { backgroundColor: `${colors.danger}14`, borderColor: `${colors.danger}4D` }]} accessibilityRole="alert">
+      <Icon name="warning" size={iconSize.md} color={colors.danger} />
       <Text variant="callout" style={{ flex: 1, color: colors.text }}>
         {message}
       </Text>
       {onRetry ? (
-        <Pressable accessibilityRole="button" onPress={onRetry} hitSlop={8}>
-          <Text variant="caption" color="danger">
+        <Pressable
+          accessibilityRole="button"
+          onPress={onRetry}
+          hitSlop={12}
+          style={({ pressed }) => pressed && styles.pressedText}>
+          <Text variant="caption" color="danger" style={styles.strong}>
             Reintentar
           </Text>
         </Pressable>
@@ -106,7 +116,10 @@ export interface ListRowProps {
   title: string;
   subtitle?: string;
   icon?: IconName;
+  /** Glyph colour of the icon tile (default `textMuted`; sports: `sport.base`). */
   iconColor?: string;
+  /** Background of the icon tile (default `surfaceAlt`; brand items: `accentSoft`; sports: `sport.tint`). */
+  iconTint?: string;
   left?: ReactNode;
   right?: ReactNode;
   onPress?: () => void;
@@ -114,14 +127,26 @@ export interface ListRowProps {
   destructive?: boolean;
 }
 
-export function ListRow({ title, subtitle, icon, iconColor, left, right, onPress, showChevron, destructive }: ListRowProps) {
+export function ListRow({
+  title,
+  subtitle,
+  icon,
+  iconColor,
+  iconTint,
+  left,
+  right,
+  onPress,
+  showChevron,
+  destructive,
+}: ListRowProps) {
   const { colors } = useTheme();
+  const glyph = iconColor ?? (destructive ? colors.danger : colors.textMuted);
   const body = (
     <>
       {left ??
         (icon ? (
-          <View style={[styles.rowIcon, { backgroundColor: colors.surfaceAlt }]}>
-            <Icon name={icon} size={18} color={iconColor ?? colors.text} />
+          <View style={[styles.rowIcon, { backgroundColor: iconTint ?? colors.surfaceAlt }]}>
+            <Icon name={icon} size={18} color={glyph} />
           </View>
         ) : null)}
       <View style={styles.rowText}>
@@ -147,7 +172,7 @@ export function ListRow({ title, subtitle, icon, iconColor, left, right, onPress
         haptics.tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfacePressed }]}>
+      style={({ pressed }) => [styles.row, styles.rowPressable, pressed && { backgroundColor: colors.surfacePressed }]}>
       {body}
     </Pressable>
   );
@@ -166,9 +191,12 @@ export function Avatar({ name, size = 36, color }: { name: string; size?: number
       accessibilityLabel={name}
       style={[
         styles.avatar,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: color ?? colors.inverseBg },
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: color ?? colors.accentSoft },
       ]}>
-      <Text variant="bodyStrong" style={{ color: color ? '#FFFFFF' : colors.inverseText, fontSize: size * 0.4 }}>
+      <Text
+        variant="bodyStrong"
+        maxFontSizeMultiplier={1}
+        style={{ color: color ? readableTextOn(color) : colors.onAccentSoft, fontSize: size * 0.4, lineHeight: size * 0.5 }}>
         {initials || '?'}
       </Text>
     </View>
@@ -240,20 +268,40 @@ export function ProgressRing({
 }
 
 const styles = StyleSheet.create({
-  section: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space.sm },
-  empty: {
-    alignItems: 'center',
-    gap: space.sm,
-    padding: space.xl,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderStyle: 'dashed',
+  section: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: space.md,
+    marginTop: space.sm,
   },
-  emptyIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: space.xs },
+  sectionTitle: { flexShrink: 1 },
+  sectionAction: { fontFamily: fonts.bodySemibold },
+  pressedText: { opacity: 0.6 },
+  strong: { fontFamily: fonts.bodySemibold },
+  // Calm empty state: icon tile + title + message, no dashed frame (safe inside or outside cards).
+  empty: { alignItems: 'center', gap: space.sm, paddingVertical: space.xl, paddingHorizontal: space.lg },
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.xs,
+  },
+  emptyAction: { marginTop: space.sm },
   loading: { padding: space.xl, alignItems: 'center', gap: space.sm },
   error: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.md, borderWidth: 1 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md, paddingHorizontal: space.xs },
-  rowIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    minHeight: 48,
+    paddingVertical: space.md,
+    paddingHorizontal: space.xs,
+  },
+  rowPressable: { borderRadius: radius.md },
+  rowIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   rowText: { flex: 1, gap: 2 },
   avatar: { alignItems: 'center', justifyContent: 'center' },
 });
