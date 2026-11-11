@@ -18,29 +18,42 @@ const input = object({
   duration_min: integer({ min: 1, max: 720, description: 'Duración en minutos.' }),
   start_time: optional(timeSchema('Hora de inicio HH:mm (ayuda a emparejar con el entreno planificado).')),
   distance_m: optional(integer({ min: 0, max: 1000000, description: 'Distancia en metros.' })),
-  avg_hr: optional(integer({ min: 30, max: 230, description: 'FC media en lpm.' })),
+  avg_hr: optional(integer({ min: 30, max: 230, description: 'FC media en ppm.' })),
   rpe: optional(integer({ min: 1, max: 10, description: 'Esfuerzo percibido 1-10.' })),
-  tss: optional(number({ min: 0, max: 1000, description: 'Carga de la actividad (TSS o Training Load de Garmin).' })),
-  title: optional(string({ min: 1, max: 120, description: 'Nombre de la actividad (p. ej. el de Garmin).' })),
+  feel: optional(integer({ min: 1, max: 5, description: 'Sensaciones 1-5 (1 muy mal … 5 genial), solo si el usuario las cuenta.' })),
+  tss: optional(number({ min: 0, max: 1000, description: 'Carga de la actividad (TSS o la carga que da el reloj).' })),
+  title: optional(string({ min: 1, max: 120, description: 'Nombre de la actividad (p. ej. el del reloj).' })),
   notes: optional(string({ max: 1000 })),
   garmin_activity_id: optional(
     string({ pattern: /^\d{1,30}$/, hint: 'solo dígitos', description: 'activityId de Garmin: evita duplicados si se registra dos veces.' }),
+  ),
+  coros_activity_id: optional(
+    string({ pattern: /^[A-Za-z0-9_-]{1,40}$/, hint: 'letras, dígitos, _ o -', description: 'Id de la actividad en COROS (conector de COROS): evita duplicados si se registra dos veces.' }),
   ),
   workout_id: optional(uuidSchema('Entreno planificado concreto a marcar como hecho; si se omite se busca automáticamente.')),
 });
 
 type Args = Infer<typeof input>;
 
+/** The watch activity id as stored in workouts.external_id ('garmin:<id>' / 'coros:<id>'), and as kept in completed.externalId. */
+function externalRefOf(args: Args): { key: string; raw: string } | null {
+  if (args.garmin_activity_id) return { key: `garmin:${args.garmin_activity_id}`, raw: args.garmin_activity_id };
+  if (args.coros_activity_id) return { key: `coros:${args.coros_activity_id}`, raw: `coros:${args.coros_activity_id}` };
+  return null;
+}
+
 function completedFrom(args: Args, nowIso: string): CompletedData {
+  const ref = externalRefOf(args);
   return {
     source: 'claude',
     durationMin: args.duration_min,
     ...(args.distance_m !== undefined ? { distanceM: args.distance_m } : {}),
     ...(args.avg_hr !== undefined ? { avgHr: args.avg_hr } : {}),
     ...(args.rpe !== undefined ? { rpe: args.rpe } : {}),
+    ...(args.feel !== undefined ? { feel: args.feel } : {}),
     ...(args.tss !== undefined ? { tss: args.tss } : {}),
     ...(args.notes ? { notes: args.notes } : {}),
-    ...(args.garmin_activity_id ? { externalId: args.garmin_activity_id } : {}),
+    ...(ref ? { externalId: ref.raw } : {}),
     completedAt: nowIso,
   };
 }
@@ -66,8 +79,9 @@ async function handle(args: Args, ctx: ToolContext): Promise<ToolResult> {
   if (!isIsoDate(args.date) || args.date > today || args.date < addDays(today, -60)) {
     throw new ToolInputError(`La fecha ${args.date} no es válida: debe ser real, no futura y de los últimos 60 días (hoy es ${today}).`);
   }
-  if (args.garmin_activity_id) {
-    const existing = await ctx.store.findByExternalId(ctx.userId, `garmin:${args.garmin_activity_id}`, args.garmin_activity_id);
+  const ref = externalRefOf(args);
+  if (ref) {
+    const existing = await ctx.store.findByExternalId(ctx.userId, ref.key, ref.raw);
     if (existing) return toolOk({ status: 'already_logged', workoutId: existing.id, title: existing.title, date: existing.date });
   }
   const dayWorkouts = await ctx.store.listWorkouts(ctx.userId, args.date, args.date);
@@ -79,7 +93,7 @@ async function handle(args: Args, ctx: ToolContext): Promise<ToolResult> {
       workoutId: lookalike.id,
       title: lookalike.title,
       date: lookalike.date,
-      message: 'Esa actividad ya estaba registrada (por ejemplo, desde Apple Salud o la sincronización de Garmin).',
+      message: 'Esa actividad ya estaba registrada (por ejemplo, desde Apple Salud o la sincronización del reloj).',
     });
   }
   const nowIso = ctx.now().toISOString();
@@ -99,7 +113,7 @@ async function handle(args: Args, ctx: ToolContext): Promise<ToolResult> {
     completed,
     source: 'claude',
     // Always explicit so the app can tell unplanned (logged-by-Claude) rows from planned ones.
-    externalId: args.garmin_activity_id ? `garmin:${args.garmin_activity_id}` : `claude:${crypto.randomUUID()}`,
+    externalId: ref ? ref.key : `claude:${crypto.randomUUID()}`,
   });
   if (!created) return toolOk({ status: 'already_logged', message: 'Esa actividad ya estaba registrada.' });
   return toolOk({ status: 'created_unplanned', workoutId: created.id, title: created.title, date: created.date });
@@ -109,11 +123,11 @@ export const logCompletedActivityTool: RegisteredTool = defineTool({
   name: 'log_completed_activity',
   title: 'Registrar actividad hecha',
   description: [
-    'Registra una actividad ya realizada (por ejemplo, leída del conector de Garmin).',
+    'Registra una actividad ya realizada (por ejemplo, leída del conector de Garmin o de COROS).',
     'Si encaja con un entreno planificado ese día (mismo deporte —brick acepta bici o carrera—, duración entre el 50 % y el 150 %, hora más cercana) lo marca como completado;',
-    'si no, crea un entreno completado no planificado. Con garmin_activity_id no se duplica aunque se llame dos veces,',
+    'si no, crea un entreno completado no planificado. Con garmin_activity_id o coros_activity_id no se duplica aunque se llame dos veces,',
     'y si la misma actividad ya está registrada (p. ej. importada de Apple Salud: mismo día, deporte, duración y hora parecidas) responde already_logged.',
-    'Duración en minutos, distancia en metros, FC en lpm, RPE 1-10. Pádel, fútbol y similares van como sport "other".',
+    'Duración en minutos, distancia en metros, FC en ppm, RPE 1-10 y sensaciones 1-5. Pádel, fútbol y similares van como sport "other".',
   ].join(' '),
   input,
   annotations: { title: 'Registrar actividad hecha', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },

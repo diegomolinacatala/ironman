@@ -92,6 +92,32 @@ test('feed: VTIMEZONE, stable UIDs, timed and all-day events, partners, CRLF', (
   for (const line of ics.split('\r\n')) assert.ok(octets(line) <= 75);
 });
 
+test('feed: each workout note carries its prescription with the athlete numbers', () => {
+  const coached = workout({
+    id: 'w6',
+    date: '2026-10-27',
+    title: 'Umbral',
+    intensity: 'threshold',
+    steps: [
+      { kind: 'warmup', durationMin: 15, intensity: 'recovery' },
+      { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold', cue: 'Solo palabras sueltas' },
+      { kind: 'recovery', durationMin: 3, repeat: 3, intensity: 'recovery' },
+    ],
+    coaching: { objective: 'Subir tu umbral', keys: ['Empieza controlado'], success: 'Las 3 series en rango', planB: '2 series' },
+  });
+  const plain = workout({ id: 'w7', date: '2026-10-28', title: 'Rodaje', durationMin: 50 });
+  const thresholds = { lthr: 170, runThresholdPaceSecPerKm: 270 };
+  const ics = buildIcsFeed({ userId: USER, now: fixedNow(), workouts: [coached, plain], jointSessions: [], thresholds, raceDistance: 'half' });
+  const unfolded = ics.replace(/\r\n /g, '');
+  assert.match(unfolded, /Objetivo: Subir tu umbral/);
+  assert.match(unfolded, /3×8' · series · Z4 · 162–168 ppm · 4:27–4:44 \/km · RPE 7–8\. Solo palabras sueltas/);
+  assert.match(unfolded, /Lo has hecho bien si: Las 3 series en rango\\nSi no es tu día: 2 series/);
+  assert.match(unfolded, /Intensidad: Z2 · 145–151 ppm · 5:08–5:48 \/km · RPE 3–4\. Cómodo/);
+  const bare = buildIcsFeed({ userId: USER, now: fixedNow(), workouts: [plain], jointSessions: [] }).replace(/\r\n /g, '');
+  assert.match(bare, /Intensidad: Z2 · RPE 3–4\. Cómodo/,'without thresholds the note keeps RPE and sensations');
+  for (const line of ics.split('\r\n')) assert.ok(octets(line) <= 75);
+});
+
 test('ICS HTTP: secret path, token scope, 404s and calendar response', async () => {
   const secret = `rb_${'a1'.repeat(32)}`;
   assert.equal(extractIcsSecret(`/ics/${secret}.ics`), secret);

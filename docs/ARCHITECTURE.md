@@ -641,3 +641,38 @@ The product contract is `docs/V2.md`; this section lists what changed in the arc
   symbol a prebuilt framework imports from another prebuilt framework must be exported by it. Re-run
   it after any `npx expo install`; unpin when `expo` moves to a core that matches.
 
+
+## 16. v4 "un entrenador de verdad", COROS y plan general (2026-11-09)
+
+The product contract is `docs/V4.md`; this section lists what changed in the architecture.
+
+- **Shared pure modules, one copy for app and server.** `src/domain/zones.ts` (thresholds → ppm, pace,
+  watts, RPE and sensations per zone; research 02 §2.1/§2.3), `src/domain/prescription.ts` (step lines,
+  one-line target summary, plain-text prescription for calendar notes and ICS) and `src/domain/season.ts`
+  (week-by-week overview to the target race + `applyWeekPlan`). Edge bundles cannot import `src/`, so
+  `scripts/sync-domain-mirror.mjs` (`npm run sync:mirror`) generates
+  `supabase/functions/_shared/planning/domain/` from `constants`, `dates` (subset), `recoveryLayout`,
+  `periodization`, `zones`, `season` and `prescription`; `mirror.test.ts` fails in `test:functions` when the
+  copy is stale. The server's old approximate `phaseFor` is now an adapter over the mirrored engine, so the
+  app, the AI coach, Claude and the briefing describe the same week.
+- **Concrete sessions.** `WorkoutStep` gains `target` (explicit ranges), `cue` and `leg` (jsonb, no
+  migration); targets are otherwise derived at render/export time from the step intensity and the current
+  thresholds. `workouts.coaching jsonb` holds objective, keys, success criterion and plan B (validated in
+  `apply_plan_changes`; direct client writes are validated by the repository). `CompletedData.feel` stores
+  sensations (1–5); `domain/review.ts` compares the session with the plan; `domain/planB.ts` builds the
+  easier version ("No es mi día").
+- **Season plan.** Table `week_plans` (own rows, PK user + Monday, kind `load|push|recovery|rest`, optional
+  minutes and note, source `manual|ai_coach|claude`, realtime topic `week_plans`), repository
+  `listWeekPlans / saveWeekPlans / deleteWeekPlan`, hooks `useWeekPlans / useSaveWeekPlans /
+  useDeleteWeekPlan`. Overrides apply only to prep/base/build weeks without a race; the rules planner honours
+  them through `PlannerInput.weekPlan`. Plan tab: `?view=general` (default week view unchanged). The coach
+  may suggest week plans (`CoachResponse.weekPlans`, stored in `coach_jobs.extras.weekPlans`); Claude writes
+  them with the MCP tool `set_week_plans` (10 tools now).
+- **COROS.** `profiles.watch_brand` (`garmin | coros`, null = Garmin). COROS has no personal API: data comes
+  from Apple Salud on the iPhone (HealthKit importer, `source 'healthkit'`) and, optionally, from the athlete's
+  Claude with the official COROS connector writing through our MCP (`log_daily_metrics` `source 'coros'`).
+  Metrics merge priority everywhere: garmin > coros > healthkit > manual. Onboarding step 3 is "Tu reloj"
+  (id still `garmin` for saved progress); `/settings/coros` is the full guide. `get_plan_for_device` is
+  device-neutral (Garmin JSON + provider-neutral steps Claude can push to the COROS calendar).
+- **Deploy order:** `supabase db push` (`20261109000100_coach_v4.sql`, then `20261109000900_week_plans_platform.sql`)
+  before deploying the edge functions or shipping the app.

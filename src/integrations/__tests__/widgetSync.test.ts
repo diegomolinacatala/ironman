@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import { todayISO } from '@/domain/dates';
+import type { Profile } from '@/domain/types';
 
 import { workout } from './fixtures';
 
@@ -107,6 +108,26 @@ describe('widget sync on iOS', () => {
     syncWidgets(input);
 
     expect(mockStored).toHaveLength(4);
+  });
+
+  test('session targets reach the widgets as strings ("" when none), never null', () => {
+    syncWidgets({
+      workouts: [
+        workout({ id: 'w1', date: '2026-10-27' }),
+        workout({ id: 'w2', date: '2026-10-27', sport: 'rest', title: 'Descanso' }),
+        workout({ id: 'w3', date: '2026-10-28', status: 'completed' }),
+      ],
+      races: [],
+      jointSessions: [],
+      profile: { id: 'me', thresholds: { lthr: 170 } } as unknown as Profile,
+      today: '2026-10-26',
+      briefing: null,
+    });
+
+    const todayTimeline = mockStored[0] as { tomorrow: { id: string; target: string }[] }[];
+    expect(todayTimeline[0]?.tomorrow).toEqual([expect.objectContaining({ id: 'w1', target: 'Z2 · 145–151 ppm' })]);
+    const nextTimeline = mockStored[2] as { next?: { id: string; target: string } }[];
+    expect(nextTimeline[0]?.next).toEqual(expect.objectContaining({ id: 'w1', target: 'Z2 · 145–151 ppm' }));
   });
 
   test('syncing a plan with sessions and a race stores only property lists', () => {

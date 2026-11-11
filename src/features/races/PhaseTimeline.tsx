@@ -24,7 +24,7 @@ function useTimelineColors(): TimelineColors {
   return { current: colors.accent, past: colors.accentInk, future: colors.borderStrong, futureOpacity: 0.6, label: colors.textMuted, currentLabel: colors.accentInk };
 }
 
-/** Base → Construcción → Pico → Puesta a punto → Carrera, with "you are here" in the accent. */
+/** Base → Construcción → Pico → Afinamiento → Carrera, with "you are here" in the accent. */
 export function PhaseTimeline({ phase, phaseName }: PhaseTimelineProps) {
   const palette = useTimelineColors();
   const current = timelineIndex(phase);

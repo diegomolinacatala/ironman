@@ -3,15 +3,35 @@ import { fireEvent, render, screen, within } from '@testing-library/react-native
 import type { ReactElement } from 'react';
 
 import ProposalScreen from '@/app/proposal/[id]';
-import type { PlanProposal } from '@/domain/types';
+import type { PlanChange, PlanProposal } from '@/domain/types';
 
+import { buildDiffRows } from '../proposalDiff';
 import type { ProposalReview } from '../useProposalReview';
 import { makeProposal } from './fixtures';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockHeader: { left: (() => ReactElement) | null } = { left: null };
-const mockProposal: { data: PlanProposal } = { data: makeProposal({ changes: [{ op: 'delete', workoutId: 'w1', reason: 'Descanso' }] }) };
+const DEFAULT_PROPOSAL = makeProposal({ changes: [{ op: 'delete', workoutId: 'w1', reason: 'Descanso' }] });
+const mockProposal: { data: PlanProposal } = { data: DEFAULT_PROPOSAL };
 let mockReview: ProposalReview;
+
+const ADD_SERIES: PlanChange = {
+  op: 'add',
+  workout: {
+    date: '2026-10-29',
+    sport: 'run',
+    title: "Series 3×8'",
+    durationMin: 55,
+    intensity: 'threshold',
+    steps: [
+      { kind: 'warmup', durationMin: 15, intensity: 'recovery' },
+      { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold', cue: 'Mismo ritmo en las tres.' },
+      { kind: 'cooldown', durationMin: 10, intensity: 'recovery' },
+    ],
+    coaching: { objective: 'Subir tu umbral sin pasarte.', keys: [], success: 'Las tres series en zona.', planB: null },
+  },
+  reason: 'La sesión clave de la semana',
+};
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -60,6 +80,7 @@ jest.setTimeout(30000);
 beforeEach(() => {
   jest.clearAllMocks();
   mockHeader.left = null;
+  mockProposal.data = DEFAULT_PROPOSAL;
   mockReview = review();
 });
 
@@ -80,5 +101,37 @@ describe('Propuesta', () => {
     const footer = within(screen.getByTestId('proposal-footer'));
     expect(footer.getByText('No se han podido aplicar los cambios.')).toBeTruthy();
     expect(footer.getByRole('button', { name: /Aplicar 1 cambio/ })).toBeTruthy();
+  });
+});
+
+describe('Propuesta — what the coach proposes', () => {
+  test('the header is one sentence; the rest of the summary supports it and the model is not shown', async () => {
+    mockProposal.data = makeProposal({
+      summary: 'Hoy: ámbar (52/100). Fatiga alta y VFC baja: paso las series al viernes.',
+      model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    });
+    await render(<ProposalScreen />);
+    expect(screen.getByRole('header', { name: 'Hoy: ámbar (52/100).' })).toBeTruthy();
+    expect(screen.getByText('Fatiga alta y VFC baja: paso las series al viernes.')).toBeTruthy();
+    expect(screen.queryByText(/Modelo/)).toBeNull();
+    expect(screen.queryByText(/llama/)).toBeNull();
+  });
+
+  test('an added session shows its objective, its main target and its steps on demand', async () => {
+    mockProposal.data = makeProposal({ changes: [ADD_SERIES] });
+    const rows = buildDiffRows([ADD_SERIES], [], {}, { thresholds: { lthr: 170 }, raceDistance: null });
+    mockReview = review({ rows });
+    await render(<ProposalScreen />);
+    expect(screen.getByText("Series 3×8'")).toBeTruthy();
+    expect(screen.getByText('Subir tu umbral sin pasarte.')).toBeTruthy();
+    expect(screen.getByText("3×8' Z4 · 162–168 ppm · RPE 7–8")).toBeTruthy();
+    // The checkbox reads the whole change, objective and target included.
+    expect(screen.getByRole('checkbox', { name: /Subir tu umbral sin pasarte\. Intensidad: 3×8' Z4 · 162–168 ppm/ })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver la estructura, 3 pasos' }));
+    expect(screen.getByLabelText("Series · Z4: 3×8'. 162–168 ppm, RPE 7–8. Mismo ritmo en las tres.")).toBeTruthy();
+    expect(screen.getByText('Calentamiento · Z1')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ocultar la estructura' }));
+    expect(screen.queryByText('Mismo ritmo en las tres.')).toBeNull();
   });
 });

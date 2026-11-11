@@ -10,7 +10,7 @@ import { confirmAction } from './confirm';
 import { formatRelativeTime } from './format';
 import { IntegrationCard } from './IntegrationCard';
 
-/** Apple Health (HealthKit, on device): what Garmin Connect writes there. */
+/** Apple Health (HealthKit, on device): what your watch's app (Garmin Connect, COROS…) writes there. */
 export function HealthCard() {
   const health = useHealthIntegration();
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export function HealthCard() {
       ? { tone: 'success' as const, label: 'Conectado' }
       : { tone: 'muted' as const, label: 'Sin conectar' };
 
-  const run = async (task: () => Promise<void>, fallback: string) => {
+  const run = async (task: () => Promise<unknown>, fallback: string) => {
     setError(null);
     try {
       await task();
@@ -43,12 +43,12 @@ export function HealthCard() {
   return (
     <IntegrationCard icon="health" title="Apple Salud" status={status}>
       <Text variant="callout" color="textMuted">
-        Si en Garmin Connect activas “Apple Salud”, tus entrenos, sueño y pulso pasan a Salud y Road to Ironman los lee
-        aquí, en el móvil: marcamos como hechos los entrenos que coincidan.
+        Si la app de tu reloj (Garmin Connect, COROS…) pasa tus datos a “Apple Salud”, tus entrenos, sueño y pulso llegan a Salud
+        y Road to Ironman los lee aquí, en el móvil: marcamos como hechos los entrenos que coincidan.
       </Text>
       <Text variant="caption" color="textMuted">
-        Ojo: la VFC y el VO2máx de Garmin no llegan por Salud. Para eso usa la conexión de Garmin o pídele a tu Claude que
-        los guarde.
+        Ojo: la VFC y la recuperación de tu reloj no suelen llegar por Salud. Para eso conecta tu Garmin o pídele a tu Claude que
+        las guarde.
         {isAiCoachEnabled() ? ' Si das permiso al Coach IA, un resumen de estas métricas se envía a Cloudflare (Workers AI) para planificar.' : ''}
       </Text>
       {!health.available ? (

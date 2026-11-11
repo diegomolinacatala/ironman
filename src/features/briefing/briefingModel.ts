@@ -3,11 +3,13 @@
  * HRV trend, sleep stages, sleep window and listening time. Unit-tested.
  */
 import { dateTimeParts, formatDuration, minutesToTime } from '@/domain/dates';
-import type { Briefing, IntegrationStatus, SleepSnapshot, SleepVerdict } from '@/domain/types';
+import type { Briefing, DailyMetrics, IntegrationStatus, MetricsSource, SleepSnapshot, SleepVerdict, WatchBrand } from '@/domain/types';
 import type { IconName } from '@/ui';
 
+import { watchName } from '../settings/watchBrand';
+
 // ---------------------------------------------------------------------------
-// Garmin connection
+// The athlete's watch (Garmin: Personal API on the server; COROS: Apple Salud on this iPhone)
 // ---------------------------------------------------------------------------
 
 export type GarminState = 'connected' | 'expired' | 'missing';
@@ -19,11 +21,20 @@ export function garminState(integrations: readonly IntegrationStatus[] | undefin
   return garmin.state === 'connected' ? 'connected' : 'expired';
 }
 
+/** Same three states for either watch ('expired' only exists for a Garmin key). */
+export type WatchState = GarminState;
+
+/** COROS counts as connected once Apple Salud is enabled on this device. */
+export function watchState(brand: WatchBrand, integrations: readonly IntegrationStatus[] | undefined, healthEnabled: boolean): WatchState {
+  if (brand === 'coros') return healthEnabled ? 'connected' : 'missing';
+  return garminState(integrations);
+}
+
 // ---------------------------------------------------------------------------
 // Card state
 // ---------------------------------------------------------------------------
 
-export type BriefingCardState = 'loading' | 'connect-garmin' | 'empty' | 'generating' | 'error' | 'ready';
+export type BriefingCardState = 'loading' | 'connect-watch' | 'empty' | 'generating' | 'error' | 'ready';
 
 export interface BriefingCardInput {
   briefing: Briefing | null | undefined;
@@ -31,27 +42,92 @@ export interface BriefingCardInput {
   briefingError: unknown;
   generating: boolean;
   generateError: unknown;
-  garmin: GarminState | 'loading';
-  /** The athlete chose to prepare the briefing without Garmin. */
-  skipGarmin: boolean;
+  watch: WatchState | 'loading';
+  /** The athlete chose to prepare the briefing without their watch. */
+  skipWatch: boolean;
 }
 
 /** Which version of the "Informe de hoy" card to show. An existing briefing always wins. */
 export function briefingCardState(input: BriefingCardInput): BriefingCardState {
   if (input.briefing) return 'ready';
   if (input.generating) return 'generating';
-  if (input.briefingLoading || input.garmin === 'loading') return 'loading';
+  if (input.briefingLoading || input.watch === 'loading') return 'loading';
   if (input.generateError != null || input.briefingError != null) return 'error';
-  if (input.garmin !== 'connected' && !input.skipGarmin) return 'connect-garmin';
+  if (input.watch !== 'connected' && !input.skipWatch) return 'connect-watch';
   return 'empty';
 }
 
-/** Friendly progress copy while the briefing is being prepared (rotates every few seconds). */
-export const BRIEFING_STEPS = ['Leyendo tu Garmin…', 'Mirando tu plan de hoy…', 'Escribiendo tu informe…'] as const;
+const PLAN_STEPS = ['Mirando tu plan de hoy…', 'Escribiendo tu informe…'] as const;
 
-/** Progress steps for this athlete (no "Leyendo tu Garmin…" without Garmin). */
-export function briefingSteps(garminConnected: boolean): readonly string[] {
-  return garminConnected ? BRIEFING_STEPS : BRIEFING_STEPS.slice(1);
+/** Friendly progress copy while the briefing is being prepared (rotates every few seconds). */
+export const BRIEFING_STEPS = ['Leyendo tu Garmin…', ...PLAN_STEPS] as const;
+
+/** Progress steps for this athlete ("Leyendo tu Garmin…" / "Leyendo tu COROS…" only when connected). */
+export function briefingSteps(brand: WatchBrand, watchConnected: boolean): readonly string[] {
+  return watchConnected ? [`Leyendo tu ${watchName(brand)}…`, ...PLAN_STEPS] : PLAN_STEPS;
+}
+
+// ---------------------------------------------------------------------------
+// Attribution ("Datos de Garmin" only for Garmin data)
+// ---------------------------------------------------------------------------
+
+/** Merge priority of the day's rows (docs/V4.md). Manual rows carry no attribution. */
+const ATTRIBUTED_SOURCES: readonly MetricsSource[] = ['garmin', 'coros', 'healthkit'];
+
+const ATTRIBUTION: Record<MetricsSource, string | null> = {
+  garmin: 'Datos de Garmin',
+  coros: 'Datos de COROS',
+  healthkit: 'Datos de Apple Salud',
+  manual: null,
+};
+
+export interface AttributionFallback {
+  brand: WatchBrand;
+  watchConnected: boolean;
+  /** The briefing carries last night's sleep. */
+  hasSleep: boolean;
+}
+
+/**
+ * Where today's numbers come from: the day's best row (garmin > coros > healthkit). Without
+ * rows, a connected Garmin that produced the sleep card is still credited (it synced server-side).
+ */
+export function dataAttribution(rows: readonly Pick<DailyMetrics, 'source'>[], fallback: AttributionFallback): string | null {
+  const source = ATTRIBUTED_SOURCES.find((s) => rows.some((r) => r.source === s));
+  if (source) return ATTRIBUTION[source];
+  return fallback.brand === 'garmin' && fallback.watchConnected && fallback.hasSleep ? ATTRIBUTION.garmin : null;
+}
+
+export interface ConnectWatchCopy {
+  title: string;
+  message: string;
+  connectLabel: string;
+  skipLabel: string;
+}
+
+/** The card that asks for the watch before the first briefing ('expired' = a Garmin key). */
+export function connectWatchCopy(brand: WatchBrand, expired: boolean): ConnectWatchCopy {
+  const watch = watchName(brand);
+  const skipLabel = `Prepararlo sin ${watch}`;
+  if (expired) {
+    return {
+      title: `Renueva tu ${watch}`,
+      message: 'Tu clave de Garmin ha caducado. Renuévala y cada mañana te cuento cómo has dormido.',
+      connectLabel: 'Renovar conexión',
+      skipLabel,
+    };
+  }
+  return {
+    title: `Conecta tu ${watch}`,
+    message: `Con tu ${watch}, cada mañana te cuento cómo has dormido y qué toca hoy.`,
+    connectLabel: `Conectar ${watch}`,
+    skipLabel,
+  };
+}
+
+/** "Conecta tu COROS en Tú → Conexiones…": the ready briefing without last night's sleep. */
+export function noSleepNote(brand: WatchBrand): string {
+  return `Conecta tu ${watchName(brand)} en Tú → Conexiones y aquí verás cómo has dormido.`;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,12 +1,12 @@
 /**
  * Last night's sleep for the morning briefing: per-field merge of every
- * metrics source (Garmin → HealthKit → manual), the 7-night HRV baseline and
+ * metrics source (Garmin → COROS → HealthKit → manual), the 7-night HRV baseline and
  * a simple verdict. Pure.
  */
 import { addDays } from './dates';
 import type { DailyMetrics, ISODate, MetricsSource, SleepSnapshot, SleepVerdict } from './types';
 
-const SOURCE_PRIORITY: readonly MetricsSource[] = ['garmin', 'healthkit', 'manual'];
+const SOURCE_PRIORITY: readonly MetricsSource[] = ['garmin', 'coros', 'healthkit', 'manual'];
 const BASELINE_NIGHTS = 7;
 /** Fewer nights than this is not a baseline. */
 const BASELINE_MIN_NIGHTS = 3;
@@ -33,7 +33,7 @@ function rowsOf(metrics: readonly DailyMetrics[], date: ISODate): DailyMetrics[]
   return metrics.filter((m) => m.date === date).sort((a, b) => rank(a) - rank(b));
 }
 
-/** First non-null value of a field across sources (garmin → healthkit → manual). */
+/** First non-null value of a field across sources (garmin → coros → healthkit → manual). */
 function merged<T>(rows: readonly DailyMetrics[], read: (m: DailyMetrics) => T | null | undefined): T | null {
   const found = rows.map(read).find((v) => v !== null && v !== undefined && (typeof v !== 'number' || Number.isFinite(v)));
   return found ?? null;

@@ -174,7 +174,7 @@ test('runCoachJob saves memory to coach_notes, logs the imprevisto and stores ex
     job({ mode: 'chat', channel: 'voice', message: 'me duele la rodilla y prefiero nadar por la mañana' }),
   );
   assert.equal(rec.jobs[0].status, 'done');
-  assert.deepEqual(rec.jobs[0].extras, { memory: ['Prefiere nadar por la mañana'], lifeEventId: 'event-1', quedada: null });
+  assert.deepEqual(rec.jobs[0].extras, { memory: ['Prefiere nadar por la mañana'], lifeEventId: 'event-1', quedada: null, weekPlans: [] });
   assert.deepEqual(rec.coachNotes, ['Notas: vive en Valencia\n- Prefiere nadar por la mañana']);
   assert.equal(rec.lifeEvents[0].bodyArea, 'knee');
   assert.equal(rec.lifeEvents[0].endDate, TODAY);
@@ -190,7 +190,7 @@ test('runCoachJob: known facts are not rewritten, duplicates and invalid events 
     job({ mode: 'chat' }),
   );
   assert.equal(rec.jobs[0].status, 'done');
-  assert.deepEqual(rec.jobs[0].extras, { memory: ['prefiere nadar por la mañana'], lifeEventId: null, quedada: null });
+  assert.deepEqual(rec.jobs[0].extras, { memory: ['prefiere nadar por la mañana'], lifeEventId: null, quedada: null, weekPlans: [] });
   assert.deepEqual(rec.coachNotes, [], 'nothing new to write');
   assert.equal(rec.lifeEvents.length, 0, 'the knee is already logged');
 
@@ -200,7 +200,7 @@ test('runCoachJob: known facts are not rewritten, duplicates and invalid events 
     job({ mode: 'chat' }),
   );
   assert.equal(invalid.jobs[0].status, 'done');
-  assert.deepEqual(invalid.jobs[0].extras, { memory: [], lifeEventId: null, quedada: null });
+  assert.deepEqual(invalid.jobs[0].extras, { memory: [], lifeEventId: null, quedada: null, weekPlans: [] });
 });
 
 test('runCoachJob: a failing memory or life-event write never fails the job', async () => {
@@ -215,7 +215,7 @@ test('runCoachJob: a failing memory or life-event write never fails the job', as
     job({ mode: 'chat' }),
   );
   assert.equal(rec.jobs[0].status, 'done');
-  assert.deepEqual(rec.jobs[0].extras, { memory: [], lifeEventId: null, quedada: null });
+  assert.deepEqual(rec.jobs[0].extras, { memory: [], lifeEventId: null, quedada: null, weekPlans: [] });
 });
 
 test('memory and imprevistos are written only from a chat message of the athlete (never plan_week or replans)', async () => {
@@ -231,7 +231,7 @@ test('memory and imprevistos are written only from a chat message of the athlete
       job(request),
     );
     assert.equal(rec.jobs[0].status, 'done', request.mode);
-    assert.deepEqual(rec.jobs[0].extras, { memory: [], lifeEventId: null, quedada: null });
+    assert.deepEqual(rec.jobs[0].extras, { memory: [], lifeEventId: null, quedada: null, weekPlans: [] });
     assert.deepEqual(rec.coachNotes, []);
     assert.deepEqual(rec.lifeEvents, []);
   }

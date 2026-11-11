@@ -1,9 +1,11 @@
 import { describe, expect, test } from '@jest/globals';
 
-import type { JointSession, Race } from '@/domain/types';
+import type { JointSession, Profile, Race } from '@/domain/types';
 
 import { buildWidgetProps, buildWidgetTimelines, linkBaseFor, partnerLabel, type WidgetDataInput } from '../widgets/props';
 import { workout } from './fixtures';
+
+const athlete = { id: 'me', thresholds: { lthr: 170, maxHr: 190, ftpW: 250, runThresholdPaceSecPerKm: 270 } } as unknown as Profile;
 
 // Monday 26 Oct 2026, 10:00 local.
 const NOW = new Date(2026, 9, 26, 10, 0);
@@ -116,6 +118,43 @@ describe('buildWidgetProps', () => {
     expect(props.today.next).toBeNull();
     expect(props.today.weekPercent).toBe(0);
     expect(props.next.next).toBeNull();
+  });
+});
+
+describe('session targets', () => {
+  test('with thresholds: zone + main target for sessions still to do, "" when done or rest', () => {
+    const { today, next } = buildWidgetProps(input({ profile: athlete }), NOW);
+    expect(today.today.map((s) => s.target)).toEqual(['', 'RPE 6–7', 'Z2 · 145–151 ppm']);
+    expect(today.tomorrow[0]?.target).toBe('Z2 · 140–185 W');
+    expect(today.next?.target).toBe('RPE 6–7');
+    expect(next.next?.target).toBe('RPE 6–7');
+  });
+
+  test('without thresholds the zone and RPE still show; never null (plist rule)', () => {
+    const { today, next } = buildWidgetProps(input(), NOW);
+    expect(today.today[2]?.target).toBe('Z2 · RPE 3–4');
+    expect(today.tomorrow[0]?.target).toBe('Z2 · RPE 3–4');
+    const all = [...today.today, ...today.tomorrow, today.next, next.next];
+    for (const item of all) expect(typeof item?.target).toBe('string');
+  });
+
+  test('the main set decides the target, and race pace follows the target race distance', () => {
+    const intervals = workout({
+      id: 'i1',
+      date: '2026-10-26',
+      startTime: '19:00',
+      intensity: 'threshold',
+      steps: [
+        { kind: 'warmup', durationMin: 15 },
+        { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold' },
+        { kind: 'cooldown', durationMin: 10 },
+      ],
+    });
+    const racePace = workout({ id: 'rp', date: '2026-10-27', startTime: '19:00', intensity: 'race' });
+    const { today } = buildWidgetProps(input({ workouts: [intervals, racePace], profile: athlete }), NOW);
+    expect(today.today[0]?.target).toBe('Z4 · 162–168 ppm');
+    // Half distance (the widget input's target race): run at 92–96 % of LTHR.
+    expect(today.tomorrow[0]?.target).toBe('Ritmo carrera · 156–163 ppm');
   });
 });
 

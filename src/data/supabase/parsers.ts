@@ -1,7 +1,7 @@
 /**
  * Parsers for jsonb payloads (thresholds, availability, steps, completed data,
- * plan changes, joint sessions). Pure; tolerate partial / malformed input by
- * dropping invalid parts instead of throwing.
+ * coaching, plan changes, joint sessions). Pure; tolerate partial / malformed
+ * input by dropping invalid parts instead of throwing.
  */
 import {
   INTENSITIES,
@@ -16,10 +16,14 @@ import {
   type JointParticipant,
   type JointSession,
   type NotificationPrefs,
+  type NumberRange,
   type PlanChange,
+  type Score5,
+  type StepTarget,
   type Thresholds,
   type TrainingWindow,
   type Weekday,
+  type WorkoutCoaching,
   type WorkoutDraft,
   type WorkoutStep,
   type WorkoutStepKind,
@@ -61,7 +65,68 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
 
 const THRESHOLD_KEYS = ['ftpW', 'runThresholdPaceSecPerKm', 'swimCssSecPer100m', 'maxHr', 'lthr', 'restingHr'] as const;
 const STEP_KINDS: readonly WorkoutStepKind[] = ['warmup', 'work', 'recovery', 'cooldown', 'rest'];
+const STEP_LEGS = ['bike', 'run'] as const;
 const COMPLETED_SOURCES = ['manual', 'healthkit', 'garmin', 'claude'] as const;
+
+/** Text limits of the v4 schema (`workouts.coaching`, step cues). */
+export const COACHING_LIMITS = { objective: 200, key: 160, keys: 4, success: 200, planB: 200, cue: 200 } as const;
+
+/** Accepted bounds of explicit step targets (same as domain/zones). Pace in s/km or s/100 m. */
+const TARGET_BOUNDS: Readonly<Record<keyof StepTarget, readonly [number, number]>> = {
+  hr: [40, 230],
+  pace: [20, 1200],
+  power: [0, 2000],
+  rpe: [1, 10],
+};
+const TARGET_KEYS = Object.keys(TARGET_BOUNDS) as (keyof StepTarget)[];
+
+/** Trimmed, non-empty text clipped to `max` characters; null otherwise. */
+function boundedText(value: unknown, max: number): string | null {
+  const s = asString(value)?.trim();
+  if (!s) return null;
+  return s.length <= max ? s : s.slice(0, max).trimEnd();
+}
+
+function score5(value: unknown): Score5 | null {
+  const n = asNumber(value);
+  return n !== null && Number.isInteger(n) && n >= 1 && n <= 5 ? (n as Score5) : null;
+}
+
+function parseRange(value: unknown, [lo, hi]: readonly [number, number]): NumberRange | null {
+  if (!isRecord(value)) return null;
+  const min = asNumber(value.min);
+  const max = asNumber(value.max);
+  if (min === null || max === null) return null;
+  if (min < lo || min > hi || max < lo || max > hi) return null;
+  return min <= max ? { min, max } : { min: max, max: min };
+}
+
+/** `step.target` → only the valid ranges (hr / pace / power / rpe); null when none is usable. */
+export function parseStepTarget(value: unknown): StepTarget | null {
+  if (!isRecord(value)) return null;
+  const target = TARGET_KEYS.reduce<StepTarget>((acc, key) => {
+    const r = parseRange(value[key], TARGET_BOUNDS[key]);
+    return r ? { ...acc, [key]: r } : acc;
+  }, {});
+  return Object.keys(target).length > 0 ? target : null;
+}
+
+/**
+ * `workouts.coaching` / a draft's `coaching` → WorkoutCoaching, or null when it
+ * has no objective or success criterion. Texts are trimmed and clipped to the
+ * schema limits; at most 4 keys are kept.
+ */
+export function parseCoaching(value: unknown): WorkoutCoaching | null {
+  if (!isRecord(value)) return null;
+  const objective = boundedText(value.objective, COACHING_LIMITS.objective);
+  const success = boundedText(value.success, COACHING_LIMITS.success);
+  if (!objective || !success) return null;
+  const keys = asArray(value.keys)
+    .map((k) => boundedText(k, COACHING_LIMITS.key))
+    .filter((k): k is string => k !== null)
+    .slice(0, COACHING_LIMITS.keys);
+  return { objective, keys, success, planB: boundedText(pick(value, 'planB', 'plan_b'), COACHING_LIMITS.planB) };
+}
 
 export function parseThresholds(value: unknown): Thresholds {
   if (!isRecord(value)) return {};
@@ -123,6 +188,9 @@ function parseStep(value: unknown): WorkoutStep | null {
   const intensity = oneOf(value.intensity, INTENSITIES);
   const repeat = asNumber(value.repeat);
   const note = asString(value.note);
+  const target = parseStepTarget(value.target);
+  const cue = boundedText(value.cue, COACHING_LIMITS.cue);
+  const leg = oneOf(value.leg, STEP_LEGS);
   return {
     kind,
     ...(durationMin !== null ? { durationMin } : {}),
@@ -130,6 +198,9 @@ function parseStep(value: unknown): WorkoutStep | null {
     ...(intensity ? { intensity } : {}),
     ...(repeat !== null ? { repeat } : {}),
     ...(note ? { note } : {}),
+    ...(target ? { target } : {}),
+    ...(cue ? { cue } : {}),
+    ...(leg ? { leg } : {}),
   };
 }
 
@@ -149,8 +220,10 @@ export function parseCompleted(value: unknown): CompletedData | null {
   const source = oneOf(value.source, COMPLETED_SOURCES);
   const externalId = asString(value.externalId);
   const completedAt = asString(value.completedAt);
+  const feel = score5(value.feel);
   return {
     ...numbers,
+    ...(feel !== null ? { feel } : {}),
     ...(notes !== null ? { notes } : {}),
     ...(source ? { source } : {}),
     ...(externalId ? { externalId } : {}),
@@ -187,6 +260,8 @@ function parseDraftFields(value: JsonRecord): Partial<WorkoutDraft> {
     tss: optNullable(value.tss, asNumber),
     steps: Array.isArray(value.steps) ? parseSteps(value.steps) : undefined,
     isKey: opt(value.isKey, asBoolean),
+    // Objective, keys, success and plan B: null clears them, an unusable object is dropped.
+    coaching: optNullable(value.coaching, parseCoaching),
     // Provenance ('rules' | 'ai_coach' | 'claude'…): apply_plan_changes stores it, defaulting to 'manual'.
     source: opt(value.source, (v) => oneOf(v, WORKOUT_SOURCES)),
   });

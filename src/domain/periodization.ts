@@ -210,11 +210,12 @@ function maintenanceFactor(target: Race | null, cadence: RecoveryCadence, cycle:
  * Maintenance load/recovery cycle. Before a planned macrocycle it is counted
  * back from the plan start (`weeksBeforePlan` = 0 is the week right before it),
  * which is always a recovery week, so the cadence never runs on across the
- * boundary; otherwise it follows the ISO week number.
+ * boundary; otherwise it follows the ISO week number (counted backwards, so
+ * the load weeks after each descarga build up 0.95 → 1.00 → 1.05 like a plan).
  */
 function maintenanceCycle(date: ISODate, cadence: RecoveryCadence, weeksBeforePlan: number | null): CycleInfo {
-  if (weeksBeforePlan === null) return cycleAt(isoWeekNumber(date), cadence);
   const cycle = cadence === '3:1' ? 4 : 3;
+  if (weeksBeforePlan === null) return cycleAt(cycle - 2 - isoWeekNumber(date), cadence);
   return cycleAt(weeksBeforePlan + cycle - 1, cadence);
 }
 

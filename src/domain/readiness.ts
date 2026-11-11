@@ -1,6 +1,7 @@
 /**
- * Morning readiness traffic light (docs/research/02 §11.8): Garmin/HealthKit
- * metrics + subjective check-in. Missing signals are ignored, never invented.
+ * Morning readiness traffic light (docs/research/02 §11.8): Garmin / COROS /
+ * HealthKit metrics + subjective check-in. Missing signals are ignored, never
+ * invented. `readinessAdvice` turns it into what to do with today's session.
  */
 import { READINESS } from './constants';
 import { addDays } from './dates';
@@ -26,14 +27,15 @@ export interface ReadinessInput {
 
 type MetricKey = 'hrvMs' | 'restingHr' | 'sleepHours' | 'sleepScore' | 'trainingReadiness' | 'bodyBattery' | 'stressAvg';
 
-const SOURCE_RANK: Record<MetricsSource, number> = { garmin: 0, healthkit: 1, manual: 2 };
+/** Merge priority everywhere: Garmin > COROS (saved by the athlete's Claude) > HealthKit > manual. */
+const SOURCE_RANK: Record<MetricsSource, number> = { garmin: 0, coros: 1, healthkit: 2, manual: 3 };
 const BASELINE_DAYS = 30;
 
 function fmt(n: number, decimals = 0): string {
   return n.toFixed(decimals).replace('.', ',');
 }
 
-/** First non-null value of `key` on `date`, preferring Garmin > HealthKit > manual. */
+/** First non-null value of `key` on `date`, preferring Garmin > COROS > HealthKit > manual. */
 function metricOn(metrics: readonly DailyMetrics[], date: ISODate, key: MetricKey): number | null {
   const sameDay = metrics.filter((m) => m.date === date).sort((a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source]);
   for (const m of sameDay) {
@@ -219,3 +221,4 @@ export function computeReadiness(input: ReadinessInput): Readiness {
     recommendation: RECOMMENDATIONS[key],
   };
 }
+

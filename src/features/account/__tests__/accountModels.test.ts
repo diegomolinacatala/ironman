@@ -7,6 +7,7 @@ import {
   calendarConnectionView,
   calendarFeedConnectionView,
   claudeConnectionView,
+  corosConnectionView,
   garminConnectionView,
   raceCountdown,
 } from '../connectionsModel';
@@ -67,6 +68,24 @@ describe('connections', () => {
     expect(garminConnectionView(garmin({ state: 'error', lastError: 'Boom' }), TODAY, NOW)).toMatchObject({ detail: 'Boom', action: { label: 'Arreglar' } });
     expect(garminConnectionView(undefined, TODAY, NOW)).toMatchObject({ status: 'Sin conectar', action: { kind: 'open', label: 'Conectar' } });
     expect(garminConnectionView(garmin({ lastSyncAt: null }), TODAY, NOW).detail).toBe('Aún sin sincronizar');
+  });
+
+  test('COROS (Apple Salud here): off → connect, waiting → check, connected → sync, iPhone only on the web', () => {
+    const health = { available: true, loaded: true, enabled: true, lastSync: '2026-10-27T10:00:00', sources: ['COROS'] };
+    expect(corosConnectionView(health, NOW)).toEqual({
+      tone: 'success',
+      status: 'Conectado',
+      detail: 'Sincronizado hace 2 h',
+      action: { kind: 'sync', label: 'Sincronizar' },
+    });
+    expect(corosConnectionView({ ...health, sources: ['Salud'] }, NOW)).toMatchObject({
+      tone: 'warning',
+      status: 'Esperando datos',
+      action: { kind: 'sync', label: 'Comprobar' },
+    });
+    expect(corosConnectionView({ ...health, enabled: false }, NOW)).toMatchObject({ status: 'Sin conectar', action: { kind: 'open', label: 'Conectar' } });
+    expect(corosConnectionView({ ...health, available: false }, NOW)).toMatchObject({ status: 'Solo en iPhone', action: null });
+    expect(corosConnectionView({ ...health, loaded: false }, NOW)).toMatchObject({ status: 'Comprobando…', detail: null, action: null });
   });
 
   test('Claude: connected when an active connector token was used', () => {

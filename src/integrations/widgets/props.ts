@@ -1,11 +1,13 @@
 /**
  * Pure builders: app data → widget props (and WidgetKit timelines).
  * Widgets cannot compute anything themselves, so all text is pre-formatted here.
+ * Every value is plist-safe: strings use '' for "none", never null (see plist.ts).
  */
 import { addDays, diffDays, formatDayMedium, formatDayShort, formatDuration, formatTime, startOfWeek } from '@/domain/dates';
 import { raceDistanceLabel, sportLabel } from '@/domain/labels';
 import { nextRace } from '@/domain/periodization';
 import type { ISODate, JointSession, Profile, Race, Workout } from '@/domain/types';
+import { mainTargetLine, prescriptionContext, type PrescriptionContext } from '@/features/coach/prescriptionContext';
 
 import { atLocal, localDate, parseTimeMinutes, startOfLocalDate } from '../time';
 import type { BriefingWidgetProps } from './BriefingWidget';
@@ -84,7 +86,17 @@ export function partnerLabel(w: Workout, sessions: readonly JointSession[], meId
   return other ? `con ${other.displayName}` : 'Quedada';
 }
 
-function toItem(w: Workout, input: WidgetDataInput): WidgetSessionItem {
+/** Thresholds (profile) and the target race as of `today`, for the session targets. */
+function prescriptionOf(input: WidgetDataInput, today: ISODate): PrescriptionContext {
+  return prescriptionContext(input.profile?.thresholds, input.races, today);
+}
+
+/** "Z4 · 162–168 ppm" for a session still to do; '' when done or without zones. */
+export function widgetTarget(w: Workout, prescription: PrescriptionContext): string {
+  return w.status === 'completed' ? '' : mainTargetLine(w, prescription);
+}
+
+function toItem(w: Workout, input: WidgetDataInput, prescription: PrescriptionContext): WidgetSessionItem {
   return {
     id: w.id,
     title: w.title,
@@ -94,6 +106,7 @@ function toItem(w: Workout, input: WidgetDataInput): WidgetSessionItem {
     duration: formatDuration(w.durationMin),
     done: w.status === 'completed',
     partner: partnerLabel(w, input.jointSessions, input.profile?.id ?? null),
+    target: widgetTarget(w, prescription),
   };
 }
 
@@ -153,11 +166,13 @@ function buildToday(input: WidgetDataInput, at: Date, today: ISODate): TodayWidg
   const nextWorkout = todays.find((w) => isUpcoming(w, at)) ?? null;
   const weekStart = startOfWeek(today);
   const stats = weekStats(input.workouts, weekStart);
+  const prescription = prescriptionOf(input, today);
+  const item = (w: Workout) => toItem(w, input, prescription);
   return {
     dateLabel: formatDayMedium(today),
-    today: todays.map((w) => toItem(w, input)),
-    tomorrow: sessionsOn(input.workouts, addDays(today, 1)).map((w) => toItem(w, input)),
-    next: nextWorkout ? toItem(nextWorkout, input) : null,
+    today: todays.map(item),
+    tomorrow: sessionsOn(input.workouts, addDays(today, 1)).map(item),
+    next: nextWorkout ? item(nextWorkout) : null,
     allDoneToday: todays.length > 0 && todays.every((w) => w.status === 'completed'),
     week: weekDays(input.workouts, weekStart, today),
     weekPercent: weekPercent(stats),
@@ -203,6 +218,7 @@ function buildNext(input: WidgetDataInput, at: Date, today: ISODate): NextWorkou
         when: whenLabel(first, today),
         duration: formatDuration(first.durationMin),
         partner: partnerLabel(first, input.jointSessions, input.profile?.id ?? null),
+        target: widgetTarget(first, prescriptionOf(input, today)),
       }
     : null;
   return { next, linkBase: input.linkBase };

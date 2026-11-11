@@ -18,7 +18,7 @@ import {
   writeTrainingSettings,
 } from '../calendar/trainingCalendarStore';
 import { userScopedKey } from '../deviceState';
-import { GARMIN_STALE_MS, isGarminSyncDue, syncGarminIfStale } from '../effects/useGarminSync';
+import { GARMIN_STALE_MS, isGarminSyncDue, isGarminWatch, syncGarminIfStale } from '../effects/useGarminSync';
 import { buildBriefingProps, buildWidgetProps, buildWidgetTimelines } from '../widgets/props';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -101,6 +101,14 @@ function garmin(overrides: Partial<IntegrationStatus>): IntegrationStatus {
 }
 
 describe('foreground Garmin sync', () => {
+  test('only for a Garmin watch, or when none is chosen yet (COROS reads Apple Salud)', () => {
+    expect(isGarminWatch({ watchBrand: 'garmin' })).toBe(true);
+    expect(isGarminWatch({ watchBrand: null })).toBe(true);
+    expect(isGarminWatch({})).toBe(true);
+    expect(isGarminWatch(undefined)).toBe(true);
+    expect(isGarminWatch({ watchBrand: 'coros' })).toBe(false);
+  });
+
   test('due only when connected and the last sync is older than an hour (or unknown)', () => {
     expect(isGarminSyncDue([], NOW)).toBe(false);
     expect(isGarminSyncDue([garmin({ state: 'expired' })], NOW)).toBe(false);

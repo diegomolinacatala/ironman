@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { formatDuration } from '@/domain/dates';
-import { Chip, Stepper, Text, TextField, space } from '@/ui';
+import { targetSummary } from '@/domain/prescription';
+import type { RaceDistance, Thresholds } from '@/domain/types';
+import { Chip, Icon, Stepper, Text, TextField, space, useTheme } from '@/ui';
 
 import { DateField, TimeField } from './DateField';
 import { distanceUnit } from './draft';
@@ -18,10 +20,28 @@ export interface WorkoutFormProps {
   state: WorkoutFormState;
   onChange: (next: WorkoutFormState) => void;
   titleError?: string | null;
+  /** The athlete's thresholds: previews the main target in ppm / pace / watts. */
+  thresholds?: Thresholds | null;
+  raceDistance?: RaceDistance | null;
+}
+
+/** "Zona objetivo: 3×8' Z4 · 162–168 ppm · RPE 7–8" under the intensity picker. */
+function TargetPreview({ state, thresholds, raceDistance }: Pick<WorkoutFormProps, 'state' | 'thresholds' | 'raceDistance'>) {
+  const { colors } = useTheme();
+  const summary = targetSummary(state, thresholds, { raceDistance });
+  if (!summary) return null;
+  return (
+    <View style={styles.preview} accessible accessibilityLabel={`Zona objetivo: ${summary}`}>
+      <Icon name="target" size={14} color={colors.accentInk} />
+      <Text variant="caption" color="textMuted" style={styles.previewText}>
+        {`Zona objetivo: ${summary}`}
+      </Text>
+    </View>
+  );
 }
 
 /** Controlled workout editor fields (create + edit). */
-export function WorkoutForm({ state, onChange, titleError }: WorkoutFormProps) {
+export function WorkoutForm({ state, onChange, titleError, thresholds = null, raceDistance = null }: WorkoutFormProps) {
   const set = <K extends keyof WorkoutFormState>(key: K, value: WorkoutFormState[K]) => onChange({ ...state, [key]: value });
   const templates = templatesFor(state.sport);
   const isRest = state.sport === 'rest';
@@ -84,6 +104,7 @@ export function WorkoutForm({ state, onChange, titleError }: WorkoutFormProps) {
           </View>
           <Section label="Intensidad">
             <IntensityPicker value={state.intensity} onChange={(i) => set('intensity', i)} />
+            <TargetPreview state={state} thresholds={thresholds} raceDistance={raceDistance} />
           </Section>
           <Section label="Marcas">
             <View style={styles.chipsWrap}>
@@ -108,6 +129,9 @@ export function WorkoutForm({ state, onChange, titleError }: WorkoutFormProps) {
           onChange={(steps) => set('steps', steps)}
           intensity={state.intensity}
           plannedMin={state.durationMin}
+          sport={state.sport}
+          thresholds={thresholds}
+          raceDistance={raceDistance}
         />
       )}
     </View>
@@ -130,4 +154,6 @@ const styles = StyleSheet.create({
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   row: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   flex: { flex: 1 },
+  preview: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xs, marginTop: space.xs },
+  previewText: { flex: 1, fontVariant: ['tabular-nums'] },
 });

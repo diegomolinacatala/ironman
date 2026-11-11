@@ -16,6 +16,7 @@ import { Button, ScorePicker, Screen, Stepper, Text, TextField, haptics, space }
 import { formToCheckinDraft, sleepHoursLabel, type CheckinFormState } from './checkinForm';
 import { CheckinResult } from './CheckinResult';
 import { MetricsToday } from './MetricsToday';
+import { useTodayPlan } from './useTodayPlan';
 
 export const MISSING_SCORES_ERROR = 'Responde las cinco preguntas (un toque en cada fila).';
 
@@ -37,7 +38,9 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Readiness | null>(null);
   const upsert = useUpsertCheckin();
-  const set = <K extends keyof CheckinFormState>(key: K, value: CheckinFormState[K]) => {
+  // Loaded while you answer, so the result names today's session at once.
+  const plan = useTodayPlan(date);
+  const set =<K extends keyof CheckinFormState>(key: K, value: CheckinFormState[K]) => {
     setError(null);
     setState((prev) => ({ ...prev, [key]: value }));
   };
@@ -67,7 +70,7 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
     return (
       <Screen inSheet>
         <Stack.Screen options={{ title: 'Tu disposición', headerLeft: () => <ModalCancel label="Cerrar" /> }} />
-        <CheckinResult readiness={result} date={date} />
+        <CheckinResult readiness={result} date={date} plan={plan} />
       </Screen>
     );
   }

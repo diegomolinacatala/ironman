@@ -64,7 +64,7 @@ const USES: PrivacySectionContent = {
     },
     {
       icon: 'health',
-      title: 'Apple Salud y Garmin',
+      title: 'Apple Salud, Garmin y COROS',
       text: 'Solo con tu permiso: marcamos entrenos hechos y estimamos tu recuperación. Nunca para publicidad.',
     },
     {
@@ -98,7 +98,9 @@ const AI_COACH_POINT: PrivacyPoint = {
 const OWN_CLAUDE_POINT: PrivacyPoint = {
   icon: 'link',
   title: 'Tu propio Claude',
-  text: 'Si conectas tu Claude, lo que lea o escriba en Road to Ironman queda también sujeto a tu relación con Anthropic.',
+  text:
+    'Si conectas tu Claude, lo que lea o escriba en Road to Ironman queda también sujeto a tu relación con Anthropic. Si le ' +
+    'añades el conector de COROS, tus datos de COROS llegan a Anthropic a través de tu Claude, no de Road to Ironman.',
 };
 
 const YOUR_CHOICES: PrivacySectionContent = {

@@ -1,5 +1,6 @@
 import { composeBriefing, sleepSnapshotFrom, sleepVerdictOf, type BriefingInput } from '../briefing';
 import { wordCount } from '../briefingSpeech';
+import { buildSession } from '../sessions';
 import { addDays } from '../dates';
 import type { DailyMetrics, SleepSnapshot } from '../types';
 import { makeMetrics, makeRace, makeWorkout } from './fixtures';
@@ -71,6 +72,14 @@ describe('sleepSnapshotFrom', () => {
     ];
     const s = sleepSnapshotFrom(metrics, TODAY);
     expect(s).toMatchObject({ hours: 7.25, hrvMs: 50, restingHr: 48, score: 81, bodyBattery: 70, hrvBaselineMs: null });
+  });
+
+  it('ranks COROS (saved by Claude) after Garmin and before HealthKit', () => {
+    const metrics: DailyMetrics[] = [
+      makeMetrics(TODAY, { source: 'healthkit', sleepHours: 6.9, hrvMs: null, restingHr: 52 }),
+      makeMetrics(TODAY, { source: 'coros', sleepHours: 7.5, hrvMs: 64, restingHr: null }),
+    ];
+    expect(sleepSnapshotFrom(metrics, TODAY)).toMatchObject({ hours: 7.5, hrvMs: 64, restingHr: 52 });
   });
 
   it('uses the mean HRV of the previous 7 nights with data as the baseline', () => {
@@ -158,12 +167,13 @@ describe('composeBriefing with full data', () => {
 });
 
 describe('composeBriefing without data or sessions', () => {
-  it('says kindly that Garmin is not connected yet', () => {
+  it('says kindly that the watch is not connected yet', () => {
     const b = composeBriefing(input({ metrics: [], todayWorkouts: [], tomorrowWorkouts: [], race: null, name: '' }));
     expect(b.sleep).toBeNull();
     expect(b.sleepVerdict).toBe('unknown');
     expect(b.headline).toBe('Hoy descanso');
-    expect(b.sleepSummary).toMatch(/conecta tu Garmin/);
+    expect(b.sleepSummary).toMatch(/conecta tu reloj/);
+    expect(b.script).toContain('conecta tu reloj');
     expect(b.script).toMatch(/^Buenos días\. Hoy es martes/);
     expect(b.script).toContain('Hoy toca descanso.');
     expect(b.script).toContain('Mañana descansas.');
@@ -172,7 +182,7 @@ describe('composeBriefing without data or sessions', () => {
 
   it("asks to sync when last night's sleep has not arrived", () => {
     const b = composeBriefing(input({ metrics: [night(addDays(TODAY, -1))] }));
-    expect(b.sleepSummary).toMatch(/sincroniza tu Garmin/);
+    expect(b.sleepSummary).toMatch(/sincroniza tu reloj/);
     expect(b.headline).toBe("Hoy rodaje suave 50'");
   });
 
@@ -269,5 +279,51 @@ describe('composeBriefing on special days', () => {
     const b = composeBriefing(input({ todayWorkouts: [w] }));
     expect(b.headline.length).toBeLessThanOrEqual(90);
     expect(b.headline.endsWith('…')).toBe(true);
+  });
+});
+
+describe('composeBriefing with the watch brand', () => {
+  it('names the watch the athlete chose', () => {
+    const empty = { metrics: [], todayWorkouts: [], tomorrowWorkouts: [], race: null };
+    expect(composeBriefing(input({ ...empty, watchBrand: 'garmin' })).sleepSummary).toMatch(/conecta tu Garmin/);
+    expect(composeBriefing(input({ ...empty, watchBrand: 'coros' })).sleepSummary).toMatch(/conecta tu COROS con Apple Salud/);
+    const late = composeBriefing(input({ metrics: [night(addDays(TODAY, -1))], watchBrand: 'coros' }));
+    expect(late.sleepSummary).toMatch(/abre la app de COROS/);
+    expect(late.script).toContain('abre la app de COROS');
+  });
+});
+
+describe('composeBriefing as a coach', () => {
+  const T = { lthr: 170, maxHr: 190, runThresholdPaceSecPerKm: 270 };
+  const steps = buildSession({ code: 'RN_THR', durationMin: 60, priority: 1 }, { thresholds: T }).steps;
+  const coaching = buildSession({ code: 'RN_THR', durationMin: 60, priority: 1 }, { thresholds: T }).coaching;
+  const series = makeWorkout({ date: TODAY, title: "Series umbral 3×8'", intensity: 'threshold', durationMin: 60, startTime: '19:00', steps, coaching });
+
+  it('says the target in words, one sensation and the success criterion', () => {
+    const b = composeBriefing(input({ todayWorkouts: [series], thresholds: T }));
+    expect(b.script).toContain('La parte principal son tres series de ocho minutos en zona cuatro.');
+    expect(b.script).toContain(
+      'Tu objetivo: entre ciento sesenta y dos y ciento sesenta y ocho pulsaciones, con un esfuerzo de siete a ocho sobre diez.',
+    );
+    expect(b.script).toContain('Sabrás que lo has hecho bien así: las tres series en zona cuatro, la última igual que la primera');
+    expect(b.script).not.toMatch(/\d|'|\bkm\b|\bh\b|\bZ\d|RPE|ppm/);
+    expect(wordCount(b.script)).toBeLessThanOrEqual(200);
+  });
+
+  it('takes the focus tip from the coaching keys, unless the night was poor', () => {
+    expect(composeBriefing(input({ todayWorkouts: [series], thresholds: T })).focus).toBe(
+      'Empieza en la parte lenta del rango: la última serie es la que cuenta.',
+    );
+    const poor = composeBriefing(input({ metrics: week({ sleepScore: 45, sleepHours: 5.2 }), todayWorkouts: [series], thresholds: T }));
+    expect(poor.focus).toMatch(/Has descansado poco/);
+  });
+
+  it('short reps are spoken by feel, never as heart rate', () => {
+    const hills = buildSession({ code: 'RN_HILLS', durationMin: 60, priority: 2 }, { thresholds: T });
+    const w = makeWorkout({ date: TODAY, title: 'Cuestas', intensity: 'threshold', durationMin: 60, steps: hills.steps, coaching: hills.coaching });
+    const b = composeBriefing(input({ todayWorkouts: [w], thresholds: T }));
+    expect(b.script).toContain('Tu objetivo: un esfuerzo de ocho a nueve sobre diez, por sensaciones.');
+    expect(b.script).toContain('La parte principal son diez series de un minuto y quince segundos en zona cuatro.');
+    expect(b.script).not.toMatch(/\d/);
   });
 });

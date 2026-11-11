@@ -7,7 +7,8 @@
  */
 import { addDays, formatDuration, formatTime, startOfWeek } from '@/domain/dates';
 import { intensityLabel, sportLabel } from '@/domain/labels';
-import type { ISODate, NotificationPrefs, Workout } from '@/domain/types';
+import type { ISODate, NotificationPrefs, RaceDistance, Thresholds, Workout } from '@/domain/types';
+import { mainTargetLine } from '@/features/coach/prescriptionContext';
 
 import { atLocal, parseTimeMinutes } from '../time';
 
@@ -43,6 +44,19 @@ export interface ScheduleInput {
   days?: number;
   /** jointSessionId → partners' names ("David", "David y Marta") for quedada reminders. */
   jointPartners?: Readonly<Record<string, string>>;
+  /** Profile thresholds: the reminder names the main target in ppm / pace / W (else zone + RPE). */
+  thresholds?: Thresholds | null;
+  /** Target race distance (what "ritmo de carrera" means). */
+  raceDistance?: RaceDistance | null;
+}
+
+/** What a workout reminder needs besides the workout. */
+interface ReminderContext {
+  prefs: NotificationPrefs;
+  now: Date;
+  jointPartners?: Readonly<Record<string, string>>;
+  thresholds: Thresholds | null;
+  raceDistance: RaceDistance | null;
 }
 
 /** Quedadas are reminded at least this long before: time to get there. */
@@ -77,29 +91,30 @@ export function leadLabel(minutes: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
-function details(w: Workout): string {
-  const parts = [sportLabel(w.sport), formatDuration(w.durationMin), intensityLabel(w.intensity)];
+/** Zone + main target ("Z4 · 162–168 ppm"), else the intensity ("Umbral Z4"). */
+function targetOf(w: Workout, ctx: ReminderContext): string {
+  return mainTargetLine(w, ctx) || intensityLabel(w.intensity);
+}
+
+/** "Carrera · 55' · Z4 · 162–168 ppm" (+ " · Quedada"). */
+function details(w: Workout, ctx: ReminderContext): string {
+  const parts = [sportLabel(w.sport), formatDuration(w.durationMin), targetOf(w, ctx)];
   return w.jointSessionId ? [...parts, 'Quedada'].join(' · ') : parts.join(' · ');
 }
 
-function jointReminder(
-  w: Workout,
-  start: number,
-  leads: { joint: number; personal: number },
-  partners: string | undefined,
-  now: Date,
-): NotificationSpec | null {
+function jointReminder(w: Workout, start: number, leads: { joint: number; personal: number }, ctx: ReminderContext): NotificationSpec | null {
   const startsAt = atLocal(w.date, start).getTime();
   // Planned less than an hour ahead: still remind with the personal lead.
-  const lead = startsAt - leads.joint * 60_000 > now.getTime() ? leads.joint : leads.personal;
+  const lead = startsAt - leads.joint * 60_000 > ctx.now.getTime() ? leads.joint : leads.personal;
   const fireAt = new Date(startsAt - lead * 60_000);
-  if (fireAt.getTime() <= now.getTime()) return null;
+  if (fireAt.getTime() <= ctx.now.getTime()) return null;
+  const partners = w.jointSessionId ? ctx.jointPartners?.[w.jointSessionId] : undefined;
   const withWho = partners ? ` con ${partners}` : '';
   return {
     id: `rti.workout.${w.id}`,
     kind: 'workout_reminder',
     title: lead === 0 ? `Empieza la quedada${withWho}` : `Quedada${withWho} en ${leadLabel(lead)}`,
-    body: `${formatTime(w.startTime)} · ${w.title} · ${sportLabel(w.sport)} · ${formatDuration(w.durationMin)}`,
+    body: [formatTime(w.startTime), w.title, sportLabel(w.sport), formatDuration(w.durationMin), targetOf(w, ctx)].join(' · '),
     url: `/joint/${w.jointSessionId}`,
     categoryId: 'workout',
     threadId: 'rti.workouts',
@@ -107,17 +122,13 @@ function jointReminder(
   };
 }
 
-function workoutReminder(
-  w: Workout,
-  prefs: NotificationPrefs,
-  now: Date,
-  jointPartners?: Readonly<Record<string, string>>,
-): NotificationSpec | null {
+function workoutReminder(w: Workout, ctx: ReminderContext): NotificationSpec | null {
+  const { prefs, now } = ctx;
   const start = parseTimeMinutes(w.startTime);
   const leadRaw = Number.isFinite(prefs.reminderMinutesBefore) ? prefs.reminderMinutesBefore : DEFAULT_LEAD_MIN;
   const lead = Math.min(MAX_LEAD_MIN, Math.max(0, Math.round(leadRaw)));
   if (w.jointSessionId && start != null) {
-    return jointReminder(w, start, { joint: Math.max(lead, JOINT_LEAD_MIN), personal: lead }, jointPartners?.[w.jointSessionId], now);
+    return jointReminder(w, start, { joint: Math.max(lead, JOINT_LEAD_MIN), personal: lead }, ctx);
   }
   if (start == null && prefs.morningSummary) return null; // the morning briefing already covers it
   const fireAt =
@@ -127,7 +138,7 @@ function workoutReminder(
   if (fireAt.getTime() <= now.getTime()) return null;
   const title =
     start == null ? `Hoy toca: ${w.title}` : lead === 0 ? `Empieza: ${w.title}` : `${w.title} en ${leadLabel(lead)}`;
-  const body = start == null ? details(w) : `${formatTime(w.startTime)} · ${details(w)}`;
+  const body = start == null ? details(w, ctx) : `${formatTime(w.startTime)} · ${details(w, ctx)}`;
   return {
     id: `rti.workout.${w.id}`,
     kind: 'workout_reminder',
@@ -215,8 +226,15 @@ export function buildSchedule(input: ScheduleInput): NotificationSpec[] {
   const morningMin = parseTimeMinutes(prefs.morningTime) ?? DEFAULT_MORNING_MIN;
   const eveningMin = parseTimeMinutes(prefs.eveningTime) ?? DEFAULT_EVENING_MIN;
 
+  const ctx: ReminderContext = {
+    prefs,
+    now,
+    jointPartners: input.jointPartners,
+    thresholds: input.thresholds ?? null,
+    raceDistance: input.raceDistance ?? null,
+  };
   const reminders = prefs.workoutReminders
-    ? days.flatMap((date) => sessionsOn(workouts, date).map((w) => workoutReminder(w, prefs, now, input.jointPartners)))
+    ? days.flatMap((date) => sessionsOn(workouts, date).map((w) => workoutReminder(w, ctx)))
     : [];
   const summaries = prefs.morningSummary ? days.map((date) => morningSummary(date, morningMin, now)) : [];
   const repeating = prefs.eveningCheckin ? [eveningCheckin(eveningMin)] : [];

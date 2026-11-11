@@ -26,6 +26,8 @@ export interface NextWorkoutItem {
   duration: string;
   /** "con Álex" or "". */
   partner: string;
+  /** Zone + main target ("Z4 · 162–168 ppm") or "". Never null (plist). */
+  target: string;
 }
 
 export interface NextWorkoutWidgetProps {
@@ -66,7 +68,12 @@ const NextWorkoutWidget = (props: NextWorkoutWidgetProps, environment: WidgetEnv
     );
   }
 
-  const detail = next.partner ? `${next.duration} · ${next.partner}` : `${next.sportLabel} · ${next.duration}`;
+  // "55' · Z4 · 162–168 ppm" (the symbol says the sport), "55' · con Álex · Z2 · 145–151 ppm",
+  // or "Carrera · 55'" without a target (a missing key reads as none).
+  const detail =
+    next.partner || next.target
+      ? [next.duration, next.partner, next.target].filter((part) => !!part).join(' · ')
+      : `${next.sportLabel} · ${next.duration}`;
   return (
     <VStack alignment="leading" spacing={1} modifiers={stack}>
       <HStack spacing={4}>

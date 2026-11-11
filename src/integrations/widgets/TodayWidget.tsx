@@ -54,6 +54,8 @@ export interface WidgetSessionItem {
   done: boolean;
   /** "con Álex" for quedadas, otherwise "". */
   partner: string;
+  /** Zone + main target ("Z4 · 162–168 ppm"), '' when none or done. Never null (plist). */
+  target: string;
 }
 
 export interface WidgetWeekDay {
@@ -120,6 +122,8 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
   const todayUrl = `${props.linkBase}today`;
   const workoutUrl = (id: string): string => `${props.linkBase}workout/${id}`;
   const meta = (s: WidgetSessionItem): string => (s.time ? `${s.time} · ${s.duration}` : s.duration);
+  // Detail line of a row: "18:30 · 55' · con Álex · Z4 · 162–168 ppm" (a missing key reads as none).
+  const detail = (s: WidgetSessionItem): string => [meta(s), s.partner, s.target].filter((part) => !!part).join(' · ');
 
   // Small labels: sentence case, semibold, muted (no all-caps, no tracking).
   const overline = (label: string, color: string) => (
@@ -155,9 +159,7 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
           <Text modifiers={[font({ size: 13, weight: 'semibold' }), foregroundStyle(s.done ? muted : ink), lineLimit(1)]}>
             {s.done ? `✓ ${s.title}` : s.title}
           </Text>
-          <Text modifiers={[font({ size: 11 }), foregroundStyle(muted), lineLimit(1)]}>
-            {s.partner ? `${meta(s)} · ${s.partner}` : meta(s)}
-          </Text>
+          <Text modifiers={[font({ size: 11 }), foregroundStyle(muted), lineLimit(1)]}>{detail(s)}</Text>
         </VStack>
         <Spacer />
       </HStack>
@@ -242,7 +244,8 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
     );
   }
 
-  // systemSmall (default): the next session, big.
+  // systemSmall (default): the next session, big. Its sport row names the target when there is one
+  // (the coloured symbol already says the sport): no extra line in a small widget.
   const next = props.next;
   return (
     <VStack
@@ -259,7 +262,9 @@ const TodayWidget = (props: TodayWidgetProps, environment: WidgetEnvironment) =>
         <VStack alignment="leading" spacing={2}>
           <HStack spacing={4}>
             <Image systemName={symbolOf(next.sport)} size={13} color={colorOf(next.sport)} />
-            <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(muted), lineLimit(1)]}>{next.sportLabel}</Text>
+            <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(muted), lineLimit(1)]}>
+              {next.target ? next.target : next.sportLabel}
+            </Text>
           </HStack>
           <Text modifiers={[font({ size: 17, weight: 'bold' }), foregroundStyle(ink), lineLimit(2)]}>{next.title}</Text>
           <Text modifiers={[font({ size: 20, weight: 'semibold' }), foregroundStyle(ink), lineLimit(1)]}>{meta(next)}</Text>

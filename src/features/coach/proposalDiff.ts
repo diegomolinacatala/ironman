@@ -1,6 +1,7 @@
 /**
  * Pure helpers for the proposal review screen: turns PlanChange[] into
- * human "before → after" rows and previews the week totals in memory.
+ * human "before → after" rows (with what each new or rewritten session asks:
+ * objective, targets and steps) and previews the week totals in memory.
  */
 import { applyPlanChanges, describeChange } from '@/domain/changes';
 import { formatDayShort, formatDistance, formatDuration, formatTime } from '@/domain/dates';
@@ -16,6 +17,9 @@ import type {
   Workout,
   WorkoutDraft,
 } from '@/domain/types';
+
+import { NO_PRESCRIPTION_CONTEXT, type PrescriptionContext } from './prescriptionContext';
+import { notesText, sessionPreview, structureText, type SessionInput, type SessionPreview } from './sessionPreview';
 
 export type DiffOp = PlanChange['op'];
 
@@ -40,6 +44,8 @@ export interface DiffRow {
   missing: boolean;
   /** describeChange() text, used for accessibility. */
   description: string;
+  /** What the new (or rewritten) session asks: added sessions and updates of steps/coaching. */
+  session: SessionPreview | null;
 }
 
 const OP_LABEL: Record<DiffOp, string> = { add: 'Añadir', delete: 'Quitar', move: 'Mover', update: 'Ajustar' };
@@ -74,6 +80,16 @@ type FieldSpec = {
   show: (target: Workout, patch: Partial<WorkoutDraft>) => [string, string];
 };
 
+/** The workout as it would be after the patch (only what a session preview reads). */
+function patchedSession(target: Workout, patch: Partial<WorkoutDraft>): SessionInput {
+  return {
+    sport: patch.sport ?? target.sport,
+    intensity: patch.intensity ?? target.intensity,
+    steps: patch.steps ?? target.steps,
+    coaching: patch.coaching !== undefined ? patch.coaching : (target.coaching ?? null),
+  };
+}
+
 const FIELD_SPECS: readonly FieldSpec[] = [
   { key: 'date', label: 'Día', show: (t, p) => [formatDayShort(t.date), formatDayShort(p.date ?? t.date)] },
   {
@@ -100,8 +116,8 @@ const FIELD_SPECS: readonly FieldSpec[] = [
   },
   { key: 'tss', label: 'Carga', show: (t, p) => [t.tss != null ? `${t.tss}` : '—', p.tss != null ? `${p.tss}` : '—'] },
   { key: 'isKey', label: 'Sesión clave', show: (t, p) => [t.isKey ? 'Sí' : 'No', p.isKey ? 'Sí' : 'No'] },
-  { key: 'description', label: 'Notas', show: () => ['Antes', 'Actualizadas'] },
-  { key: 'steps', label: 'Estructura', show: () => ['Antes', 'Actualizada'] },
+  { key: 'description', label: 'Notas', show: (t, p) => [notesText(t.description), notesText(p.description)] },
+  { key: 'steps', label: 'Estructura', show: (t, p) => [structureText(t), structureText(patchedSession(t, p))] },
 ];
 
 /** Only the fields whose value actually changes. */
@@ -128,24 +144,50 @@ function warningsFor(target: Workout | undefined, jointNames: Readonly<Record<UU
   return out;
 }
 
-function rowFor(
-  change: PlanChange,
-  index: number,
-  workouts: readonly Workout[],
-  jointNames: Readonly<Record<UUID, string>>,
-): DiffRow {
-  const base = { index, op: change.op, opLabel: OP_LABEL[change.op], reason: change.reason, description: describeChange(change, workouts) };
-  if (change.op === 'add') {
-    const w = change.workout;
-    return { ...base, title: w.title, sport: w.sport, before: null, after: workoutLine(w), fields: [], warnings: [], missing: false };
-  }
-  const target = workouts.find((w) => w.id === change.workoutId);
+/** Updates that rewrite what the session asks (structure or coaching) get a session preview. */
+function rewritesSession(patch: Partial<WorkoutDraft>): boolean {
+  return patch.steps !== undefined || patch.coaching !== undefined;
+}
+
+interface RowContext {
+  workouts: readonly Workout[];
+  jointNames: Readonly<Record<UUID, string>>;
+  prescription: PrescriptionContext;
+}
+
+function addRow(change: Extract<PlanChange, { op: 'add' }>, index: number, ctx: RowContext): DiffRow {
+  const w = change.workout;
+  return {
+    index,
+    op: 'add',
+    opLabel: OP_LABEL.add,
+    reason: change.reason,
+    description: describeChange(change, ctx.workouts),
+    title: w.title,
+    sport: w.sport,
+    before: null,
+    after: workoutLine(w),
+    fields: [],
+    warnings: [],
+    missing: false,
+    session: sessionPreview(w, ctx.prescription),
+  };
+}
+
+function rowFor(change: PlanChange, index: number, ctx: RowContext): DiffRow {
+  if (change.op === 'add') return addRow(change, index, ctx);
+  const target = ctx.workouts.find((w) => w.id === change.workoutId);
   const common = {
-    ...base,
+    index,
+    op: change.op,
+    opLabel: OP_LABEL[change.op],
+    reason: change.reason,
+    description: describeChange(change, ctx.workouts),
     title: target?.title ?? 'Entreno que ya no está en tu semana',
     sport: target?.sport ?? null,
-    warnings: warningsFor(target, jointNames),
+    warnings: warningsFor(target, ctx.jointNames),
     missing: !target,
+    session: null,
   };
   if (change.op === 'delete') {
     return { ...common, before: target ? workoutLine(target) : null, after: 'Se quita del plan', fields: [] };
@@ -159,21 +201,29 @@ function rowFor(
       fields: [],
     };
   }
+  const rewritten = target && rewritesSession(change.patch) ? sessionPreview(patchedSession(target, change.patch), ctx.prescription) : null;
   return {
     ...common,
     sport: change.patch.sport ?? common.sport,
     before: null,
     after: null,
     fields: target ? updateFieldDiffs(target, change.patch) : [],
+    session: rewritten,
   };
 }
 
+/**
+ * Diff rows of a proposal. `prescription` (thresholds + target race distance)
+ * turns zones into ppm / pace / watts; without it rows still show zone and RPE.
+ */
 export function buildDiffRows(
   changes: readonly PlanChange[],
   workouts: readonly Workout[],
   jointNames: Readonly<Record<UUID, string>> = {},
+  prescription: PrescriptionContext = NO_PRESCRIPTION_CONTEXT,
 ): DiffRow[] {
-  return changes.map((change, index) => rowFor(change, index, workouts, jointNames));
+  const ctx: RowContext = { workouts, jointNames, prescription };
+  return changes.map((change, index) => rowFor(change, index, ctx));
 }
 
 /** Indexes (into the original list) of the selected changes. */

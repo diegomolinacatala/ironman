@@ -1,9 +1,12 @@
 import { addDays } from '@/domain/dates';
-import type { CompletedData, Intensity, ISODate, Sport, UUID, Workout } from '@/domain/types';
+import { specToDraft } from '@/domain/sessions';
+import type { CompletedData, Intensity, ISODate, RaceDistance, Score5, Sport, Thresholds, UUID, Workout, WorkoutStep } from '@/domain/types';
+import { sessionHrRange, sessionRpe } from '@/domain/zones';
 
 import type { DemoClock } from '../db';
 import { localIso } from '../ids';
-import type { WorkoutTemplate } from './templates';
+import { draftToWorkout } from '../repo/workoutsDemo';
+import type { SessionTemplate } from './templates';
 
 export interface SeedWeek {
   weekStart: ISODate;
@@ -11,85 +14,88 @@ export interface SeedWeek {
   scale: number;
 }
 
-const BASE_RPE: Record<Intensity, number> = {
-  recovery: 3,
-  endurance: 4,
-  tempo: 6,
-  threshold: 7,
-  vo2: 8,
-  race: 8,
-};
+/** A demo athlete's week and what their targets are computed from. */
+export interface SeedAthlete {
+  userId: UUID;
+  templates: readonly SessionTemplate[];
+  thresholds: Thresholds;
+  /** Distance of the target race ("ritmo de carrera"). */
+  raceDistance: RaceDistance | null;
+}
 
-const AVG_HR: Record<Intensity, number> = {
+/** Swim HR is not prescribed (no target range): a plausible watch average per intensity. */
+const SWIM_AVG_HR: Record<Intensity, number> = {
   recovery: 118,
-  endurance: 136,
-  tempo: 152,
-  threshold: 162,
-  vo2: 166,
-  race: 158,
+  endurance: 132,
+  tempo: 146,
+  threshold: 154,
+  vo2: 160,
+  race: 150,
 };
 
 function roundTo(value: number, step: number): number {
   return Math.max(step, Math.round(value / step) * step);
 }
 
-function rpeFor(sport: Sport, intensity: Intensity, rand: () => number): number {
-  if (sport === 'strength' || sport === 'mobility') return 5;
-  return Math.min(10, BASE_RPE[intensity] + (rand() < 0.4 ? 1 : 0));
+/** Total metres of a swim whose steps are all distance-based, else null. */
+function setsDistance(steps: readonly WorkoutStep[]): number | null {
+  if (steps.length === 0 || steps.some((s) => !s.distanceM)) return null;
+  return steps.reduce((sum, s) => sum + (s.distanceM ?? 0) * (s.repeat && s.repeat > 1 ? s.repeat : 1), 0);
 }
 
-function completedData(w: Workout, rand: () => number): CompletedData {
+/** Watch average HR inside the expected range of the session (warm-up and recoveries included). */
+function averageHr(w: Workout, athlete: SeedAthlete, rand: () => number): number | null {
+  if (w.sport === 'strength' || w.sport === 'mobility') return null;
+  const range = sessionHrRange(w, athlete.thresholds, { raceDistance: athlete.raceDistance });
+  if (!range) return SWIM_AVG_HR[w.intensity] + Math.round(rand() * 6) - 3;
+  return Math.round(range.min + (range.max - range.min) * (0.2 + rand() * 0.6));
+}
+
+function rpeFor(w: Workout, athlete: SeedAthlete, rand: () => number): number {
+  const range = sessionRpe(w, { raceDistance: athlete.raceDistance });
+  return Math.min(10, Math.max(1, Math.round(range.min + (range.max - range.min) * rand())));
+}
+
+/** Mostly "bien" (4), sometimes "normal" (3) or "genial" (5). */
+function feelFor(rand: () => number): Score5 {
+  const roll = rand();
+  if (roll < 0.2) return 3;
+  return roll < 0.8 ? 4 : 5;
+}
+
+function completedData(w: Workout, athlete: SeedAthlete, rand: () => number): CompletedData {
   const durationMin = Math.max(10, Math.round(w.durationMin * (0.92 + rand() * 0.14)));
   const distanceM = w.distanceM === null ? undefined : Math.round((w.distanceM * durationMin) / Math.max(1, w.durationMin));
   const startIso = localIso(w.date, w.startTime ?? '18:00');
+  const avgHr = averageHr(w, athlete, rand);
   return {
     durationMin,
     ...(distanceM !== undefined ? { distanceM } : {}),
-    ...(w.sport === 'strength' ? {} : { avgHr: AVG_HR[w.intensity] + Math.round(rand() * 6) - 3 }),
-    rpe: rpeFor(w.sport, w.intensity, rand),
+    ...(avgHr !== null ? { avgHr } : {}),
+    rpe: rpeFor(w, athlete, rand),
+    feel: feelFor(rand),
     source: w.sport === 'strength' ? 'manual' : 'garmin',
     completedAt: new Date(Date.parse(startIso) + durationMin * 60_000).toISOString(),
   };
 }
 
-function fromTemplate(t: WorkoutTemplate, week: SeedWeek, userId: UUID, clock: DemoClock): Workout {
-  return {
-    id: clock.newId(),
-    userId,
-    date: addDays(week.weekStart, t.weekday),
-    startTime: t.start,
-    sport: t.sport,
-    title: t.title,
-    description: t.description ?? null,
-    durationMin: roundTo(t.durationMin * week.scale, 5),
-    distanceM: t.distanceM === undefined ? null : roundTo(t.distanceM * week.scale, t.sport === 'swim' ? 100 : 500),
-    intensity: t.intensity,
-    tss: null,
-    steps: t.steps ?? [],
-    status: 'planned',
-    completed: null,
-    source: 'rules',
-    isKey: t.isKey ?? false,
-    jointSessionId: null,
-    externalId: null,
-    createdAt: clock.now,
-    updatedAt: clock.now,
-  };
+/** The catalog session of `t` for that week, built like the rules engine does (source 'rules'). */
+function plannedFrom(t: SessionTemplate, week: SeedWeek, athlete: SeedAthlete, clock: DemoClock): Workout {
+  const durationMin = roundTo(t.spec.durationMin * week.scale, 5);
+  const distanceM = t.distanceM === undefined ? null : roundTo(t.distanceM * week.scale, 500);
+  const spec = { ...t.spec, durationMin, distanceM };
+  const date = addDays(week.weekStart, t.weekday);
+  const draft = specToDraft(spec, date, t.start, { thresholds: athlete.thresholds, raceDistance: athlete.raceDistance });
+  return draftToWorkout({ ...draft, distanceM: draft.distanceM ?? setsDistance(draft.steps ?? []) }, athlete.userId, clock);
 }
 
-/** Expands templates over weeks; past sessions come back completed (with RPE). */
-export function seedWorkouts(
-  userId: UUID,
-  templates: readonly WorkoutTemplate[],
-  weeks: readonly SeedWeek[],
-  clock: DemoClock,
-  rand: () => number,
-): Workout[] {
+/** Expands the athlete's week over `weeks`; past sessions come back completed (FC media, RPE, sensaciones). */
+export function seedWorkouts(athlete: SeedAthlete, weeks: readonly SeedWeek[], clock: DemoClock, rand: () => number): Workout[] {
   return weeks.flatMap((week) =>
-    templates.map((t) => {
-      const planned = fromTemplate(t, week, userId, clock);
+    athlete.templates.map((t) => {
+      const planned = plannedFrom(t, week, athlete, clock);
       if (planned.date >= clock.today) return planned;
-      return { ...planned, status: 'completed' as const, completed: completedData(planned, rand) };
+      return { ...planned, status: 'completed' as const, completed: completedData(planned, athlete, rand) };
     }),
   );
 }

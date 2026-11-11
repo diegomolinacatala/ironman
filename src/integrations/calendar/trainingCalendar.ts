@@ -13,8 +13,9 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { useAuth, useRepository } from '@/data/context';
-import { useProfile } from '@/data/queries';
+import { useProfile, useRaces } from '@/data/queries';
 import { todayISO } from '@/domain/dates';
+import { prescriptionContext } from '@/features/coach/prescriptionContext';
 import { logger } from '@/lib/logger';
 
 import { getCalendarPermission, requestCalendarPermission } from '../calendar';
@@ -99,7 +100,11 @@ function useAction(userId: string | null) {
 export function useTrainingCalendar(): TrainingCalendar {
   const repo = useRepository();
   const userId = useAuth().session?.userId ?? null;
-  const timeZone = useProfile().data?.timezone ?? null;
+  const profile = useProfile().data;
+  const timeZone = profile?.timezone ?? null;
+  // Same prescription inputs as the plan mirror (usePlanMirrors), so both write identical notes.
+  const thresholds = profile?.thresholds ?? null;
+  const races = useRaces().data;
   const shared = useSyncExternalStore(subscribeTrainingCalendar, getTrainingCalendarSnapshot, getTrainingCalendarSnapshot);
   const view = shared.userId === userId ? shared : emptyTrainingCalendarState(userId);
   const { busy, error, setError, run } = useAction(userId);
@@ -112,9 +117,10 @@ export function useTrainingCalendar(): TrainingCalendar {
     async (user: string) => {
       const today = todayISO();
       const workouts = await repo.listWorkouts(trainingCalendarWindow(today));
-      await syncWorkoutsToCalendar(workouts, today, { userId: user, timeZone });
+      const prescription = prescriptionContext(thresholds, races, today);
+      await syncWorkoutsToCalendar(workouts, today, { userId: user, timeZone, ...prescription });
     },
-    [repo, timeZone],
+    [repo, timeZone, thresholds, races],
   );
 
   const syncNow = useCallback(

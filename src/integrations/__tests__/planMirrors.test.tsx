@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { act, renderHook } from '@testing-library/react-native';
 
-import type { Profile } from '@/domain/types';
+import type { Profile, Race } from '@/domain/types';
 
 import { CALENDAR_DEBOUNCE_MS, usePlanMirrors, type PlanSnapshot } from '../effects/usePlanMirrors';
 import { prefs, workout } from './fixtures';
@@ -56,7 +56,31 @@ describe('usePlanMirrors', () => {
     });
     expect(mockSyncWidgets).toHaveBeenCalledWith(expect.objectContaining({ briefing, today: '2026-10-27' }));
     expect(mockSyncCalendar).toHaveBeenCalledTimes(1);
-    expect(mockSyncCalendar).toHaveBeenCalledWith(expect.any(Array), '2026-10-27', { userId: 'user-ana', timeZone: 'Europe/Madrid' });
+    expect(mockSyncCalendar).toHaveBeenCalledWith(expect.any(Array), '2026-10-27', {
+      userId: 'user-ana',
+      timeZone: 'Europe/Madrid',
+      thresholds: null,
+      raceDistance: null,
+    });
+  });
+
+  test("calendar notes and reminders get the athlete's thresholds and the target race distance", async () => {
+    const thresholds = { lthr: 170, ftpW: 250 };
+    const races = [
+      { id: 'b', userId: 'user-ana', name: 'Popular', date: '2026-11-02', distance: 'run_10k', priority: 'B' },
+      { id: 'a', userId: 'user-ana', name: 'Valencia', date: '2026-12-06', distance: 'olympic', priority: 'A' },
+    ] as unknown as Race[];
+    await renderHook(() => usePlanMirrors(true, snapshot({ profile: { ...profile, thresholds } as Profile, races })));
+    await act(async () => {
+      jest.advanceTimersByTime(CALENDAR_DEBOUNCE_MS);
+    });
+    expect(mockSyncCalendar).toHaveBeenCalledWith(expect.any(Array), '2026-10-27', {
+      userId: 'user-ana',
+      timeZone: 'Europe/Madrid',
+      thresholds,
+      raceDistance: 'olympic',
+    });
+    expect(mockReschedule).toHaveBeenCalledWith(expect.objectContaining({ raceDistance: 'olympic' }));
   });
 
   test('a burst of plan changes syncs the calendar once', async () => {

@@ -1,7 +1,7 @@
 /**
  * Last night's sleep snapshot for the briefing: the metrics row of `date` (the
  * night that ends that morning) merged field by field preferring Garmin, then
- * Apple Health, then manual entries; HRV compared with the mean of the
+ * COROS, Apple Health and manual entries; HRV compared with the mean of the
  * previous 7 nights. Pure.
  */
 import { addDays, localParts } from '../dates.ts';

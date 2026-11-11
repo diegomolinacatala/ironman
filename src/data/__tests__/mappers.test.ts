@@ -8,6 +8,7 @@ import type {
   PlanProposal,
   Profile,
   Race,
+  WeekPlan,
   Workout,
 } from '@/domain/types';
 
@@ -47,8 +48,9 @@ import {
   rowToToken,
   tokenUrl,
 } from '../supabase/mappersRpc';
-import { DEFAULT_AVAILABILITY, parseAvailability, parseJointSession, parsePlanChanges, parseSteps } from '../supabase/parsers';
+import { DEFAULT_AVAILABILITY, parseAvailability, parseCoaching, parseJointSession, parsePlanChanges, parseSteps } from '../supabase/parsers';
 import type { ProposalRow, WorkoutRow } from '../supabase/rows';
+import { rowToWeekPlan, weekPlanToRow } from '../supabase/weekPlansApi';
 
 const NOW = '2026-10-25T10:00:00.000Z';
 const ME = '0d1e6000-0000-4000-8000-000000000001';
@@ -420,5 +422,125 @@ describe('RPC mappers', () => {
     });
     expect(s).toMatchObject({ organizerId: 'u1', startTime: '08:30', durationMin: 180, status: 'confirmed' });
     expect(s?.participants.map((p) => p.displayName)).toEqual(['Diego', 'Álex']);
+  });
+});
+
+describe('v4: coaching, step targets, sensations, watch and season plan', () => {
+  const coached: Workout = {
+    ...workout,
+    sport: 'brick',
+    steps: [
+      { kind: 'warmup', durationMin: 15, intensity: 'recovery', leg: 'bike', cue: 'Cadencia alta, sin forzar' },
+      {
+        kind: 'work',
+        durationMin: 10,
+        intensity: 'threshold',
+        repeat: 3,
+        leg: 'bike',
+        target: { power: { min: 220, max: 235 }, hr: { min: 150, max: 158 }, rpe: { min: 7, max: 8 } },
+      },
+      { kind: 'work', durationMin: 20, intensity: 'endurance', leg: 'run', target: { pace: { min: 300, max: 320 } }, cue: "Primeros 5' cortos y rápidos" },
+    ],
+    completed: { durationMin: 47, rpe: 5, feel: 4, source: 'garmin', completedAt: NOW },
+    coaching: {
+      objective: 'Sostener el umbral en bici y correr suelto después',
+      keys: ['Cadencia 85–95', "Bebe cada 15'"],
+      success: 'Las 3 series dentro de 220–235 W',
+      planB: "60' en Z2 solo en bici",
+    },
+  };
+
+  it('workout round trip keeps coaching, targets, cues, brick legs and sensations', () => {
+    expect(rowToWorkout(workoutToRow(coached))).toEqual(coached);
+  });
+
+  it('a workout without coaching keeps its pre-v4 shape (null or missing column)', () => {
+    const row = workoutToRow(workout);
+    expect(row.coaching).toBeNull();
+    expect('coaching' in rowToWorkout(row)).toBe(false);
+    const { coaching: _absent, ...preV4 } = row;
+    expect(rowToWorkout(preV4)).toEqual(workout);
+  });
+
+  it('drops unusable coaching, sensations and step targets; clips long texts', () => {
+    const row: WorkoutRow = {
+      ...workoutToRow(workout),
+      coaching: { objective: '  ', success: 'x' },
+      completed: { durationMin: 40, feel: 6 },
+      steps: [
+        { kind: 'work', durationMin: 5, target: { hr: { min: 160, max: 150 }, pace: { min: 5, max: 6 }, power: 'x', rpe: { min: 7, max: 8 } }, cue: `  ${'c'.repeat(250)}`, leg: 'swim' },
+      ],
+    };
+    const w = rowToWorkout(row);
+    expect('coaching' in w).toBe(false);
+    expect(w.completed).toEqual({ durationMin: 40 });
+    expect(w.steps).toEqual([{ kind: 'work', durationMin: 5, target: { hr: { min: 150, max: 160 }, rpe: { min: 7, max: 8 } }, cue: 'c'.repeat(200) }]);
+    expect(parseCoaching({ objective: ' Base ', keys: ['a', '', 7, 'b', 'c', 'd', 'e'], success: ' s ', plan_b: ' p ' })).toEqual({
+      objective: 'Base',
+      keys: ['a', 'b', 'c', 'd'],
+      success: 's',
+      planB: 'p',
+    });
+    expect(parseSteps([{ kind: 'work', target: { rpe: { min: 0, max: 11 } } }])).toEqual([{ kind: 'work' }]);
+  });
+
+  it('proposed changes keep coaching and step targets (null clears, invalid is dropped)', () => {
+    const coaching = { objective: 'VO2 máx', keys: [], success: 'La última serie igual de rápida', planB: null };
+    const step = { kind: 'work', durationMin: 3, repeat: 5, intensity: 'vo2', target: { hr: { min: 165, max: 175 } }, cue: 'Brazos sueltos' };
+    const changes = parsePlanChanges([
+      { op: 'add', workout: { date: '2026-10-27', sport: 'run', title: 'Series', durationMin: 50, intensity: 'vo2', steps: [step], coaching }, reason: 'r' },
+      { op: 'update', workoutId: 'w1', patch: { coaching: null }, reason: 'r' },
+      { op: 'update', workoutId: 'w2', patch: { title: 'Otra', coaching: { objective: '' } }, reason: 'r' },
+    ]);
+    expect(changes[0]).toMatchObject({ op: 'add', workout: { steps: [step], coaching } });
+    expect(changes[1]).toEqual({ op: 'update', workoutId: 'w1', patch: { coaching: null }, reason: 'r' });
+    expect(changes[2]).toEqual({ op: 'update', workoutId: 'w2', patch: { title: 'Otra' }, reason: 'r' });
+  });
+
+  it('insert and update builders write coaching only when given', () => {
+    const base = { date: '2026-10-27', sport: 'run' as const, title: 'Rodaje', durationMin: 45, intensity: 'endurance' as const };
+    expect('coaching' in workoutDraftToInsert(base, ME)).toBe(false);
+    expect('coaching' in workoutDraftToInsert({ ...base, coaching: null }, ME)).toBe(false);
+    expect(workoutPatchToUpdate({ coaching: { objective: ' Base ', keys: [' Suave '], success: ' Completo ', planB: ' ' } })).toEqual({
+      coaching: { objective: 'Base', keys: ['Suave'], success: 'Completo', planB: null },
+    });
+    expect(workoutDraftToInsert({ ...base, coaching: coached.coaching }, ME)).toMatchObject({ coaching: coached.coaching });
+    expect(workoutPatchToUpdate({ coaching: null })).toEqual({ coaching: null });
+  });
+
+  it('profile watch brand: COROS round trip, not chosen or unknown → absent (Garmin)', () => {
+    expect(rowToProfile(profileToRow({ ...profile, watchBrand: 'coros' }))).toEqual({ ...profile, watchBrand: 'coros' });
+    expect(profileToRow(profile).watch_brand).toBeNull();
+    expect('watchBrand' in rowToProfile({ ...profileToRow(profile), watch_brand: 'polar' })).toBe(false);
+    expect(profilePatchToRow({ watchBrand: 'coros' })).toEqual({ watch_brand: 'coros' });
+    expect(profilePatchToRow({ watchBrand: null })).toEqual({ watch_brand: null });
+  });
+
+  it('metrics saved from the COROS connector keep their source', () => {
+    const metrics: DailyMetrics = {
+      userId: ME,
+      date: '2026-10-25',
+      source: 'coros',
+      hrvMs: 61,
+      restingHr: 48,
+      sleepHours: 7.5,
+      sleepScore: null,
+      bodyBattery: null,
+      trainingReadiness: null,
+      vo2max: 55,
+      steps: null,
+      stressAvg: null,
+      trainingStatus: null,
+    };
+    const { userId, ...draft } = metrics;
+    expect(rowToMetrics(metricsDraftToRow(draft, userId))).toMatchObject(metrics);
+  });
+
+  it('week plan round trip and narrowing', () => {
+    const plan: WeekPlan = { weekStart: '2026-11-23', kind: 'recovery', targetMinutes: 330, note: 'Exámenes', source: 'manual', updatedAt: NOW };
+    expect(rowToWeekPlan(weekPlanToRow(plan, ME))).toEqual(plan);
+    expect(
+      rowToWeekPlan({ user_id: ME, week_start: '2026-11-30', kind: 'taper', target_minutes: '420.6', note: '  ', source: 'robot', updated_at: NOW }),
+    ).toEqual({ weekStart: '2026-11-30', kind: 'load', targetMinutes: 421, note: null, source: 'manual', updatedAt: NOW });
   });
 });

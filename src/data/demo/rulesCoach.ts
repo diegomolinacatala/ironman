@@ -2,9 +2,12 @@
  * Deterministic "coach" built on the domain rules engine. Used by the demo
  * repository and as the offline / AI-unavailable fallback of the Supabase
  * repository. Reads everything through the Repository interface and stores
- * proposals with `source: 'rules'`.
+ * proposals with `source: 'rules'`. The week's entry of the season plan
+ * (Plan → General) shapes the planned and re-planned week; in the chat, a
+ * clear "planifícame la semana" runs the planner and "pon la semana del 23
+ * de descarga" suggests that week-level entry.
  */
-import { addDays, maxDate, startOfWeek } from '@/domain/dates';
+import { addDays, maxDate, minDate, startOfWeek } from '@/domain/dates';
 import { computeReadiness } from '@/domain/readiness';
 import { generateWeek } from '@/domain/planner';
 import { replanForEvent, replanForReadiness, replanMissed } from '@/domain/replanner';
@@ -14,6 +17,7 @@ import type {
   CoachResponse,
   DailyCheckin,
   DailyMetrics,
+  DateRange,
   ISODate,
   JointSession,
   LifeEvent,
@@ -21,11 +25,14 @@ import type {
   ProposalKind,
   Profile,
   Race,
+  WeekPlan,
   Workout,
 } from '@/domain/types';
+import { logger } from '@/lib/logger';
 
 import { RepositoryError, type Repository } from '../repository';
-import { buildChatReply } from './coachReply';
+import { detectPlanAction, detectWeekPlanRequest, requestedWeekStart } from './coachIntents';
+import { buildChatReply, weekPlanSuggestion } from './coachReply';
 
 /** Shared part of the replanner inputs (domain `ReplanInput`). */
 type ReplanInput = Omit<Parameters<typeof replanForReadiness>[0], 'readiness'>;
@@ -40,6 +47,7 @@ export type RulesCoachRepo = Pick<
   | 'listJointSessions'
   | 'listCheckins'
   | 'listMetrics'
+  | 'listWeekPlans'
   | 'createProposal'
 >;
 
@@ -69,6 +77,8 @@ export interface CoachContext {
   /** Completed workouts of the last ~4 weeks (planner ramp control). */
   history: Workout[];
   upcoming: Workout[];
+  /** Season plan entries (Plan → General) from the planned week up to a year ahead. */
+  weekPlans: WeekPlan[];
 }
 
 interface PlanResult {
@@ -142,6 +152,24 @@ function withEvent(events: readonly LifeEvent[], event: LifeEvent | null): LifeE
   return event && !events.some((e) => e.id === event.id) ? [...events, event] : [...events];
 }
 
+/** Weeks of the season plan the coach reads: the planned week and up to a year ahead. */
+const WEEK_PLAN_HORIZON_DAYS = 52 * 7;
+
+/** Season plan entries; none when the server cannot list them yet (v4 not deployed) or offline. */
+async function loadWeekPlans(repo: RulesCoachRepo, range: DateRange): Promise<WeekPlan[]> {
+  try {
+    return await repo.listWeekPlans(range);
+  } catch (error) {
+    logger.warn('rules coach: season plan unavailable, planning without it', error);
+    return [];
+  }
+}
+
+function weekPlanRange(weekStart: ISODate, today: ISODate): DateRange {
+  const current = startOfWeek(today);
+  return { from: minDate(weekStart, current), to: addDays(current, WEEK_PLAN_HORIZON_DAYS) };
+}
+
 export async function loadCoachContext(repo: RulesCoachRepo, request: CoachRequest, today: ISODate): Promise<CoachContext> {
   const profile = await repo.getMyProfile();
   if (!profile) throw new RepositoryError('validation', 'Completa tu perfil para que pueda planificar tu semana.');
@@ -149,7 +177,7 @@ export async function loadCoachContext(repo: RulesCoachRepo, request: CoachReque
   const weekStart = targetWeekStart(request, today, replanEvent);
   const weekEnd = addDays(weekStart, 6);
   const historyFrom = addDays(weekStart, -28);
-  const [races, workouts, events, busyBlocks, jointSessions, checkins, metrics, upcoming] = await Promise.all([
+  const [races, workouts, events, busyBlocks, jointSessions, checkins, metrics, upcoming, weekPlans] = await Promise.all([
     repo.listRaces(),
     repo.listWorkouts({ from: historyFrom, to: weekEnd }),
     repo.listLifeEvents({ from: addDays(weekStart, -EVENT_LOOKBACK_DAYS), to: addDays(weekEnd, 14) }),
@@ -158,6 +186,7 @@ export async function loadCoachContext(repo: RulesCoachRepo, request: CoachReque
     repo.listCheckins({ from: addDays(today, -28), to: today }),
     repo.listMetrics({ from: addDays(today, -28), to: today }),
     repo.listWorkouts({ from: today, to: addDays(today, 7) }),
+    loadWeekPlans(repo, weekPlanRange(weekStart, today)),
   ]);
   const readiness = computeReadiness({
     today,
@@ -179,7 +208,13 @@ export async function loadCoachContext(repo: RulesCoachRepo, request: CoachReque
     recentWeeklyMinutes: recentWeeklyMinutesOf(workouts, weekStart),
     history: workouts.filter((w) => w.status === 'completed' && w.date < today),
     upcoming: upcoming.filter((w) => w.status === 'planned'),
+    weekPlans,
   };
+}
+
+/** The season plan's entry for the coach's week (carga, más volumen, descarga, semana libre), if any. */
+export function weekPlanOf(ctx: Pick<CoachContext, 'weekPlans' | 'weekStart'>): WeekPlan | null {
+  return ctx.weekPlans.find((p) => p.weekStart === ctx.weekStart) ?? null;
 }
 
 function weekEvents(ctx: CoachContext): LifeEvent[] {
@@ -196,10 +231,12 @@ function replanInput(ctx: CoachContext): ReplanInput {
     lifeEvents: weekEvents(ctx),
     jointSessions: ctx.jointSessions,
     races: ctx.races,
+    weekPlan: weekPlanOf(ctx),
   };
 }
 
-const FATIGUE_RE = /cansad|fatig|agotad|revent|sin energ|mal dormid|dormido mal|duermo mal|reventad/i;
+const FATIGUE_RE =
+  /cansad|fatig|agotad|revent|sin energ|sin fuerzas|mal dormid|dorm(?:[ií]|ido) (?:muy )?(?:mal|fatal|poco)|duermo (?:mal|fatal|poco)|no he dormido|agujetas/i;
 
 /** Without NLU, treat "estoy cansado/a"-style messages as an amber readiness signal. */
 export function readinessFromMessage(base: Readiness, message: string | undefined): Readiness {
@@ -236,7 +273,23 @@ export function planForRequest(request: CoachRequest, ctx: CoachContext): PlanRe
     recentWeeklyMinutes: ctx.recentWeeklyMinutes,
     today: ctx.today,
     history: ctx.history,
+    weekPlan: weekPlanOf(ctx),
   });
+}
+
+/**
+ * The talk screen always sends mode 'chat': a clear request to plan or
+ * re-plan the week ("planifícame la semana que viene", "reorganiza la
+ * semana") runs that mode for the week asked about. A week-level request for
+ * the season plan ("pon la semana del 23 de descarga") stays a chat.
+ */
+export function chatPlanRequest(request: CoachRequest, today: ISODate): CoachRequest {
+  if (request.mode !== 'chat') return request;
+  const message = request.message ?? '';
+  if (detectWeekPlanRequest(message, today)) return request;
+  const action = detectPlanAction(message);
+  if (!action) return request;
+  return { ...request, mode: action, weekStart: requestedWeekStart(message, request.weekStart, today) };
 }
 
 /** The rules engine neither saves preferences nor logs imprevistos by itself. */
@@ -252,18 +305,26 @@ function changesSentence(count: number): string {
     : `Te he preparado ${count} cambios: revísalos y acepta los que te encajen.`;
 }
 
+/** A chat answer: the season-plan suggestion asked for, else the coach's reply to the message. */
+function chatResponse(request: CoachRequest, ctx: CoachContext, options: RulesCoachOptions): CoachResponse {
+  const message = request.message ?? '';
+  const weekRequest = options.injuryLogged ? null : detectWeekPlanRequest(message, ctx.today);
+  const suggestion = weekRequest ? weekPlanSuggestion(weekRequest, ctx) : null;
+  const reply = suggestion?.reply ?? buildChatReply({ message, ctx, injuryLogged: options.injuryLogged });
+  const weekPlans = suggestion?.draft ? { weekPlans: [suggestion.draft] } : {};
+  return { reply: withNotice(options.notice, reply), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED, ...weekPlans };
+}
+
 /** Runs the rules engine for a coach request and stores the proposal (if any). */
 export async function runRulesCoach(
   repo: RulesCoachRepo,
-  request: CoachRequest,
+  original: CoachRequest,
   options: RulesCoachOptions,
 ): Promise<CoachResponse> {
+  const request = chatPlanRequest(original, options.today);
   const ctx = await loadCoachContext(repo, request, options.today);
   const plan = planForRequest(request, ctx);
-  if (!plan) {
-    const reply = buildChatReply({ message: request.message ?? '', ctx, injuryLogged: options.injuryLogged });
-    return { reply: withNotice(options.notice, reply), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED };
-  }
+  if (!plan) return chatResponse(request, ctx, options);
   if (plan.changes.length === 0) {
     const summary = plan.summary || 'Tu semana ya está bien encajada: no veo cambios necesarios.';
     return { reply: withNotice(options.notice, summary), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED };

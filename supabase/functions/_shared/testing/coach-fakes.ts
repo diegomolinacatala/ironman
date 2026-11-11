@@ -126,6 +126,11 @@ export function flat(overrides: Record<string, unknown>): Record<string, unknown
     distanceM: null,
     intensity: null,
     isKey: null,
+    steps: null,
+    objective: null,
+    keys: null,
+    success: null,
+    planB: null,
     ...overrides,
   };
 }

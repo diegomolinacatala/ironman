@@ -25,6 +25,8 @@ export interface ProfileRow {
   coach_notes: string | null;
   onboarded_at: string | null;
   ai_consent_at?: string | null;
+  /** v4 (`20261109000100_coach_v4.sql`): 'garmin' | 'coros' | null (not chosen yet). */
+  watch_brand?: string | null;
   created_at: string;
   updated_at?: string;
 }
@@ -48,7 +50,21 @@ export interface WorkoutRow {
   is_key: boolean;
   joint_session_id: string | null;
   external_id: string | null;
+  /** v4: WorkoutCoaching (camelCase jsonb) or null. Absent on servers without the v4 migration. */
+  coaching?: unknown;
   created_at: string;
+  updated_at: string;
+}
+
+/** `week_plans` (v4): one row per (user, Monday), the season plan's week-level overrides. */
+export interface WeekPlanRow {
+  user_id: string;
+  week_start: string;
+  kind: string;
+  target_minutes: NumericValue;
+  note: string | null;
+  source: string;
+  created_at?: string;
   updated_at: string;
 }
 

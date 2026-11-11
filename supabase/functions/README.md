@@ -159,7 +159,7 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
   el informe o la comida inválidos → `503` (la app usa su plantilla); el coach sin `reply` → trabajo en `error`,
   y con `reply` pero cambios mal formados → respuesta sin esos cambios (cuentan como descartados).
 - **coach** — `POST` `CoachRequest` (v2: `channel?: 'voice' | 'text'`) → `202 { jobId }`. El resultado se escribe en `coach_jobs`
-  (`status` `done` con `reply`, `proposal_id`, `engine: 'ai'` y `extras = { memory: string[], lifeEventId: uuid | null }`,
+  (`status` `done` con `reply`, `proposal_id`, `engine: 'ai'` y `extras = { memory: string[], lifeEventId: uuid | null, quedada, weekPlans }`,
   o `error` con mensaje). v2: la salida de la IA incluye `memory` (0-3 hechos o preferencias duraderas, ≤ 140
   caracteres, que se añaden a `profiles.coach_notes` como líneas `- …`, sin duplicados; nunca se borra ni reescribe
   una línea existente: si no caben en 4000 caracteres, los hechos nuevos se omiten) y `life_event` (imprevisto que
@@ -178,6 +178,11 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
   El contexto que se envía a Claude nunca incluye los títulos de las ocupaciones del calendario
   (solo inicio y fin). Las propuestas se guardan en `plan_proposals` con `source: 'ai_coach'` y
   `changes` en camelCase (`PlanChange` de `src/domain/types.ts`), ya validadas contra la semana real.
+  v4: cada cambio plano lleva `steps` y la prescripción (`objective`, `keys`, `success`, `planB`), leídos con
+  tolerancia (un paso o texto malo se descarta o se recorta, nunca el cambio), y la salida añade `week_plans`
+  (plan general sugerido en un chat: lunes de esta semana a +26, semanas ajustables) que va a `extras.weekPlans`;
+  la app lo guarda solo cuando el atleta lo toca. La fase es la misma que muestra la app (`planning/phase.ts` sobre
+  el espejo `planning/domain`, con el plan general aplicado).
 - **briefing** (v2) — `POST { date: 'YYYY-MM-DD', refresh?: boolean }` → `200 Briefing` (camelCase de
   `src/domain/types.ts`, `engine: 'ai'`). Si ya hay fila en `briefings` para (usuario, fecha) y no es `refresh`, la
   devuelve tal cual (sin proveedor de IA, sin consentimiento ni cupo). Si no: `503 ai_unavailable` sin
@@ -275,7 +280,18 @@ con un token válido (el tráfico sin autenticar no puede dejar sin servicio a l
 
 Herramientas: `get_planning_context`, `get_friends_availability`, `propose_joint_session` (envía una
 invitación real: Claude la confirma antes contigo), `propose_plan_changes`,
-`log_life_event`, `log_daily_metrics`, `log_completed_activity`, `get_plan_for_device`, `manage_race`.
+`log_life_event`, `log_daily_metrics`, `log_completed_activity`, `get_plan_for_device`, `manage_race` y (v4)
+`set_week_plans` (plan general: `weeks` 1-26 de `{week_start, kind, target_minutes?, note?}` y/o `clear`; lunes de esta
+semana a +52, solo semanas que la periodización deja ajustar; todo o nada; se guarda directamente en `week_plans` con
+`source = 'claude'` y `user_id` explícito, y devuelve las semanas resultantes). v4: `get_planning_context` añade
+`athlete.zones` (Z1-Z5 y carrera con ppm, ritmo, vatios y RPE), `athlete.watchBrand`, `season` (8 semanas en `concise`,
+16 en `detailed`) y, por entreno, `targets`, la prescripción y `planVsDone`; `propose_plan_changes` acepta en los pasos
+`target` (rangos de FC, ritmo, potencia y RPE), `cue` y `leg`, y `coaching` en altas y cambios (`null` la quita);
+`log_daily_metrics` acepta `source: garmin | coros` (por defecto, el reloj del perfil) y `log_completed_activity`
+`coros_activity_id` y `feel`; `get_plan_for_device` (Garmin o COROS) agrupa las series en un bloque de repetición,
+separa el brick por sus `leg` y usa el objetivo explícito del paso o las zonas de la app: `garminWorkouts` para Garmin
+o `corosWorkouts` (pasos neutros: ppm y % de FC umbral, ritmo en segundos enteros, vatios; natación y fuerza «créalo a
+mano en COROS»).
 `log_daily_metrics` acepta también (v2) `sleep_deep_min`, `sleep_light_min`, `sleep_rem_min`, `sleep_awake_min`
 (0-1440) y `sleep_start`/`sleep_end` (ISO 8601 con zona; el fin debe ser posterior y como mucho 20 h después).
 Los cambios del plan se guardan como propuesta (`plan_proposals.source = 'claude'`) que el usuario
@@ -320,8 +336,9 @@ done
 ```
 _shared/
   schema.ts dates.ts http.ts log.ts crypto.ts secrets.ts types.ts   utilidades puras
-  planning/   contexto de planificación, carga, fases, validación de cambios, huecos, export a Garmin
-  mcp/        protocolo JSON-RPC dual-era, guardas HTTP y las 9 herramientas
+  planning/   contexto de planificación, carga, fases (espejo de la app en planning/domain, generado), plan general,
+              validación de cambios, huecos, export al reloj (Garmin y COROS)
+  mcp/        protocolo JSON-RPC dual-era, guardas HTTP y las 10 herramientas
   coach/      prompt del entrenador, salida estructurada, memoria e imprevistos, trabajo en segundo plano, capa HTTP
   ai/         elección de proveedor (Workers AI / Claude), consentimiento + cupo de 24 h (ai_usage), llamada acotada
               a la IA y limpieza de texto (briefing, meal)

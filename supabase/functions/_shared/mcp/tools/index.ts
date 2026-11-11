@@ -1,4 +1,4 @@
-/** The 9 Road to Ironman MCP tools, in a stable order (better client and prompt caching). */
+/** The 10 Road to Ironman MCP tools, in a stable order (better client and prompt caching; new tools go last). */
 import { createRegistry } from '../tool.ts';
 import type { ToolRegistry } from '../tool.ts';
 import { getFriendsAvailabilityTool } from './friends-availability.ts';
@@ -10,6 +10,7 @@ import { getPlanForDeviceTool } from './plan-for-device.ts';
 import { getPlanningContextTool } from './planning-context.ts';
 import { proposeJointSessionTool } from './propose-joint-session.ts';
 import { proposePlanChangesTool } from './propose-plan-changes.ts';
+import { setWeekPlansTool } from './set-week-plans.ts';
 
 export const MCP_TOOLS = [
   getPlanningContextTool,
@@ -21,6 +22,7 @@ export const MCP_TOOLS = [
   logCompletedActivityTool,
   getPlanForDeviceTool,
   manageRaceTool,
+  setWeekPlansTool,
 ] as const;
 
 export function createToolRegistry(): ToolRegistry {

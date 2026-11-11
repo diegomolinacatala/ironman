@@ -4,11 +4,12 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { useMetrics } from '@/data/queries';
 import type { Briefing, ISODate } from '@/domain/types';
 import { Appear } from '@/features/today/Appear';
+import { watchName } from '@/features/settings/watchBrand';
 import { dateLine } from '@/features/today/todayModel';
 import { Button, Card, ErrorNotice, Icon, Screen, Text, space, useTheme } from '@/ui';
 import { errorMessage } from '@/lib/logger';
 
-import { hasSleepData, headlineVariant } from './briefingModel';
+import { dataAttribution, hasSleepData, headlineVariant, noSleepNote } from './briefingModel';
 import { PlayerBar } from './PlayerBar';
 import { PreparingSteps } from './PreparingSteps';
 import { ScriptSection } from './ScriptSection';
@@ -55,10 +56,11 @@ interface ReadyProps {
   briefing: Briefing;
   ctrl: BriefingController;
   player: BriefingPlayer;
-  fromGarmin: boolean;
+  /** "Datos de Garmin" / "Datos de COROS" / "Datos de Apple Salud" (null: nothing to credit). */
+  attribution: string | null;
 }
 
-function ReadyContent({ briefing, ctrl, player, fromGarmin }: ReadyProps) {
+function ReadyContent({ briefing, ctrl, player, attribution }: ReadyProps) {
   const sleep = briefing.sleep && hasSleepData(briefing.sleep) ? briefing.sleep : null;
   return (
     <>
@@ -72,8 +74,8 @@ function ReadyContent({ briefing, ctrl, player, fromGarmin }: ReadyProps) {
         <Appear index={1}>
           <SleepCard sleep={sleep} verdict={briefing.sleepVerdict} />
         </Appear>
-      ) : ctrl.garmin !== 'connected' ? (
-        <Note icon="watch">Conecta tu Garmin en Tú → Conexiones y aquí verás cómo has dormido.</Note>
+      ) : ctrl.watch !== 'connected' ? (
+        <Note icon="watch">{noSleepNote(ctrl.brand)}</Note>
       ) : null}
       <Appear index={2}>
         <TodayPlanList date={briefing.date} />
@@ -100,12 +102,12 @@ function ReadyContent({ briefing, ctrl, player, fromGarmin }: ReadyProps) {
           player.stop();
           void ctrl.generate(true);
         }}
-        accessibilityHint="Vuelve a leer tu Garmin y reescribe el informe"
+        accessibilityHint={`Vuelve a leer tu ${watchName(ctrl.brand)} y reescribe el informe`}
       />
       {ctrl.error ? <ErrorNotice message={errorMessage(ctrl.error, 'No he podido actualizar tu informe.')} onRetry={ctrl.retry} /> : null}
       <View style={styles.footer}>
         {briefing.engine === 'rules' ? <Note icon="info">Informe automático</Note> : null}
-        {fromGarmin ? <Note icon="watch">Datos de Garmin</Note> : null}
+        {attribution ? <Note icon="watch">{attribution}</Note> : null}
       </View>
     </>
   );
@@ -134,7 +136,7 @@ export function BriefingDetail({ date, autoplay }: { date: ISODate; autoplay: bo
   // Opening the briefing (widget, notification, "Ver informe") prepares it when missing — but only
   // once the session and the first fetch of the briefing + integrations have settled (cold start).
   useEffect(() => {
-    if (!ctrl.settled || generatedRef.current || (state !== 'empty' && state !== 'connect-garmin')) return;
+    if (!ctrl.settled || generatedRef.current || (state !== 'empty' && state !== 'connect-watch')) return;
     generatedRef.current = true;
     void ctrl.generate();
   }, [ctrl.settled, state]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -145,8 +147,11 @@ export function BriefingDetail({ date, autoplay }: { date: ISODate; autoplay: bo
     player.play(briefing.script);
   }, [briefing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const today = metrics.data?.find((m) => m.date === date);
-  const fromGarmin = today?.source === 'garmin' || (ctrl.garmin === 'connected' && hasSleepData(briefing?.sleep));
+  const attribution = dataAttribution((metrics.data ?? []).filter((m) => m.date === date), {
+    brand: ctrl.brand,
+    watchConnected: ctrl.watch === 'connected',
+    hasSleep: hasSleepData(briefing?.sleep),
+  });
 
   return (
     <Screen
@@ -166,9 +171,9 @@ export function BriefingDetail({ date, autoplay }: { date: ISODate; autoplay: bo
       <Text variant="overline" color="textMuted">
         {dateLine(date)}
       </Text>
-      {briefing ? <ReadyContent briefing={briefing} ctrl={ctrl} player={player} fromGarmin={fromGarmin} /> : null}
+      {briefing ? <ReadyContent briefing={briefing} ctrl={ctrl} player={player} attribution={attribution} /> : null}
       {state === 'loading' ? <LoadingSkeleton /> : null}
-      {state === 'generating' || state === 'empty' || state === 'connect-garmin' ? <PreparingSteps steps={ctrl.steps} step={step} /> : null}
+      {state === 'generating' || state === 'empty' || state === 'connect-watch' ? <PreparingSteps steps={ctrl.steps} step={step} /> : null}
       {state === 'error' ? (
         <ErrorNotice message={errorMessage(ctrl.error, 'No he podido preparar tu informe.')} onRetry={ctrl.retry} />
       ) : null}

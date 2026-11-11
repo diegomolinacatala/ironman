@@ -12,7 +12,7 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import type { Repository } from '@/data/repository';
-import type { IntegrationStatus } from '@/domain/types';
+import type { IntegrationStatus, Profile } from '@/domain/types';
 import { logger } from '@/lib/logger';
 
 export const GARMIN_STALE_MS = 60 * 60_000;
@@ -20,6 +20,11 @@ export const GARMIN_RETRY_MS = 15 * 60_000;
 const GARMIN_ROOTS = ['integrations', 'metrics', 'workouts', 'workout', 'feed'] as const;
 
 type Invalidate = (roots: readonly string[]) => Promise<void>;
+
+/** Garmin syncs on its own only for a Garmin watch (or none chosen yet): a COROS athlete reads Apple Salud. */
+export function isGarminWatch(profile: Pick<Profile, 'watchBrand'> | null | undefined): boolean {
+  return (profile?.watchBrand ?? 'garmin') === 'garmin';
+}
 
 /** Connected Garmin whose last sync is missing, unreadable or older than an hour. */
 export function isGarminSyncDue(integrations: readonly IntegrationStatus[], now: number): boolean {

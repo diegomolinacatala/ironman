@@ -8,11 +8,15 @@
  * - skipped / deleted / moved-out workouts lose theirs.
  * Events outside the window (history) are never touched. Our events are recognised by the
  * stored mapping or by their `…://workout/<id>` URL (survives a lost mapping / id change).
+ *
+ * Notes carry the coach's prescription (objective, structure with ppm / pace / watts / RPE,
+ * keys, success criterion, plan B) computed with the athlete's thresholds, so a threshold
+ * or target-race change rewrites the events once (their signature changes).
  */
 import { addDays, formatDistance, formatDuration } from '@/domain/dates';
 import { intensityLabel, sportLabel } from '@/domain/labels';
-import type { DateRange, ISODate, Sport, Workout, WorkoutStep } from '@/domain/types';
-import { stepLabel } from '@/features/workouts/steps';
+import { prescriptionText } from '@/domain/prescription';
+import type { DateRange, ISODate, RaceDistance, Sport, Thresholds, Workout } from '@/domain/types';
 
 import { atLocal, isValidTimeZone, localDate, parseTimeMinutes, zonedDateTime } from '../time';
 import type { EventLink } from './trainingCalendarStore';
@@ -45,7 +49,14 @@ export interface TrainingEventDetails {
   timeZone?: string;
 }
 
-export interface EventOptions {
+/** What turns zones into concrete targets in the notes (absent → zone + RPE only). */
+export interface PrescriptionOptions {
+  thresholds?: Thresholds | null;
+  /** Distance of the target race ("ritmo de carrera"). */
+  raceDistance?: RaceDistance | null;
+}
+
+export interface EventOptions extends PrescriptionOptions {
   /** "roadtoironman://" */
   linkBase: string;
   alarmMinutes: number;
@@ -74,21 +85,25 @@ export function eventTitle(w: Pick<Workout, 'sport' | 'title' | 'durationMin' | 
   return w.status === 'completed' ? `${base} ✓` : base;
 }
 
-function stepLine(step: WorkoutStep, sport: Sport): string {
-  const intensity = step.intensity ? ` (${intensityLabel(step.intensity)})` : '';
-  const note = step.note?.trim() ? ` — ${step.note.trim()}` : '';
-  return `• ${stepLabel(step, sport)}${intensity}${note}`;
+/** Objective, structure with targets, keys, success and plan B (plain text, no markdown). */
+function prescriptionOf(w: Workout, opts: PrescriptionOptions): string {
+  if (w.sport === 'rest') return '';
+  return prescriptionText(w, opts.thresholds ?? null, { raceDistance: opts.raceDistance ?? null });
 }
 
-/** Intensity, structure and the deep link back into the app. */
-export function eventNotes(w: Workout, link: string): string {
+/**
+ * Facts, the description, the coach's prescription and the deep link back into the app
+ * (capped at 4000 characters, link kept).
+ */
+export function eventNotes(w: Workout, link: string, opts: PrescriptionOptions = {}): string {
   const facts = [sportLabel(w.sport), intensityLabel(w.intensity), formatDuration(w.durationMin)];
   const distance = w.distanceM != null && w.distanceM > 0 ? [formatDistance(w.distanceM, w.sport)] : [];
+  const prescription = prescriptionOf(w, opts);
   const lines = [
     [...facts, ...distance].join(' · '),
     ...(w.status === 'completed' ? ['Hecho ✓'] : []),
     ...(w.description?.trim() ? ['', w.description.trim()] : []),
-    ...(w.steps.length > 0 ? ['', 'Estructura:', ...w.steps.map((s) => stepLine(s, w.sport))] : []),
+    ...(prescription ? ['', prescription] : []),
     '',
     `Abrir en la app: ${link}`,
   ];
@@ -98,7 +113,7 @@ export function eventNotes(w: Workout, link: string): string {
 
 export function eventDetails(w: Workout, opts: EventOptions): TrainingEventDetails {
   const url = workoutLink(opts.linkBase, w.id);
-  const common = { title: eventTitle(w), notes: eventNotes(w, url), url };
+  const common = { title: eventTitle(w), notes: eventNotes(w, url, opts), url };
   const start = parseTimeMinutes(w.startTime);
   if (start == null) {
     // All-day ("Hoy toca…"): the morning briefing already covers it, so no alarm.

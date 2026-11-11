@@ -1,15 +1,25 @@
 /**
  * Planned workouts → Garmin Training API V2-like JSON (docs/research/04 §3.7),
- * so the user's own Garmin connector in Claude can upload them to the watch.
- * Targets use the athlete's thresholds when known (power for bike, heart rate
- * from LTHR otherwise); pace hints go into the step description.
+ * so the athlete's Garmin connector in Claude can upload them to the watch.
+ * Steps follow the plan (interval sets as ONE repeat block, brick legs from
+ * the steps' `leg`, device-plan.ts) and targets come from the step's explicit
+ * target, else the athlete's zones (mirrored domain/zones.ts, same numbers the
+ * app shows): power on the bike, heart rate otherwise; pace, RPE and the cue
+ * go in the step description. Pure.
  */
-import type { Intensity, Sport, Thresholds, Workout, WorkoutStep } from '../types.ts';
+import type { RaceDistance, Thresholds, Workout, WorkoutStep } from '../types.ts';
+import { deviceLegs, groupSteps, stepsMinutes } from './device-plan.ts';
+import type { DeviceLeg, DeviceSport, StepBlock } from './device-plan.ts';
+import { targetSummary } from './domain/prescription.ts';
+import { formatPaceRange, formatRpe, stepIntensity, stepTargets } from './domain/zones.ts';
+import type { ZoneTargets } from './domain/zones.ts';
 import { formatDuration, intensityLabel, sportLabel } from './labels.ts';
+
+export { defaultSteps } from './device-plan.ts';
 
 export type GarminSport = 'RUNNING' | 'CYCLING' | 'LAP_SWIMMING' | 'STRENGTH_TRAINING' | 'OTHER';
 
-const GARMIN_SPORT: Record<Exclude<Sport, 'brick' | 'rest'>, GarminSport> = {
+const GARMIN_SPORT: Readonly<Record<DeviceSport, GarminSport>> = {
   run: 'RUNNING',
   bike: 'CYCLING',
   swim: 'LAP_SWIMMING',
@@ -18,7 +28,7 @@ const GARMIN_SPORT: Record<Exclude<Sport, 'brick' | 'rest'>, GarminSport> = {
   other: 'OTHER',
 };
 
-const STEP_INTENSITY: Record<WorkoutStep['kind'], string> = {
+const STEP_INTENSITY: Readonly<Record<WorkoutStep['kind'], string>> = {
   warmup: 'WARMUP',
   work: 'ACTIVE',
   recovery: 'RECOVERY',
@@ -26,140 +36,96 @@ const STEP_INTENSITY: Record<WorkoutStep['kind'], string> = {
   rest: 'REST',
 };
 
-const POWER_PCT: Record<Intensity, [number, number]> = {
-  recovery: [0.45, 0.55],
-  endurance: [0.56, 0.75],
-  tempo: [0.76, 0.9],
-  threshold: [0.91, 1.05],
-  vo2: [1.06, 1.2],
-  race: [0.75, 0.85],
-};
+const STEP_DESCRIPTION_MAX = 200;
 
-const HR_PCT_LTHR: Record<Intensity, [number, number]> = {
-  recovery: [0.7, 0.84],
-  endurance: [0.85, 0.89],
-  tempo: [0.9, 0.94],
-  threshold: [0.95, 0.99],
-  vo2: [1.0, 1.06],
-  race: [0.9, 0.97],
-};
-
-/** Run pace as % of threshold pace (>1 = slower). */
-const PACE_PCT: Record<Intensity, [number, number]> = {
-  recovery: [1.3, 1.45],
-  endurance: [1.14, 1.29],
-  tempo: [1.06, 1.13],
-  threshold: [0.99, 1.05],
-  vo2: [0.9, 0.96],
-  race: [1.02, 1.1],
-};
-
-const CSS_OFFSET_SEC: Record<Intensity, [number, number]> = {
-  recovery: [15, 20],
-  endurance: [8, 15],
-  tempo: [4, 8],
-  threshold: [-1, 3],
-  vo2: [-6, -2],
-  race: [2, 4],
-};
-
-const mmss = (sec: number): string => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
-
-export function paceHint(sport: Sport, intensity: Intensity, t: Thresholds): string | null {
-  if (sport === 'run' && t.runThresholdPaceSecPerKm) {
-    const [a, b] = PACE_PCT[intensity];
-    return `${mmss(t.runThresholdPaceSecPerKm * a)}–${mmss(t.runThresholdPaceSecPerKm * b)} /km`;
-  }
-  if (sport === 'swim' && t.swimCssSecPer100m) {
-    const [a, b] = CSS_OFFSET_SEC[intensity];
-    return `${mmss(t.swimCssSecPer100m + a)}–${mmss(t.swimCssSecPer100m + b)} /100 m`;
-  }
-  return null;
+export interface DeviceOptions {
+  /** Target race distance: what "ritmo de carrera" means. */
+  raceDistance?: RaceDistance | null;
 }
 
-function target(sport: Sport, intensity: Intensity, t: Thresholds): Record<string, unknown> {
-  if (sport === 'bike' && t.ftpW) {
-    const [a, b] = POWER_PCT[intensity];
-    return { targetType: 'POWER', targetValueLow: Math.round(t.ftpW * a), targetValueHigh: Math.round(t.ftpW * b) };
-  }
-  if ((sport === 'run' || sport === 'bike') && t.lthr) {
-    const [a, b] = HR_PCT_LTHR[intensity];
-    return { targetType: 'HEART_RATE', targetValueLow: Math.round(t.lthr * a), targetValueHigh: Math.round(t.lthr * b) };
-  }
+export interface StepContext {
+  workout: Workout;
+  leg: DeviceLeg;
+  thresholds: Thresholds;
+  raceDistance: RaceDistance | null;
+}
+
+/** The step's targets: its explicit `target` first, else the athlete's zones for its intensity. */
+export function legStepTargets(step: WorkoutStep, ctx: StepContext): ZoneTargets {
+  return stepTargets(step, ctx.workout, ctx.thresholds, { raceDistance: ctx.raceDistance, leg: ctx.leg.leg });
+}
+
+function garminTarget(sport: DeviceSport, t: ZoneTargets): Record<string, unknown> {
+  if (sport === 'bike' && t.power) return { targetType: 'POWER', targetValueLow: t.power.min, targetValueHigh: t.power.max };
+  if ((sport === 'bike' || sport === 'run') && t.hr) return { targetType: 'HEART_RATE', targetValueLow: t.hr.min, targetValueHigh: t.hr.max };
   return { targetType: 'OPEN' };
 }
 
-function stepJson(step: WorkoutStep, order: number, sport: Sport, fallback: Intensity, t: Thresholds): Record<string, unknown> {
-  const intensity = step.intensity ?? (step.kind === 'work' ? fallback : 'recovery');
-  const duration =
-    step.durationMin !== undefined
-      ? { durationType: 'TIME', durationValue: Math.round(step.durationMin * 60) }
-      : step.distanceM !== undefined
-        ? { durationType: 'DISTANCE', durationValue: step.distanceM }
-        : { durationType: 'OPEN' };
-  const hint = paceHint(sport, intensity, t);
-  const description = [intensityLabel(intensity), hint, step.note].filter(Boolean).join(' · ');
-  const single = { type: 'WorkoutStep', stepOrder: 1, intensity: STEP_INTENSITY[step.kind], description, ...duration, ...target(sport, intensity, t) };
-  if (step.repeat && step.repeat > 1) {
-    return { type: 'WorkoutRepeatStep', stepOrder: order, repeatType: 'REPEAT_UNTIL_STEPS_CMPLT', repeatValue: step.repeat, steps: [single] };
-  }
-  return { ...single, stepOrder: order };
+function durationOf(step: WorkoutStep): Record<string, unknown> {
+  if (step.durationMin) return { durationType: 'TIME', durationValue: Math.round(step.durationMin * 60) };
+  if (step.distanceM) return { durationType: 'DISTANCE', durationValue: Math.round(step.distanceM) };
+  return { durationType: 'OPEN' };
 }
 
-/** Default structure when the plan has no steps: warm-up, main block, cool-down. */
-export function defaultSteps(durationMin: number, intensity: Intensity): WorkoutStep[] {
-  if (durationMin < 30) return [{ kind: 'work', durationMin, intensity }];
-  const warm = durationMin >= 60 ? 15 : 10;
-  const cool = durationMin >= 60 ? 10 : 5;
-  return [
-    { kind: 'warmup', durationMin: warm, intensity: 'recovery' },
-    { kind: 'work', durationMin: durationMin - warm - cool, intensity },
-    { kind: 'cooldown', durationMin: cool, intensity: 'recovery' },
-  ];
+function stepDescription(step: WorkoutStep, ctx: StepContext, t: ZoneTargets): string {
+  const sport = ctx.leg.sport;
+  const pace = t.pace && (sport === 'run' || sport === 'swim') ? formatPaceRange(t.pace, sport) : null;
+  const zone = intensityLabel(stepIntensity(step, ctx.workout.intensity));
+  return [zone, pace, formatRpe(t.rpe), step.cue, step.note].filter(Boolean).join(' · ').slice(0, STEP_DESCRIPTION_MAX);
 }
 
-function stepsDuration(steps: readonly WorkoutStep[]): number {
-  return steps.reduce((sum, s) => sum + (s.durationMin ?? 0) * (s.repeat ?? 1), 0);
-}
-
-function garminWorkout(w: Workout, sport: Exclude<Sport, 'brick' | 'rest'>, durationMin: number, steps: WorkoutStep[], t: Thresholds, suffix = ''): Record<string, unknown> {
-  const garminSport = GARMIN_SPORT[sport];
-  const seconds = Math.round((stepsDuration(steps) || durationMin) * 60);
+function stepJson(step: WorkoutStep, order: number, ctx: StepContext): Record<string, unknown> {
+  const t = legStepTargets(step, ctx);
   return {
-    workoutName: `${w.title}${suffix}`.slice(0, 60),
-    description: [w.description, `Road to Ironman · ${intensityLabel(w.intensity)} · ${formatDuration(durationMin)}`].filter(Boolean).join('\n').slice(0, 1000),
-    sport: garminSport,
+    type: 'WorkoutStep',
+    stepOrder: order,
+    intensity: STEP_INTENSITY[step.kind],
+    description: stepDescription(step, ctx, t),
+    ...durationOf(step),
+    ...garminTarget(ctx.leg.sport, t),
+  };
+}
+
+function blockJson(block: StepBlock, order: number, ctx: StepContext): Record<string, unknown> {
+  if (block.type === 'step') return stepJson(block.step, order, ctx);
+  return {
+    type: 'WorkoutRepeatStep',
+    stepOrder: order,
+    repeatType: 'REPEAT_UNTIL_STEPS_CMPLT',
+    repeatValue: block.times,
+    steps: block.steps.map((s, i) => stepJson(s, i + 1, ctx)),
+  };
+}
+
+function workoutDescription(w: Workout, leg: DeviceLeg): string {
+  const footer = `Road to Ironman · ${intensityLabel(w.intensity)} · ${formatDuration(leg.durationMin)}`;
+  return [w.coaching?.objective, w.description, footer].filter(Boolean).join('\n').slice(0, 1000);
+}
+
+function garminWorkout(ctx: StepContext): Record<string, unknown> {
+  const { workout: w, leg } = ctx;
+  const sport = GARMIN_SPORT[leg.sport];
+  const seconds = Math.round((stepsMinutes(leg.steps) || leg.durationMin) * 60);
+  return {
+    workoutName: `${w.title}${leg.suffix}`.slice(0, 60),
+    description: workoutDescription(w, leg),
+    sport,
     workoutProvider: 'Road to Ironman',
     workoutSourceId: w.id,
     estimatedDurationInSecs: seconds,
-    segments: [
-      {
-        segmentOrder: 1,
-        sport: garminSport,
-        estimatedDurationInSecs: seconds,
-        steps: steps.map((s, i) => stepJson(s, i + 1, sport, w.intensity, t)),
-      },
-    ],
+    segments: [{ segmentOrder: 1, sport, estimatedDurationInSecs: seconds, steps: groupSteps(leg.steps).map((b, i) => blockJson(b, i + 1, ctx)) }],
     scheduledDate: w.date,
   };
 }
 
-/** One planned workout → one Garmin workout (two for a brick: bike + run off the bike). */
-export function toGarminWorkouts(w: Workout, t: Thresholds): Record<string, unknown>[] {
-  if (w.sport === 'rest' || w.durationMin <= 0) return [];
-  if (w.sport === 'brick') {
-    const bikeMin = Math.round(w.durationMin * 0.75);
-    const runMin = w.durationMin - bikeMin;
-    return [
-      garminWorkout(w, 'bike', bikeMin, defaultSteps(bikeMin, w.intensity), t, ' · bici'),
-      garminWorkout(w, 'run', runMin, [{ kind: 'work', durationMin: runMin, intensity: w.intensity }], t, ' · carrera'),
-    ];
-  }
-  const steps = w.steps.length > 0 ? w.steps : defaultSteps(w.durationMin, w.intensity);
-  return [garminWorkout(w, w.sport, w.durationMin, steps, t)];
+/** One planned workout → its Garmin workouts (two for a brick: bike + run off the bike; none for rest). */
+export function toGarminWorkouts(w: Workout, thresholds: Thresholds, opts: DeviceOptions = {}): Record<string, unknown>[] {
+  const raceDistance = opts.raceDistance ?? null;
+  return deviceLegs(w).map((leg) => garminWorkout({ workout: w, leg, thresholds, raceDistance }));
 }
 
-export function deviceSummary(w: Workout, t: Thresholds): string {
-  const hint = w.sport === 'brick' ? null : paceHint(w.sport, w.intensity, t);
-  return `${sportLabel(w.sport)} · ${w.title} · ${formatDuration(w.durationMin)} · ${intensityLabel(w.intensity)}${hint ? ` (${hint})` : ''}`;
+/** "Carrera · Umbral 3×8' · 55 min · Umbral (Z4) · 3×8' Z4 · 162–168 ppm · 4:27–4:44 /km · RPE 7–8". */
+export function deviceSummary(w: Workout, thresholds: Thresholds, opts: DeviceOptions = {}): string {
+  const targets = targetSummary(w, thresholds, { raceDistance: opts.raceDistance ?? null });
+  return [sportLabel(w.sport), w.title, formatDuration(w.durationMin), intensityLabel(w.intensity), targets].filter(Boolean).join(' · ');
 }

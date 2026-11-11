@@ -5,9 +5,10 @@
  * sessions are protected (changed only when unavoidable, naming the partner).
  */
 import { READINESS_EFFECTS, MISSED } from './constants';
-import { diffDays, formatDayMedium } from './dates';
+import { diffDays, formatDayMedium, startOfWeek } from './dates';
 import { lifeEventLabel, readinessLabel } from './labels';
-import { phaseFor } from './periodization';
+import { phaseFor, type PhaseInfo } from './periodization';
+import { activeWeekPlan } from './plannerSupport';
 import type { Readiness } from './readiness';
 import {
   allowedOn,
@@ -26,20 +27,30 @@ import {
   poolOk,
   record,
   shorten,
+  shortenedPatch,
   startPlan,
   withPartner,
   type ReplanCtx,
-  type ReplanInput,
+  type ReplanInput as CoreReplanInput,
   type ReplanResult,
   type WorkingPlan,
 } from './replanCore';
 import { replanIllness, replanInjury, replanOtherSport, replanSocial, replanStress, replanTravel, resolveTimeConflicts } from './replanEvents';
-import { estimateTss } from './load';
-import type { LifeEvent, Sport, Workout } from './types';
+import { applyWeekPlan } from './season';
+import type { ISODate, LifeEvent, Sport, WeekPlan, Workout } from './types';
 
-export type { ReplanInput, ReplanResult } from './replanCore';
+export type { ReplanResult } from './replanCore';
 /** Editable window today..today+6 (callers load workouts/busy blocks/quedadas for it). */
 export { REPLAN_WINDOW_DAYS, replanWindowEnd } from './replanCore';
+
+export interface ReplanInput extends CoreReplanInput {
+  /**
+   * v4: the week-level override of today's week (Plan → General). A descarga
+   * or semana libre recovers nothing; "Carga" on a scheduled descarga does.
+   * Ignored when its Monday is not today's week or the week cannot change.
+   */
+  weekPlan?: WeekPlan | null;
+}
 
 function applyEvent(plan: WorkingPlan, ctx: ReplanCtx, e: LifeEvent): WorkingPlan {
   switch (e.kind) {
@@ -120,7 +131,7 @@ function amberDay(plan: WorkingPlan, ctx: ReplanCtx): WorkingPlan {
         p = moveTo(p, ctx, w, target, `Hoy vas algo justo: paso «${w.title}» al ${formatDayMedium(target.date)}`);
       } else {
         const durationMin = Math.max(20, Math.round((w.durationMin * READINESS_EFFECTS.amberQualityCut) / 5) * 5);
-        p = record(p, { op: 'update', workoutId: w.id, patch: { durationMin, tss: estimateTss({ ...w, durationMin }) }, reason: withPartner(w, ctx, 'Hoy vas algo justo: recorta las series un 30 % y no fuerces') });
+        p = record(p, { op: 'update', workoutId: w.id, patch: shortenedPatch(w, durationMin), reason: withPartner(w, ctx, 'Hoy vas algo justo: recorta las series un 30 % y no fuerces') });
       }
     } else if (isLongWorkout(w)) {
       p = downgrade(p, ctx, w, { sport: w.sport === 'brick' ? 'bike' : w.sport, durationMin: w.durationMin * READINESS_EFFECTS.amberLongCut }, 'Hoy vas algo justo: tirada un 20 % más corta y solo en Z1-Z2');
@@ -178,12 +189,25 @@ function placeMissed(plan: WorkingPlan, ctx: ReplanCtx, w: Workout): WorkingPlan
     return record(plan, {
       op: 'update',
       workoutId: w.id,
-      patch: { date: shortTarget.date, startTime: shortTarget.time, durationMin, tss: estimateTss({ ...w, durationMin }) },
+      patch: { date: shortTarget.date, startTime: shortTarget.time, ...shortenedPatch(w, durationMin) },
       reason: withPartner(w, ctx, `«${w.title}» no cabe entera: la recuperamos en versión corta el ${formatDayMedium(shortTarget.date)}`),
     });
   }
   const extra = isLongWorkout(w) ? ' Si la larga vuelve a caerse la semana que viene, lo revisamos.' : '';
   return note(plan, `No he encontrado hueco para «${w.title}» sin forzar: mejor dejarla y seguir con el plan.${extra}`);
+}
+
+/** Today's phase with the week's override (Plan → General) applied, and that override. */
+function todayPhase(input: ReplanInput, today: ISODate): { phase: PhaseInfo; weekPlan: WeekPlan | null } {
+  const raw = phaseFor(today, input.races ?? [], { level: input.profile.level });
+  const weekPlan = activeWeekPlan(raw, input.weekPlan, startOfWeek(today));
+  return { phase: applyWeekPlan(raw, weekPlan, input.profile.availability.weeklyHoursTarget), weekPlan };
+}
+
+function easyWeekNote(phase: PhaseInfo, weekPlan: WeekPlan | null): string {
+  if (phase.phase === 'race_week') return 'Semana de carrera: lo perdido no se recupera, llega fresco.';
+  if (weekPlan?.kind === 'rest') return 'Semana libre: no hace falta recuperar nada.';
+  return 'Semana de descarga: no hace falta recuperar nada.';
 }
 
 /** Missed sessions: no cramming; key ones move ±2-3 days or shrink, easy ones are not recovered. */
@@ -193,7 +217,7 @@ export function replanMissed(input: ReplanInput & { missed: Workout[] }): Replan
   const missed = input.missed
     .filter((w) => w.status === 'planned' && w.date < ctx.today && w.sport !== 'rest')
     .sort((a, b) => Number(isKeyish(b)) - Number(isKeyish(a)) || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-  const phase = phaseFor(ctx.today, input.races ?? [], { level: input.profile.level });
+  const { phase, weekPlan } = todayPhase(input, ctx.today);
   const dates = [...new Set(missed.map((w) => w.date))].sort();
   const firstMissed = dates[0];
   const doneSince = firstMissed ? input.weekWorkouts.some((w) => w.status === 'completed' && w.date >= firstMissed && w.date < ctx.today) : true;
@@ -201,7 +225,7 @@ export function replanMissed(input: ReplanInput & { missed: Workout[] }): Replan
   if (gap >= 3) {
     plan = longAbsence(plan, ctx, gap);
   } else if (phase.phase === 'race_week' || phase.isRecoveryWeek) {
-    plan = note(plan, phase.phase === 'race_week' ? 'Semana de carrera: lo perdido no se recupera, llega fresco.' : 'Semana de descarga: no hace falta recuperar nada.');
+    plan = note(plan, easyWeekNote(phase, weekPlan));
   } else {
     for (const w of missed) {
       if (isJoint(w)) plan = note(plan, `La quedada «${w.title}» ya pasó: si queréis repetirla, proponed otra desde Juntos.`);

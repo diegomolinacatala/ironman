@@ -241,8 +241,8 @@ ejecución y lo arreglo.
 ## 7. En el iPhone (cada uno, ≈10 min)
 
 1. Abre la app → entra con **Apple** o con tu email (llega un enlace: ábrelo desde el iPhone).
-2. El onboarding te guía paso a paso: objetivo, **Garmin**, **Claude**, **calendario**, hora del informe de
-   la mañana y tu primer plan (ver paso 8).
+2. El onboarding te guía paso a paso: objetivo, **tu reloj (Garmin o COROS)**, **Claude**, **calendario**,
+   hora del informe de la mañana y tu primer plan (ver pasos 8 y 8b).
 4. **Salud:** en Garmin Connect activa *Apple Salud*; luego en la app **Yo → Conexiones → Apple Salud**.
 5. **Amigos:** **Juntos → Añadir** → busca el @usuario del otro.
 6. **Widgets:** mantén pulsada la pantalla de inicio → **+** → Road to Ironman.
@@ -264,6 +264,32 @@ ejecución y lo arreglo.
      "Planifica mi semana en Road to Ironman con mis datos de Garmin y mis huecos" ·
      "Hoy he jugado al pádel 90' a tope, reorganiza mi semana".
   4. Los cambios llegan como **propuesta** (notificación) y los aceptas en la app.
+
+### 8b. Amigos con COROS (en vez de Garmin)
+
+> Desde la v4 el onboarding pregunta **"Tu reloj: Garmin o COROS"** y guía cada paso; la guía completa
+> está en la app en **Tú → Conexiones → COROS → Guía paso a paso**. COROS no da una clave personal como
+> Garmin, así que usamos dos caminos gratuitos que se complementan.
+
+1. **Apple Salud (automático).** En la app **COROS**: *Perfil → Ajustes → Apps de terceros →
+   Sincronización de datos → Apple Health* → actívalo y, cuando Salud lo pida, *Activar todo* → *Permitir*.
+   Después, en Road to Ironman, *Conectar Apple Salud* (lo hace el propio onboarding). Llegan los entrenos,
+   el sueño, el pulso en reposo y los pasos. Solo lo nuevo (COROS no envía el histórico) y en cuanto la app
+   COROS sincroniza el reloj: ábrela después de entrenar y por la mañana.
+2. **Tu Claude con el conector de COROS (recomendado).** En claude.ai: *Personalizar → Conectores →
+   Explorar conectores → COROS → Conectar* e inicia sesión con tu cuenta COROS. Si no aparece, *Añadir
+   conector personalizado* con `https://mcp.coros.com/mcp` (en Europa, si falla, `https://mcpeu.coros.com/mcp`).
+   Permisos: lectura en *Permitir siempre*; crear entrenos en *Necesita aprobación*; planes de COROS en
+   *Bloqueado* (el plan manda desde Road to Ironman). Conecta también **Road to Ironman** (paso 8).
+   - Primera vez: «Lee de COROS mi VFC, FC en reposo, sueño y recuperación de los últimos 14 días y
+     guárdalos en Road to Ironman. Después registra mis entrenos de COROS de esas dos semanas.»
+   - Cada mañana (30 s): «Guarda en Road to Ironman mi sueño, VFC y recuperación de COROS de anoche.»
+   - Entrenos al reloj: «Pasa a mi calendario de COROS los entrenos de carrera y bici de esta semana de
+     Road to Ironman.» (COROS aún no deja crear natación ni fuerza por IA, ni mover o borrar: borra a mano
+     en la app COROS los que cambien.)
+3. **Mismos umbrales en las dos apps**: FC máxima, FC umbral, ritmo umbral y FTP en Road to Ironman
+   (*Tú → Perfil*) y en COROS, para que el reloj y la app hablen de las mismas pulsaciones.
+4. Sin Claude: copia la sesión del día en *COROS → Perfil → Biblioteca de entrenamientos → «+»*.
 
 ---
 

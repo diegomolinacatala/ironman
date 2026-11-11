@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import type { Repository } from '@/data/repository';
-import type { ISODate, Profile, Workout } from '@/domain/types';
+import type { ISODate, Profile, RaceDistance, Workout } from '@/domain/types';
 import { logger } from '@/lib/logger';
 import { StorageKeys, writeJson } from '@/lib/storage';
 
@@ -160,6 +160,8 @@ export async function rescheduleLocalNotifications(input: {
   today: ISODate;
   /** jointSessionId → partners' names, for "Quedada con David en 1 h". */
   jointPartners?: Readonly<Record<string, string>>;
+  /** Distance of the target race: what race-pace targets mean in the reminder body. */
+  raceDistance?: RaceDistance | null;
 }): Promise<number> {
   if (!isNative) return 0;
   return localQueue.run(async (isCurrent) => {
@@ -172,6 +174,8 @@ export async function rescheduleLocalNotifications(input: {
       today: input.today,
       now: new Date(),
       jointPartners: input.jointPartners,
+      thresholds: input.profile.thresholds ?? null,
+      raceDistance: input.raceDistance ?? null,
     });
     const results = await Promise.allSettled(specs.map((spec) => Notifications.scheduleNotificationAsync(toRequest(spec))));
     const failed = results.filter((r) => r.status === 'rejected');

@@ -8,7 +8,7 @@ import {
   BriefingError,
   BriefingSkeleton,
   CardOverline,
-  ConnectGarminBody,
+  ConnectWatchBody,
   EmptyBody,
   ListenControls,
 } from './BriefingCardStates';
@@ -21,7 +21,7 @@ export const INTEGRATIONS_ROUTE = '/settings/integrations';
 
 /**
  * "Informe de hoy" card on Hoy (flat: the raised card is today's session, the screen's one primary): headline + last night + ▶ Escuchar, or the way to get one
- * (prepare it, or connect Garmin first).
+ * (prepare it, or connect your watch first: Garmin or COROS).
  */
 export function BriefingCard({ date }: { date: ISODate }) {
   const ctrl = useBriefingController(date);
@@ -63,11 +63,12 @@ export function BriefingCard({ date }: { date: ISODate }) {
       {ctrl.state === 'generating' ? <BriefingSkeleton message={ctrl.steps[step]} /> : null}
       {ctrl.state === 'error' ? <BriefingError error={ctrl.error} onRetry={ctrl.retry} /> : null}
       {ctrl.state === 'empty' ? <EmptyBody onPrepare={prepare} /> : null}
-      {ctrl.state === 'connect-garmin' ? (
-        <ConnectGarminBody
-          expired={ctrl.garmin === 'expired'}
+      {ctrl.state === 'connect-watch' ? (
+        <ConnectWatchBody
+          brand={ctrl.brand}
+          expired={ctrl.watch === 'expired'}
           onConnect={() => router.push(INTEGRATIONS_ROUTE)}
-          onSkip={ctrl.skipGarmin}
+          onSkip={ctrl.skipWatch}
         />
       ) : null}
     </Card>

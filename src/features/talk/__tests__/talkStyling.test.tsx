@@ -39,6 +39,7 @@ const row: DiffRow = {
   warnings: ['Es tu sesión clave'],
   missing: false,
   description: 'Quitar Rodaje suave',
+  session: null,
 };
 
 const quedada: QuedadaSuggestion = {

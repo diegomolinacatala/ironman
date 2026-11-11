@@ -6,7 +6,7 @@ import { Icon, Text, brand, iconSize, radius, space, type IconName } from '@/ui'
 import { BrandMark } from './BrandMark';
 
 const VALUE_POINTS: readonly { icon: IconName; label: string }[] = [
-  { icon: 'watch', label: 'Lee tu Garmin' },
+  { icon: 'watch', label: 'Lee tu Garmin o COROS' },
   { icon: 'calendarCheck', label: 'Vive en tu calendario' },
   { icon: 'mic', label: 'Le hablas y se adapta' },
 ];

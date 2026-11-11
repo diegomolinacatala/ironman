@@ -20,6 +20,7 @@ import {
   type DiffRow,
   type PreviewResult,
 } from './proposalDiff';
+import { usePrescriptionContext } from './usePrescriptionContext';
 
 export interface ApplyOutcome {
   applied: number;
@@ -69,7 +70,12 @@ export function useProposalReview(proposal: PlanProposal): ProposalReview {
 
   const week = snapshot ?? workouts.data;
   const names = useMemo(() => partnerNames(joints.data ?? [], session?.userId ?? null), [joints.data, session?.userId]);
-  const rows = useMemo(() => buildDiffRows(proposal.changes, week ?? [], names), [proposal.changes, week, names]);
+  // Thresholds + target race turn the zones of new sessions into ppm / pace / watts.
+  const prescription = usePrescriptionContext();
+  const rows = useMemo(
+    () => buildDiffRows(proposal.changes, week ?? [], names, prescription),
+    [proposal.changes, week, names, prescription],
+  );
   const indexes = selectedIndexes(selected);
   const preview = week
     ? previewTotals({

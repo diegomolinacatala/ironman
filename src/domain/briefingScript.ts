@@ -1,26 +1,22 @@
 /**
  * The spoken part of the local morning briefing: today's plan read as a
  * 110–200 word Spanish (Spain, tú) script for text-to-speech, with every
- * number, time and unit written out, plus one short sentence per quedada of
- * the day and for the pending invitations (`briefingSocial.ts`). Also the day-plan helpers shared with
- * the display texts in `briefing.ts`. Pure.
+ * number, time and unit written out: the key session as a coach says it
+ * (main set, target, sensation, success criterion: `briefingCoach.ts`), plus
+ * one short sentence per quedada of the day and for the pending invitations
+ * (`briefingSocial.ts`). Also the day-plan helpers shared with the display
+ * texts in `briefing.ts`. Pure.
  */
-import {
-  atTimeWords,
-  clockWords,
-  countWords,
-  dateWords,
-  distanceWords,
-  durationWords,
-  numberToWords,
-  wordCount,
-} from './briefingSpeech';
+import { keySessionSentences, lowerFirst, ZONE_SPOKEN, type SpeechContext } from './briefingCoach';
+import { atTimeWords, clockWords, countWords, dateWords, durationWords, numberToWords, wordCount } from './briefingSpeech';
 import { HRV_HIGH_RATIO, HRV_LOW_RATIO, hrvRatio, isNum } from './briefingSleep';
 import { NO_TOGETHER, type BriefingTogether, type PendingInvite, type TodayJoint } from './briefingSocial';
 import { dateTimeParts, diffDays } from './dates';
 import { estimateTss } from './load';
 import { phaseFor, type Phase } from './periodization';
-import type { Intensity, ISODate, Race, SleepSnapshot, SleepVerdict, Sport, Workout } from './types';
+import type { Intensity, ISODate, Race, SleepSnapshot, SleepVerdict, Sport, WatchBrand, Workout } from './types';
+
+export { lowerFirst } from './briefingCoach';
 
 const SCRIPT_MIN_WORDS = 110;
 const SCRIPT_MAX_WORDS = 200;
@@ -68,8 +64,24 @@ export function keySession(planned: readonly Workout[]): Workout | null {
 // Shared wording
 // ---------------------------------------------------------------------------
 
-export const NO_GARMIN = 'Aún no tengo datos de tu sueño: conecta tu Garmin y cada mañana te contaré cómo has descansado.';
-export const NO_SLEEP_YET = 'Todavía no me ha llegado tu sueño de esta noche: sincroniza tu Garmin y actualiza el informe.';
+/** "tu Garmin", "tu COROS", or "tu reloj" while the athlete has not chosen one. */
+function watchWord(brand?: WatchBrand | null): string {
+  if (brand === 'garmin') return 'tu Garmin';
+  if (brand === 'coros') return 'tu COROS';
+  return 'tu reloj';
+}
+
+/** No sleep data at all: how to get it (COROS reaches the app through Apple Salud). */
+export function noWatchText(brand?: WatchBrand | null): string {
+  const connect = brand === 'coros' ? 'conecta tu COROS con Apple Salud' : `conecta ${watchWord(brand)}`;
+  return `Aún no tengo datos de tu sueño: ${connect} y cada mañana te contaré cómo has descansado.`;
+}
+
+/** Metrics exist but last night's sleep has not arrived yet. */
+export function noSleepYetText(brand?: WatchBrand | null): string {
+  const sync = brand === 'coros' ? 'abre la app de COROS para que sincronice' : `sincroniza ${watchWord(brand)}`;
+  return `Todavía no me ha llegado tu sueño de esta noche: ${sync} y actualiza el informe.`;
+}
 
 export const SPORT_SPOKEN: Record<Sport, string> = {
   swim: 'natación',
@@ -82,10 +94,6 @@ export const SPORT_SPOKEN: Record<Sport, string> = {
   rest: 'descanso',
 };
 
-export function lowerFirst(text: string): string {
-  return /^\p{Lu}\p{Ll}/u.test(text) ? `${text.charAt(0).toLowerCase()}${text.slice(1)}` : text;
-}
-
 /** ["a", "b", "c"] → "a, b y c". */
 export function joinEs(parts: readonly string[]): string {
   if (parts.length <= 1) return parts.join('');
@@ -95,15 +103,6 @@ export function joinEs(parts: readonly string[]): string {
 // ---------------------------------------------------------------------------
 // Spoken sentences
 // ---------------------------------------------------------------------------
-
-const ZONE_SPOKEN: Record<Intensity, string> = {
-  recovery: 'en zona uno',
-  endurance: 'en zona dos',
-  tempo: 'en zona tres',
-  threshold: 'en zona cuatro',
-  vo2: 'en zona cinco',
-  race: 'a ritmo de carrera',
-};
 
 const VERDICT_SPOKEN: Record<Exclude<SleepVerdict, 'unknown'>, string> = {
   great: 'una noche excelente',
@@ -146,15 +145,6 @@ function sessionPhrase(w: Workout): string {
   return `${spokenTitle(w)} de ${durationWords(w.durationMin)}${zone}${at ? `, ${at}` : ''}`;
 }
 
-function mainSetSentence(w: Workout): Sentence | null {
-  const set = w.steps.find((s) => s.kind === 'work' && (s.repeat ?? 1) >= 2);
-  if (!set || !set.repeat) return null;
-  const size = isNum(set.durationMin) ? durationWords(set.durationMin) : isNum(set.distanceM) ? distanceWords(set.distanceM, w.sport === 'swim') : null;
-  if (!size) return null;
-  const zone = set.intensity ? ` ${ZONE_SPOKEN[set.intensity]}` : '';
-  return { text: `La parte principal son ${numberToWords(set.repeat, 'feminine')} series de ${size}${zone}.`, drop: 1 };
-}
-
 function greetingOf(now: Date, name: string): string {
   const hour = now.getHours();
   const hello = hour < 6 ? 'Hola' : hour < 13 ? 'Buenos días' : hour < 20 ? 'Buenas tardes' : 'Buenas noches';
@@ -190,8 +180,8 @@ function hrvSentence(s: SleepSnapshot): Sentence | null {
   return { text: `${value}, ${relation} tu media de ${numberToWords(Math.round(s.hrvBaselineMs))}.` };
 }
 
-function sleepSentences(s: SleepSnapshot | null, verdict: SleepVerdict, hasAnyMetrics: boolean): Sentence[] {
-  if (!s) return [{ text: hasAnyMetrics ? NO_SLEEP_YET : NO_GARMIN }];
+function sleepSentences(s: SleepSnapshot | null, verdict: SleepVerdict, hasAnyMetrics: boolean, brand?: WatchBrand | null): Sentence[] {
+  if (!s) return [{ text: hasAnyMetrics ? noSleepYetText(brand) : noWatchText(brand) }];
   const stages =
     isNum(s.deepMin) && isNum(s.remMin)
       ? { text: `Has tenido ${durationWords(s.deepMin)} de sueño profundo y ${durationWords(s.remMin)} de sueño REM.`, drop: 2 }
@@ -207,7 +197,7 @@ function sleepSentences(s: SleepSnapshot | null, verdict: SleepVerdict, hasAnyMe
   );
 }
 
-function todaySentences(plan: DayPlan, race: Race | null): Sentence[] {
+function todaySentences(plan: DayPlan, race: Race | null, speech: SpeechContext): Sentence[] {
   if (plan.kind === 'race') return [{ text: `Hoy es el gran día: ${race?.name ?? 'tu carrera'}.` }];
   if (plan.kind === 'rest') return [{ text: 'Hoy toca descanso. Aprovecha para recuperar: el cuerpo también se hace fuerte cuando descansa.' }];
   if (plan.kind === 'done') {
@@ -223,8 +213,7 @@ function todaySentences(plan: DayPlan, race: Race | null): Sentence[] {
   const more = count > SPOKEN_SESSIONS_MAX ? [`${numberToWords(count - SPOKEN_SESSIONS_MAX, 'feminine')} más`] : [];
   const intro =
     count === 1 ? `Hoy toca ${sessionPhrase(main)}.` : `Hoy tocan ${numberToWords(count, 'feminine')} sesiones: ${joinEs([...listed, ...more])}.`;
-  const set = mainSetSentence(key);
-  return set ? [{ text: intro }, set] : [{ text: intro }];
+  return [{ text: intro }, ...keySessionSentences(key, speech)];
 }
 
 /** Quedada titles fall back to "sesión de bici" (read after a colon). */
@@ -326,6 +315,10 @@ export interface ScriptInput {
   daysToRace: number | null;
   /** Today's quedadas and pending invitations (default: none). */
   together?: BriefingTogether;
+  /** The athlete's numbers for the spoken target of the key session. */
+  speech?: SpeechContext;
+  /** The athlete's watch, for the "no sleep data" sentences (null = not chosen: "tu reloj"). */
+  watchBrand?: WatchBrand | null;
 }
 
 /** The text-to-speech script: greeting, sleep, today, quedadas, focus, tomorrow, race countdown, closing. */
@@ -333,8 +326,8 @@ export function composeScript(input: ScriptInput): string {
   const { date, plan, race } = input;
   const sentences: Sentence[] = [
     { text: `${greetingOf(input.now, input.name)} Hoy es ${dateWords(date)}.` },
-    ...sleepSentences(input.snapshot, input.verdict, input.hasAnyMetrics),
-    ...todaySentences(plan, race),
+    ...sleepSentences(input.snapshot, input.verdict, input.hasAnyMetrics, input.watchBrand),
+    ...todaySentences(plan, race, input.speech ?? {}),
     ...togetherSentences(input.together ?? NO_TOGETHER, date),
     { text: input.focus },
     ...(plan.kind === 'race' ? [] : [tomorrowSentence(input.tomorrowWorkouts)]),

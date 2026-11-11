@@ -105,6 +105,13 @@ describe('Privacidad with the AI coach switched off (default)', () => {
       'Cloudflare (Coach IA)',
     );
   });
+
+  test('COROS is named: its data and the COROS connector reach Anthropic through your own Claude', () => {
+    const points = privacySummary(false).flatMap((section) => section.points);
+    expect(points.map((point) => point.title)).toContain('Apple Salud, Garmin y COROS');
+    const ownClaude = points.find((point) => point.title === 'Tu propio Claude');
+    expect(ownClaude?.text).toMatch(/conector de COROS, tus datos de COROS llegan a Anthropic a través de tu Claude/);
+  });
 });
 
 describe('privacy policy link', () => {

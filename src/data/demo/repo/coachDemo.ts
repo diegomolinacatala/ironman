@@ -4,12 +4,14 @@
  * and remembers explicit preferences ("prefiero…", "me gusta más…") in
  * `profile.coachNotes`, returning both as `lifeEvent` / `memory`, and suggests
  * a quedada with a friend named in the message (`friendIds` → `quedada`).
+ * Like the rules coach it understands "planifícame la semana" in the chat and
+ * suggests season-plan weeks ("pon la semana del 23 de descarga" → `weekPlans`).
  */
 import { addDays } from '@/domain/dates';
 import type { BodyArea, CoachRequest, CoachResponse, ISODate, LifeEvent } from '@/domain/types';
 
 import type { Repository } from '../../repository';
-import { runRulesCoach, type RulesCoachRepo } from '../rulesCoach';
+import { chatPlanRequest, runRulesCoach, type RulesCoachRepo } from '../rulesCoach';
 import { requireMe, type DemoDeps } from './common';
 import { demoQuedadaFor, quedadaReplyLine, type QuedadaDemoRepo } from './quedadaDemo';
 
@@ -117,8 +119,9 @@ export function createDemoCoach({ store }: DemoDeps, repo: CoachDemoRepo): (requ
     const preference = detectPreference(message);
     const lifeEvent = injury ? await logInjury(repo, injury, message, today) : null;
     if (preference) await rememberPreference(repo, preference.memory);
-    // A re-plan request about a new injury re-plans around the event just logged.
-    const effective = lifeEvent && request.mode === 'replan' ? { ...request, lifeEventId: lifeEvent.id } : request;
+    // A re-plan request (also "reorganiza mi semana" in the chat) about a new injury re-plans around the event just logged.
+    const asked = chatPlanRequest(request, today);
+    const effective = lifeEvent && asked.mode === 'replan' ? { ...asked, lifeEventId: lifeEvent.id } : asked;
     const response = await runRulesCoach(repo, effective, { today, notice: noticeOf(lifeEvent, preference), injuryLogged: lifeEvent !== null });
     // Never suggest training together right after a new injury.
     const quedada = lifeEvent ? null : await demoQuedadaFor(repo, request, today);

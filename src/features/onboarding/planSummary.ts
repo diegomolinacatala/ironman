@@ -1,15 +1,23 @@
 /**
- * "Tu plan" step (pure): which weeks to generate and a 3-line summary of what
- * was added, in plain Spanish.
+ * "Tu plan" step (pure): which weeks to generate, what the progress copy says
+ * and a 3-line summary of what was added, in plain Spanish.
  */
 import { addDays, formatDayLabel, formatDuration, startOfWeek, weekdayOf } from '@/domain/dates';
 import { sportLabel } from '@/domain/labels';
-import type { ISODate, PlanChange, Sport, WorkoutDraft } from '@/domain/types';
+import type { ISODate, PlanChange, Sport, WatchBrand, WorkoutDraft } from '@/domain/types';
 
 import { joinEs } from './connectModel';
 
 /** Friday or later: so few days are left that next week is planned too. */
 const LATE_WEEKDAY = 4;
+
+const WATCH_NAME: Readonly<Record<WatchBrand, string>> = { garmin: 'Garmin', coros: 'COROS' };
+
+/** Lines shown while the first plan is prepared; the first one names the athlete's watch ("tu reloj" until chosen). */
+export function planProgressCopy(watchBrand: WatchBrand | null | undefined): readonly string[] {
+  const watch = watchBrand ? WATCH_NAME[watchBrand] : 'reloj';
+  return [`Leyendo tu ${watch}…`, 'Mirando tu calendario…', 'Preparando tus próximas semanas…'];
+}
 
 /** This Monday, plus next Monday when this week is nearly over. */
 export function weeksToPlan(today: ISODate): ISODate[] {

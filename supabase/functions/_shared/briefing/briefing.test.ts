@@ -283,7 +283,9 @@ test('briefing context: no calendar titles, local times, HRV vs 7-night baseline
   assert.equal(ctx.sleepView?.duration, '7 h 20 min');
   assert.equal(ctx.sleepView?.hrvVsBaselinePct, -15);
   assert.deepEqual(ctx.todayWorkouts.map((w) => w.title), ['Rodaje suave']);
-  assert.equal((ctx.todayWorkouts[0].steps as { intensity: string }[])[0].intensity, 'Fondo (Z2)');
+  assert.equal(ctx.todayWorkouts[0].intensity, 'Fondo (Z2)');
+  assert.match(String(ctx.todayWorkouts[0].targets), /^50' Z2 · \d+–\d+ ppm · \d:\d\d–\d:\d\d \/km · RPE 3–4$/);
+  assert.match((ctx.todayWorkouts[0].structure as string[])[0], /^50' · parte principal · Z2 · \d+–\d+ ppm/);
   assert.deepEqual(ctx.tomorrowWorkouts.map((w) => w.title), ['Salida larga']);
   assert.deepEqual(ctx.yesterday, { sessions: [ctx.yesterday.sessions[0]], totalMin: 47, load: ctx.yesterday.load });
   assert.equal(ctx.yesterday.sessions[0].title, 'Técnica');

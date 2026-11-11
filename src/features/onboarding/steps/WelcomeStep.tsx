@@ -8,11 +8,10 @@ import { ErrorNotice, TextField, haptics, space } from '@/ui';
 
 import { Appear } from '../Appear';
 import { ValueLine } from '../GuideParts';
-import { NAME_MAX, nameError, welcomePatches } from '../onboardingModel';
+import { NAME_MAX, nameError, welcomePatches, welcomeWatchValue } from '../onboardingModel';
 import { StepLayout, type StepNav } from '../StepLayout';
 
-const VALUES = [
-  { icon: 'watch', title: 'Lee tu Garmin', text: 'Sueño, VFC y entrenos, sin apuntar nada.' },
+const MORE_VALUES = [
   { icon: 'calendarCheck', title: 'Vive en tu calendario', text: 'Tus entrenos aparecen entre tus planes, con aviso.' },
   { icon: 'mic', title: 'Le hablas y se adapta', text: 'Cuéntale un imprevisto y recoloca la semana.' },
 ] as const;
@@ -29,6 +28,7 @@ export function WelcomeStep({ nav, profile }: WelcomeStepProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const invalid = nameError(name);
+  const values = [{ icon: 'watch' as const, ...welcomeWatchValue(profile.watchBrand) }, ...MORE_VALUES];
 
   const onNext = async () => {
     if (invalid) return;
@@ -76,7 +76,7 @@ export function WelcomeStep({ nav, profile }: WelcomeStepProps) {
         />
       </Appear>
       <View style={styles.values}>
-        {VALUES.map((v, i) => (
+        {values.map((v, i) => (
           <ValueLine key={v.title} icon={v.icon} title={v.title} text={v.text} index={i + 2} />
         ))}
       </View>

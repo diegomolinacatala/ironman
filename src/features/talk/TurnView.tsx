@@ -1,16 +1,19 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import type { PlanProposal } from '@/domain/types';
-import { Button, Icon, Text, fonts, radius, space, useTheme, type IconName } from '@/ui';
+import { Button, Icon, Text, radius, space, useTheme, type IconName } from '@/ui';
 
 import { FadeIn } from './motion';
 import { NoteChips } from './NoteChips';
 import { ProposalPanel } from './ProposalPanel';
 import { QuedadaSuggestionCard } from './QuedadaSuggestionCard';
+import { StatusLine } from './StatusLine';
 import { resolutionNotice, type ProposalResolution, type TalkChannel, type TalkTurn } from './talkSession';
 import type { ProposalDecision } from './useProposalDecision';
+import { useWeekPlansDecision } from './useWeekPlansDecision';
+import { WeekPlansCard, WeekPlansStatus } from './WeekPlansCard';
 
 /** What you said: right-aligned soft brand bubble (accentSoft + onAccentSoft). */
 export function UserBubble({ text, channel }: { text: string; channel: TalkChannel }) {
@@ -45,25 +48,6 @@ export function CoachBubble({ children }: { children: ReactNode }) {
   );
 }
 
-function StatusLine({ icon, text, action }: { icon: IconName; text: string; action?: { label: string; onPress: () => void } }) {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.status, { backgroundColor: colors.surfaceAlt }]}>
-      <Icon name={icon} size={16} color={colors.textMuted} />
-      <Text variant="callout" color="textMuted" style={styles.flex}>
-        {text}
-      </Text>
-      {action ? (
-        <Pressable accessibilityRole="button" hitSlop={12} onPress={action.onPress} style={styles.statusAction}>
-          <Text variant="callout" color="accentInk" style={styles.semibold}>
-            {action.label}
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
 function ProposalStatus({ proposal, resolution }: { proposal: PlanProposal; resolution: ProposalResolution | null }) {
   if (resolution) {
     const icon: IconName = resolution.kind === 'discarded' ? 'close' : 'checkCircle';
@@ -92,10 +76,16 @@ export interface TurnViewProps {
   onStopSpeaking: () => void;
 }
 
-/** One exchange: what you said and what your coach answered (with its plan changes). */
+/**
+ * One exchange: what you said and what your coach answered, with its plan changes, the weeks it
+ * suggests for Plan › General and a quedada. One primary action: proposal > general plan > quedada.
+ */
 export function TurnView({ turn, latest, open, decision, speaking, onListen, onStopSpeaking }: TurnViewProps) {
   const { response } = turn;
   const proposal = response.proposal;
+  const weekPlans = useWeekPlansDecision(response);
+  const hasWeekPlans = weekPlans.suggestion.rows.length > 0;
+  const weekPlansOpen = latest && hasWeekPlans && weekPlans.status === 'open';
   return (
     <View style={styles.turn}>
       <UserBubble text={turn.text} channel={turn.channel} />
@@ -123,7 +113,9 @@ export function TurnView({ turn, latest, open, decision, speaking, onListen, onS
         </CoachBubble>
         {proposal && open ? <ProposalPanel proposal={proposal} decision={decision} /> : null}
         {proposal && !open ? <ProposalStatus proposal={proposal} resolution={turn.resolution} /> : null}
-        {latest && response.quedada ? <QuedadaSuggestionCard quedada={response.quedada} quiet={open} /> : null}
+        {weekPlansOpen ? <WeekPlansCard decision={weekPlans} quiet={open} /> : null}
+        {hasWeekPlans && weekPlans.status !== 'open' ? <WeekPlansStatus decision={weekPlans} /> : null}
+        {latest && response.quedada ? <QuedadaSuggestionCard quedada={response.quedada} quiet={open || weekPlansOpen} /> : null}
       </FadeIn>
     </View>
   );
@@ -157,14 +149,4 @@ const styles = StyleSheet.create({
   hero: { fontSize: 19, lineHeight: 27 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' },
   flex: { flex: 1 },
-  semibold: { fontFamily: fonts.bodySemibold },
-  statusAction: { minHeight: 32, justifyContent: 'center' },
-  status: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    paddingVertical: space.sm,
-    paddingHorizontal: space.md,
-    borderRadius: radius.md,
-  },
 });

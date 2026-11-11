@@ -39,4 +39,33 @@ describe('demo coach (rules engine)', () => {
     expect(response.reply).toContain('profesional');
     await repo.store.dispose();
   });
+
+  it('a clear "planifícame la semana" in the chat returns a plan_week proposal', async () => {
+    const repo = await signedInRepo();
+    const response = await repo.requestCoach({ mode: 'chat', weekStart: '2026-11-09', message: 'Planifícame la semana, porfa' });
+    expect(response.proposal).toMatchObject({ source: 'rules', kind: 'generate_week', weekStart: '2026-11-09' });
+    expect(response.reply).toContain('Te he preparado');
+    await repo.store.dispose();
+  });
+
+  it('suggests a season-plan week from the chat, saved only when the athlete taps', async () => {
+    const repo = await signedInRepo();
+    const response = await repo.requestCoach({ mode: 'chat', weekStart: '2026-10-19', message: 'Pon la semana que viene de descarga' });
+    expect(response).toMatchObject({ proposal: null, weekPlans: [{ weekStart: '2026-10-26', kind: 'recovery', targetMinutes: null, note: null, source: 'ai_coach' }] });
+    expect(response.reply).toContain('«Descarga»');
+    expect((await repo.listWeekPlans({ from: '2026-10-26', to: '2026-10-26' })).length).toBe(0);
+    await repo.store.dispose();
+  });
+
+  it('plans the week the season plan says (a semana libre plans far less)', async () => {
+    const repo = await signedInRepo();
+    const minutes = async () => {
+      const response = await repo.requestCoach({ mode: 'plan_week', weekStart: '2026-11-16' });
+      return (response.proposal?.changes ?? []).reduce((sum, c) => sum + (c.op === 'add' ? c.workout.durationMin : 0), 0);
+    };
+    const normal = await minutes();
+    await repo.saveWeekPlans([{ weekStart: '2026-11-16', kind: 'rest', note: 'Viaje' }]);
+    expect(await minutes()).toBeLessThan(normal);
+    await repo.store.dispose();
+  });
 });

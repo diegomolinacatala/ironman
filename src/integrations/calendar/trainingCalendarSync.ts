@@ -7,7 +7,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { addDays } from '@/domain/dates';
-import type { ISODate, Workout } from '@/domain/types';
+import type { ISODate, RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { logger } from '@/lib/logger';
 
 import { getCalendarPermission } from '../calendar';
@@ -25,10 +25,24 @@ import {
 } from './trainingCalendarStore';
 import { planCalendarSync, trainingCalendarWindow } from './trainingEvents';
 
-/** Optional context: who is syncing and in which zone the plan's times are (profile). */
+/**
+ * Optional context: who is syncing, in which zone the plan's times are (profile), and what
+ * turns zones into ppm / pace / watts in the notes (profile thresholds, target race distance).
+ * Every caller must pass the same prescription inputs, or the notes would flip between syncs.
+ */
 export interface CalendarSyncContext {
   userId?: string | null;
   timeZone?: string | null;
+  thresholds?: Thresholds | null;
+  raceDistance?: RaceDistance | null;
+}
+
+interface SyncInput {
+  workouts: readonly Workout[];
+  today: ISODate;
+  timeZone: string | null;
+  thresholds: Thresholds | null;
+  raceDistance: RaceDistance | null;
 }
 
 export interface CalendarSyncResult {
@@ -57,11 +71,7 @@ function listingWindow(today: ISODate): { start: Date; end: Date } {
   return rangeToWindow({ from: addDays(range.from, -1), to: addDays(range.to, 1) });
 }
 
-async function runSync(
-  userId: string,
-  settings: TrainingCalendarSettings,
-  input: { workouts: readonly Workout[]; today: ISODate; timeZone: string | null },
-): Promise<CalendarSyncResult> {
+async function runSync(userId: string, settings: TrainingCalendarSettings, input: SyncInput): Promise<CalendarSyncResult> {
   const { calendar, createdByApp } = await ensureTrainingCalendar(settings.calendarId, knownEventIds(settings));
   const window = listingWindow(input.today);
   const existing = await calendar.listEvents(window.start, window.end);
@@ -73,6 +83,8 @@ async function runSync(
     alarmMinutes: settings.alarmMinutes,
     timeZone: input.timeZone,
     linkBase: linkBase(),
+    thresholds: input.thresholds,
+    raceDistance: input.raceDistance,
   });
   const applied = await applyCalendarPlan(calendar, existing, plan);
   // Re-read: the alarm or the switch may have changed while EventKit was busy.
@@ -109,7 +121,13 @@ export async function syncWorkoutsToCalendar(
     const settings = await readTrainingSettings(userId);
     if (!settings.enabled || (await getCalendarPermission()) !== 'granted') return NO_CHANGES;
     const timeZone = context?.timeZone ?? settings.timeZone;
-    return runSync(userId, settings, { workouts, today, timeZone });
+    return runSync(userId, settings, {
+      workouts,
+      today,
+      timeZone,
+      thresholds: context?.thresholds ?? null,
+      raceDistance: context?.raceDistance ?? null,
+    });
   });
   notifyTrainingCalendarChanged(userId);
   return result;

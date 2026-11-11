@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useAuth } from '@/data/context';
+import { useProfile } from '@/data/queries';
 import type { CreatedToken } from '@/domain/types';
 import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { ClaudeConnected, ClaudeConnectPanel } from '@/features/onboarding/claude/ClaudeParts';
@@ -8,9 +9,11 @@ import { useClaudeConnect } from '@/features/onboarding/claude/useClaudeConnect'
 import { reusableClaudeTokenForSettings } from '@/features/onboarding/connectModel';
 import { ClaudeHero } from '@/features/settings/ClaudeHero';
 import { CoachDifferenceCard } from '@/features/settings/ClaudeConnectGuide';
+import { CorosClaudeCard } from '@/features/settings/CorosClaudeCard';
 import { PrivacyLinkRow } from '@/features/settings/PrivacyLinkRow';
-import { PromptList } from '@/features/settings/PromptList';
+import { PromptList, claudePrompts } from '@/features/settings/PromptList';
 import { TokenList } from '@/features/settings/TokenList';
+import { watchBrandOf } from '@/features/settings/watchBrand';
 import { Button, Screen, SectionHeader } from '@/ui';
 
 /** "Conecta tu Claude": the same connect + live verification as the onboarding step, plus link management. */
@@ -18,18 +21,19 @@ export default function ConnectClaudeScreen() {
   const { mode } = useAuth();
   const isDemo = mode === 'demo';
   const aiCoach = isAiCoachEnabled();
+  const brand = watchBrandOf(useProfile().data);
   const [token, setToken] = useState<CreatedToken | null>(null);
   // Never mint a link per visit: wait on the latest unused one; "Crear enlace nuevo" is explicit.
   const claude = useClaudeConnect({ created: token, onCreated: setToken, reuse: reusableClaudeTokenForSettings, active: true });
 
   return (
     <Screen inSheet>
-      <ClaudeHero />
+      <ClaudeHero brand={brand} />
       {claude.link === 'connected' ? (
         <>
           <ClaudeConnected lastUsedAt={claude.lastUsedAt} />
           <SectionHeader title="Pídeselo así" />
-          <PromptList />
+          <PromptList prompts={claudePrompts(brand)} />
           <Button
             label="Conectar otra cuenta de Claude"
             icon="link"
@@ -42,6 +46,8 @@ export default function ConnectClaudeScreen() {
       ) : (
         <ClaudeConnectPanel claude={claude} isDemo={isDemo} showOpenButton />
       )}
+      {/* COROS athletes add COROS's own connector too (HRV, recovery, workouts on the watch). */}
+      {brand === 'coros' ? <CorosClaudeCard /> : null}
       <SectionHeader title="Enlaces activos" />
       <TokenList
         scope="mcp"

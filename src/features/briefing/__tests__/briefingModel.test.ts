@@ -5,9 +5,13 @@ import type { IntegrationStatus, SleepSnapshot } from '@/domain/types';
 import {
   briefingCardState,
   briefingSteps,
+  connectWatchCopy,
+  dataAttribution,
   formatSleepHours,
   garminState,
   hasSleepData,
+  noSleepNote,
+  watchState,
   headlineVariant,
   hrvTrend,
   listenLabel,
@@ -35,6 +39,12 @@ describe('garminState', () => {
     expect(garminState([])).toBe('missing');
     expect(garminState(undefined)).toBe('missing');
   });
+
+  test('COROS is connected once Apple Salud is on here, whatever the Garmin key says', () => {
+    expect(watchState('coros', garmin('connected'), false)).toBe('missing');
+    expect(watchState('coros', [], true)).toBe('connected');
+    expect(watchState('garmin', garmin('expired'), true)).toBe('expired');
+  });
 });
 
 describe('briefingCardState', () => {
@@ -44,34 +54,59 @@ describe('briefingCardState', () => {
     briefingError: null,
     generating: false,
     generateError: null,
-    garmin: 'connected',
-    skipGarmin: false,
+    watch: 'connected',
+    skipWatch: false,
   };
 
   test('an existing briefing always wins', () => {
-    expect(briefingCardState({ ...base, briefing: BRIEFING, generating: true, garmin: 'missing' })).toBe('ready');
+    expect(briefingCardState({ ...base, briefing: BRIEFING, generating: true, watch: 'missing' })).toBe('ready');
   });
 
   test('generating, loading and error states', () => {
     expect(briefingCardState({ ...base, generating: true })).toBe('generating');
     expect(briefingCardState({ ...base, briefingLoading: true })).toBe('loading');
-    expect(briefingCardState({ ...base, garmin: 'loading' })).toBe('loading');
+    expect(briefingCardState({ ...base, watch: 'loading' })).toBe('loading');
     expect(briefingCardState({ ...base, generateError: new Error('x') })).toBe('error');
     expect(briefingCardState({ ...base, briefingError: new Error('x') })).toBe('error');
   });
 
-  test('asks to connect Garmin first unless skipped', () => {
-    expect(briefingCardState({ ...base, garmin: 'missing' })).toBe('connect-garmin');
-    expect(briefingCardState({ ...base, garmin: 'expired' })).toBe('connect-garmin');
-    expect(briefingCardState({ ...base, garmin: 'missing', skipGarmin: true })).toBe('empty');
+  test('asks to connect the watch first unless skipped', () => {
+    expect(briefingCardState({ ...base, watch: 'missing' })).toBe('connect-watch');
+    expect(briefingCardState({ ...base, watch: 'expired' })).toBe('connect-watch');
+    expect(briefingCardState({ ...base, watch: 'missing', skipWatch: true })).toBe('empty');
     expect(briefingCardState(base)).toBe('empty');
   });
 });
 
 describe('briefingSteps', () => {
-  test('mentions Garmin only when connected', () => {
-    expect(briefingSteps(true)[0]).toBe('Leyendo tu Garmin…');
-    expect(briefingSteps(false)).toEqual(['Mirando tu plan de hoy…', 'Escribiendo tu informe…']);
+  test('mentions the watch only when connected', () => {
+    expect(briefingSteps('garmin', true)[0]).toBe('Leyendo tu Garmin…');
+    expect(briefingSteps('coros', true)[0]).toBe('Leyendo tu COROS…');
+    expect(briefingSteps('coros', false)).toEqual(['Mirando tu plan de hoy…', 'Escribiendo tu informe…']);
+  });
+});
+
+describe('watch copy', () => {
+  test('connect card names the chosen watch; renewing is only for a Garmin key', () => {
+    expect(connectWatchCopy('coros', false)).toEqual({
+      title: 'Conecta tu COROS',
+      message: 'Con tu COROS, cada mañana te cuento cómo has dormido y qué toca hoy.',
+      connectLabel: 'Conectar COROS',
+      skipLabel: 'Prepararlo sin COROS',
+    });
+    expect(connectWatchCopy('garmin', true)).toMatchObject({ title: 'Renueva tu Garmin', connectLabel: 'Renovar conexión' });
+    expect(noSleepNote('coros')).toMatch(/^Conecta tu COROS en Tú/);
+  });
+
+  test('"Datos de Garmin" only for Garmin data: the best row of the day wins', () => {
+    const fallback = { brand: 'garmin' as const, watchConnected: true, hasSleep: true };
+    expect(dataAttribution([{ source: 'healthkit' }, { source: 'coros' }], fallback)).toBe('Datos de COROS');
+    expect(dataAttribution([{ source: 'coros' }, { source: 'garmin' }], fallback)).toBe('Datos de Garmin');
+    expect(dataAttribution([{ source: 'healthkit' }], fallback)).toBe('Datos de Apple Salud');
+    expect(dataAttribution([{ source: 'manual' }], { ...fallback, hasSleep: false })).toBeNull();
+    // No rows yet: a connected Garmin that brought last night's sleep is credited; COROS never by default.
+    expect(dataAttribution([], fallback)).toBe('Datos de Garmin');
+    expect(dataAttribution([], { ...fallback, brand: 'coros' })).toBeNull();
   });
 });
 

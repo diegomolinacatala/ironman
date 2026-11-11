@@ -50,6 +50,11 @@ export interface AllocationInput {
   /** Sports allowed only easy the whole week. */
   easyOnlyAllWeek: readonly Sport[];
   caps: AllocationCaps;
+  /**
+   * "Semana libre" (WeekPlan 'rest': holidays, exams, travel): easy sessions
+   * only, no quality and no long sessions, like a transition week.
+   */
+  freeWeek?: boolean;
 }
 
 type Endurance = 'swim' | 'bike' | 'run';
@@ -84,11 +89,12 @@ function countsFor(hours: number, kind: DistanceKind): Record<Endurance | 'stren
   return { swim: row?.swim ?? 2, bike: row?.bike ?? 2, run: row?.run ?? 2, strength: row?.strength ?? 1 };
 }
 
-function strengthPlan(info: PhaseInfo, tableCount: number, minutes: number): SessionSpec[] {
+function strengthPlan(info: PhaseInfo, tableCount: number, minutes: number, freeWeek: boolean): SessionSpec[] {
   const byPhase: Record<PhaseInfo['phase'], number> = { prep: 2, base: 2, build: 1, peak: 1, taper: 1, race_week: 0, recovery: 0, transition: 0 };
+  const easy = info.isRecoveryWeek || freeWeek;
   let count = Math.min(byPhase[info.phase], tableCount, minutes < 300 ? 1 : 2);
-  if (info.isRecoveryWeek && count > 0) count = 1;
-  const heavy = info.phase === 'base' && !info.isRecoveryWeek;
+  if (easy && count > 0) count = 1;
+  const heavy = info.phase === 'base' && !easy;
   return Array.from({ length: count }, () => ({
     code: heavy ? 'ST_HEAVY' : 'ST_MAINT',
     durationMin: heavy ? 45 : 30,
@@ -98,8 +104,8 @@ function strengthPlan(info: PhaseInfo, tableCount: number, minutes: number): Ses
 
 function qualityBudget(info: PhaseInfo, input: AllocationInput): number {
   let budget: number = QUALITY_BUDGET[info.phase];
-  // Recovery week inside a block: 1 short quality (2 in build at half work, §5.5); after a race: none.
-  if (info.phase === 'recovery' || info.phase === 'transition') budget = 0;
+  // Recovery week inside a block: 1 short quality (2 in build at half work, §5.5); after a race or in a free week: none.
+  if (info.phase === 'recovery' || info.phase === 'transition' || input.freeWeek) budget = 0;
   else if (info.isRecoveryWeek) budget = info.phase === 'build' ? 2 : 1;
   budget = Math.max(0, budget - input.qualityCut);
   return input.qualityCap === null ? budget : Math.min(budget, input.qualityCap);
@@ -230,8 +236,8 @@ function sportSessions(p: SportPlanInput): SessionSpec[] {
   return out;
 }
 
-function swimCodes(info: PhaseInfo, count: number): SessionCode[] {
-  const cssAllowed = !info.isRecoveryWeek && info.subphase !== 'base1' && info.phase !== 'prep' && info.phase !== 'transition' && info.phase !== 'recovery' && info.phase !== 'race_week';
+function swimCodes(info: PhaseInfo, count: number, freeWeek: boolean): SessionCode[] {
+  const cssAllowed = !freeWeek && !info.isRecoveryWeek && info.subphase !== 'base1' && info.phase !== 'prep' && info.phase !== 'transition' && info.phase !== 'recovery' && info.phase !== 'race_week';
   return count >= 2 && cssAllowed ? ['SW_CSS'] : [];
 }
 
@@ -334,7 +340,8 @@ export function allocateSessions(input: AllocationInput): SessionSpec[] {
   if (input.minutes <= 0) return [];
   const hours = input.minutes / 60;
   const counts = countsFor(hours, kind);
-  const strength = input.sports.includes('strength') && !input.blockedAllWeek.includes('strength') ? strengthPlan(info, counts.strength, input.minutes) : [];
+  const free = input.freeWeek === true;
+  const strength = input.sports.includes('strength') && !input.blockedAllWeek.includes('strength') ? strengthPlan(info, counts.strength, input.minutes, free) : [];
   const strengthMin = strength.reduce((s, x) => s + x.durationMin, 0);
   const enduranceMin = Math.max(0, input.minutes - strengthMin);
   const shares = normalizeSplit(splitFor(info, kind, distance), input.sports);
@@ -362,11 +369,11 @@ export function allocateSessions(input: AllocationInput): SessionSpec[] {
       info,
       kind,
     });
-  const swim = plan('swim', swimCodes(info, sportCounts.swim), false, minutes.swim, pr.swimMain).map((s) =>
+  const swim = plan('swim', swimCodes(info, sportCounts.swim, free), false, minutes.swim, pr.swimMain).map((s) =>
     s.code === 'SW_CSS' || s.code === 'SW_END' ? { ...s, priority: Math.min(s.priority, pr.swimMain) } : s,
   );
-  const bikeRaw = plan('bike', q.bike, longAllowed('bike', info, distance) && kind !== 'run', minutes.bike - bp.shortBikeMin, pr.bikeLong);
-  const run = plan('run', q.run, longAllowed('run', info, distance), minutes.run - bp.runMin, pr.runLong);
+  const bikeRaw = plan('bike', q.bike, !free && longAllowed('bike', info, distance) && kind !== 'run', minutes.bike - bp.shortBikeMin, pr.bikeLong);
+  const run = plan('run', q.run, !free && longAllowed('run', info, distance), minutes.run - bp.runMin, pr.runLong);
   const { bike, bricks } = brickSessions(q, bp, bikeRaw, pr.brick);
   const racePhase = info.phase === 'build' || info.phase === 'peak';
   const decorated = [...bike, ...run].map((s): SessionSpec => {

@@ -1,11 +1,11 @@
 import { addDays, todayISO, weekRange } from '@/domain/dates';
 import { weekSummary, type WeekSummary } from '@/domain/load';
-import { phaseFor, type PhaseInfo } from '@/domain/periodization';
-import type { BusyBlock, ISODate, JointSession, LifeEvent, Profile, Race, UUID, Workout } from '@/domain/types';
+import type { PhaseInfo } from '@/domain/periodization';
+import type { BusyBlock, ISODate, JointSession, LifeEvent, Profile, Race, UUID, WeekPlan, Workout } from '@/domain/types';
 import { useAuth } from '@/data/context';
-import { useBusyBlocks, useJointSessions, useLifeEvents, useProfile, useRaces, useWorkouts } from '@/data/queries';
+import { useBusyBlocks, useJointSessions, useLifeEvents, useProfile, useRaces, useWeekPlans, useWorkouts } from '@/data/queries';
 
-import { recentWeeklyMinutes } from './weekModel';
+import { recentWeeklyMinutes, weekPhaseOf } from './weekModel';
 
 const RECENT_WEEKS = 4;
 
@@ -19,7 +19,11 @@ export interface WeekData {
   races: Race[];
   profile: Profile | null;
   summary: WeekSummary;
+  /** Periodization of the week with its override (Plan → General) applied; null until races load. */
   phase: PhaseInfo | null;
+  /** The athlete's / coach's override for this week when it applies, else null. */
+  weekPlan: WeekPlan | null;
+  /** Weekly hours × the adjusted volume factor ("Objetivo"). */
   targetHours: number | null;
   recentMinutes: number[];
   /** Completed workouts of the 4 weeks before this one (planner ramp control). */
@@ -43,12 +47,11 @@ export function useWeekData(weekStart: ISODate): WeekData {
   const joint = useJointSessions(range);
   const races = useRaces();
   const profile = useProfile();
+  const weekPlans = useWeekPlans(range);
 
-  const all = [workouts, history, lifeEvents, busy, joint, races, profile];
-  const raceList = races.data ?? [];
+  const all = [workouts, history, lifeEvents, busy, joint, races, profile, weekPlans];
   const list = workouts.data ?? [];
-  const phase = raceList.length > 0 ? phaseFor(weekStart, raceList) : null;
-  const weeklyHours = profile.data?.availability.weeklyHoursTarget ?? null;
+  const week = weekPhaseOf(weekStart, races.data, profile.data ?? null, weekPlans.data);
 
   return {
     today,
@@ -57,11 +60,12 @@ export function useWeekData(weekStart: ISODate): WeekData {
     lifeEvents: lifeEvents.data ?? [],
     busyBlocks: busy.data ?? [],
     jointSessions: joint.data ?? [],
-    races: raceList,
+    races: races.data ?? [],
     profile: profile.data ?? null,
     summary: weekSummary(list, weekStart, today),
-    phase,
-    targetHours: weeklyHours != null ? weeklyHours * (phase?.volumeFactor ?? 1) : null,
+    phase: week.phase,
+    weekPlan: week.plan,
+    targetHours: week.targetHours,
     recentMinutes: recentWeeklyMinutes(history.data ?? [], weekStart, RECENT_WEEKS, addDays),
     history: (history.data ?? []).filter((w) => w.status === 'completed'),
     isLoading: workouts.isLoading,

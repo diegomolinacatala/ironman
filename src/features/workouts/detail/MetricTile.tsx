@@ -10,16 +10,18 @@ export interface MetricTileProps {
   hint?: string;
   /** Identity colour shown as a dot before the value (e.g. intensity zone). */
   accent?: string;
+  /** Takes the whole row (long values such as "162–168 ppm aprox."). */
+  wide?: boolean;
 }
 
 /** Number tile: muted sentence-case label over a tabular `metricSmall` value. */
-export function MetricTile({ label, value, hint, accent }: MetricTileProps) {
+export function MetricTile({ label, value, hint, accent, wide = false }: MetricTileProps) {
   const { colors } = useTheme();
   return (
     <View
       accessible
       accessibilityLabel={`${label}: ${value}${hint ? `, ${hint}` : ''}`}
-      style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      style={[styles.tile, wide ? styles.wide : null, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text variant="caption" color="textMuted" numberOfLines={1}>
         {label}
       </Text>
@@ -55,6 +57,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     gap: space.xs,
   },
+  wide: { flexBasis: '100%' },
   valueRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   dot: { width: DOT, height: DOT, borderRadius: DOT / 2 },
   value: { flexShrink: 1 },

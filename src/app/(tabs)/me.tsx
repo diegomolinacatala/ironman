@@ -64,7 +64,7 @@ export default function MeScreen() {
         <GroupDivider />
         <CoachNotesSection notes={me.coachNotes} />
       </SettingsGroup>
-      <ConnectionsSection />
+      <ConnectionsSection profile={me} />
       <PreferencesGroup />
       <PrivacyGroup />
       <AccountActions isDemo={isDemo} />

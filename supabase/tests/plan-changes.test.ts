@@ -64,6 +64,51 @@ function toDomain(row: DbWorkout): Workout {
   };
 }
 
+/** WorkoutCoaching as stored by apply_plan_changes (v4). */
+interface Coaching {
+  objective: string;
+  keys: string[];
+  success: string;
+  planB: string | null;
+}
+
+/** As the coach / Claude may send it: untrimmed texts and an unknown key. */
+const COACHING_INPUT = {
+  objective: '  Subir tu umbral sin pasarte de vueltas  ',
+  keys: [' Calienta 15′ suave antes de la primera serie ', 'Series a 162–168 ppm, 4:27–4:44 /km'],
+  success: 'Las 3 series al mismo ritmo y RPE 7–8 en la última',
+  planB: ' Si vas cansado: 45′ suaves en Z2 ',
+  extra: 'se descarta',
+};
+
+const COACHING_STORED: Coaching = {
+  objective: 'Subir tu umbral sin pasarte de vueltas',
+  keys: ['Calienta 15′ suave antes de la primera serie', 'Series a 162–168 ppm, 4:27–4:44 /km'],
+  success: 'Las 3 series al mismo ritmo y RPE 7–8 en la última',
+  planB: 'Si vas cansado: 45′ suaves en Z2',
+};
+
+/** Run session with explicit targets and cues (stored verbatim in workouts.steps). */
+const RUN_STEPS: Workout['steps'] = [
+  { kind: 'warmup', durationMin: 15, intensity: 'endurance', cue: 'Respiración cómoda: puedes hablar en frases' },
+  {
+    kind: 'work',
+    durationMin: 8,
+    repeat: 3,
+    intensity: 'threshold',
+    target: { hr: { min: 162, max: 168 }, pace: { min: 267, max: 284 }, rpe: { min: 7, max: 8 } },
+    cue: 'Ritmo constante, sin acelerar al final',
+  },
+  { kind: 'recovery', durationMin: 2, intensity: 'recovery', note: 'Trote muy suave' },
+  { kind: 'cooldown', durationMin: 10, intensity: 'recovery' },
+];
+
+/** Brick: bike leg on power, run leg on pace. */
+const BRICK_STEPS: Workout['steps'] = [
+  { kind: 'work', durationMin: 60, intensity: 'tempo', leg: 'bike', target: { power: { min: 200, max: 220 }, rpe: { min: 6, max: 7 } } },
+  { kind: 'work', durationMin: 20, intensity: 'race', leg: 'run', target: { pace: { min: 290, max: 300 } }, cue: 'Cadencia alta los primeros 5′' },
+];
+
 /** Comparable projection (ids of added workouts differ between TS and SQL). */
 function fingerprint(w: Workout): string {
   return JSON.stringify([
@@ -280,5 +325,174 @@ describe('apply_plan_changes', () => {
     assert.equal(rows[0]?.title, 'Tu semana tiene 2 cambios propuestos');
     assert.equal(rows[0]?.body, 'Muevo la tirada por el pádel');
     assert.equal(rows[0]?.data.url, `/proposal/${claude?.id}`);
+  });
+
+  describe('v4: coaching and step targets', () => {
+    const coachingOf = async (id: string): Promise<Coaching | null | undefined> =>
+      (await t.admin<{ coaching: Coaching | null }>('select coaching from public.workouts where id = $1', [id]))[0]?.coaching;
+    const idByTitle = async (user: string, title: string): Promise<string> => {
+      const [row] = await t.admin<{ id: string }>('select id from public.workouts where user_id = $1 and title = $2', [user, title]);
+      assert.ok(row?.id, `workout «${title}» exists`);
+      return row.id;
+    };
+    const draft = (title: string, extra: Record<string, unknown> = {}) => ({
+      date: '2026-12-01',
+      sport: 'run',
+      title,
+      durationMin: 60,
+      intensity: 'threshold',
+      ...extra,
+    });
+
+    test('add stores a trimmed copy with the known keys only; absent or null coaching means none', async () => {
+      const result = await apply(me, [
+        { op: 'add', workout: draft('Umbral con pautas', { coaching: COACHING_INPUT }), reason: 'r' },
+        { op: 'add', workout: draft('Sin pautas'), reason: 'r' },
+        { op: 'add', workout: draft('Pautas nulas', { coaching: null }), reason: 'r' },
+        { op: 'add', workout: draft('Pautas mínimas', { coaching: { objective: 'Rodar suave', success: 'Terminar con ganas' } }), reason: 'r' },
+      ]);
+      assert.deepEqual(result, { applied: 4, failed: [] });
+      assert.deepEqual(await coachingOf(await idByTitle(me, 'Umbral con pautas')), COACHING_STORED);
+      assert.equal(await coachingOf(await idByTitle(me, 'Sin pautas')), null);
+      assert.equal(await coachingOf(await idByTitle(me, 'Pautas nulas')), null);
+      assert.deepEqual(await coachingOf(await idByTitle(me, 'Pautas mínimas')), {
+        objective: 'Rodar suave',
+        keys: [],
+        success: 'Terminar con ganas',
+        planB: null,
+      });
+
+      // Claude (MCP) and the AI coach go through the service-role variant.
+      const [row] = await t.asService<{ r: ApplyJson }>('select public.svc_apply_plan_changes($1, $2::jsonb, null) as r', [
+        other,
+        JSON.stringify([{ op: 'add', workout: draft('Pautas de Claude', { coaching: COACHING_INPUT, source: 'claude' }), reason: 'r' }]),
+      ]);
+      assert.deepEqual(row?.r, { applied: 1, failed: [] });
+      assert.deepEqual(await coachingOf(await idByTitle(other, 'Pautas de Claude')), COACHING_STORED);
+    });
+
+    test('update replaces coaching, a patch without it keeps it and null clears it', async () => {
+      const id = await insertWorkout(me, { date: '2026-12-02', title: 'Para pautar' });
+      assert.deepEqual(await apply(me, [{ op: 'update', workoutId: id, patch: { coaching: COACHING_INPUT }, reason: 'r' }]), {
+        applied: 1,
+        failed: [],
+      });
+      assert.deepEqual(await coachingOf(id), COACHING_STORED);
+
+      await apply(me, [{ op: 'update', workoutId: id, patch: { title: 'Umbral', durationMin: 50 }, reason: 'r' }]);
+      assert.deepEqual(await coachingOf(id), COACHING_STORED, 'absent = unchanged');
+
+      const easier: Coaching = { objective: 'Soltar piernas', keys: [], success: 'FC por debajo de 140 ppm', planB: null };
+      await apply(me, [{ op: 'update', workoutId: id, patch: { coaching: easier }, reason: 'r' }]);
+      assert.deepEqual(await coachingOf(id), easier);
+
+      await apply(me, [{ op: 'update', workoutId: id, patch: { coaching: null }, reason: 'r' }]);
+      assert.equal(await coachingOf(id), null, 'null = clear');
+
+      // A new intensity (or sport) without new coaching would keep an objective written for the old session.
+      await apply(me, [{ op: 'update', workoutId: id, patch: { coaching: COACHING_INPUT }, reason: 'r' }]);
+      await apply(me, [{ op: 'update', workoutId: id, patch: { intensity: 'vo2' }, reason: 'r' }]);
+      assert.equal(await coachingOf(id), null, 'new intensity without coaching = cleared');
+      await apply(me, [{ op: 'update', workoutId: id, patch: { intensity: 'recovery', coaching: easier }, reason: 'r' }]);
+      assert.deepEqual(await coachingOf(id), easier, 'new intensity with coaching = replaced');
+
+      const done = await insertWorkout(me, { date: '2026-11-28', title: 'Hecho con pautas', status: 'completed' });
+      await apply(me, [{ op: 'update', workoutId: done, patch: { coaching: easier }, reason: 'r' }]);
+      assert.deepEqual(await coachingOf(done), easier, 'completed workouts take coaching through update');
+    });
+
+    test('invalid coaching is reported per change in Spanish and never stored', async () => {
+      const kept = await insertWorkout(me, { date: '2026-12-03', title: 'Con pautas buenas' });
+      await apply(me, [{ op: 'update', workoutId: kept, patch: { coaching: COACHING_INPUT }, reason: 'r' }]);
+
+      const valid: Coaching = { objective: 'Rodar', keys: ['Cadencia alta'], success: 'Sin molestias', planB: null };
+      const objective = 'Objetivo del entreno no válido (1–200 caracteres)';
+      const keys = 'Claves del entreno no válidas (1–160 caracteres cada una)';
+      const success = 'Criterio de éxito no válido (1–200 caracteres)';
+      const planB = 'Plan B no válido (1–200 caracteres)';
+      const emoji = (n: number): string => '💪'.repeat(n);
+      const cases: [unknown, string][] = [
+        ['Rodar suave', 'Indicaciones del entreno no válidas'],
+        [[valid], 'Indicaciones del entreno no válidas'],
+        [{ ...valid, objective: '   ' }, objective],
+        [{ ...valid, objective: 'x'.repeat(201) }, objective],
+        [{ keys: [], success: 'Sin molestias', planB: null }, objective],
+        [{ ...valid, objective: 7 }, objective],
+        [{ ...valid, keys: ['1', '2', '3', '4', '5'] }, 'Máximo 4 claves por entreno'],
+        [{ ...valid, keys: ['Cadencia alta', ''] }, keys],
+        [{ ...valid, keys: ['x'.repeat(161)] }, keys],
+        [{ ...valid, keys: [42] }, keys],
+        [{ ...valid, keys: 'Cadencia alta' }, keys],
+        [{ ...valid, success: '' }, success],
+        [{ objective: 'Rodar', keys: [], planB: null }, success],
+        [{ ...valid, success: 'x'.repeat(201) }, success],
+        [{ ...valid, planB: '  ' }, planB],
+        [{ ...valid, planB: 'x'.repeat(201) }, planB],
+        [{ ...valid, planB: false }, planB],
+        [
+          { objective: emoji(200), keys: [emoji(160), emoji(160), emoji(160), emoji(160)], success: emoji(200), planB: emoji(200) },
+          'Indicaciones del entreno demasiado largas',
+        ],
+      ];
+      const atLimit: Coaching = {
+        objective: 'o'.repeat(200),
+        keys: ['a', 'b', 'c', 'd'].map((k) => k.repeat(160)),
+        success: 's'.repeat(200),
+        planB: 'p'.repeat(200),
+      };
+      const result = await apply(me, [
+        ...cases.map(([coaching]) => ({ op: 'add', workout: draft('Pautas inválidas', { coaching }), reason: 'r' })),
+        { op: 'update', workoutId: kept, patch: { title: 'No cambia', coaching: { ...valid, objective: '' } }, reason: 'r' },
+        { op: 'add', workout: draft('Pautas al límite', { coaching: atLimit }), reason: 'r' },
+      ]);
+
+      assert.equal(result.applied, 1);
+      assert.deepEqual(result.failed, [
+        ...cases.map(([, error], index) => ({ index, error })),
+        { index: cases.length, error: objective },
+      ]);
+      const [invalid] = await t.admin<{ n: number }>(
+        `select count(*)::int as n from public.workouts where user_id = $1 and title = 'Pautas inválidas'`,
+        [me],
+      );
+      assert.equal(invalid?.n, 0);
+      const [row] = await t.admin<{ title: string; coaching: Coaching }>('select title, coaching from public.workouts where id = $1', [kept]);
+      assert.deepEqual(row, { title: 'Con pautas buenas', coaching: COACHING_STORED }, 'a failed update changes nothing');
+      assert.deepEqual(await coachingOf(await idByTitle(me, 'Pautas al límite')), atLimit);
+    });
+
+    test('steps keep explicit targets, cues and brick legs verbatim; at most 50 steps', async () => {
+      const result = await apply(me, [
+        { op: 'add', workout: draft('Series con objetivos', { steps: RUN_STEPS }), reason: 'r' },
+        { op: 'add', workout: draft('Cincuenta pasos', { steps: Array.from({ length: 50 }, () => ({ kind: 'work', durationMin: 1 })) }), reason: 'r' },
+        { op: 'add', workout: draft('Demasiados', { steps: Array.from({ length: 51 }, () => ({ kind: 'work', durationMin: 1 })) }), reason: 'r' },
+      ]);
+      assert.deepEqual(result, { applied: 2, failed: [{ index: 2, error: 'Demasiados pasos (máximo 50)' }] });
+      const id = await idByTitle(me, 'Series con objetivos');
+      const stepsOf = async (): Promise<unknown> =>
+        (await t.admin<{ steps: unknown }>('select steps from public.workouts where id = $1', [id]))[0]?.steps;
+      assert.deepEqual(await stepsOf(), RUN_STEPS);
+
+      const updated = await apply(me, [
+        { op: 'update', workoutId: id, patch: { sport: 'brick', title: 'Transición', steps: BRICK_STEPS }, reason: 'r' },
+        { op: 'update', workoutId: id, patch: { steps: Array.from({ length: 51 }, () => ({ kind: 'rest' })) }, reason: 'r' },
+      ]);
+      assert.deepEqual(updated, { applied: 1, failed: [{ index: 1, error: 'Demasiados pasos (máximo 50)' }] });
+      assert.deepEqual(await stepsOf(), BRICK_STEPS);
+    });
+
+    test('workouts.coaching only holds an object of at most 4000 bytes (direct writes too)', async () => {
+      const insert = (coaching: unknown) =>
+        t.asUser(
+          me,
+          `insert into public.workouts (date, sport, title, duration_min, intensity, coaching)
+           values ('2026-12-05', 'run', 'Directo', 40, 'endurance', $1::jsonb) returning id`,
+          [JSON.stringify(coaching)],
+        );
+      await assert.rejects(insert(['Rodar']), pgError({ code: '23514' }));
+      await assert.rejects(insert('Rodar'), pgError({ code: '23514' }));
+      await assert.rejects(insert({ ...COACHING_STORED, objective: 'x'.repeat(5000) }), pgError({ code: '23514' }));
+      assert.equal((await insert(COACHING_STORED)).length, 1);
+    });
   });
 });

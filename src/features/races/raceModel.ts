@@ -57,7 +57,7 @@ export const PHASE_TIMELINE: readonly TimelineStep[] = [
   { key: 'base', label: 'Base', weight: 1.1 },
   { key: 'build', label: 'Construcción', weight: 1.6 },
   { key: 'peak', label: 'Pico', weight: 0.7 },
-  { key: 'taper', label: 'Puesta a punto', weight: 1.4 },
+  { key: 'taper', label: 'Afinamiento', weight: 1.4 },
   { key: 'race_week', label: 'Carrera', weight: 1 },
 ];
 
@@ -73,7 +73,7 @@ export function timelineIndex(phase: string): number | null {
 
 /**
  * Name of a phase as shown in this area: the timeline wording for phases on
- * the race arc (Base → Construcción → Pico → Puesta a punto → Carrera), the
+ * the race arc (Base → Construcción → Pico → Afinamiento → Carrera), the
  * domain label otherwise (Preparación, Recuperación, Transición).
  */
 export function phaseName(phase: Phase): string {

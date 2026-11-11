@@ -22,9 +22,13 @@ type LegacyDeviceStateKey = 'healthEnabled' | 'healthLastSync' | 'healthImported
 const SCOPED_ONLY_KEYS = {
   /** "Añadir mis entrenos al calendario" settings + workout → event mapping (`calendar/trainingCalendarStore`). */
   trainingCalendar: 'rti.trainingCalendar.v1',
+  /** Apps seen writing workouts or sleep to Apple Salud ("COROS"…), to tell COROS users their data arrives. */
+  healthSources: 'rti.health.sources.v1',
 } as const;
 
-export type DeviceStateKey = LegacyDeviceStateKey | keyof typeof SCOPED_ONLY_KEYS;
+type ScopedOnlyKey = keyof typeof SCOPED_ONLY_KEYS;
+
+export type DeviceStateKey = LegacyDeviceStateKey | ScopedOnlyKey;
 
 /** Keys that were device-wide before state was namespaced (see `removeLegacyDeviceKeys`). */
 export const DEVICE_STATE_KEYS: readonly LegacyDeviceStateKey[] = [
@@ -35,8 +39,12 @@ export const DEVICE_STATE_KEYS: readonly LegacyDeviceStateKey[] = [
   'calendarLastSync',
 ];
 
+function isScopedOnly(key: DeviceStateKey): key is ScopedOnlyKey {
+  return Object.prototype.hasOwnProperty.call(SCOPED_ONLY_KEYS, key);
+}
+
 function baseKey(key: DeviceStateKey): string {
-  return key === 'trainingCalendar' ? SCOPED_ONLY_KEYS.trainingCalendar : StorageKeys[key];
+  return isScopedOnly(key) ? SCOPED_ONLY_KEYS[key] : StorageKeys[key];
 }
 
 /** AsyncStorage key of `key` for `userId` ("rti.health.enabled.user.<id>"). */

@@ -10,6 +10,7 @@ import { BriefingCard } from '@/features/briefing/BriefingCard';
 import { Appear } from '@/features/today/Appear';
 import { Banners } from '@/features/today/Banners';
 import { MealsStrip } from '@/features/today/MealsStrip';
+import { moreSheetConfig } from '@/features/today/moreSheet';
 import { QuickActions } from '@/features/today/QuickActions';
 import { RaceChip } from '@/features/today/RaceChip';
 import { TodayHeader } from '@/features/today/TodayHeader';
@@ -19,6 +20,7 @@ import { dateLine, greeting } from '@/features/today/todayModel';
 import { TomorrowStrip } from '@/features/today/TomorrowStrip';
 import { useTodayData } from '@/features/today/useTodayData';
 import { useActionSheet } from '@/features/workouts/actionSheet';
+import { easierPatch } from '@/features/workouts/coachAdapters';
 import { CompleteSheet } from '@/features/workouts/CompleteSheet';
 import { MoveSheet } from '@/features/workouts/MoveSheet';
 import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
@@ -40,13 +42,13 @@ export default function TodayScreen() {
   const inlineAccessory = needsInlineAccessory();
 
   const openMore = (workout: Workout) =>
-    sheet.open({
-      title: workout.title,
-      actions: [
-        { label: 'Mover a otro día', icon: 'move', onPress: () => setMoving(workout) },
-        { label: 'Saltar', icon: 'skip', onPress: () => void actions.skip(workout) },
-      ],
-    });
+    sheet.open(
+      moreSheetConfig(workout, easierPatch(workout, data.thresholds), {
+        onEasier: (patch) => void actions.easier(workout, patch),
+        onMove: () => setMoving(workout),
+        onSkip: () => void actions.skip(workout),
+      }),
+    );
 
   return (
     <Screen
@@ -88,7 +90,13 @@ export default function TodayScreen() {
       </Appear>
 
       {completing ? (
-        <CompleteSheet key={completing.id} workout={completing} visible onClose={() => setCompleting(null)} />
+        <CompleteSheet
+          key={completing.id}
+          workout={completing}
+          raceDistance={data.raceDistance}
+          visible
+          onClose={() => setCompleting(null)}
+        />
       ) : null}
       {moving ? (
         <MoveSheet

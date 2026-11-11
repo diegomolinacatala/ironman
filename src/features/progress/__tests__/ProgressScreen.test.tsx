@@ -11,6 +11,7 @@ import ProgressScreen from '@/app/(tabs)/progress';
 import { AuthContext, RepositoryContext } from '@/data/context';
 import { createDemoRepository, type DemoRepository } from '@/data/demo/DemoRepository';
 import type { Repository } from '@/data/repository';
+import { RecoveryCard } from '@/features/progress/RecoveryCard';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() };
 
@@ -100,5 +101,16 @@ describe('Progreso tab', () => {
     await renderProgress();
     await fireEvent.press(screen.getAllByRole('button', { name: 'Conexiones' })[0]!);
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/integrations');
+  });
+
+  test('a COROS athlete without recovery data is told how COROS arrives (never "Garmin")', async () => {
+    await repo.upsertMyProfile({ watchBrand: 'coros' });
+    await render(
+      <Providers>
+        <RecoveryCard series={[]} />
+      </Providers>,
+    );
+    expect(await screen.findByText('Conecta tu COROS (Apple Salud y tu Claude) para ver tu VFC, tu pulso en reposo y tu sueño.')).toBeTruthy();
+    expect(screen.queryByText(/Garmin/)).toBeNull();
   });
 });

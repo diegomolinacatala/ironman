@@ -3,7 +3,7 @@
  * Mirrors the user scoping of the real adapters: every method filters by userId.
  */
 import { StoreRejectedError } from '../planning/store.ts';
-import type { ApplyChangesResult, MetricsUpsert, PlanningStore, ProposedJointSession, RaceWrite } from '../planning/store.ts';
+import type { ApplyChangesResult, MetricsUpsert, PlanningStore, ProposedJointSession, RaceWrite, ServerMetricsSource } from '../planning/store.ts';
 import type {
   BusyBlock,
   DailyCheckin,
@@ -18,6 +18,7 @@ import type {
   ProposalDraft,
   Race,
   UUID,
+  WeekPlan,
   Workout,
 } from '../types.ts';
 
@@ -94,7 +95,8 @@ export interface FakeState {
   friendWeeks: Map<UUID, FriendWeekItem[]>;
   proposals: (ProposalDraft & { id: UUID; userId: UUID })[];
   applied: { userId: UUID; changes: PlanChange[]; proposalId: UUID }[];
-  metricUpserts: { userId: UUID; rows: MetricsUpsert[] }[];
+  metricUpserts: { userId: UUID; source: ServerMetricsSource; rows: MetricsUpsert[] }[];
+  weekPlans: (WeekPlan & { userId: UUID })[];
 }
 
 export function emptyState(): FakeState {
@@ -113,10 +115,42 @@ export function emptyState(): FakeState {
     proposals: [],
     applied: [],
     metricUpserts: [],
+    weekPlans: [],
   };
 }
 
 const inRange = (d: string, from: string, to: string): boolean => d >= from && d <= to;
+
+/** Week-plan methods of the fake store (upsert by user + Monday, like the table's primary key). */
+function fakeWeekPlans(state: FakeState): Pick<PlanningStore, 'listWeekPlans' | 'saveWeekPlans' | 'deleteWeekPlans'> {
+  const strip = ({ userId: _u, ...plan }: WeekPlan & { userId: UUID }): WeekPlan => plan;
+  return {
+    listWeekPlans: async (userId, from, to) =>
+      state.weekPlans
+        .filter((p) => p.userId === userId && inRange(p.weekStart, from, to))
+        .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+        .map(strip),
+    saveWeekPlans: async (userId, drafts) => {
+      const saved = drafts.map((d) => ({
+        userId,
+        weekStart: d.weekStart,
+        kind: d.kind,
+        targetMinutes: d.targetMinutes ?? null,
+        note: d.note ?? null,
+        source: d.source ?? 'manual',
+        updatedAt: NOW.toISOString(),
+      }));
+      const keys = new Set(saved.map((p) => p.weekStart));
+      state.weekPlans = [...state.weekPlans.filter((p) => p.userId !== userId || !keys.has(p.weekStart)), ...saved];
+      return saved.map(strip);
+    },
+    deleteWeekPlans: async (userId, weekStarts) => {
+      const before = state.weekPlans.length;
+      state.weekPlans = state.weekPlans.filter((p) => p.userId !== userId || !weekStarts.includes(p.weekStart));
+      return before - state.weekPlans.length;
+    },
+  };
+}
 
 export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): PlanningStore {
   const findByExternalId: PlanningStore['findByExternalId'] = async (userId, externalId, rawId) =>
@@ -148,8 +182,8 @@ export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): P
       state.events.push(created);
       return created;
     },
-    upsertMetrics: async (userId, _source, rows) => {
-      state.metricUpserts.push({ userId, rows });
+    upsertMetrics: async (userId, source, rows) => {
+      state.metricUpserts.push({ userId, source, rows });
       return rows.length;
     },
     completeWorkout: async (userId, workoutId, completed) => {
@@ -212,6 +246,7 @@ export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): P
       state.races[idx] = { ...state.races[idx], ...patch } as Race & { userId: UUID };
       return state.races[idx];
     },
+    ...fakeWeekPlans(state),
   };
 }
 

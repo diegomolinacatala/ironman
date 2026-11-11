@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 
 import { useIntegrations, useTokens, useUpdateProfile } from '@/data/queries';
 import type { CreatedToken, Profile } from '@/domain/types';
+import { useHealthIntegration } from '@/integrations/hooks';
 import { Loading, Screen, haptics } from '@/ui';
 
 import {
@@ -20,10 +21,10 @@ import {
 import type { StepNav } from './StepLayout';
 import { CalendarStep } from './steps/CalendarStep';
 import { ClaudeStep } from './steps/ClaudeStep';
-import { GarminStep } from './steps/GarminStep';
 import { GoalStep } from './steps/GoalStep';
 import { MorningStep } from './steps/MorningStep';
 import { PlanStep } from './steps/PlanStep';
+import { WatchStep } from './steps/WatchStep';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { useOnboardingProgress } from './useOnboardingProgress';
 
@@ -43,21 +44,23 @@ export function OnboardingFlow({ profile, userId, isDemo, onFinishing }: Onboard
   const progress = useOnboardingProgress(userId);
   const integrations = useIntegrations();
   const tokens = useTokens();
+  // A COROS watch counts as connected once Apple Salud is on: wait for this device's opt-in to be read.
+  const health = useHealthIntegration();
   const updateProfile = useUpdateProfile();
   const [state, setState] = useState<StoredProgress | null>(null);
   const stateRef = useRef<StoredProgress | null>(null);
   // The connector URL is shown once: keep the token for the whole session (only its id is persisted).
   const [claudeToken, setClaudeToken] = useState<CreatedToken | null>(null);
-  const factsReady = progress.loaded && !integrations.isLoading && !tokens.isLoading;
+  const factsReady = progress.loaded && !integrations.isLoading && !tokens.isLoading && health.loaded;
 
   useEffect(() => {
     if (stateRef.current || !factsReady) return;
     const local = progress.saved ?? emptyProgress('welcome');
-    const facts = onboardingFacts(profile, integrations.data, tokens.data, local);
+    const facts = onboardingFacts(profile, integrations.data, tokens.data, local, health.enabled);
     const initial: StoredProgress = { ...local, claudeDone: facts.claudeDone, step: resolveResumeStep(steps, progress.saved?.step ?? null, facts) };
     stateRef.current = initial;
     setState(initial);
-  }, [factsReady, progress.saved, profile, integrations.data, tokens.data, steps]);
+  }, [factsReady, progress.saved, profile, integrations.data, tokens.data, health.enabled, steps]);
 
   /** Merges, renders and persists (per user) in one go. */
   const persist = useCallback(
@@ -109,7 +112,15 @@ export function OnboardingFlow({ profile, userId, isDemo, onFinishing }: Onboard
     case 'goal':
       return <GoalStep nav={nav} profile={profile} />;
     case 'garmin':
-      return <GarminStep nav={nav} isDemo={isDemo} skipped={state.garminSkipped} onSkip={() => goTo(nextId, { garminSkipped: true })} />;
+      return (
+        <WatchStep
+          nav={nav}
+          profile={profile}
+          isDemo={isDemo}
+          skipped={state.garminSkipped}
+          onSkip={() => goTo(nextId, { garminSkipped: true })}
+        />
+      );
     case 'claude':
       return (
         <ClaudeStep

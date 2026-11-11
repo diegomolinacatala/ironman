@@ -15,6 +15,7 @@ import { inboxDemo } from './repo/inboxDemo';
 import { integrationsDemo } from './repo/integrationsDemo';
 import { planningDemo } from './repo/planningDemo';
 import { socialDemo } from './repo/socialDemo';
+import { weekPlansDemo } from './repo/weekPlansDemo';
 import { wellnessDemo } from './repo/wellnessDemo';
 import { workoutsDemo } from './repo/workoutsDemo';
 import { DemoStore, type DemoStoreOptions } from './store';
@@ -42,6 +43,7 @@ export function createDemoRepository(options: DemoRepositoryOptions = {}): DemoR
 
   const data = {
     ...planningDemo(deps),
+    ...weekPlansDemo(deps),
     ...workoutsDemo(deps),
     ...wellnessDemo(deps),
     ...socialDemo(deps),

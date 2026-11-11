@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import { StorageKeys, readJson, removeKey, writeJson } from '@/lib/storage';
 
 import type { AuthSession, ChangeTopic } from '../repository';
-import { isDemoDb, type DemoClock, type DemoDb } from './db';
+import { isDemoDb, migrateDemoDb, type DemoClock, type DemoDb } from './db';
 import { newId as defaultNewId } from './ids';
 import { buildSeed } from './seed';
 
@@ -51,6 +51,12 @@ export class DemoStore {
   private async load(): Promise<DemoDb> {
     const stored = await readJson<unknown>(StorageKeys.demoDb, null);
     if (isDemoDb(stored)) return stored;
+    // An older version keeps the athlete's data: migrate in place instead of re-seeding.
+    const migrated = migrateDemoDb(stored);
+    if (migrated) {
+      await writeJson(StorageKeys.demoDb, migrated);
+      return migrated;
+    }
     const seeded = buildSeed(this.clock());
     await writeJson(StorageKeys.demoDb, seeded);
     return seeded;

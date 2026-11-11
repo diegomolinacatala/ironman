@@ -6,13 +6,14 @@ import { errorInfo } from '../log.ts';
 import { extractIcsSecret } from '../mcp/guards.ts';
 import { authorizeToken, clientKeyOf } from '../mcp/token-gate.ts';
 import type { RateLimiter } from '../mcp/token-gate.ts';
+import { nextRace } from '../planning/phase.ts';
 import type { PlanningReader } from '../planning/store.ts';
 import type { UUID } from '../types.ts';
 import { buildIcsFeed, ICS_FUTURE_DAYS, ICS_PAST_DAYS } from './feed.ts';
 
 export interface IcsDeps {
   resolveUserId: (tokenHash: string) => Promise<UUID | null>;
-  reader: Pick<PlanningReader, 'getProfile' | 'listWorkouts' | 'listJointSessions'>;
+  reader: Pick<PlanningReader, 'getProfile' | 'listWorkouts' | 'listJointSessions' | 'listRaces'>;
   rateLimiter: RateLimiter;
   now: () => Date;
   logger: Logger;
@@ -36,11 +37,14 @@ export async function handleIcsHttp(req: Request, deps: IcsDeps): Promise<Respon
     const today = todayIn(profile?.timezone ?? DEFAULT_TZ, now);
     const from = addDays(today, -ICS_PAST_DAYS);
     const to = addDays(today, ICS_FUTURE_DAYS);
-    const [workouts, jointSessions] = await Promise.all([
+    const [workouts, jointSessions, races] = await Promise.all([
       deps.reader.listWorkouts(userId, from, to),
       deps.reader.listJointSessions(userId, from, to),
+      deps.reader.listRaces(userId),
     ]);
-    const body = buildIcsFeed({ userId, workouts, jointSessions, now, calendarName: 'Road to Ironman' });
+    // Thresholds and the target race distance turn each workout's notes into its prescription with numbers.
+    const prescription = { thresholds: profile?.thresholds ?? null, raceDistance: nextRace(races, today)?.distance ?? null };
+    const body = buildIcsFeed({ userId, workouts, jointSessions, now, calendarName: 'Road to Ironman', ...prescription });
     deps.logger.info('ics served', { events: workouts.length });
     return new Response(req.method === 'HEAD' ? null : body, {
       status: 200,

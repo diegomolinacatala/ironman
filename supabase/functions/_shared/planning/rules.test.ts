@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { workout } from '../testing/fakes.ts';
 import type { LifeEvent, Race } from '../types.ts';
-import { defaultSteps, deviceSummary, paceHint, toGarminWorkouts } from './device.ts';
+import { defaultSteps, deviceSummary, toGarminWorkouts } from './device.ts';
+import { zoneTargets } from './domain/zones.ts';
 import { formatDistance, formatDuration } from './labels.ts';
 import { estimateTss, intensityFromEffort, lifeEventLoad, weeklyLoadHistory, weekTotals, workoutLoad } from './load.ts';
 import { compatibleSport, matchActivity } from './match.ts';
@@ -67,8 +68,31 @@ test('phase counts back from the next A race', () => {
   assert.equal(phaseFor('2026-10-26', [race('2027-01-10', 'half')]).phase, 'build');
   assert.equal(phaseFor('2026-10-26', [race('2027-04-18', 'half')]).phase, 'base');
   assert.equal(phaseFor('2026-10-26', []).phase, 'base');
-  assert.equal(phaseFor('2026-10-26', [race('2026-10-24', 'half')]).phase, 'recovery');
-  assert.equal(phaseFor('2026-10-26', [race('2026-10-11', 'half')]).phase, 'transition');
+  // Same post-race weeks as the app (mirrored domain/periodization.ts): transition after an A race, recovery after a B race.
+  assert.equal(phaseFor('2026-10-26', [race('2026-10-24', 'half')]).phase, 'transition');
+  assert.equal(phaseFor('2026-10-26', [race('2026-10-24', 'half', 'B')]).phase, 'recovery');
+  const maintenance = phaseFor('2026-10-26', [race('2026-10-11', 'half')]);
+  assert.deepEqual([maintenance.phase, maintenance.subphase, maintenance.label], ['base', 'maintenance', 'Mantenimiento']);
+});
+
+test('phase applies the week plan like the app and labels the week like Plan → General', () => {
+  const races = [race('2027-04-18', 'half')];
+  const plan = { weekStart: '2026-10-26', kind: 'recovery' as const, targetMinutes: null, note: 'Exámenes', source: 'claude' as const, updatedAt: '2026-10-20T10:00:00Z' };
+  const plain = phaseFor('2026-10-26', races, { weeklyHoursTarget: 8, today: '2026-10-24' });
+  const adjusted = phaseFor('2026-10-26', races, { weeklyHoursTarget: 8, weekPlans: [plan], today: '2026-10-24' });
+  assert.equal(plain.adjusted, false);
+  assert.equal(adjusted.adjusted, true);
+  assert.equal(adjusted.isRecoveryWeek, true);
+  assert.equal(adjusted.weekKind, 'recovery');
+  assert.equal(adjusted.weekLabel, 'Descarga');
+  assert.ok(adjusted.volumeFactor < plain.volumeFactor);
+  assert.ok((adjusted.targetMinutes ?? 0) < (plain.targetMinutes ?? 0));
+  assert.equal((adjusted.targetMinutes ?? 0) % 5, 0);
+  assert.match(adjusted.focus, /Exámenes/);
+  // Race week: a week plan never overrides it.
+  const raceWeek = phaseFor('2027-04-12', races, { weekPlans: [{ ...plan, weekStart: '2027-04-12' }] });
+  assert.deepEqual([raceWeek.phase, raceWeek.adjusted, raceWeek.raceInWeek?.date], ['race_week', false, '2027-04-18']);
+  assert.equal(phaseFor('2026-10-26', races).targetMinutes, null, 'no weekly hours target, no minutes');
 });
 
 test('matching respects day, sport compatibility, 50–150 % duration and start time', () => {
@@ -133,7 +157,7 @@ test('wellness signals compare the latest day with the recent baseline', () => {
   assert.equal(merged[0].restingHr, 50);
 });
 
-test('device export builds Garmin-like workouts with threshold targets', () => {
+test('device export builds Garmin-like workouts with the app zones as targets', () => {
   const thresholds = { ftpW: 250, lthr: 170, runThresholdPaceSecPerKm: 270 };
   const bike = toGarminWorkouts(workout({ sport: 'bike', intensity: 'threshold', durationMin: 60 }), thresholds);
   assert.equal(bike.length, 1);
@@ -141,7 +165,8 @@ test('device export builds Garmin-like workouts with threshold targets', () => {
   assert.equal(bike[0].sport, 'CYCLING');
   assert.equal(segment.steps.length, 3);
   assert.equal(segment.steps[1].targetType, 'POWER');
-  assert.equal(segment.steps[1].targetValueLow, 228);
+  const power = zoneTargets('bike', 'threshold', thresholds).power;
+  assert.deepEqual([segment.steps[1].targetValueLow, segment.steps[1].targetValueHigh], [power?.min, power?.max], 'same watts the app shows');
   const intervals = toGarminWorkouts(
     workout({ sport: 'run', intensity: 'vo2', steps: [{ kind: 'warmup', durationMin: 15 }, { kind: 'work', durationMin: 3, repeat: 5, intensity: 'vo2' }] }),
     thresholds,
@@ -152,6 +177,5 @@ test('device export builds Garmin-like workouts with threshold targets', () => {
   assert.equal(toGarminWorkouts(workout({ sport: 'brick', durationMin: 120 }), {}).length, 2);
   assert.equal(toGarminWorkouts(workout({ sport: 'rest', durationMin: 0 }), {}).length, 0);
   assert.equal(defaultSteps(20, 'endurance').length, 1);
-  assert.match(paceHint('run', 'endurance', thresholds) ?? '', /\/km$/);
-  assert.match(deviceSummary(workout({ sport: 'run' }), thresholds), /Carrera · Rodaje Z2/);
+  assert.match(deviceSummary(workout({ sport: 'run' }), thresholds), /^Carrera · Rodaje Z2 · 50' · Fondo \(Z2\) · Z2 · 145–151 ppm · 5:08–5:48 \/km · RPE 3–4$/);
 });

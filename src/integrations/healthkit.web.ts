@@ -4,13 +4,10 @@
  */
 import type { Repository } from '@/data/repository';
 
-export { getHealthLastSync, isHealthEnabled, setHealthEnabled } from './health/state';
+import { emptyHealthResult, type HealthSyncResult } from './health/result';
 
-export interface HealthSyncResult {
-  metricsDays: number;
-  workoutsCompleted: number;
-  activitiesImported: number;
-}
+export { getHealthLastSync, isHealthEnabled, setHealthEnabled } from './health/state';
+export type { HealthSyncResult } from './health/result';
 
 export function isHealthAvailable(): boolean {
   return false;
@@ -21,5 +18,5 @@ export async function requestHealthPermissions(): Promise<boolean> {
 }
 
 export async function syncHealth(_repo: Repository, _opts?: { days?: number }): Promise<HealthSyncResult> {
-  return { metricsDays: 0, workoutsCompleted: 0, activitiesImported: 0 };
+  return emptyHealthResult();
 }

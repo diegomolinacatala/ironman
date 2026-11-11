@@ -2,14 +2,15 @@
  * Local morning briefing ("Informe de hoy"), used when Claude is not
  * available (demo, AI off, offline fallback): last night's sleep merged from
  * every metrics source (`briefingSleep.ts`), a verdict, a short headline for
- * the widget, a one-sentence sleep summary, a focus tip and a warm Spanish
- * (Spain, tú) `script` for text-to-speech (`briefingScript.ts`). Pure.
+ * the widget, a one-sentence sleep summary, a focus tip (the key session's
+ * coaching when it has one) and a warm Spanish (Spain, tú) `script` for
+ * text-to-speech (`briefingScript.ts`) that names the key session's target,
+ * sensation and success criterion (`briefingCoach.ts`). Pure.
  */
+import { coachTip } from './briefingCoach';
 import { HRV_HIGH_RATIO, HRV_LOW_RATIO, hrvRatio, isNum, sleepSnapshotFrom, sleepVerdictOf } from './briefingSleep';
 import { NO_TOGETHER, togetherOf } from './briefingSocial';
 import {
-  NO_GARMIN,
-  NO_SLEEP_YET,
   QUALITY,
   SPORT_SPOKEN,
   composeScript,
@@ -18,10 +19,25 @@ import {
   joinEs,
   keySession,
   lowerFirst,
+  noSleepYetText,
+  noWatchText,
   type DayPlan,
 } from './briefingScript';
 import { diffDays, formatDuration } from './dates';
-import type { Briefing, DailyMetrics, ISODate, JointSession, Race, SleepSnapshot, SleepVerdict, UUID, Workout } from './types';
+import type {
+  Briefing,
+  DailyMetrics,
+  ISODate,
+  JointSession,
+  Race,
+  RaceDistance,
+  SleepSnapshot,
+  SleepVerdict,
+  Thresholds,
+  UUID,
+  WatchBrand,
+  Workout,
+} from './types';
 
 export { sleepSnapshotFrom, sleepVerdictOf } from './briefingSleep';
 
@@ -41,6 +57,12 @@ export interface BriefingInput {
    * invitations still waiting for an answer. Optional: no social sentences without it.
    */
   social?: { me: UUID; jointSessions: readonly JointSession[] };
+  /** The athlete's thresholds: the key session's target is spoken in ppm, watts or pace. */
+  thresholds?: Thresholds | null;
+  /** Distance of the target race (what "ritmo de carrera" means). */
+  raceDistance?: RaceDistance | null;
+  /** The athlete's watch, for the "no sleep data yet" texts (absent/null: "tu reloj"). */
+  watchBrand?: WatchBrand | null;
 }
 
 const HEADLINE_MAX = 90;
@@ -99,8 +121,8 @@ function hrvDetail(s: SleepSnapshot): string | null {
   return `${value}, en tu media`;
 }
 
-function sleepSummaryOf(s: SleepSnapshot | null, verdict: SleepVerdict, hasAnyMetrics: boolean): string {
-  if (!s) return hasAnyMetrics ? NO_SLEEP_YET : NO_GARMIN;
+function sleepSummaryOf(s: SleepSnapshot | null, verdict: SleepVerdict, hasAnyMetrics: boolean, brand?: WatchBrand | null): string {
+  if (!s) return hasAnyMetrics ? noSleepYetText(brand) : noWatchText(brand);
   const main = [
     isNum(s.hours) ? `${hoursShort(s.hours)} de sueño` : null,
     isNum(s.score) ? `puntuación ${Math.round(s.score)}` : null,
@@ -131,6 +153,8 @@ function trainingFocus(main: Workout, verdict: SleepVerdict): string {
   if (verdict === 'fair' && demanding) {
     return 'Tu noche ha sido regular: calienta con calma y decide sobre la marcha si mantienes la intensidad.';
   }
+  const tip = coachTip(main);
+  if (tip) return tip;
   if (QUALITY.includes(main.intensity)) {
     return 'Sesión de calidad: llega con hidratos, una tostada con miel o un plátano una o dos horas antes, y calienta bien.';
   }
@@ -176,12 +200,14 @@ export function composeBriefing(input: BriefingInput): Briefing {
     race,
     daysToRace,
     together: input.social ? togetherOf(input.social.jointSessions, input.social.me, date) : NO_TOGETHER,
+    speech: { thresholds: input.thresholds ?? null, raceDistance: input.raceDistance ?? race?.distance ?? null },
+    watchBrand: input.watchBrand ?? null,
   });
   return {
     date,
     headline: headlineOf(snapshot, plan, race),
     sleepVerdict: verdict,
-    sleepSummary: sleepSummaryOf(snapshot, verdict, hasAnyMetrics),
+    sleepSummary: sleepSummaryOf(snapshot, verdict, hasAnyMetrics, input.watchBrand),
     script,
     focus,
     sleep: snapshot,

@@ -5,6 +5,7 @@ import { Card, Icon, Text, space, useTheme, type IconName } from '@/ui';
 
 const SOURCE_LABEL: Record<DailyMetrics['source'], string> = {
   garmin: 'Garmin',
+  coros: 'COROS',
   healthkit: 'Apple Salud',
   manual: 'Manual',
 };
@@ -26,7 +27,7 @@ function metricItems(m: DailyMetrics): MetricItem[] {
   return items.filter((i): i is MetricItem => i != null);
 }
 
-/** Today's device metrics with source attribution ("Datos de Garmin"). */
+/** Today's device metrics with source attribution ("Datos de hoy · Garmin", "· COROS"…). */
 export function MetricsToday({ metrics }: { metrics: DailyMetrics | null }) {
   const { colors } = useTheme();
   if (!metrics) return null;

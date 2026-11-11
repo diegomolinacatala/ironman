@@ -5,7 +5,13 @@ import {
   dateWords,
   distanceWords,
   durationWords,
+  hrRangeWords,
   numberToWords,
+  paceRangeWords,
+  powerRangeWords,
+  rpeWords,
+  spokenCopy,
+  stepDurationWords,
   wordCount,
 } from '../briefingSpeech';
 
@@ -100,5 +106,38 @@ describe('clock times and dates', () => {
   it('counts words', () => {
     expect(wordCount('  hola   qué tal ')).toBe(3);
     expect(wordCount('')).toBe(0);
+  });
+});
+
+describe('targets in words', () => {
+  test('heart rate, power, pace and RPE', () => {
+    expect(hrRangeWords({ min: 145, max: 151 })).toBe('entre ciento cuarenta y cinco y ciento cincuenta y una pulsaciones');
+    expect(powerRangeWords({ min: 200, max: 220 })).toBe('entre doscientos y doscientos veinte vatios');
+    expect(paceRangeWords({ min: 308, max: 348 }, 'km')).toBe('entre cinco minutos ocho y cinco minutos cuarenta y ocho el kilómetro');
+    expect(paceRangeWords({ min: 105, max: 105 }, '100m')).toBe('un minuto cuarenta y cinco los cien metros');
+    expect(rpeWords({ min: 7, max: 8 })).toBe('esfuerzo de siete a ocho sobre diez');
+    expect(rpeWords({ min: 9, max: 9 })).toBe('esfuerzo de nueve sobre diez');
+  });
+
+  test('step lengths with seconds', () => {
+    expect(stepDurationWords(0.5)).toBe('treinta segundos');
+    expect(stepDurationWords(1.25)).toBe('un minuto y quince segundos');
+    expect(stepDurationWords(8)).toBe('ocho minutos');
+  });
+});
+
+describe('spokenCopy', () => {
+  test('drops bracketed numbers and spells zones and RPE', () => {
+    expect(spokenCopy('Las tres series en Z4 (162–168 ppm, 4:27–4:44 /km), la última igual que la primera, y acabas con RPE 7–8.')).toBe(
+      'Las tres series en zona cuatro, la última igual que la primera, y acabas con esfuerzo de siete a ocho sobre diez.',
+    );
+    expect(spokenCopy('Sube fuerte (RPE 8–9) con zancada corta.')).toBe('Sube fuerte con zancada corta.');
+  });
+
+  test('null when digits, symbols or acronyms remain', () => {
+    expect(spokenCopy('Busca una cuesta del 4–8 %.')).toBeNull();
+    expect(spokenCopy('Rectas de 30" rápidas.')).toBeNull();
+    expect(spokenCopy('Sube tu FTP.')).toBeNull();
+    expect(spokenCopy('   ')).toBeNull();
   });
 });

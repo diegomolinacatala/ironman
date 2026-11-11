@@ -1,23 +1,27 @@
 import { addDays, DEFAULT_TZ, isIsoDate, todayIn } from '../../dates.ts';
 import { dateSchema } from '../../planning/changes.ts';
-import type { MetricsUpsert } from '../../planning/store.ts';
-import { array, integer, number, object, optional, string } from '../../schema.ts';
+import type { MetricsUpsert, ServerMetricsSource } from '../../planning/store.ts';
+import { array, enumOf, integer, number, object, optional, string } from '../../schema.ts';
 import type { Infer } from '../../schema.ts';
 import { defineTool, toolOk, ToolInputError } from '../tool.ts';
 import type { RegisteredTool } from '../tool.ts';
+
+const TITLE = 'Guardar métricas diarias del reloj';
+/** Watches whose data Claude saves here through their connectors (Apple Health arrives from the app). */
+const SOURCES: readonly ServerMetricsSource[] = ['garmin', 'coros'];
 
 const day = object({
   date: dateSchema('Día al que corresponden los datos (YYYY-MM-DD; el sueño y la VFC son los de la noche anterior a ese día).'),
   hrv_ms: optional(number({ min: 1, max: 300, description: 'VFC/HRV nocturna media en ms.' })),
   resting_hr: optional(number({ min: 25, max: 120, description: 'FC en reposo en lpm.' })),
   sleep_hours: optional(number({ min: 0, max: 16, description: 'Horas de sueño (p. ej. 7.5).' })),
-  sleep_score: optional(number({ min: 0, max: 100, description: 'Puntuación de sueño de Garmin 0-100.' })),
-  body_battery: optional(number({ min: 0, max: 100, description: 'Body Battery al despertar (o máximo del día) 0-100.' })),
-  training_readiness: optional(number({ min: 0, max: 100, description: 'Training Readiness de Garmin 0-100.' })),
+  sleep_score: optional(number({ min: 0, max: 100, description: 'Puntuación de sueño del reloj 0-100.' })),
+  body_battery: optional(number({ min: 0, max: 100, description: 'Body Battery de Garmin al despertar (o máximo del día) 0-100; en COROS, omítelo.' })),
+  training_readiness: optional(number({ min: 0, max: 100, description: 'Disposición para entrenar 0-100 (Training Readiness de Garmin o recuperación de COROS en %).' })),
   vo2max: optional(number({ min: 10, max: 100, description: 'VO2max estimado (ml/kg/min).' })),
   steps: optional(integer({ min: 0, max: 150000, description: 'Pasos del día.' })),
-  stress_avg: optional(number({ min: 0, max: 100, description: 'Estrés medio de Garmin 0-100.' })),
-  training_status: optional(string({ min: 1, max: 60, description: 'Estado de entrenamiento de Garmin tal cual (p. ej. "Productive", "Maintaining").' })),
+  stress_avg: optional(number({ min: 0, max: 100, description: 'Estrés medio del reloj 0-100.' })),
+  training_status: optional(string({ min: 1, max: 60, description: 'Estado de entrenamiento del reloj tal cual (p. ej. "Productive", "Maintaining").' })),
   sleep_deep_min: optional(integer({ min: 0, max: 1440, description: 'Minutos de sueño profundo de la noche que termina ese día.' })),
   sleep_light_min: optional(integer({ min: 0, max: 1440, description: 'Minutos de sueño ligero.' })),
   sleep_rem_min: optional(integer({ min: 0, max: 1440, description: 'Minutos de sueño REM.' })),
@@ -28,7 +32,10 @@ const day = object({
 
 const input = object({
   days: array(day, { min: 1, max: 31, description: 'Uno o varios días; solo incluye los campos que conozcas.' }),
+  source: optional(enumOf(SOURCES, 'De qué reloj vienen los datos: garmin o coros. Por defecto, el reloj del perfil (Garmin si no ha elegido).')),
 });
+
+const SOURCE_LABEL: Readonly<Record<ServerMetricsSource, string>> = { garmin: 'Garmin', coros: 'COROS' };
 
 const FIELD_MAP = {
   hrv_ms: 'hrvMs',
@@ -65,7 +72,7 @@ function sleepWindowError(d: Day): string | null {
 
 const toInstant = (v: string): string => new Date(Date.parse(v)).toISOString();
 
-export function toMetricsUpsert(d: Day, nowIso: string): MetricsUpsert {
+export function toMetricsUpsert(d: Day, nowIso: string, source: ServerMetricsSource = 'garmin'): MetricsUpsert {
   const normalized: Day = {
     ...d,
     ...(d.sleep_start !== undefined ? { sleep_start: toInstant(d.sleep_start) } : {}),
@@ -76,19 +83,19 @@ export function toMetricsUpsert(d: Day, nowIso: string): MetricsUpsert {
       .filter(([snake]) => normalized[snake as keyof Day] !== undefined)
       .map(([snake, camel]) => [camel, normalized[snake as keyof Day]]),
   ) as Partial<Omit<MetricsUpsert, 'date' | 'raw'>>;
-  return { date: d.date, ...fields, raw: { source: 'Garmin', via: 'claude_bridge', loggedAt: nowIso } };
+  return { date: d.date, ...fields, raw: { source: SOURCE_LABEL[source], via: 'claude_bridge', loggedAt: nowIso } };
 }
 
 export const logDailyMetricsTool: RegisteredTool = defineTool({
   name: 'log_daily_metrics',
-  title: 'Guardar métricas diarias de Garmin',
+  title: TITLE,
   description: [
-    'Guarda en Road to Ironman un resumen diario de bienestar leído de Garmin (VFC/HRV en ms, FC en reposo en lpm, horas, puntuación, fases (profundo, ligero, REM, despierto en minutos) e inicio/fin del sueño, Body Battery, Training Readiness, VO2max, pasos, estrés medio, estado de entrenamiento).',
-    'Se fusiona con lo que ya hubiera para ese día: los campos que no envíes se conservan. Úsala con los datos reales del conector de Garmin; no inventes valores.',
+    'Guarda en Road to Ironman un resumen diario de bienestar leído del reloj del usuario con su conector de Garmin o de COROS (VFC/HRV en ms, FC en reposo en ppm, horas, puntuación, fases (profundo, ligero, REM, despierto en minutos) e inicio/fin del sueño, Body Battery, disposición para entrenar o recuperación, VO2max, pasos, estrés medio, estado de entrenamiento).',
+    'source dice de qué reloj vienen (por defecto, el del perfil). Se fusiona con lo que ya hubiera para ese día: los campos que no envíes se conservan. Úsala solo con datos reales del conector; no inventes valores.',
     'Hasta 31 días por llamada; fechas de los últimos 365 días.',
   ].join(' '),
   input,
-  annotations: { title: 'Guardar métricas diarias de Garmin', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  annotations: { title: TITLE, readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   handler: async (args, ctx) => {
     const profile = await ctx.store.getProfile(ctx.userId);
     const today = todayIn(profile?.timezone ?? DEFAULT_TZ, ctx.now());
@@ -99,8 +106,9 @@ export const logDailyMetricsTool: RegisteredTool = defineTool({
     const windowError = args.days.map(sleepWindowError).find((e) => e !== null);
     if (windowError) throw new ToolInputError(windowError);
     const nowIso = ctx.now().toISOString();
-    const rows = args.days.map((d) => toMetricsUpsert(d, nowIso));
-    const saved = await ctx.store.upsertMetrics(ctx.userId, 'garmin', rows);
-    return toolOk({ saved, dates: rows.map((r) => r.date), source: 'Garmin' });
+    const source: ServerMetricsSource = args.source ?? profile?.watchBrand ?? 'garmin';
+    const rows = args.days.map((d) => toMetricsUpsert(d, nowIso, source));
+    const saved = await ctx.store.upsertMetrics(ctx.userId, source, rows);
+    return toolOk({ saved, dates: rows.map((r) => r.date), source: SOURCE_LABEL[source] });
   },
 });

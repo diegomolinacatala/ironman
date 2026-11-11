@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 
 import { addDays, formatDayLabel, todayISO } from '@/domain/dates';
-import type { ISODate, Workout } from '@/domain/types';
+import type { ISODate, Workout, WorkoutPatch } from '@/domain/types';
 import {
   useCreateWorkout,
   useDeleteWorkout,
@@ -14,6 +14,7 @@ import { haptics } from '@/ui';
 
 import { confirmAsync, notify } from './confirm';
 import { jointNewHref, workoutToDraft } from './draft';
+import { easierMessage } from './targets';
 
 export interface WorkoutActions {
   moveTo: (w: Workout, date: ISODate) => Promise<boolean>;
@@ -23,6 +24,8 @@ export interface WorkoutActions {
   skip: (w: Workout) => Promise<boolean>;
   reset: (w: Workout) => Promise<boolean>;
   invite: (w: Workout) => void;
+  /** "No es mi día": confirms and applies the easier version (`easierPatch` from coachAdapters). */
+  easier: (w: Workout, patch: WorkoutPatch) => Promise<boolean>;
   busy: boolean;
 }
 
@@ -99,6 +102,19 @@ export function useWorkoutActions(): WorkoutActions {
     return ok != null;
   };
 
+  const easier = async (w: Workout, patch: WorkoutPatch) => {
+    if (!(await jointWarning(w))) return false;
+    const confirmed = await confirmAsync({
+      title: '¿Hacemos la versión suave?',
+      message: easierMessage(w, patch),
+      confirmLabel: 'Cambiar',
+    });
+    if (!confirmed) return false;
+    const ok = await run('cambiar el entreno', () => update.mutateAsync({ id: w.id, patch }));
+    if (ok) haptics.success();
+    return ok != null;
+  };
+
   return {
     moveTo,
     moveToTomorrow: (w) => moveTo(w, addDays(w.date < todayISO() ? todayISO() : w.date, 1)),
@@ -107,6 +123,7 @@ export function useWorkoutActions(): WorkoutActions {
     skip,
     reset,
     invite: (w) => router.push(jointNewHref(w)),
+    easier,
     busy: update.isPending || create.isPending || del.isPending || skipM.isPending || resetM.isPending,
   };
 }

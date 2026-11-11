@@ -14,7 +14,7 @@ export function CoachDifferenceCard() {
         <View style={styles.flex}>
           <Text variant="bodyStrong">Tu Claude</Text>
           <Text variant="caption" color="textMuted">
-            Tu suscripción, tus chats y tus otros conectores (Garmin, calendario, comidas). Ideal para planificar a fondo.
+            Tu suscripción, tus chats y tus otros conectores (Garmin o COROS, calendario, comidas). Ideal para planificar a fondo.
           </Text>
         </View>
         <View style={styles.flex}>

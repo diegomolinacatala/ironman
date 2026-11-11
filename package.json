@@ -76,7 +76,8 @@
     "test:db": "node --test \"supabase/tests/**/*.test.ts\"",
     "test:functions": "node --test \"supabase/functions/**/*.test.ts\"",
     "test:all": "npm run typecheck && npm test && npm run test:db && npm run test:functions",
-    "doctor": "npx expo-doctor"
+    "doctor": "npx expo-doctor",
+    "sync:mirror": "node scripts/sync-domain-mirror.mjs"
   },
   "private": true
 }

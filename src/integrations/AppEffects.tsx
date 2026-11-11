@@ -6,7 +6,7 @@
  * - on mount / foreground (throttled 10 min): Apple Salud + calendar syncs,
  *   only for what THIS account enabled on this device,
  * - on mount / foreground: Garmin sync when its last sync is older than an hour
- *   (server-side, so also on web),
+ *   (server-side, so also on web), only when the athlete's watch is Garmin (or not chosen),
  * - keeps local notifications, widgets (incl. today's briefing headline) and the
  *   "Road to Ironman" device calendar in sync with the plan.
  * Widget deep links (roadtoironman://workout/<id>, roadtoironman://today) are handled by
@@ -25,7 +25,7 @@ import { defaultBusyRange } from './calendar';
 import { trainingCalendarWindow } from './calendar/trainingEvents';
 import { removeLegacyDeviceKeys } from './deviceState';
 import { useForegroundSync } from './effects/useForegroundSync';
-import { useGarminForegroundSync } from './effects/useGarminSync';
+import { isGarminWatch, useGarminForegroundSync } from './effects/useGarminSync';
 import { useNotificationRouting } from './effects/useNotificationRouting';
 import { usePlanMirrors } from './effects/usePlanMirrors';
 import { usePushRegistration } from './effects/usePushRegistration';
@@ -76,7 +76,7 @@ export function AppEffects(): null {
   usePushRegistration(ready, userId, repo);
   useNotificationRouting(ready);
   useForegroundSync(ready, repo, userId, onActive);
-  useGarminForegroundSync(signedInAndOnboarded, repo, userId);
+  useGarminForegroundSync(signedInAndOnboarded && isGarminWatch(profile), repo, userId);
   usePlanMirrors(ready, { workouts, races, jointSessions, profile, briefing, userId, today, tick });
   useSignedOutCleanup(isLoading, userId);
 

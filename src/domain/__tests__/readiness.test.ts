@@ -115,3 +115,13 @@ describe('§11.8 signal counting (ENG-11)', () => {
     expect(r.factors.join(' ')).toMatch(/Media de sueño/);
   });
 });
+
+describe('metrics sources', () => {
+  test('COROS ranks after Garmin and before HealthKit for the same day', () => {
+    const base = history(20).map((m) => ({ ...m, restingHr: 50 }));
+    const corosHigh = [...base, makeMetrics(TODAY, { source: 'healthkit', restingHr: 50 }), makeMetrics(TODAY, { source: 'coros', restingHr: 58, trainingReadiness: null })];
+    expect(computeReadiness({ today: TODAY, checkin: null, metrics: corosHigh }).level).toBe('red');
+    const garminWins = [...corosHigh, makeMetrics(TODAY, { source: 'garmin', restingHr: 50 })];
+    expect(computeReadiness({ today: TODAY, checkin: null, metrics: garminWins }).level).toBe('green');
+  });
+});

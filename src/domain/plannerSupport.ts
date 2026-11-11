@@ -1,13 +1,17 @@
 /**
  * Helpers for the weekly planner: progression caps from history (Frandsen
  * run rule, long-ride growth), ramp-rate cap, matching existing workouts to
- * the ideal week, trimming to the minutes budget, race-week sessions.
+ * the ideal week, trimming to the minutes budget, the Z1-Z2 share, race-week
+ * sessions and the week-level override (Plan → General). Shared with the
+ * season overview (seasonSessions.ts) so both show the same weeks.
  */
 import {
   BIKE_LONG_GROWTH,
   BIKE_LONG_GROWTH_MIN,
   GENERIC_TSS_PER_HOUR,
+  MIN_LOW_INTENSITY_SHARE,
   MIN_SESSION_MIN,
+  PRE_RACE_LOOKAHEAD_DAYS,
   RAMP_HARD_CAP,
   RAMP_LIFE_STRESS_PENALTY,
   RAMP_TABLE,
@@ -18,11 +22,13 @@ import {
   TSB_WARN,
   type DistanceKind,
 } from './constants';
-import { addDays } from './dates';
+import { addDays, diffDays, formatDuration } from './dates';
 import { computePmc, dailyLoads, estimateTss, weeklyLoadForRamp } from './load';
+import type { PhaseInfo } from './periodization';
 import type { Placed } from './placement';
-import { specClass, specIntensity, specSport, type SessionSpec } from './sessions';
-import type { AthleteLevel, ISODate, Race, RaceDistance, Thresholds, Workout } from './types';
+import { canOverride } from './season';
+import { hardMinutes, isQualitySpec, specClass, specIntensity, specSport, type SessionSpec } from './sessions';
+import type { AthleteLevel, ISODate, Race, RaceDistance, Sport, Thresholds, WeekPlan, WeekPlanKind, Workout } from './types';
 import type { FixedInput } from './weekModel';
 
 export interface HistoryCaps {
@@ -148,6 +154,58 @@ export function trimToBudget(specs: readonly SessionSpec[], budget: number): Ses
   return items.map((x) => x.spec);
 }
 
+const ENDURANCE_SPORTS: readonly Sport[] = ['swim', 'bike', 'run', 'brick'];
+
+/** Share of endurance time in Z1-Z2 (by step durations). */
+export function lowIntensityShare(specs: readonly SessionSpec[]): number {
+  const endurance = specs.filter((s) => ENDURANCE_SPORTS.includes(specSport(s)) && specClass(s) !== 'RACE');
+  const totalMin = endurance.reduce((s, x) => s + x.durationMin, 0);
+  if (totalMin === 0) return 1;
+  return 1 - endurance.reduce((s, x) => s + hardMinutes(x), 0) / totalMin;
+}
+
+const EASY_VERSION: Partial<Record<Sport, SessionSpec['code']>> = { bike: 'BK_END', run: 'RN_EASY', swim: 'SW_END' };
+
+/** Keeps Z1-Z2 ≥ 75 % of endurance time (§2.2 invariant) by downgrading the least important quality sessions. */
+export function enforceIntensityDistribution(specs: readonly SessionSpec[], raceWeek: boolean): SessionSpec[] {
+  if (raceWeek) return [...specs];
+  let out = [...specs];
+  while (lowIntensityShare(out) < MIN_LOW_INTENSITY_SHARE) {
+    const quality = out
+      .filter((s) => isQualitySpec(s) && specClass(s) !== 'BRICK' && !s.allowedDates && EASY_VERSION[specSport(s)])
+      .sort((a, b) => b.priority - a.priority || a.code.localeCompare(b.code))[0];
+    const code = quality ? EASY_VERSION[specSport(quality)] : undefined;
+    if (quality && code) {
+      out = out.map((s) => (s === quality ? { ...s, code, priority: Math.max(s.priority, 5) } : s));
+      continue;
+    }
+    // Then race-pace blocks inside long sessions and bricks become plain Z2.
+    const paced = out.filter((s) => s.racePace && !s.allowedDates).sort((a, b) => b.priority - a.priority || a.code.localeCompare(b.code))[0];
+    if (!paced) break;
+    out = out.map((s) => (s === paced ? { ...s, racePace: false } : s));
+  }
+  return out;
+}
+
+/**
+ * The week-level override (Plan → General) that shapes the week starting on
+ * `weekStart`: null without one, when it belongs to another week or when the
+ * periodization does not allow changing this week (taper, race, transition…).
+ */
+export function activeWeekPlan(info: PhaseInfo, plan: WeekPlan | null | undefined, weekStart: ISODate): WeekPlan | null {
+  if (!plan || plan.weekStart !== weekStart || !canOverride(info)) return null;
+  return plan;
+}
+
+const WEEK_PLAN_WORD: Readonly<Record<WeekPlanKind, string>> = { load: 'carga', push: 'más volumen', recovery: 'descarga', rest: 'libre' };
+
+/** "Semana ajustada: descarga." ("Semana ajustada: carga (5h)." with explicit minutes). */
+export function weekPlanSentence(plan: Pick<WeekPlan, 'kind' | 'targetMinutes'>): string {
+  const minutes = plan.targetMinutes;
+  const amount = typeof minutes === 'number' && Number.isFinite(minutes) ? ` (${formatDuration(minutes)})` : '';
+  return `Semana ajustada: ${WEEK_PLAN_WORD[plan.kind]}${amount}.`;
+}
+
 export interface TsbGuardInput {
   range: { from: ISODate; to: ISODate };
   history: readonly Workout[];
@@ -254,16 +312,45 @@ export function raceWeekSessions(race: Race, isTarget: boolean, kind: DistanceKi
     durationMin: RACE_DURATION[race.distance],
     priority: 0,
     raceName: race.name,
+    raceDistance: race.distance,
     sport: isRun ? 'run' : 'brick',
     allowedDates: [race.date],
   };
   if (!isTarget && race.priority === 'C') return [raceSpec];
   const dMinus = (n: number) => addDays(race.date, -n);
-  const activation: SessionSpec = { code: 'ACTIVATION', durationMin: 25, priority: 2, sport: isRun ? 'run' : 'bike', allowedDates: [dMinus(1)] };
+  const activation: SessionSpec = { code: 'ACTIVATION', durationMin: 25, priority: 2, sport: isRun ? 'run' : 'bike', raceDistance: race.distance, allowedDates: [dMinus(1)] };
   if (!isTarget) return [raceSpec, activation];
   const spark: SessionSpec = isRun
     ? { code: 'RN_THR', durationMin: 40, priority: 2, allowedDates: [dMinus(3), dMinus(4)], note: 'Última sesión con chispa antes de la carrera: corta y sin fatiga.' }
     : { code: 'BRICK', durationMin: 45, brickRunMin: 10, racePace: true, priority: 2, allowedDates: [dMinus(3), dMinus(4)], note: 'Última sesión con chispa antes de la carrera.' };
   const easySwim: SessionSpec[] = isRun ? [] : [{ code: 'SW_TECH', durationMin: 30, priority: 5, allowedDates: [dMinus(2)], note: 'Solo para soltar: nada de cansarse.' }];
   return [raceSpec, activation, spark, ...easySwim];
+}
+
+export interface PinnedRaceInput {
+  /** The week being planned. */
+  info: PhaseInfo;
+  /** The week after it (a race early next week pins D−1…D−4 sessions into this one). */
+  next: PhaseInfo;
+  kind: DistanceKind;
+  firstPlannable: ISODate;
+  /** Sunday of the week. */
+  weekEnd: ISODate;
+  /** The race day is already in the calendar: keep only the pre-race sessions. */
+  raceDayPlanned?: boolean;
+}
+
+/**
+ * Race-day and pre-race sessions that fall inside the plannable part of the
+ * week: this week's race, plus D−1…D−4 sessions of a race early next week.
+ * Pinned sessions whose dates fall outside are left out (not reported as dropped).
+ */
+export function pinnedRaceSessions(p: PinnedRaceInput): SessionSpec[] {
+  const race = p.info.raceInWeek;
+  const own = race ? raceWeekSessions(race, p.info.phase === 'race_week', p.kind, p.firstPlannable) : [];
+  const ownSpecs = p.raceDayPlanned ? own.filter((s) => s.code !== 'RACE') : own;
+  const nextRace = p.next.raceInWeek;
+  const early = nextRace && diffDays(nextRace.date, p.weekEnd) <= PRE_RACE_LOOKAHEAD_DAYS ? nextRace : null;
+  const earlySpecs = early ? raceWeekSessions(early, p.next.phase === 'race_week', p.kind, p.firstPlannable).filter((s) => s.code !== 'RACE') : [];
+  return narrowToWeek([...ownSpecs, ...earlySpecs], p.firstPlannable, p.weekEnd);
 }

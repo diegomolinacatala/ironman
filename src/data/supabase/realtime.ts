@@ -21,6 +21,8 @@ export const OWN_TABLE_TOPICS: Readonly<Record<string, ChangeTopic>> = {
   life_events: 'life_events',
   daily_metrics: 'metrics',
   briefings: 'briefings',
+  // v4: season plan entries (the coach's edge function and Claude's `set_week_plans` write them too).
+  week_plans: 'week_plans',
 };
 
 /** Extra topics implied by a new notification (e.g. a friend answered a quedada). */

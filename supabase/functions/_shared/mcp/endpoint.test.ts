@@ -79,11 +79,11 @@ test('GET and DELETE are 405 with Allow: POST; OPTIONS is a CORS preflight', asy
   assert.equal(pre.status, 204);
 });
 
-test('legacy ping, tools/list (9 tools, stable order) and unknown method', async () => {
+test('legacy ping, tools/list (10 tools, stable order: new ones last) and unknown method', async () => {
   const ping = await call(post({ jsonrpc: '2.0', id: 1, method: 'ping' }, { 'mcp-protocol-version': '2025-11-25' }));
   assert.deepEqual(ping.body, { jsonrpc: '2.0', id: 1, result: {} });
   const list = await call(post({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }));
-  const tools = result(list).tools as { name: string; inputSchema: Record<string, unknown>; annotations: Record<string, unknown> }[];
+  const tools = result(list).tools as { name: string; title: string; inputSchema: Record<string, unknown>; annotations: Record<string, unknown> }[];
   assert.deepEqual(tools.map((t) => t.name), [
     'get_planning_context',
     'get_friends_availability',
@@ -94,7 +94,14 @@ test('legacy ping, tools/list (9 tools, stable order) and unknown method', async
     'log_completed_activity',
     'get_plan_for_device',
     'manage_race',
+    'set_week_plans',
   ]);
+  const weekPlans = tools[9];
+  assert.deepEqual(
+    [weekPlans.annotations.readOnlyHint, weekPlans.annotations.destructiveHint, weekPlans.annotations.idempotentHint],
+    [false, false, true],
+  );
+  assert.equal(tools[7].title, 'Entrenos para el reloj (Garmin o COROS)');
   for (const t of tools) {
     assert.equal(t.inputSchema.type, 'object');
     assert.equal(t.inputSchema.additionalProperties, false);

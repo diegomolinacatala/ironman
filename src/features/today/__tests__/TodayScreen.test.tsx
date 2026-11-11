@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { ActionSheetIOS } from 'react-native';
 
 import TodayScreen from '@/app/(tabs)/today';
-import type { JointSession, NutritionLog, Workout } from '@/domain/types';
+import type { JointSession, NutritionLog, Thresholds, Workout, WorkoutPatch, WorkoutStep } from '@/domain/types';
 import { ME, makeSession, makeWorkout } from '@/features/workouts/__tests__/fixtures';
 
 import type { TodayData } from '../useTodayData';
@@ -16,8 +17,10 @@ const mockActions = {
   skip: jest.fn(async (_w: Workout) => true),
   reset: jest.fn(async (_w: Workout) => true),
   invite: jest.fn((_w: Workout) => undefined),
+  easier: jest.fn(async (_w: Workout, _patch: WorkoutPatch) => true),
   busy: false,
 };
+const mockEasierPatch = jest.fn((_w: Workout, _t: Thresholds | null): WorkoutPatch | null => null);
 let mockData: TodayData;
 let mockCalendarEnabled = false;
 let mockInlineAccessory = false;
@@ -35,6 +38,10 @@ jest.mock(
 jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('../useTodayData', () => ({ useTodayData: () => mockData }));
 jest.mock('@/features/workouts/useWorkoutActions', () => ({ useWorkoutActions: () => mockActions }));
+// domain/planB is unit-tested on its own: Hoy only offers its patch.
+jest.mock('@/features/workouts/coachAdapters', () => ({
+  easierPatch: (w: Workout, t: Thresholds | null) => mockEasierPatch(w, t),
+}));
 jest.mock('@/features/briefing/BriefingCard', () => ({ BriefingCard: () => null }));
 jest.mock('@/integrations/calendar/trainingCalendar', () => ({
   useTrainingCalendar: () => ({ enabled: mockCalendarEnabled, syncedWorkoutIds: ['h'] }),
@@ -70,6 +77,8 @@ function data(overrides: Partial<TodayData> = {}): TodayData {
     tomorrow: '2026-10-26',
     myId: ME,
     displayName: 'Diego Molina',
+    thresholds: null,
+    raceDistance: null,
     todayWorkouts: [],
     tomorrowWorkouts: [],
     jointSessions: [],
@@ -96,6 +105,67 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCalendarEnabled = false;
   mockInlineAccessory = false;
+  mockEasierPatch.mockReturnValue(null);
+});
+
+const SERIES_STEPS: WorkoutStep[] = [
+  { kind: 'warmup', durationMin: 15 },
+  { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold', cue: 'Fuerte pero controlado' },
+  { kind: 'recovery', durationMin: 2, repeat: 3 },
+  { kind: 'cooldown', durationMin: 10 },
+];
+
+function coachedSeries(): Workout {
+  return makeWorkout({
+    id: 'h',
+    title: 'Series 3×8',
+    intensity: 'threshold',
+    durationMin: 60,
+    steps: SERIES_STEPS,
+    coaching: { objective: 'Subir tu umbral sin pasarte', keys: [], success: 'Series iguales', planB: null },
+  });
+}
+
+describe('Hoy · the coach in the session card', () => {
+  test('objective, target line and how it should feel, also when the session has steps', async () => {
+    mockData = data({ todayWorkouts: [coachedSeries()], thresholds: { lthr: 170, runThresholdPaceSecPerKm: 270 } });
+    await render(<TodayScreen />);
+    expect(screen.getByText('Subir tu umbral sin pasarte')).toBeTruthy();
+    expect(screen.getByText("3×8' Z4 · 162–168 ppm · 4:27–4:44 /km · RPE 7–8")).toBeTruthy();
+    expect(screen.getByText('Fuerte pero controlado')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Tu entreno de hoy: .*Subir tu umbral sin pasarte\. 3×8' Z4 · 162–168 ppm/ })).toBeTruthy();
+  });
+
+  test('without thresholds the target line is the effort', async () => {
+    mockData = data({ todayWorkouts: [coachedSeries()] });
+    await render(<TodayScreen />);
+    expect(screen.getByText("3×8' Z4 · RPE 7–8")).toBeTruthy();
+  });
+
+  test('"No es mi día" in more options applies the easier version', async () => {
+    const hero = coachedSeries();
+    const patch: WorkoutPatch = { title: 'Rodaje suave', durationMin: 40, intensity: 'endurance', steps: [] };
+    mockEasierPatch.mockReturnValue(patch);
+    const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation((options, callback) => {
+      callback((options.options as string[]).indexOf('No es mi día'));
+    });
+    mockData = data({ todayWorkouts: [hero], thresholds: { lthr: 170 } });
+    await render(<TodayScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Más opciones: no es mi día, mover o saltar' }));
+    expect(sheet.mock.calls[0]?.[0].options).toEqual(['No es mi día', 'Mover a otro día', 'Saltar', 'Cancelar']);
+    expect(mockEasierPatch).toHaveBeenCalledWith(hero, { lthr: 170 });
+    expect(mockActions.easier).toHaveBeenCalledWith(hero, patch);
+    sheet.mockRestore();
+  });
+
+  test('no easier version: more options only move or skip', async () => {
+    const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => undefined);
+    mockData = data({ todayWorkouts: [coachedSeries()] });
+    await render(<TodayScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Más opciones: no es mi día, mover o saltar' }));
+    expect(sheet.mock.calls[0]?.[0].options).toEqual(['Mover a otro día', 'Saltar', 'Cancelar']);
+    sheet.mockRestore();
+  });
 });
 
 describe('Hoy', () => {

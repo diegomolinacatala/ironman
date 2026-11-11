@@ -13,6 +13,7 @@ import {
   mealTotalsA11y,
   mealTotalsLine,
   mealsOfDay,
+  refreshSyncFor,
   structureSummary,
 } from '../todayModel';
 
@@ -104,5 +105,18 @@ describe('structureSummary', () => {
 
   test('null without steps', () => {
     expect(structureSummary(makeWorkout({ steps: [] }))).toBeNull();
+  });
+});
+
+describe('refreshSyncFor (pull-to-refresh)', () => {
+  test('Garmin (or no watch chosen) syncs Garmin only when connected', () => {
+    expect(refreshSyncFor({ watchBrand: 'garmin', garminConnected: true, healthReady: true })).toBe('garmin');
+    expect(refreshSyncFor({ watchBrand: null, garminConnected: true, healthReady: false })).toBe('garmin');
+    expect(refreshSyncFor({ watchBrand: undefined, garminConnected: false, healthReady: true })).toBeNull();
+  });
+
+  test('COROS pulls Apple Salud (where COROS writes) instead of Garmin', () => {
+    expect(refreshSyncFor({ watchBrand: 'coros', garminConnected: true, healthReady: true })).toBe('health');
+    expect(refreshSyncFor({ watchBrand: 'coros', garminConnected: true, healthReady: false })).toBeNull();
   });
 });

@@ -53,6 +53,8 @@ export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySes
         onComplete={() => onComplete(hero)}
         onMore={() => onMore(hero)}
         busy={busy}
+        thresholds={data.thresholds}
+        raceDistance={data.raceDistance}
       />
     );
   } else body = <DayStatusCard kind={plan.isRestDay ? 'rest' : 'done'} today={today} />;
@@ -72,6 +74,8 @@ export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySes
               compact
               today={today}
               partnerName={partner(w)}
+              thresholds={data.thresholds}
+              raceDistance={data.raceDistance}
               onPress={() => router.push(`/workout/${w.id}`)}
             />
           ))}

@@ -18,9 +18,12 @@ function numbers(rows: readonly DailyMetrics[], pick: (m: DailyMetrics) => numbe
   return rows.map(pick).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
 }
 
-/** One row per date, preferring Garmin over other sources field by field. */
+/** Merge priority of metric sources, field by field (docs/V4.md §2): garmin > coros > healthkit > manual. */
+const SOURCE_RANK: Readonly<Record<DailyMetrics['source'], number>> = { garmin: 0, coros: 1, healthkit: 2, manual: 3 };
+
+/** One row per date, preferring Garmin, then COROS, Apple Health and manual entries, field by field. */
 export function mergeMetricsByDate(rows: readonly DailyMetrics[]): DailyMetrics[] {
-  const rank = { garmin: 0, healthkit: 1, manual: 2 } as const;
+  const rank = SOURCE_RANK;
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date) || rank[a.source] - rank[b.source]);
   const byDate = new Map<ISODate, DailyMetrics>();
   for (const row of sorted) {
@@ -67,7 +70,7 @@ export function wellnessSignals(metrics: readonly DailyMetrics[], checkins: read
       amber += 1;
     }
     if (latest.trainingReadiness != null && latest.trainingReadiness < 50) {
-      signals.push(`Training Readiness de Garmin ${latest.trainingReadiness}`);
+      signals.push(`Disposición para entrenar del reloj ${latest.trainingReadiness}/100`);
       if (latest.trainingReadiness < 25) red += 1;
       else amber += 1;
     }

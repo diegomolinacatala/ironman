@@ -1,11 +1,12 @@
 import { addDays, formatDayLabel, weekdayOf } from '@/domain/dates';
-import type { ISODate, ISODateTime, PlanChange, PlanProposal, Weekday, Workout } from '@/domain/types';
+import { specToDraft } from '@/domain/sessions';
+import type { ISODate, ISODateTime, PlanChange, PlanProposal, Sport, UUID, Weekday, Workout, WorkoutDraft } from '@/domain/types';
 
 import type { DemoClock, DemoDb, DemoFriendship, DemoJointSession } from '../db';
 import { feedForCompletion, feedForRace, notify } from '../events';
 import { feedForJointConfirmed } from '../jointOps';
 import { DEMO_USERS } from '../ids';
-import { linkJointWorkout } from './workouts';
+import { linkJointWorkout, type SeedAthlete } from './workouts';
 
 function daysAgoIso(clock: DemoClock, days: number, hours = 0): ISODateTime {
   return new Date(Date.parse(clock.now) - (days * 24 + hours) * 3_600_000).toISOString();
@@ -42,15 +43,22 @@ function sessionBase(clock: DemoClock): Pick<DemoJointSession, 'id' | 'createdAt
   return { id: clock.newId(), createdAt: daysAgoIso(clock, 2), notes: null };
 }
 
+/** Duration of the organizer's planned session that day (the quedada keeps its structure), else `fallback`. */
+function plannedMinutes(db: DemoDb, userId: UUID, date: ISODate, sport: Sport, fallback: number): number {
+  return db.workouts.find((w) => w.userId === userId && w.date === date && w.sport === sport)?.durationMin ?? fallback;
+}
+
 /** Confirmed long ride (Diego organises) + pending track session invite from Álex. */
 export function seedJointSessions(db: DemoDb, clock: DemoClock): { db: DemoDb; confirmedId: string; pendingId: string } {
+  const rideDate = nextWeekdayAfter(clock.today, 5);
+  const trackDate = nextWeekdayAfter(clock.today, 3);
   const ride: DemoJointSession = {
     ...sessionBase(clock),
     organizerId: DEMO_USERS.diego,
     sport: 'bike',
-    date: nextWeekdayAfter(clock.today, 5),
+    date: rideDate,
     startTime: '08:30',
-    durationMin: 180,
+    durationMin: plannedMinutes(db, DEMO_USERS.diego, rideDate, 'bike', 180),
     intensity: 'endurance',
     title: 'Tirada larga en bici',
     location: 'Salida desde Moncloa',
@@ -62,9 +70,9 @@ export function seedJointSessions(db: DemoDb, clock: DemoClock): { db: DemoDb; c
     ...sessionBase(clock),
     organizerId: DEMO_USERS.alex,
     sport: 'run',
-    date: nextWeekdayAfter(clock.today, 3),
+    date: trackDate,
     startTime: '19:00',
-    durationMin: 50,
+    durationMin: plannedMinutes(db, DEMO_USERS.alex, trackDate, 'run', 50),
     intensity: 'vo2',
     title: "Series en el Retiro: 6×1'",
     location: 'Parque del Retiro · puerta de Felipe V',
@@ -127,21 +135,37 @@ function findWorkout(db: DemoDb, date: ISODate, sport: Workout['sport']): Workou
   return db.workouts.find((w) => w.userId === DEMO_USERS.diego && w.date === date && w.sport === sport && w.jointSessionId === null);
 }
 
-/** Pending rules proposal for next week (after the pádel match). */
-export function seedProposal(db: DemoDb, clock: DemoClock, weekStart: ISODate): PlanProposal {
+/** Patch that turns a session into `draft` (structure, targets and coaching included). */
+function replaceWith(draft: WorkoutDraft): Partial<WorkoutDraft> {
+  return {
+    title: draft.title,
+    description: draft.description ?? null,
+    durationMin: draft.durationMin,
+    intensity: draft.intensity,
+    tss: draft.tss ?? null,
+    steps: draft.steps ?? [],
+    ...(draft.coaching !== undefined ? { coaching: draft.coaching } : {}),
+  };
+}
+
+/** Pending rules proposal for next week (after the pádel match), with concrete sessions like the engine's. */
+export function seedProposal(db: DemoDb, clock: DemoClock, weekStart: ISODate, athlete: SeedAthlete): PlanProposal {
   const next = addDays(weekStart, 7);
+  const zones = { thresholds: athlete.thresholds, raceDistance: athlete.raceDistance };
   const tuesdayRun = findWorkout(db, addDays(next, 1), 'run');
   const thursdayStrength = findWorkout(db, addDays(next, 3), 'strength');
+  const easyRun = specToDraft({ code: 'RN_EASY', durationMin: 45, priority: 5 }, addDays(next, 1), tuesdayRun?.startTime ?? null, zones);
+  const mobility = specToDraft({ code: 'MOB', durationMin: 20, priority: 6 }, addDays(next, 2), '07:15', zones);
   const changes: PlanChange[] = [
     ...(tuesdayRun
-      ? [{ op: 'update' as const, workoutId: tuesdayRun.id, patch: { title: 'Rodaje suave Z2', intensity: 'endurance' as const, durationMin: 45 }, reason: 'El pádel suma carga intensa: cambiamos los cambios de ritmo por un rodaje suave.' }]
+      ? [{ op: 'update' as const, workoutId: tuesdayRun.id, patch: replaceWith(easyRun), reason: 'El pádel suma carga intensa: cambiamos los cambios de ritmo por un rodaje suave.' }]
       : []),
     ...(thursdayStrength
       ? [{ op: 'move' as const, workoutId: thursdayStrength.id, toDate: addDays(next, 4), toStartTime: '07:30', reason: 'Separamos la fuerza del día de series para llegar más fresco.' }]
       : []),
     {
       op: 'add',
-      workout: { date: addDays(next, 2), startTime: '07:15', sport: 'mobility', title: 'Movilidad de cadera y tobillo', durationMin: 20, intensity: 'recovery', source: 'rules' },
+      workout: { ...mobility, title: 'Movilidad de cadera y tobillo' },
       reason: 'Movilidad suave para descargar las piernas tras el pádel.',
     },
   ];

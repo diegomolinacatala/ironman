@@ -11,8 +11,10 @@ import { getCalendarLastSync, getSelectedCalendarIds, setSelectedCalendarIds } f
 import { assertSessionUser, removeLegacyDeviceKeys, sessionUserId, userScopedKey } from '../deviceState';
 import {
   getHealthLastSync,
+  getHealthSources,
   getImportedHealthIds,
   isHealthEnabled,
+  rememberHealthSources,
   rememberImportedHealthIds,
   setHealthEnabled,
   setHealthLastSync,
@@ -61,6 +63,16 @@ describe('per-account device state', () => {
     await rememberImportedHealthIds(ANA, new Set(), ['hk-1']);
     expect([...(await getImportedHealthIds(ANA))]).toEqual(['hk-1']);
     expect([...(await getImportedHealthIds(BEA))]).toEqual([]);
+  });
+
+  test('apps seen writing to Apple Salud (COROS…) are remembered per account, latest last and capped', async () => {
+    expect(await rememberHealthSources(ANA, ['COROS'])).toEqual(['COROS']);
+    expect(await rememberHealthSources(ANA, [])).toEqual(['COROS']);
+    expect(await rememberHealthSources(ANA, ['Salud', 'COROS'])).toEqual(['Salud', 'COROS']);
+    expect(await getHealthSources(BEA)).toEqual([]);
+    const many = Array.from({ length: 20 }, (_, i) => `App ${i}`);
+    expect(await rememberHealthSources(ANA, many)).toHaveLength(12);
+    expect(userScopedKey('healthSources', ANA)).toBe(`rti.health.sources.v1.user.${ANA}`);
   });
 
   test('legacy device-wide keys are dropped, namespaced ones are kept', async () => {

@@ -23,7 +23,7 @@ const outputSchema = object(
     sleep_verdict: enumOf(SLEEP_VERDICTS),
     sleep_summary: string({ description: 'Una frase sobre la noche.' }),
     script: string({ min: 1, description: 'Guion para leer en voz alta, 110-200 palabras.' }),
-    focus: string({ description: 'Un consejo accionable para hoy.' }),
+    focus: string({ description: 'El foco del día: la cifra y el criterio de la sesión clave, o un consejo accionable.' }),
   },
   undefined,
   // Extra keys from weaker models are ignored; the five fields stay strictly validated.

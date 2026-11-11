@@ -1,7 +1,7 @@
 /** Pure helpers to derive drafts / links from existing workouts. */
 import type { JointSession, Sport, UUID, Workout, WorkoutDraft } from '@/domain/types';
 
-/** Copy of a workout as a fresh draft (same day unless `date` is given). */
+/** Copy of a workout as a fresh draft (same day unless `date` is given), keeping the coach's prescription. */
 export function workoutToDraft(w: Workout, overrides: Partial<WorkoutDraft> = {}): WorkoutDraft {
   return {
     date: w.date,
@@ -16,6 +16,7 @@ export function workoutToDraft(w: Workout, overrides: Partial<WorkoutDraft> = {}
     steps: w.steps.map((s) => ({ ...s })),
     isKey: w.isKey,
     source: 'manual',
+    ...(w.coaching ? { coaching: { ...w.coaching, keys: [...(w.coaching.keys ?? [])] } } : {}),
     ...overrides,
   };
 }

@@ -24,14 +24,16 @@ import type {
   Profile,
   Race,
   UUID,
+  WeekPlan,
   Workout,
 } from '@/domain/types';
 
 /**
  * v2: sleep stages in the seed, `briefings`, Diego not onboarded (the v2 onboarding runs once).
  * v3: open quedadas, `jointComments`.
+ * v4: season plan (`weekPlans`); a v3 database is migrated in place, never re-seeded.
  */
-export const DEMO_DB_VERSION = 3;
+export const DEMO_DB_VERSION = 4;
 
 export interface DemoFriendship {
   id: UUID;
@@ -86,6 +88,10 @@ export interface DemoBriefing extends Briefing {
   userId: UUID;
 }
 
+export interface DemoWeekPlan extends WeekPlan {
+  userId: UUID;
+}
+
 export interface DemoDb {
   version: number;
   /** "Today" when the data was seeded (all seed dates are relative to it). */
@@ -111,6 +117,8 @@ export interface DemoDb {
   tokens: DemoToken[];
   integrations: DemoIntegration[];
   briefings: DemoBriefing[];
+  /** Season plan overrides ("Plan → General"), one per (user, Monday). */
+  weekPlans: DemoWeekPlan[];
 }
 
 /** Clock + id factory injected into pure demo operations. */
@@ -120,11 +128,9 @@ export interface DemoClock {
   newId: () => UUID;
 }
 
-export function isDemoDb(value: unknown): value is DemoDb {
-  if (typeof value !== 'object' || value === null) return false;
-  const db = value as Partial<DemoDb>;
+/** Collections every database since v3 has (the shape a migration can start from). */
+function hasV3Shape(db: Partial<DemoDb>): boolean {
   return (
-    db.version === DEMO_DB_VERSION &&
     typeof db.meId === 'string' &&
     Array.isArray(db.profiles) &&
     Array.isArray(db.workouts) &&
@@ -133,6 +139,25 @@ export function isDemoDb(value: unknown): value is DemoDb {
     Array.isArray(db.notifications) &&
     Array.isArray(db.briefings)
   );
+}
+
+export function isDemoDb(value: unknown): value is DemoDb {
+  if (typeof value !== 'object' || value === null) return false;
+  const db = value as Partial<DemoDb>;
+  return db.version === DEMO_DB_VERSION && hasV3Shape(db) && Array.isArray(db.weekPlans);
+}
+
+/**
+ * Brings an older stored database up to the current version, keeping every
+ * row (the athlete's own workouts, check-ins, quedadas…). Null when it cannot
+ * be migrated (too old or malformed): the caller seeds a new one.
+ * - v3 → v4: adds an empty season plan.
+ */
+export function migrateDemoDb(value: unknown): DemoDb | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const db = value as Partial<DemoDb>;
+  if (db.version !== 3 || !hasV3Shape(db)) return null;
+  return { ...(db as DemoDb), version: DEMO_DB_VERSION, weekPlans: [] };
 }
 
 export function profileOf(db: DemoDb, id: UUID): Profile | null {

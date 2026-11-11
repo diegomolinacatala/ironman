@@ -125,6 +125,21 @@ describe('demo seed (relative to today)', () => {
     await repo.store.dispose();
   });
 
+  it('v4: realistic thresholds, catalog sessions with structure, and sensations on completed ones', async () => {
+    const repo = await signedInRepo();
+    const profile = await repo.getMyProfile();
+    expect(profile?.thresholds).toEqual({ lthr: 168, maxHr: 188, restingHr: 50, ftpW: 240, runThresholdPaceSecPerKm: 280, swimCssSecPer100m: 105 });
+    const nextWeek = await repo.listWorkouts(NEXT_WEEK);
+    expect(nextWeek.filter((w) => w.userId === DEMO_USERS.diego).every((w) => w.steps.length > 0)).toBe(true);
+    const history = await repo.listWorkouts({ from: addDays(WEEK.from, -21), to: addDays(TODAY, -1) });
+    const done = history.filter((w) => w.status === 'completed');
+    expect(done.every((w) => w.completed?.feel !== undefined && w.completed.feel >= 1 && w.completed.feel <= 5)).toBe(true);
+    const runs = done.filter((w) => w.sport === 'run');
+    expect(runs.every((w) => (w.completed?.avgHr ?? 0) >= 110 && (w.completed?.avgHr ?? 0) <= 175)).toBe(true);
+    expect(await repo.listWeekPlans({ from: WEEK.from, to: addDays(WEEK.from, 364) })).toHaveLength(1);
+    await repo.store.dispose();
+  });
+
   it('works when seeded mid-week (Wednesday)', async () => {
     const repo = await signedInRepo(WEDNESDAY);
     const today = '2026-10-21';

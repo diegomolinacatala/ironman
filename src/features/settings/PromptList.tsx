@@ -1,15 +1,31 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import type { WatchBrand } from '@/domain/types';
 import { Icon, Text, radius, space, useTheme } from '@/ui';
 
+import { COROS_CLAUDE_PROMPTS } from './corosContent';
 import { useCopy } from './useCopy';
 
+const PADEL_PROMPT = 'Hoy he jugado al pádel 90’ a tope, reorganiza mi semana';
+
+/** Example prompts for a Garmin athlete (Garmin connector + Road to Ironman). */
 export const CLAUDE_PROMPTS: readonly string[] = [
   'Planifica mi semana en Road to Ironman con mis datos de Garmin y mis huecos',
-  'Hoy he jugado al pádel 90’ a tope, reorganiza mi semana',
+  PADEL_PROMPT,
   'Guarda en Road to Ironman mi VFC, Body Battery y Training Readiness de Garmin de hoy',
   'Sube a mi Garmin los entrenos de mañana',
 ];
+
+const COROS_PROMPTS: readonly string[] = [
+  'Planifica mi semana en Road to Ironman con mis datos de COROS y mis huecos',
+  PADEL_PROMPT,
+  ...COROS_CLAUDE_PROMPTS,
+];
+
+/** What to ask your Claude, for your watch. */
+export function claudePrompts(brand: WatchBrand): readonly string[] {
+  return brand === 'coros' ? COROS_PROMPTS : CLAUDE_PROMPTS;
+}
 
 /** Example prompts for the user's Claude, each with a copy button. */
 export function PromptList({ prompts = CLAUDE_PROMPTS }: { prompts?: readonly string[] }) {

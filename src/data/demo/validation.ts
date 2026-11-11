@@ -2,7 +2,18 @@
  * Input validation shared by both repositories (Spanish messages). Pure.
  */
 import { validateDraft } from '@/domain/changes';
-import type { BusyBlockDraft, DateRange, JointSessionDraft, NutritionDraft, WorkoutDraft } from '@/domain/types';
+import { addDays, isISODate, startOfWeek, weekdayOf } from '@/domain/dates';
+import {
+  WEEK_PLAN_KINDS,
+  type BusyBlockDraft,
+  type DateRange,
+  type ISODate,
+  type JointSessionDraft,
+  type NutritionDraft,
+  type WeekPlan,
+  type WeekPlanDraft,
+  type WorkoutDraft,
+} from '@/domain/types';
 
 import { RepositoryError } from '../repository';
 
@@ -59,3 +70,66 @@ export function assertNutrition(draft: NutritionDraft): void {
 
 export const USERNAME_RE = /^[a-z0-9_.]{3,24}$/;
 export const USERNAME_HELP = 'El usuario debe tener 3–24 caracteres: minúsculas, números, punto o guion bajo.';
+
+// ---------------------------------------------------------------------------
+// Season plan ("Plan → General")
+// ---------------------------------------------------------------------------
+
+/** Weeks ahead of the current one that can be adjusted. */
+export const WEEK_PLAN_MAX_WEEKS = 52;
+export const WEEK_PLAN_MAX_MINUTES = 3000;
+export const WEEK_PLAN_NOTE_MAX = 300;
+const WEEK_PLAN_SOURCES: readonly WeekPlan['source'][] = ['manual', 'ai_coach', 'claude'];
+
+/** A draft ready to store: every field explicit. */
+export type CleanWeekPlanDraft = Omit<WeekPlan, 'updatedAt'>;
+
+/** Throws `validation` unless `weekStart` is a Monday from this week up to +52 weeks. */
+export function assertWeekPlanWeek(weekStart: string, today: ISODate): void {
+  if (!isISODate(weekStart) || weekdayOf(weekStart) !== 0) {
+    throw new RepositoryError('validation', 'Cada semana del plan general empieza en lunes: elige el lunes de esa semana.');
+  }
+  const first = startOfWeek(today);
+  if (weekStart < first || weekStart > addDays(first, WEEK_PLAN_MAX_WEEKS * 7)) {
+    throw new RepositoryError('validation', 'Solo puedes ajustar semanas desde esta hasta dentro de un año.');
+  }
+}
+
+function cleanMinutes(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value < 0 || value > WEEK_PLAN_MAX_MINUTES) {
+    throw new RepositoryError('validation', 'El volumen de la semana debe estar entre 0 y 50 horas.');
+  }
+  return Math.round(value);
+}
+
+function cleanNote(value: string | null | undefined): string | null {
+  const note = value?.trim();
+  if (!note) return null;
+  if (note.length > WEEK_PLAN_NOTE_MAX) {
+    throw new RepositoryError('validation', `La nota de la semana no puede pasar de ${WEEK_PLAN_NOTE_MAX} caracteres.`);
+  }
+  return note;
+}
+
+/** Validates one draft (Spanish messages) and fills the defaults (source 'manual'). */
+export function cleanWeekPlanDraft(draft: WeekPlanDraft, today: ISODate): CleanWeekPlanDraft {
+  assertWeekPlanWeek(draft.weekStart, today);
+  if (!(WEEK_PLAN_KINDS as readonly string[]).includes(draft.kind)) {
+    throw new RepositoryError('validation', 'Elige qué semana es: carga, más volumen, descarga o semana libre.');
+  }
+  const source = draft.source ?? 'manual';
+  if (!WEEK_PLAN_SOURCES.includes(source)) throw new RepositoryError('validation', 'El origen del ajuste no es válido.');
+  return { weekStart: draft.weekStart, kind: draft.kind, targetMinutes: cleanMinutes(draft.targetMinutes), note: cleanNote(draft.note), source };
+}
+
+/** Validates every draft (all or nothing); one entry per week (the last one wins), ordered by week. */
+export function cleanWeekPlanDrafts(drafts: readonly WeekPlanDraft[], today: ISODate): CleanWeekPlanDraft[] {
+  const byWeek = new Map(drafts.map((d) => [d.weekStart, cleanWeekPlanDraft(d, today)] as const));
+  return [...byWeek.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+}
+
+/** Throws `validation` for anything that is not a calendar date (delete by week). */
+export function assertWeekStartDate(weekStart: string): void {
+  if (!isISODate(weekStart)) throw new RepositoryError('validation', 'La semana no es válida.');
+}

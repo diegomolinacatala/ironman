@@ -54,6 +54,8 @@ import type {
   SyncResult,
   TokenScope,
   UUID,
+  WeekPlan,
+  WeekPlanDraft,
   Workout,
   WorkoutDraft,
   WorkoutPatch,
@@ -103,7 +105,8 @@ export type ChangeTopic =
   | 'proposals'
   | 'profile'
   | 'integrations'
-  | 'briefings';
+  | 'briefings'
+  | 'week_plans';
 
 export interface AuthSession {
   userId: UUID;
@@ -156,6 +159,17 @@ export interface Repository {
   createRace(draft: RaceDraft): Promise<Race>;
   updateRace(id: UUID, patch: Partial<RaceDraft>): Promise<Race>;
   deleteRace(id: UUID): Promise<void>;
+
+  // Season plan ("Plan → General") -------------------------------------------
+  /** Week-level plan entries whose Monday is inside `range`, ordered by week. */
+  listWeekPlans(range: DateRange): Promise<WeekPlan[]>;
+  /**
+   * Creates or replaces one entry per `weekStart` (a Monday, from this week up to
+   * +52 weeks; validation error otherwise). Returns the saved entries.
+   */
+  saveWeekPlans(drafts: WeekPlanDraft[]): Promise<WeekPlan[]>;
+  /** Removes the entry of that week (back to the computed periodization). No-op when absent. */
+  deleteWeekPlan(weekStart: ISODate): Promise<void>;
 
   // Life events --------------------------------------------------------------
   listLifeEvents(range: DateRange): Promise<LifeEvent[]>;

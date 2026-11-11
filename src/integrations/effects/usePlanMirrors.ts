@@ -2,10 +2,14 @@
  * Mirrors the plan into the OS: rolling local notifications, widget timelines (including
  * today's briefing headline) and the "Road to Ironman" device calendar. Debounced so a
  * burst of query updates triggers one rebuild.
+ *
+ * Reminders, widgets and calendar notes carry the session's targets (ppm / pace / watts),
+ * computed from the profile thresholds and the target race distance.
  */
 import { useEffect } from 'react';
 
 import type { ISODate, JointSession, Profile, Race, Workout } from '@/domain/types';
+import { prescriptionContext } from '@/features/coach/prescriptionContext';
 import { logger } from '@/lib/logger';
 
 import { syncWorkoutsToCalendar } from '../calendar/trainingCalendar';
@@ -48,26 +52,30 @@ export function jointPartnerNames(sessions: readonly JointSession[], myId: strin
 export function usePlanMirrors(enabled: boolean, snapshot: PlanSnapshot): void {
   const { workouts, races, jointSessions, profile, briefing, userId, today, tick } = snapshot;
   const timeZone = profile?.timezone ?? null;
+  const { thresholds, raceDistance } = prescriptionContext(profile?.thresholds, races, today);
 
   useEffect(() => {
     if (!enabled || !profile || !workouts) return undefined;
     const timer = setTimeout(() => {
-      rescheduleLocalNotifications({ workouts, profile, today, jointPartners: jointPartnerNames(jointSessions ?? [], profile.id) })
+      // Reminder bodies name the main target: `buildSchedule` (ScheduleInput) takes the profile
+      // thresholds and this race distance (what race-pace sessions mean).
+      const reminders = { workouts, profile, today, jointPartners: jointPartnerNames(jointSessions ?? [], profile.id), raceDistance };
+      rescheduleLocalNotifications(reminders)
         .then((count) => logger.debug(`notifications: ${count} scheduled`))
         .catch((error: unknown) => logger.warn('notifications: reschedule failed', error));
       syncWidgets({ workouts, races: races ?? [], jointSessions: jointSessions ?? [], profile, today, briefing });
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, workouts, races, jointSessions, profile, today, tick, briefing]);
+  }, [enabled, workouts, races, jointSessions, profile, today, tick, briefing, raceDistance]);
 
   // No-op unless this account turned "Añadir mis entrenos al calendario" on.
   useEffect(() => {
     if (!enabled || !workouts || !userId) return undefined;
     const timer = setTimeout(() => {
-      syncWorkoutsToCalendar(workouts, today, { userId, timeZone })
+      syncWorkoutsToCalendar(workouts, today, { userId, timeZone, thresholds, raceDistance })
         .then((result) => logger.debug('training calendar: mirrored', result))
         .catch((error: unknown) => logger.warn('training calendar: sync failed', error));
     }, CALENDAR_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, workouts, today, tick, userId, timeZone]);
+  }, [enabled, workouts, today, tick, userId, timeZone, thresholds, raceDistance]);
 }

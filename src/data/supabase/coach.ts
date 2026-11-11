@@ -5,8 +5,8 @@
  *
  * With it ON: `coach` edge function POST (the request, incl. `channel`) →
  * 202 { jobId } → poll the `coach_jobs` row every 2 s (max 130 s) → load the
- * proposal, the saved memory lines, the logged life event and the suggested
- * quedada (`extras`).
+ * proposal, the saved memory lines, the logged life event, the suggested
+ * quedada and the suggested season-plan weeks (`extras`).
  * Falls back to the local rules engine (with a notice) when AI is unavailable
  * or anything fails.
  */
@@ -19,7 +19,7 @@ import { runRulesCoach, type RulesCoachRepo } from '../demo/rulesCoach';
 import { run, type SupabaseCtx } from './base';
 import { functionErrorInfo, isNetworkError } from './errors';
 import { rowToLifeEvent } from './mappers';
-import { EMPTY_COACH_EXTRAS, parseCoachExtras, type CoachExtras } from './mappersAi';
+import { EMPTY_COACH_EXTRAS, parseCoachExtras, weekPlansFrom, type CoachExtras } from './mappersAi';
 import { asString, isRecord, pick } from './narrow';
 import type { CoachJobRow, LifeEventRow } from './rows';
 
@@ -142,7 +142,17 @@ async function jobToResponse(deps: CoachDeps, job: CoachJobRow): Promise<CoachRe
   ]);
   const lifeEvent = extras.lifeEventId ? await readLifeEvent(deps.ctx, extras.lifeEventId) : null;
   const reply = job.reply?.trim() || proposal?.summary || 'Listo. Revisa la propuesta.';
-  return { reply, proposal, engine: job.engine === 'rules' ? 'rules' : 'ai', memory: extras.memory, lifeEvent, quedada: extras.quedada };
+  // Only weeks the athlete can still save (a past week would make "Guardar" fail for all of them).
+  const weekPlans = weekPlansFrom(extras.weekPlans, deps.today());
+  return {
+    reply,
+    proposal,
+    engine: job.engine === 'rules' ? 'rules' : 'ai',
+    memory: extras.memory,
+    lifeEvent,
+    quedada: extras.quedada,
+    ...(weekPlans.length > 0 ? { weekPlans } : {}),
+  };
 }
 
 export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) => Promise<CoachResponse> {

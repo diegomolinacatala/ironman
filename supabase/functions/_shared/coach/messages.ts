@@ -17,11 +17,11 @@ export interface FriendWeek {
 
 const MODE_TASK: Record<CoachMode, (weekStart: string) => string> = {
   plan_week: (w) =>
-    `Modo plan_week. Planifica la semana del ${w} al ${addDays(w, 6)}: propone las sesiones que faltan (op add) respetando lo ya planificado, la disponibilidad, las ocupaciones y las quedadas.`,
+    `Modo plan_week. Planifica la semana del ${w} al ${addDays(w, 6)}: propone las sesiones que faltan (op add), cada una con steps y su prescripción (objective, keys, success, planB) con las cifras de athlete.zones, cuadrando con phase.targetMinutes y respetando lo ya planificado, la disponibilidad, las ocupaciones y las quedadas. En reply, di qué tipo de semana es y por qué.`,
   replan: (w) =>
-    `Modo replan. Replanifica lo que queda de la semana del ${w} (y la siguiente si hace falta) con los cambios mínimos para absorber la situación descrita.`,
+    `Modo replan. Replanifica lo que queda de la semana del ${w} (y la siguiente si hace falta) con los cambios mínimos para absorber la situación descrita; las sesiones nuevas o cambiadas llevan su prescripción completa.`,
   chat: (w) =>
-    `Modo chat sobre la semana del ${w}. Responde a la pregunta del atleta; incluye cambios solo si los pide o son necesarios por seguridad.`,
+    `Modo chat sobre la semana del ${w}. Responde a la pregunta del atleta; incluye cambios solo si los pide o son necesarios por seguridad, y usa week_plans si pide planificar varias semanas por encima.`,
 };
 
 function friendsBlock(friends: readonly FriendWeek[]): string {

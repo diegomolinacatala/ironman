@@ -26,6 +26,7 @@ import type {
   RaceDraft,
   TokenScope,
   UUID,
+  WeekPlanDraft,
   WorkoutDraft,
   WorkoutPatch,
 } from '@/domain/types';
@@ -62,6 +63,7 @@ export const qk = {
   tokens: ['tokens'] as const,
   integrations: ['integrations'] as const,
   briefing: (date: ISODate) => ['briefing', date] as const,
+  weekPlans: (r: DateRange) => ['week_plans', r.from, r.to] as const,
 };
 
 /** Root keys invalidated for each change topic. */
@@ -81,6 +83,7 @@ const TOPIC_KEYS: Record<ChangeTopic, readonly string[]> = {
   profile: ['profile'],
   integrations: ['integrations'],
   briefings: ['briefing'],
+  week_plans: ['week_plans'],
 };
 
 function useInvalidate() {
@@ -224,6 +227,30 @@ export function useUpdateRace() {
 export function useDeleteRace() {
   const repo = useRepository();
   return useRepoMutation((id: UUID) => repo.deleteRace(id), ['races']);
+}
+
+// ---------------------------------------------------------------------------
+// Season plan ("Plan → General")
+// ---------------------------------------------------------------------------
+
+/** Week-level plan entries (overrides of the computed periodization) in range. */
+export function useWeekPlans(range: DateRange) {
+  const repo = useRepository();
+  return useQuery({
+    queryKey: qk.weekPlans(range),
+    queryFn: () => repo.listWeekPlans(range),
+    enabled: useSignedIn(),
+  });
+}
+
+export function useSaveWeekPlans() {
+  const repo = useRepository();
+  return useRepoMutation((drafts: WeekPlanDraft[]) => repo.saveWeekPlans(drafts), ['week_plans']);
+}
+
+export function useDeleteWeekPlan() {
+  const repo = useRepository();
+  return useRepoMutation((weekStart: ISODate) => repo.deleteWeekPlan(weekStart), ['week_plans']);
 }
 
 // ---------------------------------------------------------------------------

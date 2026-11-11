@@ -167,13 +167,18 @@ describe('schema, privileges and sign-up', () => {
 
     const updated = await t.asUser(a, `update public.profiles set display_name = 'Hack' where id = $1 returning id`, [b]);
     assert.equal(updated.length, 0);
-    await t.asUser(a, `update public.profiles set display_name = 'Ana', visibility = 'summary' where id = $1`, [a]);
-    const [own] = await t.admin<{ display_name: string; visibility: string }>(
-      'select display_name, visibility from public.profiles where id = $1',
+    await t.asUser(a, `update public.profiles set display_name = 'Ana', visibility = 'summary', watch_brand = 'coros' where id = $1`, [a]);
+    const [own] = await t.admin<{ display_name: string; visibility: string; watch_brand: string | null }>(
+      'select display_name, visibility, watch_brand from public.profiles where id = $1',
       [a],
     );
     assert.equal(own?.display_name, 'Ana');
     assert.equal(own?.visibility, 'summary');
+    assert.equal(own?.watch_brand, 'coros');
+    await assert.rejects(
+      t.asUser(a, `update public.profiles set watch_brand = 'polar' where id = $1`, [a]),
+      pgError({ code: '23514' }),
+    );
 
     await assert.rejects(
       t.asUser(a, `update public.profiles set id = $2 where id = $1`, [a, b]),

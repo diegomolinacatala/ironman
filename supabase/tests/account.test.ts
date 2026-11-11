@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 
-import { createFriends, createTestDb, isoDay, pgError } from './harness.ts';
+import { createFriends, createTestDb, isoDay, isoMonday, pgError } from './harness.ts';
 import type { TestDb } from './harness.ts';
 
 interface CreatedToken {
@@ -133,6 +133,7 @@ describe('delete_my_account', () => {
     await t.asUser(leaver, `insert into public.workouts (date, start_time, sport, title, duration_min, intensity) values ($1, '08:00', 'run', 'Mío', 40, 'endurance')`, [isoDay(2)]);
     await t.asUser(leaver, `insert into public.races (name, date, distance) values ('Carrera', $1, 'sprint')`, [isoDay(60)]);
     await t.asUser(leaver, `insert into public.life_events (kind, title, start_date, end_date) values ('injury', 'Rodilla', $1, $1)`, [isoDay(0)]);
+    await t.asUser(leaver, `insert into public.week_plans (week_start, kind) values ($1, 'recovery')`, [isoMonday(1)]);
     await t.asUser(leaver, `select public.create_personal_token('mcp', 'x')`);
     await t.asUser(leaver, `select public.register_push_token('ExponentPushToken[leaver]', 'ios')`);
     await t.asUser(friend, `insert into public.workouts (date, sport, title, duration_min, intensity) values ($1, 'swim', 'Del amigo', 40, 'endurance')`, [isoDay(2)]);
@@ -149,6 +150,7 @@ describe('delete_my_account', () => {
     const tables = [
       'workouts', 'races', 'life_events', 'personal_tokens', 'push_tokens', 'notifications',
       'activity_events', 'integration_credentials', 'friendships', 'joint_session_participants',
+      'week_plans',
     ];
     for (const table of tables) {
       const column = table === 'activity_events' ? 'actor_id' : table === 'friendships' ? 'requester_id' : 'user_id';

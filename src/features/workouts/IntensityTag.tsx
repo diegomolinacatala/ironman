@@ -26,6 +26,25 @@ export function IntensityTag({ intensity }: IntensityTagProps): JSX.Element {
   );
 }
 
+export interface ZoneTagProps {
+  intensity: Intensity;
+  /** "Z4", "Carrera". */
+  zone: string;
+}
+
+/** Compact zone chip for step rows and zone tables: zone colour dot + "Z4" in ink. */
+export function ZoneTag({ intensity, zone }: ZoneTagProps): JSX.Element {
+  const { colors } = useTheme();
+  return (
+    <View accessible accessibilityLabel={`Zona ${zone}`} style={[styles.tag, { backgroundColor: colors.surfaceAlt }]}>
+      <View style={[styles.dot, { backgroundColor: intensityColor[intensity] }]} />
+      <Text variant="caption" style={[styles.label, styles.tabular]} numberOfLines={1}>
+        {zone}
+      </Text>
+    </View>
+  );
+}
+
 const DOT = 8;
 
 const styles = StyleSheet.create({
@@ -40,4 +59,5 @@ const styles = StyleSheet.create({
   },
   dot: { width: DOT, height: DOT, borderRadius: DOT / 2 },
   label: { fontFamily: fonts.bodySemibold, fontSize: 12, lineHeight: 16 },
+  tabular: { fontVariant: ['tabular-nums'] },
 });

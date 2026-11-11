@@ -24,7 +24,8 @@ export function seedProfiles(createdAt: ISODateTime): Profile[] {
     displayName: 'Diego',
     sports: ['swim', 'bike', 'run', 'strength'],
     level: 'intermediate',
-    thresholds: { ftpW: 245, runThresholdPaceSecPerKm: 268, swimCssSecPer100m: 102, maxHr: 192, lthr: 172, restingHr: 50 },
+    // Realistic for an intermediate age-grouper: LTHR 168 (run), 4:40 /km threshold, FTP 240 W, CSS 1:45 /100 m.
+    thresholds: { lthr: 168, maxHr: 188, restingHr: 50, ftpW: 240, runThresholdPaceSecPerKm: 280, swimCssSecPer100m: 105 },
     availability: {
       weeklyHoursTarget: 10,
       restDay: 0,

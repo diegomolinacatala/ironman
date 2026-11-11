@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import WeekScreen from '@/app/(tabs)/week';
-import { startOfWeek, todayISO } from '@/domain/dates';
+import { addDays, startOfWeek, todayISO } from '@/domain/dates';
 import type { WeekSummary } from '@/domain/load';
-import { ME, makeEvent, makeWorkout } from '@/features/workouts/__tests__/fixtures';
+import type { WeekPlan } from '@/domain/types';
+import { ME, makeEvent, makeProfile, makeRace, makeWorkout } from '@/features/workouts/__tests__/fixtures';
 
 import type { WeekData } from '../useWeekData';
+import { weekPhaseOf } from '../weekModel';
 
 const mockRouter = { push: jest.fn(), setParams: jest.fn(), back: jest.fn(), replace: jest.fn() };
 const mockPlan = jest.fn(async (_weekStart: string, _data: WeekData) => undefined);
@@ -51,6 +53,7 @@ function data(overrides: Partial<WeekData> = {}): WeekData {
     profile: null,
     summary: emptySummary,
     phase: null,
+    weekPlan: null,
     targetHours: null,
     recentMinutes: [],
     history: [],
@@ -118,6 +121,27 @@ describe('Semana', () => {
     await render(<WeekScreen />);
     expect(screen.getByTestId('day-today')).toBeTruthy();
     expect(screen.getByText(/^Hoy · /)).toBeTruthy();
+  });
+
+  test('opens on the week view and switches to General through ?view', async () => {
+    mockData = data();
+    await render(<WeekScreen />);
+    expect(screen.getByRole('tab', { name: 'Semana', selected: true })).toBeTruthy();
+    expect(screen.getByText('Semana en blanco')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'General' }));
+    expect(mockRouter.setParams).toHaveBeenCalledWith({ view: 'general' });
+  });
+
+  test('an adjusted week shows it in the phase line, which opens General', async () => {
+    const monday = startOfWeek(todayISO());
+    const plan: WeekPlan = { weekStart: monday, kind: 'recovery', targetMinutes: null, note: null, source: 'manual', updatedAt: '2026-11-09T08:00:00Z' };
+    const week = weekPhaseOf(monday, [makeRace({ date: addDays(monday, 7 * 20) })], makeProfile(), [plan]);
+    mockData = data({ phase: week.phase, weekPlan: week.plan, targetHours: week.targetHours });
+    await render(<WeekScreen />);
+    expect(screen.getByText('Descarga')).toBeTruthy();
+    expect(screen.getByText('Ajustada')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: /Ajustada/ }));
+    expect(mockRouter.setParams).toHaveBeenCalledWith({ view: 'general' });
   });
 
   test('week switcher updates the ?week param', async () => {

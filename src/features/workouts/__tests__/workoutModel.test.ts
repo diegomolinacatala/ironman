@@ -10,10 +10,32 @@ import {
   partnerNameFor,
   workoutToDraft,
 } from '../draft';
-import { addStep, applyTemplate, changeSport, emptyForm, formToDraft, isSport, removeStep, updateStep, workoutToForm } from '../form';
+import {
+  STEP_CUE_MAX,
+  addStep,
+  applyTemplate,
+  changeSport,
+  editPatch,
+  emptyForm,
+  formToDraft,
+  isSport,
+  removeStep,
+  setStepCue,
+  shouldResetCoaching,
+  updateStep,
+  withoutStaleCoaching,
+  workoutToForm,
+} from '../form';
 import { timeRangeLabel, workoutMetaLine } from '../format';
 import { isRpe, rpeLabel } from '../rpe';
-import { stepLabel, stepSegments, stepWeight, stepsTotalMinutes } from '../steps';
+import {
+  snapStepMinutes,
+  stepLabel,
+  stepMinutesIncrement,
+  stepSegments,
+  stepWeight,
+  stepsTotalMinutes,
+} from '../steps';
 import { allTemplates, templatesFor } from '../templates';
 import { ALEX, ME, makeSession, makeWorkout } from './fixtures';
 
@@ -66,6 +88,14 @@ describe('drafts and links', () => {
     expect(draft.steps?.[0]).not.toBe(w.steps[0]);
   });
 
+  test("workoutToDraft keeps the coach's prescription as a copy", () => {
+    const coaching = { objective: 'Base', keys: ['Cadencia'], success: 'FC estable', planB: null };
+    const draft = workoutToDraft(makeWorkout({ coaching }));
+    expect(draft.coaching).toEqual(coaching);
+    expect(draft.coaching?.keys).not.toBe(coaching.keys);
+    expect(workoutToDraft(makeWorkout())).not.toHaveProperty('coaching');
+  });
+
   test('jointNewHref encodes the workout', () => {
     const href = jointNewHref(makeWorkout({ id: 'abc', title: 'Series 6×1000', startTime: '18:30' }));
     expect(href.startsWith('/joint/new?')).toBe(true);
@@ -116,6 +146,44 @@ describe('form', () => {
     expect(removeStep(updated, 0)).toHaveLength(1);
   });
 
+  test('step cues: set, cleared when blank, capped, trimmed in the draft', () => {
+    const steps = [{ kind: 'work' as const, durationMin: 10 }];
+    const withCue = setStepCue(steps, 0, 'Suelto ');
+    expect(withCue[0]).toEqual({ kind: 'work', durationMin: 10, cue: 'Suelto ' });
+    expect(steps[0]).not.toHaveProperty('cue');
+    expect(setStepCue(withCue, 0, '   ')[0]).not.toHaveProperty('cue');
+    expect(setStepCue(steps, 0, 'x'.repeat(250))[0]?.cue).toHaveLength(STEP_CUE_MAX);
+    const draft = formToDraft({ ...emptyForm('2026-10-27', 'run'), steps: withCue });
+    expect(draft.steps).toEqual([{ kind: 'work', durationMin: 10, cue: 'Suelto' }]);
+  });
+
+  test('an edit that changes sport or intensity clears the coaching; other edits keep it', () => {
+    const coaching = { objective: 'Base', keys: [], success: 'FC estable', planB: null };
+    const before = makeWorkout({ intensity: 'endurance', durationMin: 45, tss: 40, coaching });
+    const same = formToDraft(workoutToForm(before));
+    expect(shouldResetCoaching(before, same)).toBe(false);
+    expect(editPatch(before, same)).not.toHaveProperty('coaching');
+    expect(editPatch(before, same)).not.toHaveProperty('tss');
+    const harder = { ...same, intensity: 'threshold' as const };
+    expect(editPatch(before, harder)).toMatchObject({ intensity: 'threshold', tss: null, coaching: null });
+    expect(editPatch(before, { ...same, sport: 'bike' })).toMatchObject({ coaching: null });
+    expect(shouldResetCoaching(makeWorkout({ intensity: 'endurance' }), harder)).toBe(false);
+  });
+
+  test('a patch that changes intensity without new coaching clears the old one', () => {
+    const coaching = { objective: 'Umbral', keys: [], success: 'Series iguales', planB: null };
+    const before = makeWorkout({ intensity: 'threshold', coaching });
+    expect(withoutStaleCoaching(before, { intensity: 'endurance', durationMin: 40 })).toEqual({
+      intensity: 'endurance',
+      durationMin: 40,
+      coaching: null,
+    });
+    const fresh = { ...coaching, objective: 'Rodaje suave' };
+    expect(withoutStaleCoaching(before, { intensity: 'endurance', coaching: fresh })).toEqual({ intensity: 'endurance', coaching: fresh });
+    expect(withoutStaleCoaching(before, { durationMin: 40 })).toEqual({ durationMin: 40 });
+    expect(withoutStaleCoaching(before, { intensity: 'threshold' })).toEqual({ intensity: 'threshold' });
+  });
+
   test('isSport guards params', () => {
     expect(isSport('swim')).toBe(true);
     expect(isSport('padel')).toBe(false);
@@ -135,6 +203,39 @@ describe('steps', () => {
     expect(stepLabel({ kind: 'warmup', distanceM: 400 }, 'swim')).toBe('400 m · Calentamiento');
     const segments = stepSegments([{ kind: 'warmup', durationMin: 10 }, { kind: 'work', durationMin: 20 }], 'tempo', 'bike');
     expect(segments.map((s) => s.intensity)).toEqual(['recovery', 'tempo']);
+  });
+
+  test('seconds-aware amounts, brick legs and the zone in the legend', () => {
+    expect(stepLabel({ kind: 'work', durationMin: 0.5, repeat: 8 })).toBe('8× 30" · Trabajo');
+    expect(stepLabel({ kind: 'work', durationMin: 15, leg: 'run' })).toBe("15' · Trabajo · carrera");
+    const series = stepSegments(
+      [
+        { kind: 'warmup', durationMin: 15 },
+        { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold' },
+      ],
+      'threshold',
+      'run',
+    );
+    expect(series.map((s) => s.label)).toEqual(["15' · Calentamiento · Z1", "3×8' · Series · Z4"]);
+    const brick = stepSegments(
+      [
+        { kind: 'work', durationMin: 60, leg: 'bike' },
+        { kind: 'work', durationMin: 15, leg: 'run' },
+      ],
+      'endurance',
+      'brick',
+    );
+    expect(brick.map((s) => s.label)).toEqual(['1h · Parte principal · bici · Z2', "15' · Parte principal · carrera · Z2"]);
+  });
+
+  test('editor minutes: half minutes up to 2, whole minutes above', () => {
+    expect(stepMinutesIncrement(1)).toBe(0.5);
+    expect(stepMinutesIncrement(2)).toBe(0.5);
+    expect(stepMinutesIncrement(2.5)).toBe(1);
+    expect(snapStepMinutes(0.2)).toBe(0.5);
+    expect(snapStepMinutes(1.4)).toBe(1.5);
+    expect(snapStepMinutes(7.6)).toBe(8);
+    expect(snapStepMinutes(Number.NaN)).toBe(1);
   });
 
   test('total minutes only when every step is timed', () => {

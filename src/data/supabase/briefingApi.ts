@@ -10,7 +10,7 @@ import { composeBriefing } from '@/domain/briefing';
 import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
 import { addDays, isISODate } from '@/domain/dates';
 import { nextRace } from '@/domain/periodization';
-import type { Briefing, ISODate, JointSession } from '@/domain/types';
+import type { Briefing, ISODate, JointSession, Profile, Race, RaceDistance, Thresholds, WatchBrand } from '@/domain/types';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
@@ -49,6 +49,22 @@ async function jointSessionsFor(repo: BriefingSourceRepo, date: ISODate): Promis
   }
 }
 
+/** What the local briefing needs to speak concrete targets: zones, race distance and the watch. */
+export interface BriefingAthleteFields {
+  thresholds?: Thresholds;
+  /** Distance of the target race (what "ritmo de carrera" means). */
+  raceDistance?: RaceDistance;
+  watchBrand?: WatchBrand;
+}
+
+export function briefingAthleteFields(profile: Profile | null, race: Race | null): BriefingAthleteFields {
+  return {
+    ...(profile ? { thresholds: profile.thresholds } : {}),
+    ...(race ? { raceDistance: race.distance } : {}),
+    ...(profile?.watchBrand ? { watchBrand: profile.watchBrand } : {}),
+  };
+}
+
 /** Composes the local ('rules') briefing from the athlete's data. */
 export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODate, now: Date): Promise<Briefing> {
   const tomorrow = addDays(date, 1);
@@ -59,14 +75,16 @@ export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODa
     repo.listRaces(),
     jointSessionsFor(repo, date),
   ]);
+  const race = nextRace(races, date);
   return composeBriefing({
     date,
     name: profile?.displayName ?? '',
     metrics,
     todayWorkouts: workouts.filter((w) => w.date === date),
     tomorrowWorkouts: workouts.filter((w) => w.date === tomorrow),
-    race: nextRace(races, date),
+    race,
     now,
+    ...briefingAthleteFields(profile, race),
     ...(profile && joint ? { social: { me: profile.id, jointSessions: joint } } : {}),
   });
 }

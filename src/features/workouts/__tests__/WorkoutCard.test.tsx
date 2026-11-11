@@ -2,7 +2,7 @@ import { describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { ComplianceDot } from '../ComplianceDot';
-import { IntensityTag } from '../IntensityTag';
+import { IntensityTag, ZoneTag } from '../IntensityTag';
 import { SheetModal } from '../SheetModal';
 import { JuntosTag, KeyTag } from '../Tags';
 import { WorkoutCard } from '../WorkoutCard';
@@ -39,6 +39,35 @@ describe('WorkoutCard', () => {
     await render(<WorkoutCard workout={makeWorkout()} today="2026-10-25" compact onPress={() => undefined} onLongPress={onLongPress} />);
     await fireEvent(screen.getByRole('button'), 'longPress');
     expect(onLongPress).toHaveBeenCalledTimes(1);
+  });
+
+  test('with thresholds, a compact caption shows the zone and the main target', async () => {
+    const w = makeWorkout({
+      intensity: 'threshold',
+      durationMin: 60,
+      steps: [
+        { kind: 'warmup', durationMin: 15 },
+        { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold' },
+      ],
+    });
+    await render(<WorkoutCard workout={w} today="2026-10-25" thresholds={{ lthr: 170 }} onPress={() => undefined} />);
+    expect(screen.getByText('Z4 · 162–168 ppm')).toBeTruthy();
+    expect(screen.getByRole('button').props.accessibilityLabel).toContain('objetivo Z4 · 162–168 ppm');
+  });
+
+  test('null thresholds fall back to the effort; no prop keeps the old card', async () => {
+    const w = makeWorkout({ intensity: 'endurance' });
+    const view = await render(<WorkoutCard workout={w} today="2026-10-25" thresholds={null} />);
+    expect(screen.getByText('Z2 · RPE 3–4')).toBeTruthy();
+    await view.rerender(<WorkoutCard workout={w} today="2026-10-25" />);
+    expect(screen.queryByText(/RPE|ppm/)).toBeNull();
+  });
+});
+
+describe('ZoneTag', () => {
+  test('reads the zone', async () => {
+    await render(<ZoneTag intensity="threshold" zone="Z4" />);
+    expect(screen.getByLabelText('Zona Z4')).toBeTruthy();
   });
 });
 

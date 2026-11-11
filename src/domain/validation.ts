@@ -1,10 +1,13 @@
 /**
  * Form/input validation schemas (zod 4) with Spanish messages. Limits mirror
- * the database CHECK constraints (supabase/migrations/20261025000100_schema.sql).
+ * the database CHECK constraints (supabase/migrations/20261025000100_schema.sql)
+ * and, for coaching, steps and week plans, 20261109000100_coach_v4.sql with the
+ * server's own wording, so client and database errors match.
  */
 import { z } from 'zod';
 
-import { diffDays, isISODate, timeToMinutes } from './dates';
+import { validateCoaching } from './changes';
+import { diffDays, isISODate, timeToMinutes, weekdayOf } from './dates';
 import {
   BODY_AREAS,
   INTENSITIES,
@@ -13,6 +16,8 @@ import {
   RACE_DISTANCES,
   SPORTS,
   TRAINABLE_SPORTS,
+  WATCH_BRANDS,
+  WEEK_PLAN_KINDS,
   WORKOUT_SOURCES,
 } from './types';
 
@@ -46,6 +51,29 @@ const requiredTitle = (label: string, max = 120) =>
     .min(1, { error: `Pon un ${label}` })
     .max(max, { error: `El ${label} es demasiado largo (máximo ${max})` });
 
+/** Inclusive range within [lo, hi] with min ≤ max (heart rate, pace, power, RPE). */
+const targetRange = (lo: number, hi: number, label: string) =>
+  z
+    .object(
+      {
+        min: z.number({ error: `${label}: debe ser un número` }).min(lo, { error: `${label}: entre ${lo} y ${hi}` }).max(hi, { error: `${label}: entre ${lo} y ${hi}` }),
+        max: z.number({ error: `${label}: debe ser un número` }).min(lo, { error: `${label}: entre ${lo} y ${hi}` }).max(hi, { error: `${label}: entre ${lo} y ${hi}` }),
+      },
+      { error: `${label}: rango no válido` },
+    )
+    .refine((r) => r.min <= r.max, { error: `${label}: el mínimo no puede ser mayor que el máximo` });
+
+/** Explicit step targets: pulse 40–230 ppm, pace 20–1200 s (per km or per 100 m), power 0–2000 W, RPE 1–10. */
+export const stepTargetSchema = z.object(
+  {
+    hr: targetRange(40, 230, 'Pulso objetivo').optional(),
+    pace: targetRange(20, 1200, 'Ritmo objetivo').optional(),
+    power: targetRange(0, 2000, 'Potencia objetivo').optional(),
+    rpe: targetRange(1, 10, 'RPE objetivo').optional(),
+  },
+  { error: 'Objetivos del paso no válidos' },
+);
+
 export const workoutStepSchema = z.object({
   kind: z.enum(['warmup', 'work', 'recovery', 'cooldown', 'rest'], { error: 'Tipo de paso no válido' }),
   durationMin: z.number().min(0).max(720).optional(),
@@ -53,7 +81,42 @@ export const workoutStepSchema = z.object({
   intensity: z.enum(INTENSITIES, { error: 'Intensidad no válida' }).optional(),
   repeat: z.number().int().min(1).max(100).optional(),
   note: z.string().max(300).optional(),
+  target: stepTargetSchema.optional(),
+  cue: z.string({ error: 'Indicación del paso no válida' }).max(200, { error: 'Indicación del paso: máximo 200 caracteres' }).optional(),
+  leg: z.enum(['bike', 'run'], { error: 'Tramo del brick no válido (bici o carrera)' }).optional(),
 });
+
+const COACHING_TEXT_MAX = 200;
+const COACHING_KEY_MAX = 160;
+const COACHING_KEYS_MAX = 4;
+const MAX_STEPS = 50;
+
+const coachingText = (max: number, message: string) => z.string({ error: message }).trim().min(1, { error: message }).max(max, { error: message });
+
+/**
+ * The coach's prescription of a session, with the database's messages (lengths
+ * after trimming): objective and success 1–200, up to 4 keys of 1–160, plan B
+ * null or 1–200; the stored size check is the server's (`changes.validateCoaching`).
+ */
+export const workoutCoachingSchema = z
+  .object(
+    {
+      objective: coachingText(COACHING_TEXT_MAX, 'Objetivo del entreno no válido (1–200 caracteres)'),
+      keys: z
+        .array(coachingText(COACHING_KEY_MAX, 'Claves del entreno no válidas (1–160 caracteres cada una)'), {
+          error: 'Claves del entreno no válidas (1–160 caracteres cada una)',
+        })
+        .max(COACHING_KEYS_MAX, { error: 'Máximo 4 claves por entreno' })
+        .default([]),
+      success: coachingText(COACHING_TEXT_MAX, 'Criterio de éxito no válido (1–200 caracteres)'),
+      planB: coachingText(COACHING_TEXT_MAX, 'Plan B no válido (1–200 caracteres)').nullable().default(null),
+    },
+    { error: 'Indicaciones del entreno no válidas' },
+  )
+  .superRefine((value, ctx) => {
+    const error = validateCoaching(value);
+    if (error) ctx.addIssue({ code: 'custom', message: error });
+  });
 
 export const workoutDraftSchema = z.object({
   date: isoDateSchema,
@@ -69,9 +132,10 @@ export const workoutDraftSchema = z.object({
   distanceM: optionalInt(0, 1_000_000, 'Distancia'),
   intensity: z.enum(INTENSITIES, { error: 'Elige una intensidad' }),
   tss: z.number({ error: 'Carga: debe ser un número' }).min(0).max(2000, { error: 'Carga demasiado alta' }).nullable().optional(),
-  steps: z.array(workoutStepSchema).max(50, { error: 'Demasiados pasos' }).optional(),
+  steps: z.array(workoutStepSchema).max(MAX_STEPS, { error: 'Demasiados pasos (máximo 50)' }).optional(),
   isKey: z.boolean().optional(),
   source: z.enum(WORKOUT_SOURCES).optional(),
+  coaching: workoutCoachingSchema.nullable().optional(),
 });
 
 export const raceDraftSchema = z.object({
@@ -121,6 +185,40 @@ export const checkinDraftSchema = z.object({
   stress: score5('Estrés'),
   motivation: score5('Motivación'),
   notes: z.string().max(1000, { error: 'Notas: máximo 1000 caracteres' }).nullable(),
+});
+
+/** What the athlete logs when completing a session (CompleteSheet, imports): sensaciones 1–5, RPE 1–10. */
+export const completedDataSchema = z.object({
+  durationMin: z.number({ error: 'Duración: debe ser un número' }).min(0, { error: 'La duración no puede ser negativa' }).max(1440, { error: 'Duración: máximo 24 horas' }).optional(),
+  distanceM: z.number({ error: 'Distancia: debe ser un número' }).min(0).max(1_000_000, { error: 'Distancia demasiado larga' }).optional(),
+  avgHr: z.number({ error: 'FC media: debe ser un número' }).min(30, { error: 'FC media no válida' }).max(250, { error: 'FC media no válida' }).optional(),
+  rpe: z.number({ error: 'RPE: elige un valor de 1 a 10' }).min(1, { error: 'RPE: elige un valor de 1 a 10' }).max(10, { error: 'RPE: elige un valor de 1 a 10' }).optional(),
+  feel: score5('Sensaciones').optional(),
+  tss: z.number({ error: 'Carga: debe ser un número' }).min(0).max(2000, { error: 'Carga demasiado alta' }).optional(),
+  notes: z.string().max(2000, { error: 'Notas: máximo 2000 caracteres' }).optional(),
+  source: z.enum(['manual', 'healthkit', 'garmin', 'claude'], { error: 'Origen no válido' }).optional(),
+  externalId: z.string().max(200).optional(),
+  completedAt: z.string().optional(),
+});
+
+/**
+ * One week of the general plan ("Ajustar semana"): Monday of the week, kind,
+ * optional volume (0–3000 min) and note (≤ 300). The from-this-week…+52 range
+ * depends on today, so the repository checks it.
+ */
+export const weekPlanDraftSchema = z.object({
+  weekStart: isoDateSchema.refine((d) => !isISODate(d) || weekdayOf(d) === 0, {
+    error: 'Cada semana del plan general empieza en lunes: elige el lunes de esa semana.',
+  }),
+  kind: z.enum(WEEK_PLAN_KINDS, { error: 'Elige qué semana es: carga, más volumen, descarga o semana libre.' }),
+  targetMinutes: z
+    .number({ error: 'El volumen de la semana debe estar entre 0 y 50 horas.' })
+    .min(0, { error: 'El volumen de la semana debe estar entre 0 y 50 horas.' })
+    .max(3000, { error: 'El volumen de la semana debe estar entre 0 y 50 horas.' })
+    .nullable()
+    .optional(),
+  note: z.string().trim().max(300, { error: 'La nota de la semana no puede pasar de 300 caracteres.' }).nullable().optional(),
+  source: z.enum(['manual', 'ai_coach', 'claude'], { error: 'El origen del ajuste no es válido.' }).optional(),
 });
 
 export const nutritionDraftSchema = z.object({
@@ -187,6 +285,7 @@ export const profilePatchSchema = z
     timezone: z.string().min(1).max(64),
     coachNotes: z.string().max(4000, { error: 'Notas para el coach: máximo 4000 caracteres' }).nullable(),
     onboardedAt: z.string().nullable(),
+    watchBrand: z.enum(WATCH_BRANDS, { error: 'Elige tu reloj: Garmin o COROS' }).nullable(),
   })
   .partial();
 
@@ -196,6 +295,9 @@ export type LifeEventDraftInput = z.infer<typeof lifeEventDraftSchema>;
 export type CheckinDraftInput = z.infer<typeof checkinDraftSchema>;
 export type NutritionDraftInput = z.infer<typeof nutritionDraftSchema>;
 export type ProfilePatchInput = z.infer<typeof profilePatchSchema>;
+export type WorkoutCoachingInput = z.infer<typeof workoutCoachingSchema>;
+export type CompletedDataInput = z.infer<typeof completedDataSchema>;
+export type WeekPlanDraftInput = z.infer<typeof weekPlanDraftSchema>;
 
 /** Minimal shape of a zod safeParse result. */
 export type SafeParseLike = { success: true } | { success: false; error: { issues: readonly { message: string }[] } };

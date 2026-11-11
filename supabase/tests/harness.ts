@@ -250,6 +250,14 @@ export function isoDay(offsetDays = 0): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** YYYY-MM-DD of the Monday of the current week + n weeks (UTC, ISO weeks: week_plans rows). */
+export function isoMonday(offsetWeeks = 0): string {
+  const d = new Date();
+  const daysSinceMonday = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - daysSinceMonday + offsetWeeks * 7);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Seeds two users who are accepted friends. */
 export async function createFriends(
   t: TestDb,

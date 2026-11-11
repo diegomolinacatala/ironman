@@ -5,7 +5,7 @@
  * Pure, used by the local morning briefing (`briefing.ts`).
  */
 import { parseISODate, timeToMinutes, weekdayOf } from './dates';
-import type { ISODate, ISOTime } from './types';
+import type { ISODate, ISOTime, NumberRange } from './types';
 
 /** How "1" (and its compounds) agrees with the noun that follows. */
 export type NumberGender = 'standalone' | 'masculine' | 'feminine';
@@ -144,4 +144,69 @@ export function distanceWords(meters: number, inMeters = false): string {
 export function wordCount(text: string): number {
   const trimmed = text.trim();
   return trimmed === '' ? 0 : trimmed.split(/\s+/).length;
+}
+
+/** Step lengths with seconds: 0.5 → "treinta segundos", 1.25 → "un minuto y quince segundos", 8 → "ocho minutos". */
+export function stepDurationWords(minutes: number): string {
+  const totalSec = Number.isFinite(minutes) ? Math.max(0, Math.round(minutes * 60)) : 0;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (sec === 0) return durationWords(min);
+  const secText = countWords(sec, 'segundo', 'segundos', 'masculine');
+  return min === 0 ? secText : `${durationWords(min)} y ${secText}`;
+}
+
+function rangeWords(r: NumberRange, word: (n: number) => string): string {
+  return r.min === r.max ? word(r.min) : `entre ${word(r.min)} y ${word(r.max)}`;
+}
+
+/** 145–151 → "entre ciento cuarenta y cinco y ciento cincuenta y una pulsaciones". */
+export function hrRangeWords(r: NumberRange): string {
+  return `${rangeWords(r, (n) => numberToWords(n, 'feminine'))} pulsaciones`;
+}
+
+/** 200–220 → "entre doscientos y doscientos veinte vatios". */
+export function powerRangeWords(r: NumberRange): string {
+  return `${rangeWords(r, (n) => numberToWords(n, 'masculine'))} vatios`;
+}
+
+/** 308 → "cinco minutos ocho" (a pace, without its unit). */
+function paceWords(sec: number): string {
+  const total = Math.max(0, Math.round(sec));
+  const minutes = countWords(Math.floor(total / 60), 'minuto', 'minutos', 'masculine');
+  return total % 60 === 0 ? minutes : `${minutes} ${numberToWords(total % 60)}`;
+}
+
+/** 308–348 s/km → "entre cinco minutos ocho y cinco minutos cuarenta y ocho el kilómetro". */
+export function paceRangeWords(r: NumberRange, per: 'km' | '100m'): string {
+  return `${rangeWords(r, paceWords)} ${per === 'km' ? 'el kilómetro' : 'los cien metros'}`;
+}
+
+/** RPE 7–8 → "esfuerzo de siete a ocho sobre diez". */
+export function rpeWords(r: NumberRange): string {
+  const span = r.min === r.max ? numberToWords(r.min) : `${numberToWords(r.min)} a ${numberToWords(r.max)}`;
+  return `esfuerzo de ${span} sobre diez`;
+}
+
+const PAREN_WITH_DIGITS = /\s*\([^()]*\d[^()]*\)/g;
+const RPE_RANGE = /\bRPE (\d{1,2})[–-](\d{1,2})\b/g;
+const RPE_SINGLE = /\bRPE (\d{1,2})\b/g;
+const ZONE = /\bZ([1-5])\b/g;
+const UNSPEAKABLE = /[\d%×"'’/]|\b\p{Lu}{2,}\b/u;
+
+/**
+ * Coach copy made speakable: numbers in brackets dropped, "Z4" → "zona
+ * cuatro", "RPE 7–8" → "esfuerzo de siete a ocho sobre diez". Null when
+ * digits, symbols or acronyms remain (the text cannot be read aloud as is).
+ */
+export function spokenCopy(text: string): string | null {
+  const spoken = text
+    .replace(PAREN_WITH_DIGITS, '')
+    .replace(RPE_RANGE, (_m, a: string, b: string) => rpeWords({ min: Number(a), max: Number(b) }))
+    .replace(RPE_SINGLE, (_m, a: string) => rpeWords({ min: Number(a), max: Number(a) }))
+    .replace(ZONE, (_m, z: string) => `zona ${numberToWords(Number(z))}`)
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return spoken && !UNSPEAKABLE.test(spoken) ? spoken : null;
 }

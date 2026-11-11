@@ -1,110 +1,135 @@
 /**
- * Approximate periodization (docs/research/02 §5), counted back from the next
- * A race (or next race of any priority). Used only to give Claude context; the
- * app's rules engine has the authoritative version.
+ * The training week as the app shows it: an adapter over the mirrored app
+ * periodization (domain/periodization.ts `phaseFor`) with the athlete's
+ * week-level plan applied (domain/season.ts `applyWeekPlan`), labelled like
+ * Plan → General labels it (`buildSeason`). The AI coach, Claude and the
+ * briefing therefore see the same phase, volume and "Carga / Descarga" week
+ * the athlete sees. Keeps the older server fields (label, focus,
+ * suggestRecoveryWeek…) for existing consumers.
  */
-import { addDays, diffDays, startOfWeek } from '../dates.ts';
-import type { ISODate, Race, RaceDistance } from '../types.ts';
+import { diffDays, startOfWeek } from '../dates.ts';
+import type { AthleteLevel, ISODate, Race, WeekPlan } from '../types.ts';
+import type { Subphase } from './domain/constants.ts';
+import { phaseFor as domainPhaseFor } from './domain/periodization.ts';
+import type { Phase } from './domain/periodization.ts';
+import { applyWeekPlan, buildSeason, canOverride } from './domain/season.ts';
+import type { SeasonOverview, SeasonWeek, SeasonWeekKind } from './domain/season.ts';
 
-export type Phase = 'prep' | 'base' | 'build' | 'peak' | 'taper' | 'race_week' | 'recovery' | 'transition';
+export { nextRace } from './domain/periodization.ts';
+export type { Phase };
 
-const PHASE_LABELS: Record<Phase, string> = {
+export type RaceRef = Pick<Race, 'id' | 'name' | 'date' | 'distance' | 'priority'>;
+
+export interface PhaseInfo {
+  phase: Phase;
+  /** "Base 2", "Construcción 1", "Mantenimiento", "Afinamiento"… (Plan → General's phase label). */
+  label: string;
+  /** What the week works on (periodization focus, or the week plan's, with its note). */
+  focus: string;
+  targetRace: RaceRef | null;
+  daysToRace: number | null;
+  weeksToRace: number | null;
+  /** Older consumers: same as `isRecoveryWeek`. */
+  suggestRecoveryWeek: boolean;
+  isRecoveryWeek: boolean;
+  /** Multiplier over the athlete's weekly hours target (week plan applied). */
+  volumeFactor: number;
+  subphase: Subphase | null;
+  /** load, push, recovery, rest, taper, race or transition. */
+  weekKind: SeasonWeekKind;
+  /** "Carga", "Más volumen", "Vuelta a la carga", "Descarga", "Semana libre", "Pico", "Afinamiento", "Carrera"… */
+  weekLabel: string;
+  /** Target training minutes of the week (multiple of 5), null without a weekly hours target. */
+  targetMinutes: number | null;
+  /** The week has a week-level plan (set in Plan → General by the athlete, the coach or Claude). */
+  adjusted: boolean;
+  /** Race this week (the target or a B/C race), else null. */
+  raceInWeek: RaceRef | null;
+  /** Spanish periodization warnings (plan too short, A races too close…). */
+  warnings: string[];
+}
+
+export interface PhaseOptions {
+  /** `profile.level`; unknown values use the default 3:1 cadence. */
+  level?: string | null;
+  /** The athlete's normal weekly hours (week plans in minutes and targetMinutes need it). */
+  weeklyHoursTarget?: number | null;
+  /** Week-level plans ("Plan → General"). */
+  weekPlans?: readonly WeekPlan[];
+  /** The athlete's today: weeks from this one on are labelled like the app's season view. */
+  today?: ISODate;
+  /** Season already built from `today` (avoids building it twice). */
+  season?: SeasonOverview;
+}
+
+const LEVELS: readonly AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
+const MAX_SEASON_WEEKS = 52;
+
+const PHASE_LABELS: Readonly<Record<Phase, string>> = {
   prep: 'Preparación',
   base: 'Base',
   build: 'Construcción',
   peak: 'Pico',
-  taper: 'Afinamiento (taper)',
+  taper: 'Afinamiento',
   race_week: 'Semana de carrera',
-  recovery: 'Recuperación post-carrera',
+  recovery: 'Recuperación',
   transition: 'Transición',
 };
 
-const FOCUS: Record<Phase, string> = {
-  prep: 'Volver a la rutina: Z1-Z2, técnica y fuerza general.',
-  base: 'Motor aeróbico: mucho Z2, técnica, fuerza; poca intensidad (≥80 % suave).',
-  build: 'Especificidad: intervalos a ritmo de carrera, transiciones (brick) y tiradas largas.',
-  peak: 'Mantener intensidad con menos volumen; simulaciones cortas de carrera.',
-  taper: 'Bajar volumen 40-60 % manteniendo intensidad y frecuencia para llegar fresco.',
-  race_week: 'Activaciones cortas, descanso, nada nuevo. Sin pádel/fútbol los 7 días previos.',
-  recovery: 'Recuperar tras la carrera: suave, sin intensidad unos días.',
-  transition: 'Descanso activo, otros deportes, sin estructura.',
-};
-
-const TAPER_WEEKS: Record<RaceDistance, number> = {
-  sprint: 1,
-  olympic: 1,
-  half: 2,
-  full: 3,
-  run_5k: 1,
-  run_10k: 1,
-  run_half: 2,
-  run_marathon: 3,
-  other: 1,
-};
-
-const BUILD_WEEKS: Record<RaceDistance, number> = {
-  sprint: 6,
-  olympic: 8,
-  half: 10,
-  full: 12,
-  run_5k: 5,
-  run_10k: 6,
-  run_half: 8,
-  run_marathon: 10,
-  other: 8,
-};
-
-export interface PhaseInfo {
-  phase: Phase;
-  label: string;
-  focus: string;
-  targetRace: Pick<Race, 'id' | 'name' | 'date' | 'distance' | 'priority'> | null;
-  daysToRace: number | null;
-  weeksToRace: number | null;
-  /** 3:1 heuristic: every 4th week of base/build is lighter. */
-  suggestRecoveryWeek: boolean;
+export function athleteLevel(level: string | null | undefined): AthleteLevel | undefined {
+  return LEVELS.find((l) => l === level);
 }
 
-export function nextRace(races: readonly Race[], today: ISODate): Race | null {
-  const upcoming = [...races].filter((r) => r.date >= today).sort((a, b) => a.date.localeCompare(b.date));
-  return upcoming.find((r) => r.priority === 'A') ?? upcoming[0] ?? null;
+function hoursOf(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-function info(phase: Phase, race: Race | null, days: number | null, weeks: number | null, recovery = false): PhaseInfo {
-  return {
-    phase,
-    label: PHASE_LABELS[phase],
-    focus: FOCUS[phase],
-    targetRace: race ? { id: race.id, name: race.name, date: race.date, distance: race.distance, priority: race.priority } : null,
-    daysToRace: days,
-    weeksToRace: weeks,
-    suggestRecoveryWeek: recovery,
-  };
+function raceRef(race: Race | null): RaceRef | null {
+  return race ? { id: race.id, name: race.name, date: race.date, distance: race.distance, priority: race.priority } : null;
 }
 
-export function phaseFor(weekStart: ISODate, races: readonly Race[]): PhaseInfo {
-  const monday = startOfWeek(weekStart);
-  const recent = races.find((r) => {
-    const since = diffDays(monday, r.date);
-    return since > 0 && since <= 7 && r.priority !== 'C';
-  });
-  const race = nextRace(races, monday);
-  if (!race) {
-    const lastRace = [...races].filter((r) => r.date < monday).sort((a, b) => b.date.localeCompare(a.date))[0];
-    if (recent) return info('recovery', null, null, null);
-    if (lastRace && diffDays(monday, lastRace.date) <= 21) return info('transition', null, null, null);
-    return info('base', null, null, null);
+/** The season row of `monday` as Plan → General shows it (from the athlete's today), else the week on its own. */
+function seasonWeekOf(monday: ISODate, races: readonly Race[], opts: PhaseOptions): SeasonWeek | null {
+  const known = opts.season?.weeks.find((w) => w.weekStart === monday);
+  if (known) return known;
+  const input = { races, level: athleteLevel(opts.level), weeklyHoursTarget: hoursOf(opts.weeklyHoursTarget), weekPlans: opts.weekPlans ?? [] };
+  const current = opts.today ? startOfWeek(opts.today) : monday;
+  const ahead = diffDays(monday, current) / 7;
+  if (ahead > 0 && ahead < MAX_SEASON_WEEKS) {
+    const row = buildSeason({ ...input, today: current, horizonWeeks: ahead + 1 }).weeks.find((w) => w.weekStart === monday);
+    if (row) return row;
   }
-  const days = diffDays(race.date, monday);
-  const weeks = Math.round(diffDays(startOfWeek(race.date), monday) / 7);
-  if (recent && weeks > TAPER_WEEKS[race.distance]) return info('recovery', race, days, weeks);
-  if (race.date <= addDays(monday, 6)) return info('race_week', race, days, weeks);
-  const taper = TAPER_WEEKS[race.distance];
-  if (weeks <= taper) return info(weeks === taper && taper > 1 ? 'peak' : 'taper', race, days, weeks);
-  const build = BUILD_WEEKS[race.distance];
-  const weeksBeforeTaper = weeks - taper;
-  const recovery = weeksBeforeTaper % 4 === 0;
-  if (weeksBeforeTaper <= build) return info('build', race, days, weeks, recovery);
-  if (weeksBeforeTaper > build + 20) return info('prep', race, days, weeks);
-  return info('base', race, days, weeks, recovery);
+  return buildSeason({ ...input, today: monday, horizonWeeks: 1 }).weeks[0] ?? null;
+}
+
+/**
+ * Phase, volume and week type of the week containing `date`, with the
+ * athlete's week plan applied. `date` keeps its meaning for days to the race
+ * (the briefing passes the day, the planning context the Monday).
+ */
+export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptions = {}): PhaseInfo {
+  const monday = startOfWeek(date);
+  const raw = domainPhaseFor(date, races, { level: athleteLevel(opts.level) });
+  const plan = canOverride(raw) ? ((opts.weekPlans ?? []).find((p) => p.weekStart === monday) ?? null) : null;
+  const hours = hoursOf(opts.weeklyHoursTarget);
+  const info = applyWeekPlan(raw, plan, hours);
+  const week = seasonWeekOf(monday, races, opts);
+  return {
+    phase: info.phase,
+    label: week?.phaseLabel ?? PHASE_LABELS[info.phase],
+    focus: info.focus,
+    targetRace: raceRef(info.targetRace),
+    daysToRace: info.daysToRace,
+    weeksToRace: info.weeksToRace,
+    suggestRecoveryWeek: info.isRecoveryWeek,
+    isRecoveryWeek: info.isRecoveryWeek,
+    volumeFactor: info.volumeFactor,
+    subphase: info.subphase,
+    weekKind: week?.kind ?? (info.isRecoveryWeek ? 'recovery' : 'load'),
+    weekLabel: week?.label ?? (info.isRecoveryWeek ? 'Descarga' : 'Carga'),
+    targetMinutes: hours > 0 ? Math.max(0, Math.round((hours * 60 * info.volumeFactor) / 5) * 5) : null,
+    adjusted: plan !== null,
+    raceInWeek: raceRef(info.raceInWeek),
+    warnings: info.warnings,
+  };
 }

@@ -3,21 +3,41 @@
  * docs/research/02 §13: phase → weekly minutes (hours target × factors, ramp
  * cap) → sport split and sessions → placement with hard rules → 'add' changes.
  * Never deletes or moves the athlete's workouts.
+ *
+ * v4: a week-level override from Plan → General (`weekPlan`: carga, más
+ * volumen, descarga, semana libre or explicit minutes) replaces the week's
+ * periodization volume and descarga flag; readiness, restrictions, the ramp
+ * cap and the freshness guard still apply on top of it.
  */
-import { MIN_LOW_INTENSITY_SHARE, PRE_RACE_LOOKAHEAD_DAYS, READINESS_EFFECTS, maxHardDays, type DistanceKind } from './constants';
+import { READINESS_EFFECTS, maxHardDays, type DistanceKind } from './constants';
 import { allocateSessions } from './allocation';
-import { addDays, daysInRange, diffDays, maxDate, weekRange } from './dates';
+import { addDays, daysInRange, maxDate, weekRange } from './dates';
 import { distanceKindOf, phaseFor, type PhaseInfo } from './periodization';
 import { placeSessions, type Dropped, type Placed, type PlacementResult } from './placement';
 import { dailyLoads } from './load';
-import { consumeExisting, historyCaps, narrowToWeek, raceWeekSessions, rampCapMinutes, trimToBudget, tsbGuard, type HistoryCaps } from './plannerSupport';
+import {
+  activeWeekPlan,
+  consumeExisting,
+  enforceIntensityDistribution,
+  historyCaps,
+  pinnedRaceSessions,
+  rampCapMinutes,
+  trimToBudget,
+  tsbGuard,
+  weekPlanSentence,
+  type HistoryCaps,
+} from './plannerSupport';
 import { reasonFor, summaryFor } from './plannerText';
 import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
 import { NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
-import { hardMinutes, isQualitySpec, specClass, specSport, specToDraft, type SessionSpec } from './sessions';
-import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, Sport, Weekday, Workout } from './types';
+import { applyWeekPlan } from './season';
+import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
+import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, Sport, Weekday, WeekPlan, Workout } from './types';
 import { buildWeekModel, type FixedInput } from './weekModel';
+
+/** Share of endurance time in Z1-Z2 (kept here for the public API; lives in plannerSupport). */
+export { lowIntensityShare } from './plannerSupport';
 
 export interface PlannerInput {
   weekStart: ISODate;
@@ -40,6 +60,13 @@ export interface PlannerInput {
    * gone today (plus a 30' buffer) is not offered. Omit when planning a future week.
    */
   nowMinutes?: number;
+  /**
+   * v4: the week-level override of this week (Plan → General). Changes the
+   * volume, the descarga flag, the quality budget and the summary of a
+   * prep/base/build week without a race; ignored for other weeks (taper,
+   * race, transition…) and when its Monday is not this week's.
+   */
+  weekPlan?: WeekPlan | null;
 }
 
 export interface PlanWeekResult {
@@ -114,39 +141,6 @@ function summarizeRestrictions(dates: readonly ISODate[], restrictions: Record<I
   };
 }
 
-const ENDURANCE_SPORTS: readonly Sport[] = ['swim', 'bike', 'run', 'brick'];
-
-/** Share of endurance time in Z1-Z2 (by step durations). */
-export function lowIntensityShare(specs: readonly SessionSpec[]): number {
-  const endurance = specs.filter((s) => ENDURANCE_SPORTS.includes(specSport(s)) && specClass(s) !== 'RACE');
-  const totalMin = endurance.reduce((s, x) => s + x.durationMin, 0);
-  if (totalMin === 0) return 1;
-  return 1 - endurance.reduce((s, x) => s + hardMinutes(x), 0) / totalMin;
-}
-
-const EASY_VERSION: Partial<Record<Sport, SessionSpec['code']>> = { bike: 'BK_END', run: 'RN_EASY', swim: 'SW_END' };
-
-/** Keeps Z1-Z2 ≥ 75 % of endurance time (§2.2 invariant) by downgrading the least important quality sessions. */
-function enforceIntensityDistribution(specs: readonly SessionSpec[], raceWeek: boolean): SessionSpec[] {
-  if (raceWeek) return [...specs];
-  let out = [...specs];
-  while (lowIntensityShare(out) < MIN_LOW_INTENSITY_SHARE) {
-    const quality = out
-      .filter((s) => isQualitySpec(s) && specClass(s) !== 'BRICK' && !s.allowedDates && EASY_VERSION[specSport(s)])
-      .sort((a, b) => b.priority - a.priority || a.code.localeCompare(b.code))[0];
-    const code = quality ? EASY_VERSION[specSport(quality)] : undefined;
-    if (quality && code) {
-      out = out.map((s) => (s === quality ? { ...s, code, priority: Math.max(s.priority, 5) } : s));
-      continue;
-    }
-    // Then race-pace blocks inside long sessions and bricks become plain Z2.
-    const paced = out.filter((s) => s.racePace && !s.allowedDates).sort((a, b) => b.priority - a.priority || a.code.localeCompare(b.code))[0];
-    if (!paced) break;
-    out = out.map((s) => (s === paced ? { ...s, racePace: false } : s));
-  }
-  return out;
-}
-
 interface Budget {
   targetMinutes: number;
   budgetMinutes: number;
@@ -203,7 +197,10 @@ interface WeekContext {
   firstPlannable: ISODate;
   events: LifeEvent[];
   lifeStress: boolean;
+  /** Phase of the week with the athlete's override (`weekPlan`) applied. */
   info: PhaseInfo;
+  /** The override that shaped `info`, null when none applies. */
+  weekPlan: WeekPlan | null;
   plannable: ISODate[];
   restrictions: Record<ISODate, DayRestriction>;
   kind: DistanceKind;
@@ -222,7 +219,9 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   const firstPlannable = maxDate(range.from, input.today ?? range.from);
   const events = input.lifeEvents.filter((e) => overlapsWeek(e, range.from, range.to));
   const lifeStress = events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
-  const info = phaseFor(range.from, input.races, { level: input.profile.level, lifeStress });
+  const raw = phaseFor(range.from, input.races, { level: input.profile.level, lifeStress });
+  const weekPlan = activeWeekPlan(raw, input.weekPlan, range.from);
+  const info = applyWeekPlan(raw, weekPlan, input.profile.availability.weeklyHoursTarget);
   const target = info.raceInWeek && info.phase === 'race_week' && info.targetRace?.id === info.raceInWeek.id ? info.targetRace : null;
   const plannable = dates.filter((d) => d >= firstPlannable && !(target !== null && d > target.date));
   const restrictions = restrictionsForDates(dates, input.lifeEvents);
@@ -239,6 +238,7 @@ function weekPlanContext(input: PlannerInput): WeekContext {
     events,
     lifeStress,
     info,
+    weekPlan,
     plannable,
     restrictions,
     kind: distanceKindOf(info.targetRace?.distance ?? null, input.profile.sports),
@@ -248,20 +248,17 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   };
 }
 
-/**
- * Race-day and pre-race sessions that fall inside the plannable part of the
- * week: this week's race, plus D−1…D−4 sessions of a race early next week.
- * Pinned sessions whose dates fall outside are left out (not reported as dropped).
- */
+/** Race-day and pre-race sessions inside the plannable part of the week (see pinnedRaceSessions). */
 function raceSpecsFor(input: PlannerInput, ctx: WeekContext): SessionSpec[] {
-  const { info, kind } = ctx;
-  const own = info.raceInWeek ? raceWeekSessions(info.raceInWeek, info.phase === 'race_week', kind, ctx.firstPlannable) : [];
-  const alreadyRace = ctx.existing.some((w) => w.date === info.raceInWeek?.date && w.intensity === 'race');
-  const ownSpecs = alreadyRace ? own.filter((s) => s.code !== 'RACE') : own;
-  const next = phaseFor(addDays(ctx.range.from, 7), input.races, { level: input.profile.level, lifeStress: ctx.lifeStress });
-  const early = next.raceInWeek && diffDays(next.raceInWeek.date, ctx.range.to) <= PRE_RACE_LOOKAHEAD_DAYS ? next.raceInWeek : null;
-  const earlySpecs = early ? raceWeekSessions(early, next.phase === 'race_week', kind, ctx.firstPlannable).filter((s) => s.code !== 'RACE') : [];
-  return narrowToWeek([...ownSpecs, ...earlySpecs], ctx.firstPlannable, ctx.range.to);
+  const { info } = ctx;
+  return pinnedRaceSessions({
+    info,
+    next: phaseFor(addDays(ctx.range.from, 7), input.races, { level: input.profile.level, lifeStress: ctx.lifeStress }),
+    kind: ctx.kind,
+    firstPlannable: ctx.firstPlannable,
+    weekEnd: ctx.range.to,
+    raceDayPlanned: ctx.existing.some((w) => w.date === info.raceInWeek?.date && w.intensity === 'race'),
+  });
 }
 
 /** Ideal week (allocation) minus what already exists, fitted to the budget, plus race-week sessions. */
@@ -282,6 +279,7 @@ function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): { sp
     substitutes: week.substitutes,
     easyOnlyAllWeek: week.easyOnlyAllWeek,
     caps: { runLongMax: caps.runLongMax, bikeLongMax: caps.bikeLongMax },
+    freeWeek: ctx.weekPlan?.kind === 'rest',
   });
   const existingPlannable = ctx.fixed.filter((f) => ctx.plannable.includes(f.date));
   const remaining = trimToBudget(consumeExisting(ideal, existingPlannable), Math.max(0, budget.budgetMinutes - specialMin));
@@ -349,6 +347,15 @@ function enforcePlacedDistribution(placed: readonly Placed[], raceWeek: boolean)
   });
 }
 
+/**
+ * Phase info for the summary: the override is named before the week's focus
+ * and replaces the header's "(descarga)" tag (a semana libre is no descarga).
+ */
+function summaryInfo(ctx: WeekContext): PhaseInfo {
+  const { info, weekPlan } = ctx;
+  return weekPlan ? { ...info, isRecoveryWeek: false, focus: `${weekPlanSentence(weekPlan)} ${info.focus}` } : info;
+}
+
 function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed: WeekPlacement, runCapped: boolean): PlanWeekResult {
   const { info } = ctx;
   const guarded = tsbGuard({
@@ -359,15 +366,16 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     placed: placed.placement.placed,
   });
   const guard = { ...guarded, placed: enforcePlacedDistribution(guarded.placed, info.phase === 'race_week') };
+  const draftCtx = { thresholds: input.profile.thresholds, raceDistance: info.targetRace?.distance ?? null };
   const changes: PlanChange[] = guard.placed.map((p) => ({
     op: 'add',
-    workout: specToDraft(p.spec, p.date, p.startTime),
+    workout: specToDraft(p.spec, p.date, p.startTime, draftCtx),
     reason: reasonFor(p.spec, info, p.adjusted, runCapped && p.spec.code === 'RN_LONG'),
   }));
   const fatigueNote = guard.removed.length > 0 ? [`He quitado ${guard.removed.length} sesión(es) para no acumular demasiada fatiga.`] : [];
   const warnings = [...info.warnings, ...budget.warnings, ...fatigueNote, ...(guard.warning ? [guard.warning] : [])];
   const summary = summaryFor({
-    info,
+    info: summaryInfo(ctx),
     placed: guard.placed,
     dropped: placed.placement.dropped,
     restDay: placed.rest.restDay,

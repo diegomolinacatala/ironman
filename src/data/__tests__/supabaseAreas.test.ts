@@ -1,4 +1,6 @@
 /// <reference types="jest" />
+import type { WeekPlanDraft } from '@/domain/types';
+
 import type { Repository } from '../repository';
 import { createSupabaseRepository } from '../supabase/SupabaseRepository';
 import { subscribeRealtime } from '../supabase/realtime';
@@ -147,6 +149,57 @@ describe('Supabase inbox & social RPCs', () => {
   });
 });
 
+describe('Supabase season plan (week_plans)', () => {
+  const ROW = { user_id: 'me', week_start: '2026-11-02', kind: 'recovery', target_minutes: null, note: 'Exámenes', source: 'manual', created_at: ISO, updated_at: ISO };
+
+  it('lists a range in week order, upserts on (user_id, week_start) and deletes one week', async () => {
+    const { repo, calls } = repoWith({ week_plans: { data: [ROW], error: null } });
+    await expect(repo.listWeekPlans({ from: '2026-10-19', to: '2027-01-04' })).resolves.toEqual([
+      { weekStart: '2026-11-02', kind: 'recovery', targetMinutes: null, note: 'Exámenes', source: 'manual', updatedAt: ISO },
+    ]);
+    const list = calls[calls.length - 1];
+    expect(chainArgs(list, 'gte')).toEqual(['week_start', '2026-10-19']);
+    expect(chainArgs(list, 'lte')).toEqual(['week_start', '2027-01-04']);
+    expect(chainArgs(list, 'order')).toEqual(['week_start', { ascending: true }]);
+
+    await repo.saveWeekPlans([{ weekStart: '2026-11-02', kind: 'recovery', targetMinutes: 329.6, note: ' Exámenes ' }]);
+    const upsert = calls[calls.length - 1];
+    expect(chainArgs(upsert, 'upsert')).toEqual([
+      [{ user_id: 'me', week_start: '2026-11-02', kind: 'recovery', target_minutes: 330, note: 'Exámenes', source: 'manual' }],
+      { onConflict: 'user_id,week_start' },
+    ]);
+
+    await repo.deleteWeekPlan('2026-11-02');
+    const removal = calls[calls.length - 1];
+    expect(chainArgs(removal, 'delete')).toEqual([]);
+    expect(removal?.chain.filter(([m]) => m === 'eq').map(([, a]) => a)).toEqual([
+      ['user_id', 'me'],
+      ['week_start', '2026-11-02'],
+    ]);
+  });
+
+  it.each([
+    ['not a Monday', { weekStart: '2026-11-03', kind: 'load' }, 'lunes'],
+    ['a past week', { weekStart: '2026-10-12', kind: 'load' }, 'desde esta'],
+    ['beyond a year', { weekStart: '2027-10-25', kind: 'load' }, 'desde esta'],
+    ['an unknown kind', { weekStart: '2026-11-02', kind: 'taper' }, 'carga, más volumen'],
+    ['too many minutes', { weekStart: '2026-11-02', kind: 'push', targetMinutes: 3001 }, '50 horas'],
+    ['a long note', { weekStart: '2026-11-02', kind: 'push', note: 'x'.repeat(301) }, '300 caracteres'],
+  ])('rejects %s before calling the server', async (_label, draft, message) => {
+    const { repo, calls } = repoWith({});
+    await expect(repo.saveWeekPlans([draft as WeekPlanDraft])).rejects.toMatchObject({ code: 'validation', message: expect.stringContaining(message) });
+    expect(calls.some((c) => c.target === 'week_plans')).toBe(false);
+  });
+
+  it.each(['42P01', 'PGRST205', '42703', 'PGRST204'])('a server without the v4 migration (%s) says so in Spanish', async (code) => {
+    const { repo } = repoWith({ week_plans: { data: null, error: { code, message: 'relation "week_plans" does not exist' } } });
+    await expect(repo.listWeekPlans({ from: '2026-10-19', to: '2026-12-28' })).rejects.toMatchObject({
+      code: 'unavailable',
+      message: 'El servidor aún no tiene el plan general: hay que actualizarlo.',
+    });
+  });
+});
+
 describe('Supabase realtime', () => {
   it('opens one channel with per-table filters and removes it on unsubscribe', async () => {
     const bindings: { table: string; filter: string }[] = [];
@@ -163,7 +216,7 @@ describe('Supabase realtime', () => {
     const unsubscribe = subscribeRealtime(ctx, () => undefined);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(bindings.filter((b) => b.filter === 'user_id=eq.me').map((b) => b.table)).toEqual(
-      expect.arrayContaining(['workouts', 'notifications', 'plan_proposals', 'coach_jobs', 'joint_session_participants', 'races', 'life_events', 'daily_metrics']),
+      expect.arrayContaining(['workouts', 'notifications', 'plan_proposals', 'coach_jobs', 'joint_session_participants', 'races', 'life_events', 'daily_metrics', 'week_plans']),
     );
     expect(bindings.filter((b) => b.table === 'friendships').map((b) => b.filter)).toEqual(['requester_id=eq.me', 'addressee_id=eq.me']);
     unsubscribe();

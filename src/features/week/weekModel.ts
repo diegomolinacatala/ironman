@@ -1,5 +1,7 @@
 /** Pure helpers for the Semana screen (unit-tested). */
-import type { BusyBlock, ISODate, LifeEvent, Workout } from '@/domain/types';
+import { phaseFor, type PhaseInfo } from '@/domain/periodization';
+import { applyWeekPlan, canOverride } from '@/domain/season';
+import type { BusyBlock, ISODate, LifeEvent, Profile, Race, WeekPlan, Workout } from '@/domain/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MINUTES_PER_DAY = 24 * 60;
@@ -90,6 +92,45 @@ export function recentWeeklyMinutes(workouts: readonly Workout[], weekStart: ISO
 /** Validates the `?week=` param; anything invalid falls back to `fallback`. */
 export function parseWeekParam(value: unknown, fallback: ISODate): ISODate {
   return typeof value === 'string' && DATE_RE.test(value) ? value : fallback;
+}
+
+/** Plan tab views: the week (default) or the general overview (`?view=general`). */
+export type PlanView = 'week' | 'general';
+
+export const PLAN_VIEW_OPTIONS: { value: PlanView; label: string }[] = [
+  { value: 'week', label: 'Semana' },
+  { value: 'general', label: 'General' },
+];
+
+/** Validates the `?view=` param: only "general" switches away from the week. */
+export function parsePlanView(value: unknown): PlanView {
+  return value === 'general' ? 'general' : 'week';
+}
+
+export interface WeekPhase {
+  /** Null until the races are loaded. */
+  phase: PhaseInfo | null;
+  /** The override that applies to this week (prep/base/build weeks without a race), else null. */
+  plan: WeekPlan | null;
+  /** Weekly hours × the adjusted factor, rounded like Plan → General; null without a profile. */
+  targetHours: number | null;
+}
+
+/** The week's phase with the athlete's override applied: the same week Plan → General and the planner see. */
+export function weekPhaseOf(
+  weekStart: ISODate,
+  races: readonly Race[] | undefined,
+  profile: Pick<Profile, 'level' | 'availability'> | null,
+  plans: readonly WeekPlan[] | undefined,
+): WeekPhase {
+  const weekly = profile?.availability.weeklyHoursTarget ?? null;
+  if (!races) return { phase: null, plan: null, targetHours: weekly };
+  const raw = phaseFor(weekStart, races, { level: profile?.level });
+  const stored = plans?.find((p) => p.weekStart === weekStart) ?? null;
+  const plan = stored && canOverride(raw) ? stored : null;
+  const phase = applyWeekPlan(raw, plan, weekly ?? 0);
+  const targetHours = weekly === null ? null : Math.max(0, Math.round((weekly * 60 * phase.volumeFactor) / 5) * 5) / 60;
+  return { phase, plan, targetHours };
 }
 
 /** Hours with one decimal and a comma: 6.5 → "6,5". */

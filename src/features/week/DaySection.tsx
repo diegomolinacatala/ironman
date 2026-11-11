@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { formatDayLabel, formatDayLong, formatDayMedium } from '@/domain/dates';
 import { lifeEventLabel } from '@/domain/labels';
-import type { ISODate, LifeEvent, Workout } from '@/domain/types';
+import type { ISODate, LifeEvent, RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { Chip, Icon, IconButton, Text, iconSize, radius, space, useTheme } from '@/ui';
 
 import { lifeEventIcon } from '@/features/events/kinds';
@@ -17,6 +17,10 @@ export interface DaySectionProps {
   busyText: string | null;
   partnerName: (w: Workout) => string | null;
   onLongPressWorkout: (w: Workout) => void;
+  /** The athlete's thresholds: each card adds its zone and main target (omit while the profile loads). */
+  thresholds?: Thresholds | null;
+  /** Target race distance ("ritmo de carrera" targets). */
+  raceDistance?: RaceDistance | null;
 }
 
 /** "Hoy · mié 5 nov", "Mañana · jue 6 nov", "Lun 10 nov" (sentence case). */
@@ -31,7 +35,17 @@ export function dayHeading(date: ISODate, today: ISODate): string {
  * One day of the week list: header, busy summary, imprevistos and sessions.
  * Today sits on a soft brand panel (`accentSoft`) so it is easy to find without shouting.
  */
-export function DaySection({ date, today, workouts, events, busyText, partnerName, onLongPressWorkout }: DaySectionProps) {
+export function DaySection({
+  date,
+  today,
+  workouts,
+  events,
+  busyText,
+  partnerName,
+  onLongPressWorkout,
+  thresholds,
+  raceDistance = null,
+}: DaySectionProps) {
   const { colors } = useTheme();
   const isToday = date === today;
   const isPast = date < today;
@@ -59,6 +73,8 @@ export function DaySection({ date, today, workouts, events, busyText, partnerNam
               compact
               today={today}
               partnerName={partnerName(w)}
+              thresholds={thresholds}
+              raceDistance={raceDistance}
               onPress={() => router.push(`/workout/${w.id}`)}
               onLongPress={() => onLongPressWorkout(w)}
             />

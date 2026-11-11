@@ -6,10 +6,11 @@ import { sportLabel } from '@/domain/labels';
 import type { Workout } from '@/domain/types';
 import { firstError, workoutDraftSchema } from '@/domain/validation';
 import { useCreateWorkout, useUpdateWorkout, useWorkout } from '@/data/queries';
-import { emptyForm, formToDraft, isSport, shouldResetTss, workoutToForm, type WorkoutFormState } from '@/features/workouts/form';
+import { editPatch, emptyForm, formToDraft, isSport, workoutToForm, type WorkoutFormState } from '@/features/workouts/form';
 import { FormFooter } from '@/features/workouts/FormFooter';
 import { FormScreen } from '@/features/workouts/FormScreen';
 import { ModalCancel, closeModal } from '@/features/workouts/ModalClose';
+import { useAthleteTargets } from '@/features/workouts/useAthleteTargets';
 import { WorkoutForm } from '@/features/workouts/WorkoutForm';
 import { errorMessage, logger } from '@/lib/logger';
 import { Button, EmptyState, ErrorNotice, Loading, Screen, haptics } from '@/ui';
@@ -67,6 +68,7 @@ function Editor({ initial, existing }: { initial: WorkoutFormState; existing: Wo
   const [error, setError] = useState<string | null>(null);
   const create = useCreateWorkout();
   const update = useUpdateWorkout();
+  const athlete = useAthleteTargets();
   const saving = create.isPending || update.isPending;
 
   const save = async () => {
@@ -83,8 +85,7 @@ function Editor({ initial, existing }: { initial: WorkoutFormState; existing: Wo
     setError(null);
     try {
       if (existing) {
-        const patch = shouldResetTss(existing, draft) ? { ...draft, tss: null } : draft;
-        await update.mutateAsync({ id: existing.id, patch });
+        await update.mutateAsync({ id: existing.id, patch: editPatch(existing, draft) });
       } else {
         await create.mutateAsync(draft);
       }
@@ -111,7 +112,7 @@ function Editor({ initial, existing }: { initial: WorkoutFormState; existing: Wo
   return (
     <FormScreen inSheet footer={footer}>
       <Stack.Screen options={{ title: existing ? 'Editar entreno' : 'Nuevo entreno', headerLeft: () => <ModalCancel /> }} />
-      <WorkoutForm state={state} onChange={change} titleError={null} />
+      <WorkoutForm state={state} onChange={change} titleError={null} thresholds={athlete.thresholds} raceDistance={athlete.raceDistance} />
     </FormScreen>
   );
 }

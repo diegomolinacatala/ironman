@@ -10,9 +10,11 @@ import type { ReactNode } from 'react';
 import CheckinScreen from '@/app/checkin';
 import { AuthContext, RepositoryContext } from '@/data/context';
 import type { Repository } from '@/data/repository';
-import type { CheckinDraft, DailyCheckin, DailyMetrics } from '@/domain/types';
+import type { CheckinDraft, DailyCheckin, DailyMetrics, DateRange, Workout } from '@/domain/types';
+import { makeWorkout } from '@/features/coach/__tests__/fixtures';
 
 const DATE = '2026-10-25';
+const SERIES: Workout = makeWorkout({ id: 'series', date: DATE, title: "Series 3×8'", intensity: 'threshold', durationMin: 55 });
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockAdjust = jest.fn(async () => undefined);
 
@@ -50,11 +52,15 @@ function metricsRow(overrides: Partial<DailyMetrics> = {}): DailyMetrics {
   };
 }
 
-function makeRepo(opts: { metrics?: DailyMetrics[]; metricsDelayMs?: number } = {}) {
+function makeRepo(opts: { metrics?: DailyMetrics[]; metricsDelayMs?: number; workouts?: Workout[] } = {}) {
   let stored: DailyCheckin[] = [];
   return {
     mode: 'demo',
     auth: {},
+    // Today's session, its targets' inputs (no thresholds → zone + RPE) and the target race.
+    listWorkouts: jest.fn(async (_range: DateRange) => opts.workouts ?? [SERIES]),
+    getMyProfile: jest.fn(async () => null),
+    listRaces: jest.fn(async () => []),
     listCheckins: jest.fn(async () => stored),
     upsertCheckin: jest.fn(async (draft: CheckinDraft): Promise<DailyCheckin> => {
       const saved: DailyCheckin = { ...draft, userId: 'me' };
@@ -110,10 +116,24 @@ describe('first check-in of the day', () => {
   test('a red day offers "Ajustar hoy" on the first save', async () => {
     await render(<CheckinScreen />, { wrapper: Providers });
     await screen.findByRole('button', { name: 'Guardar check-in' });
+    // Today's week is loaded while you answer, so the result names the session at once.
+    await waitFor(() => expect(repo.listWorkouts).toHaveBeenCalledWith({ from: '2026-10-19', to: '2026-10-25' }));
     await answerAll([1, 5, 5, 5, 1]);
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Ajustar hoy' }));
     expect(mockAdjust).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Tu sesión de hoy: Series 3×8'. Carrera · 55' · Z4 · RPE 7–8")).toBeTruthy();
+  });
+
+  test('a red day with nothing left today has nothing to adjust', async () => {
+    repo = makeRepo({ workouts: [] });
+    await render(<CheckinScreen />, { wrapper: Providers });
+    await screen.findByRole('button', { name: 'Guardar check-in' });
+    await waitFor(() => expect(repo.listWorkouts).toHaveBeenCalled());
+    await answerAll([1, 5, 5, 5, 1]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(await screen.findByText('Hoy no tienes ningún entreno pendiente: aprovecha para recuperar.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ajustar hoy' })).toBeNull();
   });
 
   test('uses the watch sleep hours even when metrics arrive after the check-ins', async () => {

@@ -34,6 +34,35 @@ describe('buildSchedule', () => {
     expect(reminder?.categoryId).toBe('workout');
   });
 
+  test("the reminder body names the session's main target with the athlete's thresholds", () => {
+    const series = workout({
+      id: 'w1',
+      date: TODAY,
+      startTime: '18:30',
+      title: 'Series',
+      durationMin: 55,
+      intensity: 'threshold',
+      steps: [
+        { kind: 'warmup', durationMin: 15 },
+        { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold' },
+        { kind: 'cooldown', durationMin: 10 },
+      ],
+    });
+    const bike = workout({ id: 'w2', date: TODAY, startTime: '20:00', sport: 'bike', title: 'Rodillo', durationMin: 60 });
+    const specs = buildSchedule({ workouts: [series, bike], prefs, today: TODAY, now: NOW, thresholds: { lthr: 170, ftpW: 250 } });
+    expect(specs.find((s) => s.id === 'rti.workout.w1')?.body).toBe("18:30 · Carrera · 55' · Z4 · 162–168 ppm");
+    expect(specs.find((s) => s.id === 'rti.workout.w2')?.body).toBe("20:00 · Bici · 1h · Z2 · 140–185 W");
+  });
+
+  test('without thresholds the body still says zone and RPE; race pace follows the target race', () => {
+    const easy = workout({ id: 'w1', date: TODAY, startTime: '18:30', durationMin: 50 });
+    const racePace = workout({ id: 'w2', date: TODAY, startTime: '20:00', intensity: 'race', durationMin: 40 });
+    const plain = buildSchedule({ workouts: [easy], prefs, today: TODAY, now: NOW });
+    expect(plain.find((s) => s.id === 'rti.workout.w1')?.body).toBe("18:30 · Carrera · 50' · Z2 · RPE 3–4");
+    const race = buildSchedule({ workouts: [racePace], prefs, today: TODAY, now: NOW, thresholds: { lthr: 170 }, raceDistance: 'olympic' });
+    expect(race.find((s) => s.id === 'rti.workout.w2')?.body).toBe("20:00 · Carrera · 40' · Ritmo carrera · 162–168 ppm");
+  });
+
   test('untimed workouts get a 07:30 reminder only when the morning summary is off', () => {
     const w = workout({ id: 'w2', date: TODAY });
     const withSummary = buildSchedule({ workouts: [w], prefs, today: TODAY, now: NOW });
@@ -168,6 +197,12 @@ describe('quedada reminders', () => {
     expect(spec?.url).toBe('/joint/j1');
     expect(spec?.body.startsWith('19:00 · Series')).toBe(true);
     expect(dateOf(spec).getTime()).toBe(new Date(2026, 9, 26, 18, 0).getTime());
+  });
+
+  test('the quedada reminder also names the target', () => {
+    const w = workout({ id: 'wj', date: TODAY, startTime: '19:00', title: 'Rodaje juntos', jointSessionId: 'j1' });
+    const specs = buildSchedule({ workouts: [w], prefs, today: TODAY, now: NOW, thresholds: { lthr: 170 } });
+    expect(specs.find((s) => s.id === 'rti.workout.wj')?.body).toBe("19:00 · Rodaje juntos · Carrera · 50' · Z2 · 145–151 ppm");
   });
 
   test('a longer personal lead wins; untimed quedadas use the normal reminder', () => {

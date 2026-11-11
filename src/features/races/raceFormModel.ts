@@ -66,3 +66,13 @@ export function validateRaceForm(state: RaceFormState): RaceValidation {
   if (!result.success) return { ok: false, error: firstError(result) ?? 'Revisa los datos de la carrera.' };
   return { ok: true, draft };
 }
+
+/**
+ * Whether saving this draft reshapes the season: a new upcoming race, or a new
+ * date, distance or priority. Then the app offers Plan → General.
+ */
+export function changesSeason(before: Race | null, draft: RaceDraft, today: ISODate): boolean {
+  if (draft.date < today) return false;
+  if (!before) return true;
+  return before.date !== draft.date || before.distance !== draft.distance || before.priority !== draft.priority;
+}

@@ -11,20 +11,23 @@ import {
   mapNutrition,
   mapProfile,
   mapRace,
+  mapWeekPlan,
   mapWorkout,
 } from '../db/rows.ts';
 import { StoreRejectedError } from '../planning/store.ts';
 import type { MetricsUpsert, PlanningStore, ProposedJointSession, RaceWrite } from '../planning/store.ts';
 import { normalizeTime } from '../dates.ts';
 import { INTENSITIES, SPORTS } from '../types.ts';
-import type { JointParticipant, JointSession, UUID } from '../types.ts';
+import type { JointParticipant, JointSession, UUID, WeekPlanDraft } from '../types.ts';
 import { rowsOf, unwrap } from './db.ts';
 import type { Db } from './db.ts';
 
 const WORKOUT_COLS =
-  'id,user_id,date,start_time,sport,title,description,duration_min,distance_m,intensity,tss,steps,status,completed,source,is_key,joint_session_id,external_id,created_at,updated_at';
-const PROFILE_COLS = 'id,username,display_name,sports,level,thresholds,availability,visibility,notification_prefs,timezone,coach_notes';
-const RACE_COLS = 'id,name,date,distance,priority,location,goal,notes';
+  'id,user_id,date,start_time,sport,title,description,duration_min,distance_m,intensity,tss,steps,status,completed,source,is_key,joint_session_id,external_id,coaching,created_at,updated_at';
+const PROFILE_COLS =
+  'id,username,display_name,sports,level,thresholds,availability,visibility,notification_prefs,timezone,coach_notes,watch_brand';
+const RACE_COLS = 'id,name,date,distance,priority,location,goal,notes,created_at';
+const WEEK_PLAN_COLS = 'week_start,kind,target_minutes,note,source,updated_at';
 const EVENT_COLS = 'id,kind,title,start_date,end_date,start_time,duration_min,severity,body_area,notes';
 const METRIC_COLS =
   'date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status,' +
@@ -56,6 +59,17 @@ function metricsRow(userId: UUID, source: string, m: MetricsUpsert, nowIso: stri
       .map(([camel, snake]) => [snake, (m as unknown as Record<string, unknown>)[camel]]),
   );
   return { user_id: userId, date: m.date, source, ...fields, raw: m.raw, updated_at: nowIso };
+}
+
+function weekPlanRow(userId: UUID, d: WeekPlanDraft): Record<string, unknown> {
+  return {
+    user_id: userId,
+    week_start: d.weekStart,
+    kind: d.kind,
+    target_minutes: d.targetMinutes ?? null,
+    note: d.note ?? null,
+    source: d.source ?? 'manual',
+  };
 }
 
 function raceRow(r: RaceWrite): Record<string, unknown> {
@@ -321,6 +335,32 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
       return data ? mapRace(data) : null;
     },
     proposeJointSession: (userId, draft, inviteeIds) => proposeJointSession(db, userId, draft, inviteeIds),
+    async listWeekPlans(userId, from, to) {
+      const rows = rowsOf(
+        await db.from('week_plans').select(WEEK_PLAN_COLS).eq('user_id', userId).gte('week_start', from).lte('week_start', to).order('week_start').limit(60),
+        'week plans',
+      );
+      return rows.map(mapWeekPlan);
+    },
+    async saveWeekPlans(userId, drafts) {
+      if (drafts.length === 0) return [];
+      const rows = rowsOf(
+        await db
+          .from('week_plans')
+          .upsert(drafts.map((d) => weekPlanRow(userId, d)), { onConflict: 'user_id,week_start' })
+          .select(WEEK_PLAN_COLS),
+        'save week plans',
+      );
+      return rows.map(mapWeekPlan);
+    },
+    async deleteWeekPlans(userId, weekStarts) {
+      if (weekStarts.length === 0) return 0;
+      const rows = rowsOf(
+        await db.from('week_plans').delete().eq('user_id', userId).in('week_start', [...weekStarts]).select('week_start'),
+        'delete week plans',
+      );
+      return rows.length;
+    },
   };
 }
 

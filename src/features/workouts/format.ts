@@ -43,13 +43,26 @@ export function workoutStatusLabel(w: Workout): string | null {
 }
 
 /** Screen-reader summary of a workout card. */
-export function workoutA11yLabel(w: Workout, extra: { partnerName?: string | null; compliance?: string }): string {
+export function workoutA11yLabel(
+  w: Workout,
+  extra: { partnerName?: string | null; compliance?: string; target?: string | null },
+): string {
   const parts = [sportLabel(w.sport), w.title, workoutMetaLine(w)];
   if (w.sport !== 'rest') parts.push(intensityLabel(w.intensity));
+  if (extra.target) parts.push(`objetivo ${extra.target}`);
   if (w.isKey) parts.push('sesión clave');
   if (extra.partnerName) parts.push(`con ${extra.partnerName}`);
   const status = workoutStatusLabel(w);
   if (status) parts.push(status);
   if (extra.compliance) parts.push(extra.compliance);
   return parts.filter(Boolean).join(', ');
+}
+
+/** Screen-reader text from sentences: trims, drops empty ones and ends each with one period ("A. B. C."). */
+export function a11ySentences(parts: readonly (string | null | undefined)[]): string {
+  return parts
+    .map((part) => (part ?? '').trim())
+    .filter(Boolean)
+    .map((part) => (/[.!?…]$/.test(part) ? part : `${part}.`))
+    .join(' ');
 }

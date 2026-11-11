@@ -1,6 +1,6 @@
-/** Pure helpers for the v2 Hoy screen: greeting, date line, meals and session structure. Unit-tested. */
+/** Pure helpers for the v2 Hoy screen: greeting, date line, meals, session structure and refresh source. Unit-tested. */
 import { formatDayLong } from '@/domain/dates';
-import type { ISODate, NutritionLog, Workout } from '@/domain/types';
+import type { ISODate, NutritionLog, WatchBrand, Workout } from '@/domain/types';
 import { stepLabel } from '@/features/workouts/steps';
 
 /** "Buenos días" until 14:00, "Buenas tardes" until 21:00, "Buenas noches" otherwise. */
@@ -96,4 +96,24 @@ export function structureSummary(workout: Pick<Workout, 'steps' | 'sport'>): str
   const shown = labels.slice(0, MAX_STRUCTURE_PARTS).join(' · ');
   const rest = labels.length - MAX_STRUCTURE_PARTS;
   return rest > 0 ? `${shown} · +${rest}` : shown;
+}
+
+// ---------------------------------------------------------------------------
+// Pull-to-refresh
+// ---------------------------------------------------------------------------
+
+export type RefreshSync = 'garmin' | 'health' | null;
+
+export interface RefreshSyncInput {
+  /** Profile watch; null / absent = not chosen (treated as Garmin). */
+  watchBrand: WatchBrand | null | undefined;
+  garminConnected: boolean;
+  /** Apple Salud is available on this device (native iOS) and enabled for this account. */
+  healthReady: boolean;
+}
+
+/** What to pull before refetching: COROS data arrives through Apple Salud, Garmin through its API. */
+export function refreshSyncFor({ watchBrand, garminConnected, healthReady }: RefreshSyncInput): RefreshSync {
+  if (watchBrand === 'coros') return healthReady ? 'health' : null;
+  return garminConnected ? 'garmin' : null;
 }

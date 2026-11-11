@@ -85,7 +85,7 @@ test('structured output publishes quedada as a nullable object; weaker models ma
   assert.equal(parseCoachOutput(JSON.stringify({ reply: 'Hola' }))?.quedada, null);
   assert.deepEqual(parseCoachOutput(JSON.stringify({ reply: 'Hola', quedada: RAW }))?.quedada, RAW);
   assert.match(COACH_SYSTEM_PROMPT, /quedada: si el atleta quiere entrenar con un amigo/);
-  assert.match(COACH_SYSTEM_PROMPT, /seis claves/);
+  assert.match(COACH_SYSTEM_PROMPT, /siete claves/);
 });
 
 function output(overrides: Record<string, unknown>): string {

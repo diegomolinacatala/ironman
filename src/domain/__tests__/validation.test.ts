@@ -1,11 +1,14 @@
 import {
   checkinDraftSchema,
+  completedDataSchema,
   firstError,
   lifeEventDraftSchema,
   nutritionDraftSchema,
   profilePatchSchema,
   raceDraftSchema,
   usernameSchema,
+  weekPlanDraftSchema,
+  workoutCoachingSchema,
   workoutDraftSchema,
 } from '../validation';
 
@@ -60,5 +63,59 @@ describe('validation schemas (Spanish messages)', () => {
     expect(firstError(profilePatchSchema.safeParse(badWindow))).toMatch(/terminar después/);
     expect(firstError(profilePatchSchema.safeParse({ sports: [] }))).toMatch(/al menos un deporte/);
     expect(firstError(profilePatchSchema.safeParse({ thresholds: { ftpW: 2000 } }))).toMatch(/FTP/);
+  });
+});
+
+describe('v4 schemas: steps, coaching, completed data, week plans, watch', () => {
+  const coaching = { objective: 'Subir tu umbral.', keys: ['Empieza suave.', 'Cadencia alta.'], success: 'Las tres series en Z4.', planB: null };
+
+  test('steps accept targets, cues and brick legs within the limits', () => {
+    const step = { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold', target: { hr: { min: 160, max: 168 }, rpe: { min: 7, max: 8 } }, cue: 'Duro y sostenido.', leg: 'run' };
+    expect(workoutDraftSchema.safeParse({ ...workout, steps: [step], coaching }).success).toBe(true);
+    const bad = (patch: object) => firstError(workoutDraftSchema.safeParse({ ...workout, steps: [{ ...step, ...patch }] }));
+    expect(bad({ target: { hr: { min: 170, max: 160 } } })).toMatch(/Pulso objetivo: el mínimo no puede ser mayor/);
+    expect(bad({ target: { hr: { min: 30, max: 160 } } })).toMatch(/Pulso objetivo: entre 40 y 230/);
+    expect(bad({ target: { power: { min: 100, max: 2500 } } })).toMatch(/Potencia objetivo/);
+    expect(bad({ target: { pace: { min: 10, max: 300 } } })).toMatch(/Ritmo objetivo/);
+    expect(bad({ target: { rpe: { min: 0, max: 8 } } })).toMatch(/RPE objetivo/);
+    expect(bad({ cue: 'x'.repeat(201) })).toMatch(/máximo 200/);
+    expect(bad({ leg: 'swim' })).toMatch(/Tramo del brick/);
+    const many = Array.from({ length: 51 }, () => ({ kind: 'work', durationMin: 1 }));
+    expect(firstError(workoutDraftSchema.safeParse({ ...workout, steps: many }))).toBe('Demasiados pasos (máximo 50)');
+  });
+
+  test('coaching uses the database messages (lengths after trimming)', () => {
+    expect(workoutCoachingSchema.safeParse(coaching).success).toBe(true);
+    expect(workoutCoachingSchema.parse({ objective: '  Base.  ', success: ' Bien. ' })).toEqual({ objective: 'Base.', keys: [], success: 'Bien.', planB: null });
+    const err = (patch: object) => firstError(workoutCoachingSchema.safeParse({ ...coaching, ...patch }));
+    expect(err({ objective: '   ' })).toBe('Objetivo del entreno no válido (1–200 caracteres)');
+    expect(err({ objective: 'x'.repeat(201) })).toBe('Objetivo del entreno no válido (1–200 caracteres)');
+    expect(err({ keys: ['a', 'b', 'c', 'd', 'e'] })).toBe('Máximo 4 claves por entreno');
+    expect(err({ keys: ['x'.repeat(161)] })).toBe('Claves del entreno no válidas (1–160 caracteres cada una)');
+    expect(err({ success: '' })).toBe('Criterio de éxito no válido (1–200 caracteres)');
+    expect(err({ planB: ' ' })).toBe('Plan B no válido (1–200 caracteres)');
+    expect(firstError(workoutCoachingSchema.safeParse('texto'))).toBe('Indicaciones del entreno no válidas');
+    expect(workoutDraftSchema.safeParse({ ...workout, coaching: null }).success).toBe(true);
+  });
+
+  test('completed data: sensaciones 1–5 and RPE 1–10', () => {
+    expect(completedDataSchema.safeParse({ durationMin: 50, avgHr: 148, rpe: 7, feel: 4 }).success).toBe(true);
+    expect(firstError(completedDataSchema.safeParse({ feel: 6 }))).toMatch(/Sensaciones/);
+    expect(firstError(completedDataSchema.safeParse({ rpe: 11 }))).toMatch(/RPE/);
+  });
+
+  test('week plan drafts: Monday, kind, volume and note', () => {
+    expect(weekPlanDraftSchema.safeParse({ weekStart: '2026-11-16', kind: 'recovery', targetMinutes: 300, note: 'Viaje' }).success).toBe(true);
+    expect(firstError(weekPlanDraftSchema.safeParse({ weekStart: '2026-11-17', kind: 'load' }))).toMatch(/empieza en lunes/);
+    expect(firstError(weekPlanDraftSchema.safeParse({ weekStart: '2026-11-16', kind: 'taper' }))).toMatch(/Elige qué semana es/);
+    expect(firstError(weekPlanDraftSchema.safeParse({ weekStart: '2026-11-16', kind: 'push', targetMinutes: 3001 }))).toMatch(/entre 0 y 50 horas/);
+    expect(firstError(weekPlanDraftSchema.safeParse({ weekStart: '2026-11-16', kind: 'rest', note: 'x'.repeat(301) }))).toMatch(/300 caracteres/);
+    expect(firstError(weekPlanDraftSchema.safeParse({ weekStart: '2026-11-16', kind: 'rest', source: 'garmin' }))).toMatch(/origen/);
+  });
+
+  test('profile watch brand', () => {
+    expect(profilePatchSchema.safeParse({ watchBrand: 'coros' }).success).toBe(true);
+    expect(profilePatchSchema.safeParse({ watchBrand: null }).success).toBe(true);
+    expect(firstError(profilePatchSchema.safeParse({ watchBrand: 'polar' }))).toMatch(/Garmin o COROS/);
   });
 });

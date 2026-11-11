@@ -20,6 +20,7 @@ import { planningApi } from './planningApi';
 import { profileApi } from './profileApi';
 import { subscribeRealtime } from './realtime';
 import { socialApi } from './socialApi';
+import { weekPlansApi } from './weekPlansApi';
 import { wellnessApi } from './wellnessApi';
 import { workoutsApi } from './workoutsApi';
 
@@ -37,6 +38,7 @@ export function createSupabaseRepository(options: SupabaseRepositoryOptions = {}
     ...profileApi(ctx),
     ...workoutsApi(ctx),
     ...planningApi(ctx),
+    ...weekPlansApi(ctx),
     ...wellnessApi(ctx),
     ...socialApi(ctx),
     ...inboxApi(ctx),

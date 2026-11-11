@@ -23,6 +23,9 @@ export function validateCompleted(data: CompletedData): void {
   if (data.distanceM !== undefined && (!Number.isFinite(data.distanceM) || data.distanceM < 0)) {
     throw new RepositoryError('validation', 'La distancia no es válida.');
   }
+  if (data.feel !== undefined && (!Number.isInteger(data.feel) || data.feel < 1 || data.feel > 5)) {
+    throw new RepositoryError('validation', 'Las sensaciones van de 1 (muy mal) a 5 (genial).');
+  }
 }
 
 export function completionPatch(data: CompletedData, now: string): WorkoutPatch {

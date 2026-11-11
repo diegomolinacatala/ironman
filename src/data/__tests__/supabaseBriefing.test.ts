@@ -1,9 +1,9 @@
 /// <reference types="jest" />
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { Briefing } from '@/domain/types';
+import type { Briefing, Profile, Race } from '@/domain/types';
 
-import { BRIEFING_TIMEOUT_MS, briefingApi } from '../supabase/briefingApi';
+import { BRIEFING_TIMEOUT_MS, briefingApi, briefingAthleteFields } from '../supabase/briefingApi';
 import { createCtx } from '../supabase/base';
 import { LOCAL_BRIEFING_DAYS, localBriefingsKey, readLocalBriefing, saveLocalBriefing } from '../supabase/localBriefings';
 import { createSupabaseRepository } from '../supabase/SupabaseRepository';
@@ -409,5 +409,20 @@ describe('Supabase local briefing kept on the device', () => {
     expect(await AsyncStorage.getItem(localBriefingsKey('me'))).not.toBeNull();
     await repo.auth.signOut();
     expect(await AsyncStorage.getItem(localBriefingsKey('me'))).toBeNull();
+  });
+});
+
+describe('local briefing athlete fields (v4)', () => {
+  const thresholds = { lthr: 168, maxHr: 188, ftpW: 240 };
+  const profile = { id: 'me', thresholds, watchBrand: 'coros' } as unknown as Profile;
+  const race = { id: 'r', distance: 'half', priority: 'A' } as unknown as Race;
+
+  it('passes zones, the target race distance and the watch to the local briefing', () => {
+    expect(briefingAthleteFields(profile, race)).toEqual({ thresholds, raceDistance: 'half', watchBrand: 'coros' });
+  });
+
+  it('leaves out what is unknown (no profile, no race, watch not chosen)', () => {
+    expect(briefingAthleteFields(null, null)).toEqual({});
+    expect(briefingAthleteFields({ ...profile, watchBrand: null }, null)).toEqual({ thresholds });
   });
 });

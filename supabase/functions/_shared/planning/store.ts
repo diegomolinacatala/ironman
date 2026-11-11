@@ -23,12 +23,17 @@ import type {
   RaceDistance,
   RacePriority,
   UUID,
+  WeekPlan,
+  WeekPlanDraft,
   Workout,
   BodyArea,
   CompletedData,
   Intensity,
   Sport,
 } from '../types.ts';
+
+/** Who saved a daily metrics row through the server (Garmin sync, or Claude with the Garmin/COROS connector). */
+export type ServerMetricsSource = 'garmin' | 'coros';
 
 export interface PlanningReader {
   getProfile(userId: UUID): Promise<Profile | null>;
@@ -47,6 +52,8 @@ export interface PlanningReader {
   listFriends(userId: UUID): Promise<FriendSummary[]>;
   /** Friend's calendar masked by their visibility (svc_get_friend_week). */
   getFriendWeek(viewerId: UUID, friendId: UUID, from: ISODate, to: ISODate): Promise<FriendWeekItem[]>;
+  /** Week-level plans ("Plan → General") whose Monday is in [from, to], by week. */
+  listWeekPlans(userId: UUID, from: ISODate, to: ISODate): Promise<WeekPlan[]>;
 }
 
 export interface ApplyChangesResult {
@@ -150,7 +157,7 @@ export interface PlanningWriter {
   insertProposal(userId: UUID, draft: ProposalDraft): Promise<UUID>;
   applyPlanChanges(userId: UUID, changes: PlanChange[], proposalId: UUID): Promise<ApplyChangesResult>;
   insertLifeEvent(userId: UUID, event: LifeEventInsert): Promise<LifeEvent>;
-  upsertMetrics(userId: UUID, source: 'garmin', rows: MetricsUpsert[]): Promise<number>;
+  upsertMetrics(userId: UUID, source: ServerMetricsSource, rows: MetricsUpsert[]): Promise<number>;
   /** Marks a planned workout completed. Returns false when it was not planned/owned. */
   completeWorkout(userId: UUID, workoutId: UUID, completed: CompletedData): Promise<boolean>;
   /** Finds a workout already linked to an external activity (external_id or completed.externalId). */
@@ -165,6 +172,10 @@ export interface PlanningWriter {
    * Throws StoreRejectedError with the database's Spanish message when refused.
    */
   proposeJointSession(userId: UUID, draft: JointSessionDraft, inviteeIds: readonly UUID[]): Promise<ProposedJointSession>;
+  /** Upserts week plans by (user, week_start) (service role; drafts already validated). Returns the stored rows. */
+  saveWeekPlans(userId: UUID, drafts: readonly WeekPlanDraft[]): Promise<WeekPlan[]>;
+  /** Removes the plans of those Mondays; returns how many existed. */
+  deleteWeekPlans(userId: UUID, weekStarts: readonly ISODate[]): Promise<number>;
 }
 
 export type PlanningStore = PlanningReader & PlanningWriter;

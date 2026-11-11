@@ -5,11 +5,17 @@
  * "before → after". The Supabase repository applies the same semantics
  * server-side in the `apply_plan_changes` RPC.
  */
-import type { ApplyResult, ISODateTime, PlanChange, UUID, Workout, WorkoutDraft } from './types';
+import type { ApplyResult, ISODateTime, PlanChange, UUID, Workout, WorkoutCoaching, WorkoutDraft } from './types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_DURATION_MIN = 12 * 60;
+/** Same limits and messages as the server (`20261109000100_coach_v4.sql`). */
+const MAX_STEPS = 50;
+const COACHING_TEXT_MAX = 200;
+const COACHING_KEY_MAX = 160;
+const COACHING_KEYS_MAX = 4;
+const COACHING_BYTES_MAX = 4000;
 
 export interface ApplyContext {
   userId: UUID;
@@ -32,11 +38,72 @@ export function validateDraft(draft: Partial<WorkoutDraft>, partial: boolean): s
   if (!partial || draft.title !== undefined) {
     if (!draft.title || draft.title.trim().length === 0) return 'Título vacío';
   }
+  if (Array.isArray(draft.steps) && draft.steps.length > MAX_STEPS) return 'Demasiados pasos (máximo 50)';
+  return validateCoaching(draft.coaching);
+}
+
+/** Characters of the trimmed text (code points, like Postgres `char_length`). */
+function trimmedLength(value: string): number {
+  return Array.from(value.trim()).length;
+}
+
+function isTextBetween(value: unknown, max: number): boolean {
+  if (typeof value !== 'string') return false;
+  const length = trimmedLength(value);
+  return length >= 1 && length <= max;
+}
+
+function utf8Bytes(text: string): number {
+  return Array.from(text).reduce((sum, ch) => {
+    const code = ch.codePointAt(0) ?? 0;
+    return sum + (code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4);
+  }, 0);
+}
+
+/** Stored size of the coaching (trimmed texts, known keys only), like the server's `pg_column_size` check. */
+function coachingBytes(c: Record<string, unknown>, keys: readonly unknown[]): number {
+  const trimmed = (v: unknown) => (typeof v === 'string' ? v.trim() : null);
+  return utf8Bytes(JSON.stringify({ objective: trimmed(c.objective), keys: keys.map(trimmed), success: trimmed(c.success), planB: trimmed(c.planB) }));
+}
+
+/** Stored form of a valid coaching, as the server keeps it: trimmed texts, keys default [], plan B default null. */
+export function normalizeCoaching(c: WorkoutCoaching): WorkoutCoaching {
+  return {
+    objective: c.objective.trim(),
+    keys: (c.keys ?? []).map((k) => k.trim()),
+    success: c.success.trim(),
+    planB: c.planB?.trim() || null,
+  };
+}
+
+/**
+ * First error (Spanish, the server's wording) of a workout's coaching, or
+ * null when it is valid, absent (undefined) or cleared (null). Objective and
+ * success 1–200 characters, 0–4 keys of 1–160, plan B null or 1–200.
+ */
+export function validateCoaching(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) return 'Indicaciones del entreno no válidas';
+  const c = value as Record<string, unknown>;
+  if (!isTextBetween(c.objective, COACHING_TEXT_MAX)) return 'Objetivo del entreno no válido (1–200 caracteres)';
+  const keys: readonly unknown[] = Array.isArray(c.keys) ? c.keys : [];
+  if (keys.length > COACHING_KEYS_MAX) return 'Máximo 4 claves por entreno';
+  const badKeysType = c.keys !== undefined && c.keys !== null && !Array.isArray(c.keys);
+  if (badKeysType || keys.some((k) => !isTextBetween(k, COACHING_KEY_MAX))) {
+    return 'Claves del entreno no válidas (1–160 caracteres cada una)';
+  }
+  if (!isTextBetween(c.success, COACHING_TEXT_MAX)) return 'Criterio de éxito no válido (1–200 caracteres)';
+  if (c.planB !== undefined && c.planB !== null && !isTextBetween(c.planB, COACHING_TEXT_MAX)) {
+    return 'Plan B no válido (1–200 caracteres)';
+  }
+  if (coachingBytes(c, keys) > COACHING_BYTES_MAX) return 'Indicaciones del entreno demasiado largas';
   return null;
 }
 
 function draftToWorkout(draft: WorkoutDraft, ctx: ApplyContext): Workout {
   return {
+    // Objective, keys, success and plan B travel with the session (absent = none).
+    ...(draft.coaching ? { coaching: normalizeCoaching(draft.coaching) } : {}),
     id: ctx.newId(),
     userId: ctx.userId,
     date: draft.date,
@@ -95,19 +162,36 @@ function applyOne(
 
   const error = validateDraft(change.patch, true);
   if (error) return { workouts: [...workouts], error };
-  const { source, ...rest } = change.patch;
-  const updated: Workout = {
+  return { workouts: workouts.map((w) => (w.id === target.id ? patchedWorkout(target, change.patch, ctx) : w)), error: null };
+}
+
+/**
+ * `target` with an update patch applied: undefined keeps a field, null clears
+ * the nullable ones; `coaching: null` removes the coaching, steps are replaced
+ * as given (targets, cues and brick legs included).
+ */
+function patchedWorkout(target: Workout, patch: Partial<WorkoutDraft>, ctx: ApplyContext): Workout {
+  const { source, coaching, ...rest } = patch;
+  const defined = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Partial<WorkoutDraft>;
+  const base: Workout = {
     ...target,
-    ...rest,
+    ...defined,
     title: rest.title?.trim() ?? target.title,
-    startTime: rest.startTime === undefined ? target.startTime : rest.startTime,
-    description: rest.description === undefined ? target.description : rest.description,
-    distanceM: rest.distanceM === undefined ? target.distanceM : rest.distanceM,
-    tss: rest.tss === undefined ? target.tss : rest.tss,
     source: source ?? target.source,
     updatedAt: ctx.now,
   };
-  return { workouts: workouts.map((w) => (w.id === target.id ? updated : w)), error: null };
+  return withCoachingPatch(base, coaching);
+}
+
+/**
+ * Applies the `coaching` of a patch: undefined keeps the current one, null
+ * removes it (absent = none, like a null column), an object replaces it in
+ * its stored form.
+ */
+export function withCoachingPatch(workout: Workout, coaching: WorkoutCoaching | null | undefined): Workout {
+  if (coaching === undefined) return workout;
+  const { coaching: _previous, ...rest } = workout;
+  return coaching === null ? rest : { ...rest, coaching: normalizeCoaching(coaching) };
 }
 
 /**

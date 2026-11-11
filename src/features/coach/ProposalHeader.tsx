@@ -4,12 +4,13 @@ import { formatWeekRange } from '@/domain/dates';
 import type { PlanProposal } from '@/domain/types';
 import { Icon, Tag, Text, space, useTheme } from '@/ui';
 
-import { changeCountLabel, proposalKindLabel, proposalSourceLabel, proposalStatusLabel } from './labels';
+import { changeCountLabel, proposalKindLabel, proposalSourceLabel, proposalStatusLabel, splitSummary } from './labels';
 
-/** Summary block on top of the proposal review. */
+/** Summary block on top of the proposal review: one-sentence headline, the rest as supporting text. */
 export function ProposalHeader({ proposal }: { proposal: PlanProposal }) {
   const { colors } = useTheme();
   const isPending = proposal.status === 'pending';
+  const { headline, rest } = splitSummary(proposal.summary);
   return (
     <View style={styles.wrap}>
       <View style={styles.tags}>
@@ -30,12 +31,14 @@ export function ProposalHeader({ proposal }: { proposal: PlanProposal }) {
           {`Semana ${formatWeekRange(proposal.weekStart)} · ${changeCountLabel(proposal.changes.length)}`}
         </Text>
       </View>
-      <Text variant="title" accessibilityRole="header">
-        {proposal.summary}
-      </Text>
-      {proposal.model ? (
-        <Text variant="caption" color="textMuted">
-          {`Modelo: ${proposal.model}`}
+      {headline ? (
+        <Text variant="title" accessibilityRole="header">
+          {headline}
+        </Text>
+      ) : null}
+      {rest ? (
+        <Text variant="callout" color="textMuted">
+          {rest}
         </Text>
       ) : null}
     </View>

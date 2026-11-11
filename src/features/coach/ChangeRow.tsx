@@ -1,10 +1,15 @@
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon, SportBadge, Tag, Text, fonts, haptics, radius, readableTextOn, space, useTheme, type IconName, type Theme } from '@/ui';
 
 import type { DiffOp, DiffRow } from './proposalDiff';
+import type { SessionPreview } from './sessionPreview';
+import { SessionSteps } from './SessionSteps';
 
 const OP_ICON: Record<DiffOp, IconName> = { add: 'add', delete: 'trash', move: 'move', update: 'edit' };
+/** Glyph column (34 pt badge + 4 pt) + gap: the step list lines up with the row text. */
+const BODY_INSET = 38 + space.md;
 
 /** Diff colour of an operation: added = success, removed = danger, changed/moved = info. Always shown with its icon. */
 export function opColor(op: DiffOp, colors: Theme['colors']): string {
@@ -53,6 +58,24 @@ function BeforeAfter({ before, after }: { before: string | null; after: string |
   );
 }
 
+/** What the session asks: its objective and the main target ("3×8' Z4 · 162–168 ppm · RPE 7–8"). */
+function SessionSummary({ session }: { session: SessionPreview }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.session}>
+      {session.objective ? <Text variant="callout">{session.objective}</Text> : null}
+      {session.target ? (
+        <View style={[styles.target, { backgroundColor: colors.surfaceAlt }]}>
+          <Icon name="target" size={14} color={colors.textMuted} />
+          <Text variant="caption" style={styles.targetText}>
+            {session.target}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function RowBody({ row, error, skipped }: { row: DiffRow; error?: string | null; skipped: boolean }) {
   const { colors } = useTheme();
   return (
@@ -77,6 +100,7 @@ function RowBody({ row, error, skipped }: { row: DiffRow; error?: string | null;
           <Text variant="caption">{f.after}</Text>
         </View>
       ))}
+      {row.session ? <SessionSummary session={row.session} /> : null}
       {row.warnings.map((w) => (
         <View key={w} style={styles.noteLine}>
           <Icon name="warning" size={12} color={colors.warning} />
@@ -102,13 +126,20 @@ function RowBody({ row, error, skipped }: { row: DiffRow; error?: string | null;
   );
 }
 
-/** Spoken summary of a row (avoids raw ISO dates of describeChange). */
-function rowLabel(row: DiffRow, skipped: boolean): string {
-  const move = row.before && row.after ? `De ${row.before} a ${row.after}` : row.after;
-  const fields = row.fields.map((f) => `${f.label}: de ${f.before} a ${f.after}`);
-  return [`${row.opLabel} «${row.title}»`, skipped ? 'No aplicado' : '', move ?? '', ...fields, row.reason, ...row.warnings]
+/** Spoken parts as sentences, without doubling full stops ("…sin pasarte. Intensidad: …"). */
+function sentences(parts: readonly (string | null | undefined)[]): string {
+  return parts
+    .map((part) => (part ?? '').trim().replace(/\.+$/, ''))
     .filter(Boolean)
     .join('. ');
+}
+
+/** Spoken summary of a row (avoids raw ISO dates of describeChange). */
+export function rowLabel(row: DiffRow, skipped: boolean): string {
+  const move = row.before && row.after ? `De ${row.before} a ${row.after}` : row.after;
+  const fields = row.fields.map((f) => `${f.label}: de ${f.before} a ${f.after}`);
+  const session = row.session ? [row.session.objective, row.session.target ? `Intensidad: ${row.session.target}` : null] : [];
+  return sentences([`${row.opLabel} «${row.title}»`, skipped ? 'No aplicado' : null, move, ...fields, ...session, row.reason, ...row.warnings]);
 }
 
 /** Sport badge with the coloured operation badge, or a tinted operation tile when there's no sport. */
@@ -134,24 +165,18 @@ function OpGlyph({ row }: { row: DiffRow }) {
   );
 }
 
-/** One change of a proposal as a diff row with an optional checkbox. */
-export function ChangeRow({ row, checked, onToggle, error, skipped = false }: ChangeRowProps) {
-  const { colors } = useTheme();
-  const glyph = <OpGlyph row={row} />;
-  const content = (
-    <>
-      {glyph}
-      <RowBody row={row} error={error} skipped={skipped} />
-      {checked !== undefined ? <Checkbox checked={checked} /> : null}
-    </>
-  );
-  const label = rowLabel(row, skipped);
-  const faded = checked === false || skipped ? { opacity: 0.55 } : null;
+interface RowMainProps extends Pick<ChangeRowProps, 'checked' | 'onToggle'> {
+  label: string;
+  children: ReactNode;
+}
 
+/** The selectable part of the row (a checkbox) or a read-only group read as one element. */
+function RowMain({ label, checked, onToggle, children }: RowMainProps) {
+  const { colors } = useTheme();
   if (checked === undefined || !onToggle) {
     return (
-      <View accessible accessibilityLabel={label} style={[styles.row, { borderColor: colors.border }, faded]}>
-        {content}
+      <View accessible accessibilityLabel={label} style={styles.main}>
+        {children}
       </View>
     );
   }
@@ -165,26 +190,49 @@ export function ChangeRow({ row, checked, onToggle, error, skipped = false }: Ch
         haptics.tap();
         onToggle();
       }}
-      style={({ pressed }) => [
-        styles.row,
-        { borderColor: colors.border, backgroundColor: pressed ? colors.surfacePressed : 'transparent' },
-        faded,
-      ]}>
-      {content}
+      style={({ pressed }) => [styles.main, { backgroundColor: pressed ? colors.surfacePressed : 'transparent' }]}>
+      {children}
     </Pressable>
   );
 }
 
+/**
+ * One change of a proposal as a diff row with an optional checkbox. Added or
+ * rewritten sessions show what they ask (objective + main target) and an
+ * expandable list of steps, kept outside the checkbox so it stays reachable.
+ */
+export function ChangeRow({ row, checked, onToggle, error, skipped = false }: ChangeRowProps) {
+  const { colors } = useTheme();
+  const faded = checked === false || skipped ? { opacity: 0.55 } : null;
+  const steps = row.session?.steps ?? [];
+  return (
+    <View style={[styles.row, { borderColor: colors.border }, faded]}>
+      <RowMain label={rowLabel(row, skipped)} checked={checked} onToggle={onToggle}>
+        <OpGlyph row={row} />
+        <RowBody row={row} error={error} skipped={skipped} />
+        {checked !== undefined ? <Checkbox checked={checked} /> : null}
+      </RowMain>
+      {steps.length > 0 ? (
+        <View style={styles.steps}>
+          <SessionSteps lines={steps} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  row: {
+  row: { borderBottomWidth: StyleSheet.hairlineWidth },
+  main: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: space.md,
     paddingVertical: space.md,
     paddingHorizontal: space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
   },
+  // Pulled up under the row text; padded at the bottom like the row itself.
+  steps: { marginTop: -space.sm, paddingLeft: space.sm + BODY_INSET, paddingRight: space.sm, paddingBottom: space.md },
   glyphCol: { width: 38, alignItems: 'center', paddingTop: 2 },
   opBadge: {
     position: 'absolute',
@@ -205,6 +253,16 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.xs },
   diffLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   strike: { textDecorationLine: 'line-through' },
+  session: { gap: space.xs, paddingTop: 2 },
+  target: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  targetText: { flex: 1, fontFamily: fonts.bodySemibold, fontVariant: ['tabular-nums'] },
   checkbox: {
     width: 26,
     height: 26,

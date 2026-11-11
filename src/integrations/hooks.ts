@@ -8,7 +8,7 @@
  * Actions throw `Error`s with Spanish messages; screens show them with `errorMessage()`.
  */
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { AppState } from 'react-native';
 
 import { useAuth, useRepository } from '@/data/context';
@@ -25,15 +25,12 @@ import {
   type DeviceCalendar,
   type PermissionState,
 } from './calendar';
-import {
-  getHealthLastSync,
-  isHealthAvailable,
-  isHealthEnabled,
-  requestHealthPermissions,
-  setHealthEnabled,
-  syncHealth,
-} from './healthkit';
+import type { HealthSyncResult } from './health/result';
+import { getHealthLastSync, getHealthSources, isHealthEnabled, setHealthEnabled } from './health/state';
+import { isHealthAvailable, requestHealthPermissions, syncHealth } from './healthkit';
 import { getNotificationPermission, registerForPush, requestNotificationPermission } from './notifications';
+
+export type { HealthSyncResult } from './health/result';
 
 const HEALTH_QUERY_ROOTS = ['metrics', 'workouts', 'workout', 'feed', 'friend_week'] as const;
 const CALENDAR_QUERY_ROOTS = ['busy_blocks', 'friend_week'] as const;
@@ -53,72 +50,128 @@ function useUserId(): string | null {
   return useAuth().session?.userId ?? null;
 }
 
+/** The first import reads 4 weeks (Garmin and COROS onboarding promise the same). */
+export const FIRST_HEALTH_IMPORT_DAYS = 28;
+
+export interface HealthSyncOptions {
+  /** Days to read back (default 14; capped at 60). */
+  days?: number;
+}
+
 export interface HealthIntegration {
   available: boolean;
+  /** This account's opt-in has been read from the device: until then `enabled` means nothing. */
+  loaded: boolean;
   enabled: boolean;
   lastSync: string | null;
+  /** Apps seen writing workouts or sleep to Apple Salud for this account ("COROS"…). */
+  sources: string[];
   busy: boolean;
-  connect(): Promise<void>;
-  syncNow(): Promise<void>;
+  /** Permission sheet + opt-in + first import (4 weeks unless `days`). Null when that import failed. */
+  connect(opts?: HealthSyncOptions): Promise<HealthSyncResult | null>;
+  syncNow(opts?: HealthSyncOptions): Promise<HealthSyncResult>;
   disable(): Promise<void>;
 }
 
-export function useHealthIntegration(): HealthIntegration {
-  const repo = useRepository();
-  const userId = useUserId();
-  const invalidate = useInvalidateRoots();
-  const [available] = useState(() => isHealthAvailable());
-  const [enabled, setEnabled] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+interface HealthDeviceState {
+  loaded: boolean;
+  enabled: boolean;
+  lastSync: string | null;
+  sources: string[];
+}
 
+const UNREAD: HealthDeviceState = { loaded: false, enabled: false, lastSync: null, sources: [] };
+const SIGNED_OUT_HEALTH: HealthDeviceState = { ...UNREAD, loaded: true };
+
+async function readHealthState(userId: string | null): Promise<HealthDeviceState> {
+  if (!userId) return SIGNED_OUT_HEALTH;
+  const [enabled, lastSync, sources] = await Promise.all([isHealthEnabled(userId), getHealthLastSync(userId), getHealthSources(userId)]);
+  return { loaded: true, enabled, lastSync, sources };
+}
+
+type SetHealthState = Dispatch<SetStateAction<HealthDeviceState>>;
+
+/** Reads this account's Apple Salud opt-in (again when the account changes). */
+function useHealthDeviceState(userId: string | null): readonly [HealthDeviceState, SetHealthState] {
+  const [state, setState] = useState<HealthDeviceState>(UNREAD);
   useEffect(() => {
     let active = true;
-    const load: Promise<[boolean, string | null]> = userId
-      ? Promise.all([isHealthEnabled(userId), getHealthLastSync(userId)])
-      : Promise.resolve([false, null]);
-    void load.then(([on, last]) => {
-      if (!active) return;
-      setEnabled(on);
-      setLastSync(last);
-    });
+    // Another account must never see the previous one's opt-in, even for a frame.
+    setState(UNREAD);
+    // One retry before reporting "not enabled": a transient storage error must not send a COROS
+    // athlete who already connected Apple Salud back to the onboarding watch step.
+    void readHealthState(userId)
+      .catch(() => readHealthState(userId))
+      .catch((error: unknown) => {
+        logger.warn('health: could not read the opt-in', error);
+        return SIGNED_OUT_HEALTH;
+      })
+      .then((next) => {
+        if (active) setState(next);
+      });
     return () => {
       active = false;
     };
   }, [userId]);
+  return [state, setState] as const;
+}
 
-  const syncNow = useCallback(async () => {
-    if (!userId) throw new Error(SIGNED_OUT_MESSAGE);
-    setBusy(true);
-    try {
-      await syncHealth(repo);
-      setLastSync(await getHealthLastSync(userId));
-      await invalidate(HEALTH_QUERY_ROOTS);
-    } catch (error) {
-      logger.warn('health: manual sync failed', error);
-      throw new Error('No se pudo sincronizar con Apple Salud. Inténtalo de nuevo.');
-    } finally {
-      setBusy(false);
-    }
-  }, [repo, userId, invalidate]);
+/** «Sincronizar»: reads Apple Salud now, then refreshes the last read, the sources and the screens. */
+function useHealthSyncNow(userId: string | null, setState: SetHealthState) {
+  const repo = useRepository();
+  const invalidate = useInvalidateRoots();
+  const [busy, setBusy] = useState(false);
+  const syncNow = useCallback(
+    async (opts?: HealthSyncOptions): Promise<HealthSyncResult> => {
+      if (!userId) throw new Error(SIGNED_OUT_MESSAGE);
+      setBusy(true);
+      try {
+        const result = await syncHealth(repo, opts);
+        const [lastSync, sources] = await Promise.all([getHealthLastSync(userId), getHealthSources(userId)]);
+        setState((prev) => ({ ...prev, lastSync, sources }));
+        await invalidate(HEALTH_QUERY_ROOTS);
+        return result;
+      } catch (error) {
+        logger.warn('health: manual sync failed', error);
+        throw new Error('No se pudo sincronizar con Apple Salud. Inténtalo de nuevo.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [repo, userId, invalidate, setState],
+  );
+  return { busy, syncNow };
+}
 
-  const connect = useCallback(async () => {
-    if (!available) throw new Error('Apple Salud no está disponible en este dispositivo.');
-    if (!userId) throw new Error(SIGNED_OUT_MESSAGE);
-    const ok = await requestHealthPermissions();
-    if (!ok) throw new Error('No se pudo pedir acceso a Apple Salud. Revisa Ajustes > Salud > Road to Ironman.');
-    await setHealthEnabled(userId, true);
-    setEnabled(true);
-    // Connected even if the first import fails (offline…): AppEffects retries on the next foreground.
-    await syncNow().catch((error: unknown) => logger.warn('health: first sync failed', error));
-  }, [available, userId, syncNow]);
+export function useHealthIntegration(): HealthIntegration {
+  const userId = useUserId();
+  const [available] = useState(() => isHealthAvailable());
+  const [state, setState] = useHealthDeviceState(userId);
+  const { busy, syncNow } = useHealthSyncNow(userId, setState);
+
+  const connect = useCallback(
+    async (opts?: HealthSyncOptions): Promise<HealthSyncResult | null> => {
+      if (!available) throw new Error('Apple Salud no está disponible en este dispositivo.');
+      if (!userId) throw new Error(SIGNED_OUT_MESSAGE);
+      const ok = await requestHealthPermissions();
+      if (!ok) throw new Error('No se pudo pedir acceso a Apple Salud. Revisa Ajustes > Salud > Road to Ironman.');
+      await setHealthEnabled(userId, true);
+      setState((prev) => ({ ...prev, loaded: true, enabled: true }));
+      // Connected even if the first import fails (offline…): AppEffects retries on the next foreground.
+      return syncNow({ days: opts?.days ?? FIRST_HEALTH_IMPORT_DAYS }).catch((error: unknown) => {
+        logger.warn('health: first sync failed', error);
+        return null;
+      });
+    },
+    [available, userId, syncNow, setState],
+  );
 
   const disable = useCallback(async () => {
     if (userId) await setHealthEnabled(userId, false);
-    setEnabled(false);
-  }, [userId]);
+    setState((prev) => ({ ...prev, enabled: false }));
+  }, [userId, setState]);
 
-  return { available, enabled, lastSync, busy, connect, syncNow, disable };
+  return { available, ...state, busy, connect, syncNow, disable };
 }
 
 export interface CalendarIntegration {

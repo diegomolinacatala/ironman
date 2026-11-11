@@ -9,7 +9,9 @@ import { addDays, daysInRange, minutesToTime, timeToMinutes, weekdayOf } from '.
 import { isHardDay, lifeEventHardPoints, workoutHardPoints } from './hardness';
 import { workoutLoad } from './load';
 import { allowsSession, intensityRank, restrictionsForDates, type DayRestriction, NO_RESTRICTION } from './restrictions';
-import { buildSession, type SessionCode } from './sessions';
+import { easyCodeFor } from './sessionEasier';
+import { buildSession, SESSION_CATALOG, type SessionContext } from './sessions';
+import { scaleSteps } from './stepScale';
 import { busyRangesOn, subtractRanges, windowRangesOn, type MinuteRange } from './timeRanges';
 import { estimateTss } from './load';
 import type {
@@ -274,49 +276,67 @@ export function moveTo(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, target: Mo
   return record(next, { op: 'move', workoutId: w.id, toDate: target.date, toStartTime: target.time, reason: withPartner(w, ctx, reason) });
 }
 
-const EASY_CODE: Partial<Record<Sport, { easy: SessionCode; recovery: SessionCode }>> = {
-  run: { easy: 'RN_EASY', recovery: 'RN_REC' },
-  bike: { easy: 'BK_END', recovery: 'BK_REC' },
-  brick: { easy: 'BK_END', recovery: 'BK_REC' },
-  swim: { easy: 'SW_END', recovery: 'SW_TECH' },
-  strength: { easy: 'ST_MAINT', recovery: 'MOB' },
-  mobility: { easy: 'MOB', recovery: 'MOB' },
-};
-
 function roundDuration(n: number): number {
   return Math.max(10, Math.round(n / 5) * 5);
 }
 
-/** Patch that turns a session into an easy/recovery one of `sport` (default: same sport). */
-export function easyPatch(w: Workout, opts: { durationMin: number; intensity?: Intensity; sport?: Sport; note?: string }): Partial<WorkoutDraft> {
+export interface EasyPatchOptions {
+  durationMin: number;
+  intensity?: Intensity;
+  sport?: Sport;
+  note?: string;
+}
+
+/**
+ * Patch that turns a session into an easy/recovery one of `sport` (default:
+ * same sport; easy strength becomes mobility): steady work only (no strides),
+ * with coaching and, given
+ * `sctx`, the athlete's targets. Sports without an easy session lose their
+ * old structure. The planned distance no longer applies.
+ */
+export function easyPatch(w: Workout, opts: EasyPatchOptions, sctx: SessionContext = {}): Partial<WorkoutDraft> {
   const sport = opts.sport ?? (w.sport === 'brick' ? 'bike' : w.sport);
   const intensity: Intensity = opts.intensity ?? 'endurance';
   const durationMin = roundDuration(opts.durationMin);
-  const codes = EASY_CODE[sport];
-  if (!codes) return { sport, intensity, durationMin, tss: estimateTss({ sport, intensity, durationMin }) };
-  const code = intensity === 'recovery' ? codes.recovery : codes.easy;
-  const content = buildSession({ code, durationMin, priority: 5, note: opts.note ?? null });
+  const code = easyCodeFor(sport, intensity === 'recovery' ? 'recovery' : 'endurance');
+  if (!code) return { sport, intensity, durationMin, distanceM: null, steps: [], coaching: null, tss: estimateTss({ sport, intensity, durationMin }) };
+  // Easy strength is mobility: the easy session's own sport.
+  const easySport = SESSION_CATALOG[code].sport;
+  const content = buildSession({ code, durationMin, priority: 5, note: opts.note ?? null, plain: true }, sctx);
   return {
-    sport,
+    sport: easySport,
     intensity,
     durationMin,
+    distanceM: null,
     title: content.title,
     description: content.description,
     steps: content.steps,
-    tss: estimateTss({ sport, intensity, durationMin }),
+    coaching: content.coaching,
+    tss: estimateTss({ sport: easySport, intensity, durationMin }),
   };
 }
 
-export function downgrade(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, opts: { durationMin: number; intensity?: Intensity; sport?: Sport; note?: string }, reason: string): WorkingPlan {
+/** The athlete's numbers for rebuilt sessions. */
+export function sessionCtxOf(ctx: ReplanCtx): SessionContext {
+  return { thresholds: ctx.input.profile.thresholds };
+}
+
+export function downgrade(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, opts: EasyPatchOptions, reason: string): WorkingPlan {
   if (plan.touched.has(w.id)) return plan;
-  return record(plan, { op: 'update', workoutId: w.id, patch: easyPatch(w, opts), reason: withPartner(w, ctx, reason) });
+  return record(plan, { op: 'update', workoutId: w.id, patch: easyPatch(w, opts, sessionCtxOf(ctx)), reason: withPartner(w, ctx, reason) });
+}
+
+/** Patch that shortens a session to `durationMin`, its steps scaled so they never exceed it. */
+export function shortenedPatch(w: Workout, durationMin: number): Partial<WorkoutDraft> {
+  const steps = w.steps.length > 0 ? { steps: scaleSteps(w.steps, w.durationMin, durationMin) } : {};
+  return { durationMin, tss: estimateTss({ ...w, durationMin }), ...steps };
 }
 
 export function shorten(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, factor: number, reason: string): WorkingPlan {
   if (plan.touched.has(w.id)) return plan;
   const durationMin = roundDuration(w.durationMin * factor);
   if (durationMin >= w.durationMin) return plan;
-  return record(plan, { op: 'update', workoutId: w.id, patch: { durationMin, tss: estimateTss({ ...w, durationMin }) }, reason: withPartner(w, ctx, reason) });
+  return record(plan, { op: 'update', workoutId: w.id, patch: shortenedPatch(w, durationMin), reason: withPartner(w, ctx, reason) });
 }
 
 export function remove(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, reason: string): WorkingPlan {

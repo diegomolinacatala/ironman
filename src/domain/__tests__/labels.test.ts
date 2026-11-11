@@ -52,12 +52,20 @@ describe('labels', () => {
     expect(L.complianceLabel('adjusted')).toBe('Ajustado');
     expect(L.readinessLabel('amber')).toBe('Con precaución');
     expect(L.phaseLabel('race_week')).toBe('Semana de carrera');
-    expect(L.phaseLabel('taper')).toBe('Puesta a punto');
+    expect(L.phaseLabel('taper')).toBe('Afinamiento');
   });
 
   test('weekday labels', () => {
     expect(L.weekdayLabel(0)).toBe('Lunes');
     expect(L.weekdayShort(6)).toBe('Dom');
     expect(L.weekdayInitial(2)).toBe('X');
+  });
+});
+
+describe('v4 labels', () => {
+  test('sensaciones and watch brands', () => {
+    expect([1, 2, 3, 4, 5].map((f) => L.feelLabel(f as 1 | 2 | 3 | 4 | 5))).toEqual(['Muy mal', 'Mal', 'Normal', 'Bien', 'Genial']);
+    expect(L.watchBrandLabel('coros')).toBe('COROS');
+    expect(L.watchBrandLabel('garmin')).toBe('Garmin');
   });
 });

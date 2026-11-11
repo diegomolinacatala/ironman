@@ -1,11 +1,12 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatDayLong } from '@/domain/dates';
 import { raceDistanceLabel } from '@/domain/labels';
 import type { Phase } from '@/domain/periodization';
 import type { ISODate, Race } from '@/domain/types';
-import { Card, Icon, ListRow, Tag, Text, radius, space, useTheme } from '@/ui';
+import { SEASON_HREF } from '@/features/season/links';
+import { Button, Card, Icon, ListRow, Tag, Text, haptics, radius, space, useTheme } from '@/ui';
 
 import { PhaseTimeline } from './PhaseTimeline';
 import { PriorityBadge } from './PriorityBadge';
@@ -25,6 +26,8 @@ export interface RaceCountdownCardProps {
 }
 
 const openRaces = () => router.push('/races');
+/** Plan → General (switches tab: `navigate`, never `push`). */
+const openSeason = () => router.navigate(SEASON_HREF);
 
 function CountdownTile({ value, unit }: { value: string; unit: string }) {
   const { colors } = useTheme();
@@ -45,7 +48,7 @@ function PhaseBlock({ phase }: { phase: PhaseSnapshot }) {
   return (
     <View style={styles.phase}>
       <PhaseTimeline phase={phase.phase} phaseName={phaseName(phase.phase)} />
-      {phase.isRecoveryWeek ? <Tag label="Semana de descarga" color={colors.info} tone="soft" icon="moon" /> : null}
+      {phase.isRecoveryWeek ? <Tag label="Descarga" color={colors.info} tone="soft" icon="moon" /> : null}
       <Text variant="caption" color="textMuted" numberOfLines={2}>
         {phase.focus}
       </Text>
@@ -53,7 +56,10 @@ function PhaseBlock({ phase }: { phase: PhaseSnapshot }) {
   );
 }
 
-/** Compact "next race" card (Progreso → Carreras): countdown, race, season phase. Opens Carreras. */
+/**
+ * Compact "next race" card (Progreso): countdown, race and season phase (opens
+ * Carreras), plus "Ver plan general" for the weeks until the race.
+ */
 export function RaceCountdownCard({ race, phase, today }: RaceCountdownCardProps) {
   const { colors } = useTheme();
   if (!race) {
@@ -72,13 +78,15 @@ export function RaceCountdownCard({ race, phase, today }: RaceCountdownCardProps
   }
   const cd = countdown(race.date, today);
   return (
-    <Card
-      variant="flat"
-      padding="lg"
-      style={styles.card}
-      onPress={openRaces}
-      accessibilityLabel={`${cd.spoken} para ${race.name}. Ver carreras.`}>
-      <View style={styles.top}>
+    <Card variant="flat" padding="lg" style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${cd.spoken} para ${race.name}. Ver carreras.`}
+        onPress={() => {
+          haptics.tap();
+          openRaces();
+        }}
+        style={({ pressed }) => [styles.top, pressed && styles.pressed]}>
         <CountdownTile value={cd.value} unit={cd.unit} />
         <View style={styles.info}>
           <View style={styles.nameRow}>
@@ -92,8 +100,16 @@ export function RaceCountdownCard({ race, phase, today }: RaceCountdownCardProps
           </Text>
         </View>
         <Icon name="chevronRight" size={14} color={colors.textFaint} />
-      </View>
+      </Pressable>
       {phase ? <PhaseBlock phase={phase} /> : null}
+      <Button
+        label="Ver plan general"
+        icon="week"
+        variant="secondary"
+        size="sm"
+        onPress={openSeason}
+        accessibilityHint="Abre en Plan las semanas hasta la carrera"
+      />
     </Card>
   );
 }
@@ -101,6 +117,8 @@ export function RaceCountdownCard({ race, phase, today }: RaceCountdownCardProps
 const styles = StyleSheet.create({
   card: { gap: space.md },
   top: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  // Opacity only: no layout shift while pressed.
+  pressed: { opacity: 0.7 },
   tile: { minWidth: 64, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, paddingVertical: space.sm, paddingHorizontal: space.sm },
   info: { flex: 1, gap: space.xxs },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

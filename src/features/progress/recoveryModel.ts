@@ -1,6 +1,6 @@
 /**
  * Recovery sparklines (VFC, FC en reposo, sueño) over the last 28 days with
- * source attribution (Garmin / Salud / Manual). Pure.
+ * source attribution (Garmin / COROS / Salud / Manual). Pure.
  */
 import { addDays, daysInRange } from '@/domain/dates';
 import type { DailyMetrics, DateRange, ISODate, MetricsSource } from '@/domain/types';
@@ -28,8 +28,8 @@ export interface RecoverySeries {
   sources: MetricsSource[];
 }
 
-/** Preferred source when a day has several rows. */
-const SOURCE_PRIORITY: readonly MetricsSource[] = ['garmin', 'healthkit', 'manual'];
+/** Preferred source when a day has several rows (docs/V4.md: garmin > coros > healthkit > manual). */
+const SOURCE_PRIORITY: readonly MetricsSource[] = ['garmin', 'coros', 'healthkit', 'manual'];
 
 const SPECS: readonly { key: RecoveryKey; label: string; unit: string; higherIsBetter: boolean }[] = [
   { key: 'hrvMs', label: 'VFC', unit: 'ms', higherIsBetter: true },
@@ -45,6 +45,8 @@ export function sourceLabel(source: MetricsSource): string {
   switch (source) {
     case 'garmin':
       return 'Garmin';
+    case 'coros':
+      return 'COROS';
     case 'healthkit':
       return 'Salud';
     case 'manual':

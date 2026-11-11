@@ -1,15 +1,19 @@
 import { describe, expect, test } from '@jest/globals';
 
 import { addDays } from '@/domain/dates';
-import { makeBusy, makeEvent, makeWorkout } from '@/features/workouts/__tests__/fixtures';
+import { phaseFor } from '@/domain/periodization';
+import type { WeekPlan } from '@/domain/types';
+import { makeBusy, makeEvent, makeProfile, makeRace, makeWorkout } from '@/features/workouts/__tests__/fixtures';
 
 import {
   busyIntervalsOn,
   busySummary,
   eventsOn,
   hoursLabel,
+  parsePlanView,
   parseWeekParam,
   recentWeeklyMinutes,
+  weekPhaseOf,
   workoutsOnDay,
 } from '../weekModel';
 
@@ -104,3 +108,56 @@ describe('parseWeekParam / hoursLabel', () => {
     expect(hoursLabel(0)).toBe('0');
   });
 });
+
+describe('weekPhaseOf (Plan → General override in the week view)', () => {
+  const MONDAY = '2026-11-09';
+  const race = makeRace({ date: addDays(MONDAY, 7 * 20 + 6) });
+  const profile = makeProfile();
+  const plan = (overrides: Partial<WeekPlan> = {}): WeekPlan => ({
+    weekStart: MONDAY,
+    kind: 'recovery',
+    targetMinutes: null,
+    note: null,
+    source: 'manual',
+    updatedAt: '2026-11-09T08:00:00Z',
+    ...overrides,
+  });
+
+  test('applies the week plan to the phase and the objective', () => {
+    const recovery = weekPhaseOf(MONDAY, [race], profile, [plan(), plan({ weekStart: '2026-11-16', kind: 'push' })]);
+    const push = weekPhaseOf(MONDAY, [race], profile, [plan({ kind: 'push' })]);
+    expect(weekPhaseOf(MONDAY, [race], profile, []).plan).toBeNull();
+    expect(recovery.plan?.kind).toBe('recovery');
+    expect(recovery.phase?.isRecoveryWeek).toBe(true);
+    expect(recovery.phase?.focus).toContain('descarga');
+    expect(push.phase?.isRecoveryWeek).toBe(false);
+    expect(push.phase?.focus).toContain('más volumen');
+    expect(recovery.targetHours).toBeLessThan(push.targetHours ?? 0);
+  });
+
+  test('explicit hours win and the level reaches the periodization', () => {
+    const week = weekPhaseOf(MONDAY, [race], profile, [plan({ kind: 'load', targetMinutes: 390 })]);
+    expect(week.targetHours).toBe(6.5);
+    const beginner = weekPhaseOf(MONDAY, [race], makeProfile({ level: 'beginner' }), []);
+    expect(beginner.phase).toEqual(phaseFor(MONDAY, [race], { level: 'beginner' }));
+  });
+
+  test('ignores plans for weeks the race organises and waits for the races', () => {
+    const raceWeek = startOfRaceWeek(race.date);
+    const week = weekPhaseOf(raceWeek, [race], profile, [plan({ weekStart: raceWeek, kind: 'push' })]);
+    expect(week.plan).toBeNull();
+    expect(week.phase?.phase).toBe('race_week');
+    expect(weekPhaseOf(MONDAY, undefined, profile, [plan()])).toEqual({ phase: null, plan: null, targetHours: 10 });
+    expect(weekPhaseOf(MONDAY, [], null, []).targetHours).toBeNull();
+  });
+
+  test('only ?view=general leaves the week view', () => {
+    expect(parsePlanView('general')).toBe('general');
+    expect(parsePlanView(undefined)).toBe('week');
+    expect(parsePlanView(['general'])).toBe('week');
+  });
+});
+
+function startOfRaceWeek(date: string): string {
+  return addDays(date, -6);
+}

@@ -10,6 +10,25 @@ import { getAppearancePreference, resetAppearanceForTests } from '@/ui/appearanc
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockUpdateProfile = jest.fn(async (patch: Record<string, unknown>) => patch);
 const mockSync = jest.fn(async () => ({ metricsDays: 1, activitiesImported: 0, workoutsCompleted: 0, message: 'ok' }));
+/** Apple Salud on this device (how a COROS watch reaches us). */
+const mockHealth = {
+  available: true,
+  loaded: true,
+  enabled: false,
+  lastSync: null as string | null,
+  sources: [] as string[],
+  busy: false,
+  connect: jest.fn(async () => null),
+  syncNow: jest.fn(async (_opts?: { days?: number }) => ({
+    metricsDays: 2,
+    sleepNights: 1,
+    activitiesFound: 1,
+    workoutsCompleted: 1,
+    activitiesImported: 0,
+    sources: ['COROS'],
+  })),
+  disable: jest.fn(async () => undefined),
+};
 const mockAuth = { signOut: jest.fn(async () => undefined), deleteAccount: jest.fn(async () => undefined) };
 
 const mockData: { profile: Profile; races: Race[]; integrations: IntegrationStatus[]; tokens: PersonalToken[]; calendarEnabled: boolean } = {
@@ -86,7 +105,9 @@ jest.mock('@/data/queries', () => {
   };
 });
 jest.mock('@/integrations/hooks', () => ({
+  FIRST_HEALTH_IMPORT_DAYS: 28,
   useNotificationPermission: () => ({ status: 'granted', request: async () => true }),
+  useHealthIntegration: () => ({ ...mockHealth }),
 }));
 jest.mock('@/integrations/calendar/trainingCalendar', () => ({
   useTrainingCalendar: () => ({
@@ -119,6 +140,9 @@ beforeEach(() => {
   mockData.integrations = [];
   mockData.tokens = [];
   mockData.calendarEnabled = false;
+  mockHealth.enabled = false;
+  mockHealth.lastSync = null;
+  mockHealth.sources = [];
 });
 
 describe('Tú', () => {
@@ -170,6 +194,38 @@ describe('Tú', () => {
     // Tapping a row opens its settings.
     await fireEvent.press(screen.getByLabelText(/^Garmin: Conectado/));
     expect(mockRouter.push).toHaveBeenLastCalledWith('/settings/integrations');
+  });
+
+  test('Tu reloj: switching to COROS saves it and the watch row becomes COROS', async () => {
+    await render(<MeScreen />);
+    expect(screen.getByLabelText(/^Garmin: Sin conectar/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'COROS' }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith({ watchBrand: 'coros' }));
+    expect(await screen.findByLabelText(/^COROS: Sin conectar/)).toBeTruthy();
+    expect(screen.queryByLabelText(/^Garmin:/)).toBeNull();
+  });
+
+  test('COROS row: last Apple Salud read and one-tap sync', async () => {
+    mockData.profile = profile({ watchBrand: 'coros' });
+    mockHealth.enabled = true;
+    mockHealth.sources = ['COROS'];
+    mockHealth.lastSync = new Date().toISOString();
+    await render(<MeScreen />);
+    expect(screen.getByLabelText(/COROS: Conectado. Sincronizado hace un momento/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Sincronizar' }));
+    await waitFor(() => expect(mockHealth.syncNow).toHaveBeenCalledWith({ days: 28 }));
+    expect(await screen.findByText('COROS sincronizado.')).toBeTruthy();
+    expect(mockSync).not.toHaveBeenCalled();
+  });
+
+  test('COROS row waiting for data: «Comprobar» explains what to do when nothing arrives', async () => {
+    mockData.profile = profile({ watchBrand: 'coros' });
+    mockHealth.enabled = true;
+    mockHealth.syncNow.mockResolvedValueOnce({ metricsDays: 0, sleepNights: 0, activitiesFound: 0, workoutsCompleted: 0, activitiesImported: 0, sources: [] });
+    await render(<MeScreen />);
+    expect(screen.getByLabelText(/^COROS: Esperando datos/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Comprobar' }));
+    expect(await screen.findByText(/Aún no vemos datos de COROS: abre la app COROS/)).toBeTruthy();
   });
 
   test('the calendar subscription is reachable from Conexiones', async () => {

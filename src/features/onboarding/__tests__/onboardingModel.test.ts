@@ -16,12 +16,14 @@ import {
   resolveResumeStep,
   toggleSport,
   visibleSteps,
+  watchStepTitle,
   welcomePatches,
+  welcomeWatchValue,
   type OnboardingFacts,
 } from '../onboardingModel';
 
-const ALL_DONE: OnboardingFacts = { displayName: 'Diego', garminDone: true, claudeDone: true };
-const NOTHING: OnboardingFacts = { displayName: '', garminDone: false, claudeDone: false };
+const ALL_DONE: OnboardingFacts = { displayName: 'Diego', watchDone: true, claudeDone: true };
+const NOTHING: OnboardingFacts = { displayName: '', watchDone: false, claudeDone: false };
 
 const ios = visibleSteps('ios');
 const web = visibleSteps('web');
@@ -71,7 +73,7 @@ describe('required-step gating', () => {
     expect(isStepSatisfied('welcome', NOTHING)).toBe(false);
     expect(isStepSatisfied('welcome', { ...NOTHING, displayName: '  Ana ' })).toBe(true);
     expect(isStepSatisfied('garmin', NOTHING)).toBe(false);
-    expect(isStepSatisfied('garmin', { ...NOTHING, garminDone: true })).toBe(true);
+    expect(isStepSatisfied('garmin', { ...NOTHING, watchDone: true })).toBe(true);
     expect(isStepSatisfied('claude', NOTHING)).toBe(false);
     expect(isStepSatisfied('claude', { ...NOTHING, claudeDone: true })).toBe(true);
   });
@@ -91,12 +93,12 @@ describe('resume', () => {
   });
 
   test('goes back to the first unsatisfied required step (Garmin disconnected meanwhile)', () => {
-    expect(resolveResumeStep(ios, 'morning', { ...ALL_DONE, garminDone: false })).toBe('garmin');
+    expect(resolveResumeStep(ios, 'morning', { ...ALL_DONE, watchDone: false })).toBe('garmin');
     expect(resolveResumeStep(ios, 'plan', { ...ALL_DONE, claudeDone: false })).toBe('claude');
   });
 
   test('the saved step itself may be unsatisfied (that is where the athlete was)', () => {
-    expect(resolveResumeStep(ios, 'garmin', { ...ALL_DONE, garminDone: false })).toBe('garmin');
+    expect(resolveResumeStep(ios, 'garmin', { ...ALL_DONE, watchDone: false })).toBe('garmin');
   });
 
   test('a native-only step saved on the iPhone resumes at the next visible step on web', () => {
@@ -121,10 +123,19 @@ describe('facts from the server', () => {
   const none = { claudeDone: false, garminSkipped: false };
 
   test('Garmin is done when connected (not expired) or skipped', () => {
-    expect(onboardingFacts({ displayName: 'D' }, [connected], [], none).garminDone).toBe(true);
-    expect(onboardingFacts({ displayName: 'D' }, [{ ...connected, state: 'expired' }], [], none).garminDone).toBe(false);
-    expect(onboardingFacts({ displayName: 'D' }, undefined, undefined, none).garminDone).toBe(false);
-    expect(onboardingFacts({ displayName: 'D' }, [], [], { ...none, garminSkipped: true }).garminDone).toBe(true);
+    expect(onboardingFacts({ displayName: 'D' }, [connected], [], none).watchDone).toBe(true);
+    expect(onboardingFacts({ displayName: 'D' }, [{ ...connected, state: 'expired' }], [], none).watchDone).toBe(false);
+    expect(onboardingFacts({ displayName: 'D' }, undefined, undefined, none).watchDone).toBe(false);
+    expect(onboardingFacts({ displayName: 'D' }, [], [], { ...none, garminSkipped: true }).watchDone).toBe(true);
+  });
+
+  test('COROS is done once Apple Salud is on (on this device) or skipped; a Garmin key does not count', () => {
+    const coros = { displayName: 'D', watchBrand: 'coros' as const };
+    expect(onboardingFacts(coros, [], [], none, true).watchDone).toBe(true);
+    expect(onboardingFacts(coros, [connected], [], none, false).watchDone).toBe(false);
+    expect(onboardingFacts(coros, [], [], { ...none, garminSkipped: true }, false).watchDone).toBe(true);
+    // Not chosen yet = Garmin: Apple Salud alone does not make it done.
+    expect(onboardingFacts({ displayName: 'D', watchBrand: null }, [], [], none, true).watchDone).toBe(false);
   });
 
   test('Claude is done with a used connector token or the stored flag (demo / skipped)', () => {
@@ -165,5 +176,25 @@ describe('welcome', () => {
     expect(toggleSport(sports, 'run')).toEqual(['swim', 'bike', 'run']);
     expect(toggleSport(sports, 'swim')).toEqual(['bike']);
     expect(sports).toEqual(['swim', 'bike']);
+  });
+
+  test('"Lee tu reloj": the chosen watch, or both before choosing', () => {
+    expect(welcomeWatchValue(undefined).title).toBe('Lee tu reloj');
+    expect(welcomeWatchValue(null).text).toMatch(/^Garmin o COROS/);
+    expect(welcomeWatchValue('garmin').title).toBe('Lee tu Garmin');
+    expect(welcomeWatchValue('coros').title).toBe('Lee tu COROS');
+  });
+});
+
+describe('Tu reloj', () => {
+  test('the step keeps its id (saved onboardings resume) but says "Tu reloj"', () => {
+    const watch = ONBOARDING_STEPS.find((s) => s.id === 'garmin');
+    expect(watch).toMatchObject({ overline: 'Tu reloj', title: 'Conecta tu reloj', required: true });
+    expect(watch?.subtitle).not.toMatch(/Garmin/);
+  });
+
+  test('the title names the watch chosen on the step, COROS in capitals', () => {
+    expect(watchStepTitle('garmin')).toBe('Conecta tu Garmin');
+    expect(watchStepTitle('coros')).toBe('Conecta tu COROS');
   });
 });

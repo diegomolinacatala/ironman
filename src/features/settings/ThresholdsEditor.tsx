@@ -1,10 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { Sport } from '@/domain/types';
-import { Icon, SportBadge, Text, TextField, radius, space, useTheme } from '@/ui';
+import type { Sport, Thresholds } from '@/domain/types';
+import { ZoneTag } from '@/features/workouts/IntensityTag';
+import { Card, Divider, Icon, Segmented, SportBadge, Text, TextField, radius, space, useTheme } from '@/ui';
 
-import { parseThresholdInputs, type ThresholdInputs, type ThresholdKey } from './thresholdsModel';
+import {
+  ZONE_PREVIEW_SPORTS,
+  parseThresholdInputs,
+  zonePreviewNote,
+  zonePreviewRows,
+  type ThresholdInputs,
+  type ThresholdKey,
+  type ZonePreviewSport,
+} from './thresholdsModel';
 
 interface FieldSpec {
   key: ThresholdKey;
@@ -22,7 +31,7 @@ const FIELDS: readonly FieldSpec[] = [
     sport: 'bike',
     label: 'FTP bici (W)',
     placeholder: '230',
-    hint: 'Potencia que aguantas ~1 h. En Garmin: Rendimiento → FTP.',
+    hint: 'Potencia que aguantas ~1 h. En tu reloj (Garmin o COROS): FTP o potencia umbral.',
     numeric: true,
   },
   {
@@ -30,7 +39,7 @@ const FIELDS: readonly FieldSpec[] = [
     sport: 'run',
     label: 'Ritmo umbral carrera (min/km)',
     placeholder: '4:30',
-    hint: 'El ritmo de un 10K a tope, aprox. Formato mm:ss.',
+    hint: 'El ritmo de un 10K a tope, aprox. Formato mm:ss. En tu reloj (Garmin o COROS): ritmo umbral.',
     numeric: false,
   },
   {
@@ -54,30 +63,38 @@ const FIELDS: readonly FieldSpec[] = [
     sport: null,
     label: 'FC umbral (ppm)',
     placeholder: '172',
-    hint: 'Media de los últimos 20 min de un test de 30 min a tope.',
+    hint: "Media de los últimos 20' de un test de 30' a tope. En tu reloj (Garmin o COROS): FC de umbral de lactato.",
+    numeric: true,
+  },
+  {
+    key: 'restingHr',
+    sport: null,
+    label: 'FC en reposo (ppm)',
+    placeholder: '48',
+    hint: 'Al despertar, antes de levantarte. Tu reloj (Garmin o COROS) la mide cada noche.',
     numeric: true,
   },
 ];
+
+const INTRO =
+  'Con estos datos, cada sesión te dice a qué pulsaciones, ritmo o vatios ir. ¿No los sabes? Déjalos vacíos y te guiamos por sensaciones (RPE); si tu reloj ya los calcula, cópialos aquí.';
 
 export interface ThresholdsEditorProps {
   value: ThresholdInputs;
   onChange: (next: ThresholdInputs) => void;
 }
 
-/** Optional thresholds (shared by onboarding step 4 and settings/profile). */
+/** Optional thresholds (settings › Perfil) with a live "Tus zonas" preview. */
 export function ThresholdsEditor({ value, onChange }: ThresholdsEditorProps) {
-  const { errors } = useMemo(() => parseThresholdInputs(value), [value]);
+  const { errors, thresholds } = useMemo(() => parseThresholdInputs(value), [value]);
   return (
     <View style={styles.wrap}>
       <Text variant="callout" color="textMuted">
-        ¿No los sabes? Déjalos vacíos: el coach usará la percepción de esfuerzo (RPE) y los irá afinando con tus
-        datos de Garmin.
+        {INTRO}
       </Text>
       {FIELDS.map((field) => (
         <View key={field.key} style={styles.row}>
-          <View style={styles.badge}>
-            {field.sport ? <SportBadge sport={field.sport} size={32} /> : <HeartBadge />}
-          </View>
+          <View style={styles.badge}>{field.sport ? <SportBadge sport={field.sport} size={32} /> : <HeartBadge />}</View>
           <View style={styles.field}>
             <TextField
               label={field.label}
@@ -93,6 +110,48 @@ export function ThresholdsEditor({ value, onChange }: ThresholdsEditorProps) {
           </View>
         </View>
       ))}
+      <Text variant="caption" color="textMuted">
+        Pon los mismos valores en tu reloj para que sus zonas y las de tus sesiones coincidan.
+      </Text>
+      <ZonesPreview thresholds={thresholds} />
+    </View>
+  );
+}
+
+/** Z1–Z5 per sport with the numbers the sessions will use, updated as the athlete types. */
+function ZonesPreview({ thresholds }: { thresholds: Thresholds }) {
+  const [sport, setSport] = useState<ZonePreviewSport>('run');
+  const rows = useMemo(() => zonePreviewRows(thresholds, sport), [thresholds, sport]);
+  const note = useMemo(() => zonePreviewNote(thresholds, sport), [thresholds, sport]);
+  return (
+    <View style={styles.zones}>
+      <Text variant="heading" accessibilityRole="header">
+        Tus zonas
+      </Text>
+      <Segmented options={[...ZONE_PREVIEW_SPORTS]} value={sport} onChange={setSport} accessibilityLabel="Deporte de las zonas" />
+      <Card padding="md" style={styles.zoneList}>
+        {rows.map((row, index) => (
+          <View key={row.zone} style={styles.zoneList}>
+            {index > 0 ? <Divider /> : null}
+            <View style={styles.zoneRow} accessible accessibilityLabel={`${row.zone}, ${row.name}: ${row.values}`}>
+              <ZoneTag intensity={row.intensity} zone={row.zone} />
+              <View style={styles.field}>
+                <Text variant="caption" color="textMuted">
+                  {row.name}
+                </Text>
+                <Text variant="callout" style={styles.tabular}>
+                  {row.values}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ))}
+      </Card>
+      {note ? (
+        <Text variant="caption" color="textMuted">
+          {note}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -111,5 +170,9 @@ const styles = StyleSheet.create({
   wrap: { gap: space.lg },
   row: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
   badge: { paddingTop: 22 },
-  field: { flex: 1 },
+  field: { flex: 1, gap: 2 },
+  zones: { gap: space.md },
+  zoneList: { gap: space.sm },
+  zoneRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  tabular: { fontVariant: ['tabular-nums'] },
 });

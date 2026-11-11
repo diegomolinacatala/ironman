@@ -1,7 +1,9 @@
 /**
  * Background part of the coach: context → Claude (structured output) →
- * validated changes → plan_proposals (source 'ai_coach') → memory lines in
- * coach_notes + logged imprevisto + suggested quedada → coach_jobs done (with `extras`).
+ * validated changes (with each session's steps and prescription) →
+ * plan_proposals (source 'ai_coach') → memory lines in coach_notes + logged
+ * imprevisto + suggested quedada + suggested general plan (week plans) →
+ * coach_jobs done (with `extras`).
  * Any failure (including the overall deadline) ends the job with status
  * 'error' and a Spanish message, so the app can fall back to the rules engine.
  */
@@ -12,12 +14,13 @@ import { checkChanges, PLAN_WINDOW_DAYS, withSource } from '../planning/changes.
 import { buildPlanningContext, NotFoundError } from '../planning/context.ts';
 import type { PlanningContext } from '../planning/context.ts';
 import type { PlanningReader } from '../planning/store.ts';
-import type { CoachRequest, PlanChange, ProposalKind, UUID } from '../types.ts';
+import type { CoachJobExtras, CoachRequest, PlanChange, ProposalKind, UUID } from '../types.ts';
 import { COACH_DEADLINE_MS, startDeadline, timeoutError, withDeadline } from './deadline.ts';
 import { applyCoachExtras } from './extras.ts';
 import { buildCoachMessages } from './messages.ts';
 import type { FriendWeek } from './messages.ts';
 import { COACH_OUTPUT_JSON_SCHEMA, parseCoachOutput, toPlanChanges } from './output.ts';
+import type { CoachOutput } from './output.ts';
 import { CoachAiError } from './ports.ts';
 import type { ClaudePort, ClaudeResponse, CoachStore } from './ports.ts';
 import { COACH_SYSTEM_PROMPT } from './prompt.ts';
@@ -135,6 +138,35 @@ async function generate(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal):
   return { context, response };
 }
 
+/** The validated changes as an ai_coach proposal (none without changes). */
+async function storeProposal(
+  deps: CoachJobDeps,
+  job: CoachJob,
+  context: PlanningContext,
+  output: CoachOutput,
+  changes: PlanChange[],
+  model: string,
+): Promise<UUID | null> {
+  if (changes.length === 0) return null;
+  return deps.store.insertProposal(job.userId, {
+    kind: KIND[job.request.mode],
+    source: 'ai_coach',
+    weekStart: context.weekStart,
+    summary: (output.summary || output.reply).slice(0, 1000),
+    changes,
+    model,
+  });
+}
+
+function extrasFields(extras: CoachJobExtras): Record<string, unknown> {
+  return {
+    memory: extras.memory.length,
+    lifeEvent: extras.lifeEventId !== null,
+    quedada: extras.quedada !== null,
+    weekPlans: extras.weekPlans?.length ?? 0,
+  };
+}
+
 async function markFailed(deps: CoachJobDeps, job: CoachJob, log: Logger, error: unknown): Promise<void> {
   log.error('coach job failed', errorInfo(error));
   try {
@@ -162,17 +194,7 @@ export async function runCoachJob(deps: CoachJobDeps, job: CoachJob): Promise<vo
     const dropped = validated.dropped + output.malformedChanges;
     // Past the deadline the app has already fallen back: do not add a competing proposal.
     if (deadline.signal.aborted) throw timeoutError();
-    const proposalId =
-      changes.length > 0
-        ? await deps.store.insertProposal(job.userId, {
-            kind: KIND[job.request.mode],
-            source: 'ai_coach',
-            weekStart: context.weekStart,
-            summary: (output.summary || output.reply).slice(0, 1000),
-            changes,
-            model: response.model,
-          })
-        : null;
+    const proposalId = await storeProposal(deps, job, context, output, changes, response.model);
     const extras = await withDeadline(applyCoachExtras(deps, job.userId, job.request, output, context, log), deadline.signal);
     const finished = await deps.store.finishJob(job.userId, job.jobId, {
       reply: finalReply(output.reply, dropped, proposalId !== null),
@@ -180,7 +202,7 @@ export async function runCoachJob(deps: CoachJobDeps, job: CoachJob): Promise<vo
       extras,
     });
     if (!finished) log.warn('coach job was no longer running when it finished', { proposalId });
-    log.info('coach job done', { ms: Date.now() - started, changes: changes.length, dropped, memory: extras.memory.length, lifeEvent: extras.lifeEventId !== null, quedada: extras.quedada !== null });
+    log.info('coach job done', { ms: Date.now() - started, changes: changes.length, dropped, ...extrasFields(extras) });
   } catch (error) {
     await markFailed(deps, job, log, error);
   } finally {

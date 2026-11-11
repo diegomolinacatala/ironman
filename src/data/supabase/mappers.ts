@@ -6,6 +6,7 @@
  * `xToRow` / `draftToInsert` / `patchToUpdate` produce the column objects
  * sent to PostgREST.
  */
+import { normalizeCoaching } from '@/domain/changes';
 import {
   INTENSITIES,
   LIFE_EVENT_KINDS,
@@ -15,6 +16,7 @@ import {
   RACE_DISTANCES,
   SPORTS,
   TRAINABLE_SPORTS,
+  WATCH_BRANDS,
   WORKOUT_SOURCES,
   type AppNotification,
   type BusyBlock,
@@ -38,12 +40,21 @@ import {
   type Severity,
   type TrainableSport,
   type Workout,
+  type WorkoutCoaching,
   type WorkoutDraft,
   type WorkoutPatch,
 } from '@/domain/types';
 
 import { asNumber, asString, compact, isRecord, oneOf, oneOfOr, timeFromDb } from './narrow';
-import { parseAvailability, parseCompleted, parseNotificationPrefs, parsePlanChanges, parseSteps, parseThresholds } from './parsers';
+import {
+  parseAvailability,
+  parseCoaching,
+  parseCompleted,
+  parseNotificationPrefs,
+  parsePlanChanges,
+  parseSteps,
+  parseThresholds,
+} from './parsers';
 import type {
   BusyBlockRow,
   CheckinRow,
@@ -62,7 +73,7 @@ const VISIBILITIES = ['full', 'summary', 'busy'] as const;
 const WORKOUT_STATUSES = ['planned', 'completed', 'skipped'] as const;
 const PRIORITIES = ['A', 'B', 'C'] as const;
 const BUSY_SOURCES = ['device_calendar', 'manual'] as const;
-const METRICS_SOURCES = ['healthkit', 'garmin', 'manual'] as const;
+const METRICS_SOURCES = ['healthkit', 'garmin', 'coros', 'manual'] as const;
 const PROPOSAL_KINDS = ['generate_week', 'replan', 'chat'] as const;
 const PROPOSAL_SOURCES = ['rules', 'ai_coach', 'claude'] as const;
 const PROPOSAL_STATUSES = ['pending', 'applied', 'partially_applied', 'discarded'] as const;
@@ -92,7 +103,10 @@ function recordOrEmpty(value: unknown): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 export function rowToProfile(row: ProfileRow): Profile {
+  // Not chosen yet (null) or a server without the v4 column: the key stays absent (treated as Garmin).
+  const watchBrand = oneOf(row.watch_brand, WATCH_BRANDS);
   return {
+    ...(watchBrand ? { watchBrand } : {}),
     id: row.id,
     username: row.username,
     displayName: row.display_name,
@@ -127,6 +141,7 @@ export function profileToRow(profile: Profile): ProfileRow {
     coach_notes: profile.coachNotes,
     onboarded_at: profile.onboardedAt,
     ai_consent_at: profile.aiConsentAt,
+    watch_brand: profile.watchBrand ?? null,
     created_at: profile.createdAt,
   };
 }
@@ -147,6 +162,7 @@ export function profilePatchToRow(patch: ProfilePatch): Row {
     coach_notes: patch.coachNotes,
     onboarded_at: patch.onboardedAt,
     ai_consent_at: patch.aiConsentAt,
+    watch_brand: patch.watchBrand,
   });
 }
 
@@ -170,8 +186,16 @@ export function rowToPublicProfile(row: {
 // Workouts
 // ---------------------------------------------------------------------------
 
+/** `workouts.coaching` as the RPCs store it (trimmed texts, keys [], plan B null); null clears it. */
+function coachingColumn(coaching: WorkoutCoaching | null): WorkoutCoaching | null {
+  return coaching ? normalizeCoaching(coaching) : null;
+}
+
 export function rowToWorkout(row: WorkoutRow): Workout {
+  // Omitted when null so workouts without coaching keep their pre-v4 shape.
+  const coaching = parseCoaching(row.coaching);
   return {
+    ...(coaching ? { coaching } : {}),
     id: row.id,
     userId: row.user_id,
     date: row.date,
@@ -215,6 +239,7 @@ export function workoutToRow(w: Workout): WorkoutRow {
     is_key: w.isKey,
     joint_session_id: w.jointSessionId,
     external_id: w.externalId,
+    coaching: w.coaching ?? null,
     created_at: w.createdAt,
     updated_at: w.updatedAt,
   };
@@ -237,6 +262,8 @@ export function workoutDraftToInsert(draft: WorkoutDraft, userId: string): Row {
     is_key: draft.isKey ?? false,
     source: draft.source ?? 'manual',
     external_id: draft.externalId ?? null,
+    // Only when there is one (null = the column default), so manual workouts still save on a server without the v4 column.
+    ...(draft.coaching ? { coaching: normalizeCoaching(draft.coaching) } : {}),
   };
 }
 
@@ -256,6 +283,7 @@ export function workoutPatchToUpdate(patch: WorkoutPatch): Row {
     source: patch.source,
     status: patch.status,
     completed: patch.completed,
+    coaching: patch.coaching === undefined ? undefined : coachingColumn(patch.coaching),
   });
 }
 

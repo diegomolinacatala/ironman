@@ -58,6 +58,7 @@ export const VOICE_CONTEXTUAL_STRINGS: readonly string[] = [
   'variabilidad',
   'pulsaciones',
   'Garmin',
+  'COROS',
   'Strava',
   'brick',
   'transición',

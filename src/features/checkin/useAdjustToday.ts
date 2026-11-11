@@ -8,7 +8,11 @@ import type { ISODate } from '@/domain/types';
 import { useBusyBlocks, useCreateProposal, useJointSessions, useLifeEvents, useProfile, useRaces, useWorkouts } from '@/data/queries';
 import { errorMessage, logger } from '@/lib/logger';
 
-/** "Ajustar hoy": re-plans the current week for a low readiness and opens the proposal. */
+/**
+ * "Ajustar hoy" on an amber or red check-in: re-plans today's sessions within the current week
+ * (red: move or ≤ 45' in Z1; amber: move or cut quality, shorten long ones) and opens the
+ * proposal to review. Nothing changes until it is applied there.
+ */
 export function useAdjustToday(date: ISODate): {
   run: (readiness: Readiness) => Promise<void>;
   busy: boolean;

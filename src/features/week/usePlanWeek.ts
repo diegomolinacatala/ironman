@@ -47,6 +47,8 @@ export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => P
         // Current week: never add sessions to days that already passed.
         ...(weekStart <= data.today ? { today: data.today, nowMinutes: minutesNow() } : {}),
         history: data.history,
+        // Plan → General: carga / más volumen / descarga / semana libre and its hours.
+        weekPlan: data.weekPlan,
       });
       if (result.changes.length === 0) {
         notify('Tu semana ya está completa', result.summary || 'No hay huecos libres que rellenar con tu disponibilidad actual.');

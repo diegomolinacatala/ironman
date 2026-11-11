@@ -7,6 +7,7 @@ import type { ISODate, IntegrationStatus, PersonalToken, Race } from '@/domain/t
 import { alarmLabel } from '../onboarding/calendarModel';
 import { latestUsedClaudeToken } from '../onboarding/connectModel';
 import { nextRace } from '../onboarding/goalModel';
+import { corosStatusView, type CorosHealthLike } from '../settings/corosModel';
 import { daysUntil, formatRelativeTime } from '../settings/format';
 import { garminStatusView, type StatusTone } from '../settings/garminModel';
 
@@ -38,6 +39,23 @@ export function garminConnectionView(status: IntegrationStatus | undefined, toda
       return { tone: 'danger', status: 'Con errores', detail: status.lastError ?? 'Garmin rechazó la última sincronización.', action: OPEN('Arreglar') };
     default:
       return { tone: 'muted', status: 'Sin conectar', detail: 'Tu sueño, tu VFC y tus entrenos, solos.', action: OPEN('Conectar') };
+  }
+}
+
+/** COROS through Apple Salud on this iPhone: off → connect, waiting for its first data or connected → sync. */
+export function corosConnectionView(health: CorosHealthLike, now: Date = new Date()): ConnectionView {
+  const view = corosStatusView(health, now);
+  switch (view.state) {
+    case 'unavailable':
+      return { tone: 'muted', status: view.label, detail: 'Tus entrenos y tu sueño de COROS, por Apple Salud.', action: null };
+    case 'checking':
+      return { tone: 'muted', status: view.label, detail: null, action: null };
+    case 'off':
+      return { tone: 'muted', status: view.label, detail: view.detail, action: OPEN('Conectar') };
+    case 'waiting':
+      return { tone: 'warning', status: view.label, detail: view.detail, action: { kind: 'sync', label: 'Comprobar' } };
+    default:
+      return { tone: 'success', status: view.label, detail: syncedLine(health.lastSync, now), action: { kind: 'sync', label: 'Sincronizar' } };
   }
 }
 

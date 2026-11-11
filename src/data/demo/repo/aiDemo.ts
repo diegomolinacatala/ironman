@@ -12,6 +12,7 @@ import { nextRace } from '@/domain/periodization';
 import type { Briefing, ISODate, MealAnalysis, MealAnalysisInput, MealSlot, UUID } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../../repository';
+import { briefingAthleteFields } from '../../supabase/briefingApi';
 import { cleanMealInput } from '../../supabase/mealApi';
 import type { DemoBriefing, DemoDb } from '../db';
 import { listJointFor } from '../jointOps';
@@ -41,17 +42,20 @@ function syncIfStale(db: DemoDb, me: UUID, now: string, today: string): DemoDb {
 function briefingFrom(db: DemoDb, me: UUID, date: ISODate, now: Date): Briefing {
   const tomorrow = addDays(date, 1);
   const mine = db.workouts.filter((w) => w.userId === me);
+  const profile = db.profiles.find((p) => p.id === me) ?? null;
+  const race = nextRace(
+    db.races.filter((r) => r.userId === me),
+    date,
+  );
   return composeBriefing({
     date,
-    name: db.profiles.find((p) => p.id === me)?.displayName ?? '',
+    name: profile?.displayName ?? '',
     metrics: db.metrics.filter((m) => m.userId === me && m.date >= addDays(date, -7) && m.date <= date),
     todayWorkouts: mine.filter((w) => w.date === date),
     tomorrowWorkouts: mine.filter((w) => w.date === tomorrow),
-    race: nextRace(
-      db.races.filter((r) => r.userId === me),
-      date,
-    ),
+    race,
     now,
+    ...briefingAthleteFields(profile, race),
     social: { me, jointSessions: listJointFor(db, me, { from: date, to: addDays(date, INVITE_HORIZON_DAYS - 1) }) },
   });
 }

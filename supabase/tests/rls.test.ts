@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
-import { createTestDb, isoDay, pgError } from './harness.ts';
+import { createTestDb, isoDay, isoMonday, pgError } from './harness.ts';
 import type { TestDb } from './harness.ts';
 
 /** Own-rows tables: insert statement (as the owner, user_id omitted → default auth.uid()) + an updatable column. */
@@ -62,6 +62,12 @@ const OWN_TABLES: readonly OwnTable[] = [
     insert: `insert into public.plan_proposals (kind, source, week_start) values ('generate_week', 'rules', '${day}') returning id::text as key`,
     update: `summary = 'Cambiada'`,
     key: 'id',
+  },
+  {
+    table: 'week_plans',
+    insert: `insert into public.week_plans (week_start, kind) values ('${isoMonday(1)}', 'recovery') returning week_start::text as key`,
+    update: `note = 'Cambiada'`,
+    key: 'week_start',
   },
 ];
 

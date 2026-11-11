@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 
-import type { Workout } from '@/domain/types';
+import type { Thresholds, Workout } from '@/domain/types';
 
 import {
   eventDetails,
@@ -11,6 +11,7 @@ import {
   trainingCalendarWindow,
   workoutIdFromUrl,
   type CalendarSyncInput,
+  type EventOptions,
   type ExistingEvent,
 } from '../calendar/trainingEvents';
 import { isValidTimeZone, zonedDateTime } from '../time';
@@ -18,7 +19,23 @@ import { workout } from './fixtures';
 
 const TODAY = '2026-10-27';
 const LINK = 'roadtoironman://';
-const OPTS = { linkBase: LINK, alarmMinutes: 30, timeZone: 'Europe/Madrid' };
+const OPTS: EventOptions = { linkBase: LINK, alarmMinutes: 30, timeZone: 'Europe/Madrid' };
+const THRESHOLDS: Thresholds = { lthr: 170, maxHr: 190, ftpW: 250, runThresholdPaceSecPerKm: 270, swimCssSecPer100m: 100 };
+
+const SERIES = workout({
+  id: 'w1',
+  date: TODAY,
+  title: 'Series',
+  intensity: 'threshold',
+  durationMin: 60,
+  distanceM: 10_000,
+  description: 'Ritmo controlado',
+  steps: [
+    { kind: 'warmup', durationMin: 15 },
+    { kind: 'work', durationMin: 4, repeat: 6, intensity: 'threshold', note: 'cadencia alta' },
+    { kind: 'cooldown', durationMin: 10 },
+  ],
+});
 
 function input(overrides: Partial<CalendarSyncInput>): CalendarSyncInput {
   return { workouts: [], today: TODAY, existing: [], mapping: {}, ...OPTS, ...overrides };
@@ -28,7 +45,7 @@ function existing(id: string, workoutId: string, date: string): ExistingEvent {
   return { id, url: `${LINK}workout/${workoutId}`, startDate: new Date(`${date}T10:00:00`) };
 }
 
-function signatureOf(w: Workout, opts = OPTS): string {
+function signatureOf(w: Workout, opts: EventOptions = OPTS): string {
   return eventSignature(eventDetails(w, opts));
 }
 
@@ -58,34 +75,64 @@ describe('training event details', () => {
     expect(eventTitle(workout({ id: 'f', date: TODAY, sport: 'bike', title: 'Rodillo' }))).toMatch(/^🚴 /);
   });
 
-  test('notes: intensity, structure and the deep link', () => {
-    const w = workout({
-      id: 'w1',
-      date: TODAY,
-      title: 'Series',
-      intensity: 'threshold',
-      durationMin: 60,
-      distanceM: 10_000,
-      description: 'Ritmo controlado',
-      steps: [
-        { kind: 'warmup', durationMin: 15 },
-        { kind: 'work', durationMin: 4, repeat: 6, intensity: 'threshold', note: 'cadencia alta' },
-        { kind: 'cooldown', durationMin: 10 },
-      ],
-    });
-    const notes = eventNotes(w, `${LINK}workout/w1`);
+  test('notes: facts, description, structure with zones and sensations, and the deep link', () => {
+    const notes = eventNotes(SERIES, `${LINK}workout/w1`);
     expect(notes.split('\n')).toEqual([
-      "Carrera · Umbral Z4 · 1h · 10 km",
+      'Carrera · Umbral Z4 · 1h · 10 km',
       '',
       'Ritmo controlado',
       '',
       'Estructura:',
-      "• 15' · Calentamiento",
-      "• 6× 4' · Trabajo (Umbral Z4) — cadencia alta",
-      "• 10' · Vuelta a la calma",
+      "• 15' · calentamiento · Z1 · RPE 1–2",
+      "• 6×4' · series · Z4 · RPE 7–8. Duro y sostenido: solo palabras sueltas. Acabas cada serie pudiendo aguantar un poco más. cadencia alta",
+      "• 10' · vuelta a la calma · Z1 · RPE 1–2",
       '',
       'Abrir en la app: roadtoironman://workout/w1',
     ]);
+  });
+
+  test("notes: the coach's prescription with the athlete's targets (objective, keys, success, plan B)", () => {
+    const w = {
+      ...SERIES,
+      coaching: {
+        objective: 'Subir tu umbral sin pasarte.',
+        keys: ['Mismo ritmo en todas las series.'],
+        success: 'Las seis series dentro de 162–168 ppm.',
+        planB: "40' suaves en Z2.",
+      },
+    };
+    const notes = eventNotes(w, `${LINK}workout/w1`, { thresholds: THRESHOLDS, raceDistance: 'half' });
+    expect(notes).toContain('Objetivo: Subir tu umbral sin pasarte.');
+    expect(notes).toContain("• 15' · calentamiento · Z1 · 128–143 ppm · 5:48–6:32 /km · RPE 1–2");
+    expect(notes).toContain("• 6×4' · series · Z4 · 162–168 ppm · 4:27–4:44 /km · RPE 7–8.");
+    expect(notes).toContain('Claves:\n• Mismo ritmo en todas las series.');
+    expect(notes).toContain('Lo has hecho bien si: Las seis series dentro de 162–168 ppm.');
+    expect(notes).toContain("Si no es tu día: 40' suaves en Z2.");
+    expect(notes.endsWith('Abrir en la app: roadtoironman://workout/w1')).toBe(true);
+  });
+
+  test('notes: a session without steps gets its intensity line; rest days no prescription', () => {
+    const easy = workout({ id: 'e', date: TODAY, intensity: 'endurance' });
+    expect(eventNotes(easy, 'roadtoironman://workout/e', { thresholds: THRESHOLDS })).toContain(
+      'Intensidad: Z2 · 145–151 ppm · 5:08–5:48 /km · RPE 3–4. Cómodo',
+    );
+    const rest = workout({ id: 'r', date: TODAY, sport: 'rest', title: 'Descanso' });
+    expect(eventNotes(rest, 'roadtoironman://workout/r')).not.toContain('Intensidad');
+  });
+
+  test('notes are capped at 4000 characters and keep the link', () => {
+    const long = workout({ id: 'l', date: TODAY, description: 'x'.repeat(5000) });
+    const notes = eventNotes(long, 'roadtoironman://workout/l');
+    expect(notes.length).toBeLessThanOrEqual(4000);
+    expect(notes.endsWith('…\nroadtoironman://workout/l')).toBe(true);
+  });
+
+  test('targets are part of the signature: a threshold change rewrites the event once', () => {
+    const w = workout({ id: 'w1', date: TODAY, startTime: '07:00' });
+    const withTargets = { ...OPTS, thresholds: THRESHOLDS };
+    expect(signatureOf(w, withTargets)).toBe(signatureOf(w, withTargets));
+    expect(signatureOf(w, withTargets)).not.toBe(signatureOf(w));
+    expect(signatureOf(w, withTargets)).not.toBe(signatureOf(w, { ...withTargets, thresholds: { ...THRESHOLDS, lthr: 175 } }));
   });
 
   test('timed workouts: start in the profile zone, end after the duration, alarm before', () => {

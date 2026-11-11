@@ -2,13 +2,17 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 import CheckinScreen from '@/app/checkin';
-import type { CheckinDraft, DailyCheckin, DailyMetrics } from '@/domain/types';
+import type { Readiness } from '@/domain/readiness';
+import type { CheckinDraft, DailyCheckin, DailyMetrics, Workout } from '@/domain/types';
+import { makeWorkout } from '@/features/coach/__tests__/fixtures';
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockUpsert = jest.fn(async (draft: CheckinDraft): Promise<DailyCheckin> => ({ ...draft, userId: 'me' }));
-const mockAdjust = jest.fn(async () => undefined);
+const mockAdjust = jest.fn(async (_readiness: Readiness) => undefined);
+const SERIES: Workout = makeWorkout({ id: 'series', date: '2026-10-25', title: "Series 3×8'", intensity: 'threshold', durationMin: 55 });
 let mockMetrics: DailyMetrics[] = [];
 let mockMetricsLoading = false;
+let mockWorkouts: Workout[] = [SERIES];
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -25,6 +29,9 @@ jest.mock('@/data/queries', () => ({
   useCheckins: () => ({ data: [], isLoading: false, error: null, refetch: jest.fn() }),
   useMetrics: () => ({ data: mockMetricsLoading ? undefined : mockMetrics, isLoading: mockMetricsLoading, error: null }),
   useUpsertCheckin: () => ({ mutateAsync: mockUpsert, isPending: false }),
+  useWorkouts: () => ({ data: mockWorkouts, isLoading: false }),
+  useProfile: () => ({ data: { thresholds: { lthr: 170 } } }),
+  useRaces: () => ({ data: [] }),
 }));
 jest.mock('../useAdjustToday', () => ({ useAdjustToday: () => ({ run: mockAdjust, busy: false, message: null }) }));
 
@@ -34,7 +41,27 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockMetrics = [];
   mockMetricsLoading = false;
+  mockWorkouts = [SERIES];
 });
+
+function metricsToday(overrides: Partial<DailyMetrics>): DailyMetrics {
+  return {
+    userId: 'me',
+    date: '2026-10-25',
+    source: 'garmin',
+    hrvMs: null,
+    restingHr: null,
+    sleepHours: null,
+    sleepScore: null,
+    bodyBattery: null,
+    trainingReadiness: null,
+    vo2max: null,
+    steps: null,
+    stressAvg: null,
+    trainingStatus: null,
+    ...overrides,
+  };
+}
 
 async function answerAll(values: { sleep: number; fatigue: number; soreness: number; stress: number; motivation: number }) {
   await fireEvent.press(screen.getByLabelText(`Calidad del sueño: ${values.sleep} de 5`));
@@ -99,5 +126,49 @@ describe('check-in', () => {
     await render(<CheckinScreen />);
     expect(screen.getByText('Datos de hoy · Garmin')).toBeTruthy();
     expect(screen.getByLabelText('VFC: 62 ms')).toBeTruthy();
+  });
+});
+
+describe('check-in result: today', () => {
+  test("a red day names today's session, its easier version and offers \"Ajustar hoy\"", async () => {
+    await render(<CheckinScreen />);
+    await answerAll({ sleep: 1, fatigue: 5, soreness: 5, stress: 5, motivation: 1 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(await screen.findByLabelText("Tu sesión de hoy: Series 3×8'. Carrera · 55' · Z4 · 162–168 ppm")).toBeTruthy();
+    expect(screen.getByText('Hoy no toca hacerla así: tu cuerpo pide recuperar.')).toBeTruthy();
+    expect(screen.getByText("Como mucho: 45' muy suaves en Z1 · 128–143 ppm, o descansa.")).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ajustar hoy' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Seguir con el plan' })).toBeTruthy();
+  });
+
+  test('an amber day also offers "Ajustar hoy" with the easier version', async () => {
+    mockMetrics = [metricsToday({ sleepHours: 5.5 })];
+    await render(<CheckinScreen />);
+    await answerAll({ sleep: 3, fatigue: 4, soreness: 2, stress: 2, motivation: 3 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(await screen.findByText('Con precaución')).toBeTruthy();
+    expect(screen.getByText("Versión suave: 40' en Z2 · 145–151 ppm.")).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ajustar hoy' }));
+    expect(mockAdjust).toHaveBeenCalledWith(expect.objectContaining({ level: 'amber' }));
+  });
+
+  test('a green day says go ahead and closes with "Listo"', async () => {
+    await render(<CheckinScreen />);
+    await answerAll({ sleep: 4, fatigue: 2, soreness: 2, stress: 2, motivation: 4 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(await screen.findByText('Adelante: hazla tal como está planteada.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ajustar hoy' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Listo' }));
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  test('with nothing left today a red day has nothing to adjust', async () => {
+    mockWorkouts = [{ ...SERIES, status: 'completed' }];
+    await render(<CheckinScreen />);
+    await answerAll({ sleep: 1, fatigue: 5, soreness: 5, stress: 5, motivation: 1 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(await screen.findByText('Hoy no tienes ningún entreno pendiente: aprovecha para recuperar.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ajustar hoy' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Listo' })).toBeTruthy();
   });
 });

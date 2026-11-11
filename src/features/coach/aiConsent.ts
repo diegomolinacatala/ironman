@@ -37,7 +37,7 @@ export const AI_SHARED_DATA: readonly SharedDataItem[] = [
   { icon: 'progress', label: 'Tu carga de entrenamiento' },
   { icon: 'bolt', label: 'Tus imprevistos, también molestias y lesiones' },
   { icon: 'moon', label: 'Tus check-ins diarios' },
-  { icon: 'health', label: 'Métricas de Apple Salud y Garmin: sueño, pulso, VFC…' },
+  { icon: 'health', label: 'Métricas de Apple Salud, Garmin y COROS: sueño, pulso, VFC…' },
   { icon: 'calendarBadge', label: 'Las horas ocupadas de tu calendario, SIN títulos' },
   { icon: 'food', label: 'Tu registro de nutrición' },
   { icon: 'edit', label: 'Tus notas para el coach y lo que le digas o escribas' },

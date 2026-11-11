@@ -4,22 +4,25 @@ import { useState } from 'react';
 import { todayISO } from '@/domain/dates';
 import { sportLabel } from '@/domain/labels';
 import { complianceOf } from '@/domain/load';
-import type { Workout } from '@/domain/types';
+import type { ISODate, Workout } from '@/domain/types';
 import { useAuth } from '@/data/context';
 import { useJointSession, useWorkout } from '@/data/queries';
+import { easierPatch, workoutVerdict } from '@/features/workouts/coachAdapters';
 import { CompleteSheet } from '@/features/workouts/CompleteSheet';
+import { CoachVerdict } from '@/features/workouts/detail/CoachVerdict';
 import { CompletedPanel } from '@/features/workouts/detail/CompletedPanel';
 import { DetailActions } from '@/features/workouts/detail/DetailActions';
 import { JointInfo } from '@/features/workouts/detail/JointInfo';
-import { WorkoutHeader, WorkoutMetrics } from '@/features/workouts/detail/WorkoutSummary';
+import { PlanSections } from '@/features/workouts/detail/PlanSections';
+import { WorkoutHeader } from '@/features/workouts/detail/WorkoutSummary';
 import { partnerNames } from '@/features/workouts/draft';
 import { FuelingHint } from '@/features/workouts/FuelingHint';
 import { leaveTo } from '@/features/workouts/ModalClose';
 import { MoveSheet } from '@/features/workouts/MoveSheet';
-import { StepsBar } from '@/features/workouts/StepsBar';
-import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
+import { useAthleteTargets } from '@/features/workouts/useAthleteTargets';
+import { useWorkoutActions, type WorkoutActions } from '@/features/workouts/useWorkoutActions';
 import { errorMessage } from '@/lib/logger';
-import { Button, EmptyState, ErrorNotice, Loading, Screen, SectionHeader, Stack as UIStack, Text } from '@/ui';
+import { Button, EmptyState, ErrorNotice, Loading, Screen } from '@/ui';
 
 export default function WorkoutDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -66,41 +69,62 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
   const myId = session?.userId;
   const joint = useJointSession(workout.jointSessionId ?? undefined);
   const actions = useWorkoutActions();
+  const athlete = useAthleteTargets();
   const [completing, setCompleting] = useState(false);
   const [moving, setMoving] = useState(false);
   const names = partnerNames(joint.data ?? undefined, myId);
   const partnerName = names.length > 0 ? names.join(' y ') : null;
   const compliance = complianceOf(workout, today);
+  // Plan B is for a session still ahead (today or later), never for one already missed.
+  const upcoming = workout.status === 'planned' && workout.date >= today;
+  const easier = upcoming ? easierPatch(workout, athlete.thresholds) : null;
 
   return (
     <Screen inSheet onRefresh={onRefresh} refreshing={refreshing}>
       <Stack.Screen options={{ title: sportLabel(workout.sport) }} />
       <WorkoutHeader workout={workout} partnerName={partnerName} />
-      <CompletedPanel workout={workout} compliance={compliance} />
-      <WorkoutMetrics workout={workout} />
-      {workout.description ? <Text variant="body">{workout.description}</Text> : null}
-      {workout.steps.length > 0 ? (
-        <UIStack gap="sm">
-          <SectionHeader title="Estructura" />
-          <StepsBar steps={workout.steps} intensity={workout.intensity} sport={workout.sport} />
-        </UIStack>
-      ) : null}
+      <CompletedPanel workout={workout} compliance={compliance} thresholds={athlete.thresholds} raceDistance={athlete.raceDistance} />
+      <CoachVerdict verdict={workoutVerdict(workout, athlete.thresholds, athlete.raceDistance)} />
+      <PlanSections
+        workout={workout}
+        athlete={athlete}
+        upcoming={upcoming}
+        onEase={easier ? () => void actions.easier(workout, easier) : null}
+        busy={actions.busy}
+      />
       {workout.jointSessionId ? <JointInfo sessionId={workout.jointSessionId} myId={myId} /> : null}
       {workout.sport !== 'rest' && workout.durationMin >= 45 ? <FuelingHint workout={workout} /> : null}
       <DetailActions workout={workout} actions={actions} onComplete={() => setCompleting(true)} onMove={() => setMoving(true)} />
-      {completing ? <CompleteSheet key={workout.id} workout={workout} visible onClose={() => setCompleting(false)} /> : null}
-      <MoveSheet
-        visible={moving}
-        onClose={() => setMoving(false)}
-        fromDate={workout.date}
-        today={today}
-        busy={actions.busy}
-        onSelect={(date) => {
-          void actions.moveTo(workout, date).then((ok) => {
-            if (ok) setMoving(false);
-          });
-        }}
-      />
+      {completing ? (
+        <CompleteSheet key={workout.id} workout={workout} raceDistance={athlete.raceDistance} visible onClose={() => setCompleting(false)} />
+      ) : null}
+      <DetailMoveSheet workout={workout} today={today} actions={actions} visible={moving} onClose={() => setMoving(false)} />
     </Screen>
+  );
+}
+
+interface DetailMoveSheetProps {
+  workout: Workout;
+  today: ISODate;
+  actions: WorkoutActions;
+  visible: boolean;
+  onClose: () => void;
+}
+
+/** "Mover": closes only once the move is saved. */
+function DetailMoveSheet({ workout, today, actions, visible, onClose }: DetailMoveSheetProps) {
+  return (
+    <MoveSheet
+      visible={visible}
+      onClose={onClose}
+      fromDate={workout.date}
+      today={today}
+      busy={actions.busy}
+      onSelect={(date) => {
+        void actions.moveTo(workout, date).then((ok) => {
+          if (ok) onClose();
+        });
+      }}
+    />
   );
 }

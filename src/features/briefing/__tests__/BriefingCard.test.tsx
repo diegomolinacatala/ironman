@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import type { Briefing, IntegrationStatus } from '@/domain/types';
 
@@ -41,6 +41,26 @@ const mockGenerate = {
 let mockBriefing: QueryState;
 let mockIntegrations: IntegrationsState;
 let mockSession: { userId: string } | null = { userId: 'user-me' };
+let mockWatchBrand: 'garmin' | 'coros' | null = null;
+/** Apple Salud on this device (how a COROS watch reaches us). */
+const mockHealth = {
+  available: true,
+  loaded: true,
+  enabled: false,
+  lastSync: null,
+  sources: [] as string[],
+  busy: false,
+  connect: jest.fn(async () => null),
+  syncNow: jest.fn(async (_opts?: { days?: number }) => ({
+    metricsDays: 2,
+    sleepNights: 1,
+    activitiesFound: 0,
+    workoutsCompleted: 0,
+    activitiesImported: 0,
+    sources: ['COROS'],
+  })),
+  disable: jest.fn(async () => undefined),
+};
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -48,11 +68,13 @@ jest.mock('expo-router', () => ({
   },
 }));
 jest.mock('@/integrations/speech/useSpeaker', () => ({ useSpeaker: () => mockSpeaker }));
+jest.mock('@/integrations/hooks', () => ({ useHealthIntegration: () => mockHealth }));
 jest.mock('@/data/context', () => ({ useAuth: () => ({ session: mockSession, isLoading: false }) }));
 jest.mock('@/data/queries', () => ({
   useBriefing: () => mockBriefing,
   useIntegrations: () => mockIntegrations,
   useGenerateBriefing: () => mockGenerate,
+  useProfile: () => ({ data: { watchBrand: mockWatchBrand }, isLoading: false }),
 }));
 
 const DATE = '2026-10-27';
@@ -70,6 +92,9 @@ beforeEach(() => {
   mockGenerate.isPending = false;
   mockGenerate.error = null;
   mockSession = { userId: 'user-me' };
+  mockWatchBrand = null;
+  mockHealth.available = true;
+  mockHealth.enabled = false;
   mockBriefing = { data: null, isLoading: false, isFetched: true, error: null, refetch: jest.fn(async () => undefined) };
   mockIntegrations = { data: connected, isLoading: false, isFetched: true, error: null, refetch: jest.fn(async () => undefined) };
 });
@@ -105,6 +130,53 @@ describe('BriefingCard', () => {
     mockIntegrations = { ...mockIntegrations, data: [{ ...connected[0]!, state: 'expired' }] };
     await render(<BriefingCard date={DATE} />);
     expect(screen.getByText('Renueva tu Garmin')).toBeTruthy();
+  });
+
+  test('COROS without Apple Salud asks to connect COROS (a Garmin key does not count)', async () => {
+    mockWatchBrand = 'coros';
+    await render(<BriefingCard date={DATE} />);
+    expect(screen.getByText('Conecta tu COROS')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Conectar COROS' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/integrations');
+    await fireEvent.press(screen.getByRole('button', { name: 'Prepararlo sin COROS' }));
+    expect(screen.getByText('Prepara tu informe')).toBeTruthy();
+  });
+
+  test('COROS on the web (no Apple Salud) never nags: it prepares the briefing straight away', async () => {
+    mockWatchBrand = 'coros';
+    mockHealth.available = false;
+    await render(<BriefingCard date={DATE} />);
+    expect(screen.queryByText('Conecta tu COROS')).toBeNull();
+    expect(screen.getByText('Prepara tu informe')).toBeTruthy();
+  });
+
+  test('COROS: reads the last 2 days of Apple Salud before writing the briefing', async () => {
+    mockWatchBrand = 'coros';
+    mockHealth.enabled = true;
+    await render(<BriefingCard date={DATE} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Preparar mi informe' }));
+    await waitFor(() => expect(mockGenerate.mutateAsync).toHaveBeenCalledWith({ date: DATE, refresh: false }));
+    expect(mockHealth.syncNow).toHaveBeenCalledWith({ days: 2 });
+    expect(mockHealth.syncNow.mock.invocationCallOrder[0]!).toBeLessThan(mockGenerate.mutateAsync.mock.invocationCallOrder[0]!);
+  });
+
+  test('COROS: a failed Apple Salud read does not block the briefing', async () => {
+    mockWatchBrand = 'coros';
+    mockHealth.enabled = true;
+    mockHealth.syncNow.mockRejectedValueOnce(new Error('No se pudo sincronizar con Apple Salud.'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await render(<BriefingCard date={DATE} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Preparar mi informe' }));
+    await waitFor(() => expect(mockGenerate.mutateAsync).toHaveBeenCalledTimes(1));
+    warn.mockRestore();
+  });
+
+  test('a Garmin athlete never triggers an Apple Salud read before the briefing', async () => {
+    mockHealth.enabled = true;
+    await render(<BriefingCard date={DATE} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Preparar mi informe' }));
+    expect(mockGenerate.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(mockHealth.syncNow).not.toHaveBeenCalled();
   });
 
   test('prepares the briefing on demand', async () => {

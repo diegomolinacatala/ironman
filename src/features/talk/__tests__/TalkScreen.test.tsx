@@ -3,19 +3,42 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import type { ReactNode } from 'react';
 
 import TalkScreen from '@/app/talk';
-import type { ApplyResult, CoachRequest, CoachResponse, Friend, PlanProposal, Profile, ProposalStatus } from '@/domain/types';
+import { addDays, startOfWeek, todayISO } from '@/domain/dates';
+import type {
+  ApplyResult,
+  CoachRequest,
+  CoachResponse,
+  Friend,
+  PlanProposal,
+  Profile,
+  ProposalStatus,
+  Thresholds,
+  WeekPlanDraft,
+} from '@/domain/types';
 import { makeCoachResponse, makeLifeEvent, makeProposal, makeWorkout } from '@/features/coach/__tests__/fixtures';
 import type { VoiceInput } from '@/integrations/speech/useVoiceInput';
 
-const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
-const mockState: { mode: 'demo' | 'supabase'; params: Record<string, string>; consentAt: string | null } = {
+const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn(), canGoBack: jest.fn(() => true) };
+const mockState: {
+  mode: 'demo' | 'supabase';
+  params: Record<string, string>;
+  consentAt: string | null;
+  thresholds: Thresholds | null;
+  saveError: Error | null;
+} = {
   mode: 'demo',
   params: {},
   consentAt: null,
+  thresholds: null,
+  saveError: null,
 };
 const mockCoach = jest.fn(async (_request: CoachRequest): Promise<CoachResponse> => makeCoachResponse());
 const mockApply = jest.fn(async (_vars: { changes: unknown[]; proposalId?: string }): Promise<ApplyResult> => ({ applied: 2, failed: [], workouts: [] }));
 const mockSetStatus = jest.fn(async (_vars: { id: string; status: ProposalStatus }) => undefined);
+const mockSaveWeekPlans = jest.fn(async (drafts: WeekPlanDraft[]) => {
+  if (mockState.saveError) throw mockState.saveError;
+  return drafts;
+});
 const mockUpdateProfile = jest.fn(async (patch: Partial<Profile>) => patch);
 const mockSpeak = jest.fn();
 const mockFriends: Friend[] = [
@@ -73,7 +96,9 @@ jest.mock('@/data/queries', () => ({
   useWorkouts: () => ({ data: mockWorkouts }),
   useFriends: () => ({ data: mockFriends }),
   useProposal: () => ({ data: undefined }),
-  useProfile: () => ({ data: { aiConsentAt: mockState.consentAt }, isLoading: false }),
+  useProfile: () => ({ data: { aiConsentAt: mockState.consentAt, thresholds: mockState.thresholds }, isLoading: false }),
+  useRaces: () => ({ data: [] }),
+  useSaveWeekPlans: () => ({ mutateAsync: mockSaveWeekPlans, isPending: false }),
   useUpdateProfile: () => ({ mutateAsync: mockUpdateProfile, isPending: false }),
 }));
 jest.mock('@/integrations/speech/useVoiceInput', () => ({ useVoiceInput: () => ({ ...mockVoice }) }));
@@ -105,6 +130,8 @@ beforeEach(() => {
   mockState.mode = 'demo';
   mockState.params = {};
   mockState.consentAt = null;
+  mockState.thresholds = null;
+  mockState.saveError = null;
   Object.assign(mockVoice, { state: 'idle', transcript: '', level: 0, error: null, available: true });
 });
 
@@ -357,5 +384,125 @@ describe('Talk — waiting and consent', () => {
     await sendTyped('Hola');
     await waitFor(() => expect(mockCoach).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('¿Compartimos tus datos con Cloudflare?')).toBeNull();
+  });
+});
+
+describe('Talk — a new session in the proposal', () => {
+  const SERIES = makeProposal({
+    id: 'p10',
+    source: 'ai_coach',
+    changes: [
+      {
+        op: 'add',
+        workout: {
+          date: '2026-10-29',
+          sport: 'run',
+          title: "Series 3×8'",
+          durationMin: 55,
+          intensity: 'threshold',
+          steps: [
+            { kind: 'warmup', durationMin: 15, intensity: 'recovery' },
+            { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold', cue: 'Mismo ritmo en las tres.' },
+            { kind: 'cooldown', durationMin: 10, intensity: 'recovery' },
+          ],
+          coaching: { objective: 'Subir tu umbral sin pasarte.', keys: [], success: 'Las tres series en zona.', planB: null },
+        },
+        reason: 'La sesión clave de la semana',
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    mockVoice.available = false;
+    mockCoach.mockImplementation(async () => makeCoachResponse({ reply: 'Te añado unas series el jueves.', proposal: SERIES }));
+  });
+
+  test("shows what the session asks with the athlete's targets and its steps on demand", async () => {
+    mockState.thresholds = { lthr: 170 };
+    await render(<TalkScreen />);
+    await sendTyped('Quiero series esta semana');
+    expect(await screen.findByText('Subir tu umbral sin pasarte.')).toBeTruthy();
+    expect(screen.getByText("3×8' Z4 · 162–168 ppm · RPE 7–8")).toBeTruthy();
+    expect(screen.queryByText('Mismo ritmo en las tres.')).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver la estructura, 3 pasos' }));
+    expect(screen.getByText('Mismo ritmo en las tres.')).toBeTruthy();
+    expect(screen.getByText('162–168 ppm · RPE 7–8')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ocultar la estructura' })).toBeTruthy();
+  });
+
+  test('without thresholds the zone and RPE still show', async () => {
+    await render(<TalkScreen />);
+    await sendTyped('Quiero series esta semana');
+    expect(await screen.findByText("3×8' Z4 · RPE 7–8")).toBeTruthy();
+  });
+});
+
+describe('Talk — plan general suggested by the coach', () => {
+  const monday = startOfWeek(todayISO());
+  const weekPlans: WeekPlanDraft[] = [
+    { weekStart: addDays(monday, 14), kind: 'push', targetMinutes: 540, note: null },
+    { weekStart: addDays(monday, 7), kind: 'recovery', targetMinutes: 300, note: 'Semana suave antes de subir.' },
+  ];
+
+  beforeEach(() => {
+    mockVoice.available = false;
+    mockCoach.mockImplementation(async () => makeCoachResponse({ reply: 'Así veo tus próximas semanas.', weekPlans }));
+  });
+
+  test('lists one row per week in date order and saves them on tap, then opens Plan › General', async () => {
+    await render(<TalkScreen />);
+    await sendTyped('¿Cómo planteo el próximo mes?');
+    expect(await screen.findByText('Plan general · 2 semanas')).toBeTruthy();
+    expect(screen.getByText(/· Descarga · 5 h$/)).toBeTruthy();
+    expect(screen.getByText(/· Más volumen · 9 h$/)).toBeTruthy();
+    expect(screen.getByText('Semana suave antes de subir.')).toBeTruthy();
+    expect(mockSaveWeekPlans).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar en tu plan general' }));
+    await waitFor(() => expect(mockRouter.navigate).toHaveBeenCalledWith('/week?view=general'));
+    expect(mockSaveWeekPlans).toHaveBeenCalledWith([
+      { weekStart: addDays(monday, 7), kind: 'recovery', targetMinutes: 300, note: 'Semana suave antes de subir.', source: 'ai_coach' },
+      { weekStart: addDays(monday, 14), kind: 'push', targetMinutes: 540, note: null, source: 'ai_coach' },
+    ]);
+    expect(await screen.findByText('Guardado en tu plan general.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Guardar en tu plan general' })).toBeNull();
+  });
+
+  test('weeks from the rules engine are saved as your own', async () => {
+    mockCoach.mockImplementation(async () => makeCoachResponse({ reply: 'Plan de semanas.', engine: 'rules', weekPlans }));
+    await render(<TalkScreen />);
+    await sendTyped('Plan de semanas');
+    await fireEvent.press(await screen.findByRole('button', { name: 'Guardar en tu plan general' }));
+    await waitFor(() => expect(mockSaveWeekPlans).toHaveBeenCalledTimes(1));
+    expect(mockSaveWeekPlans.mock.calls[0]?.[0].map((d) => d.source)).toEqual(['manual', 'manual']);
+  });
+
+  test('"Ahora no" leaves the general plan as it was', async () => {
+    await render(<TalkScreen />);
+    await sendTyped('¿Cómo planteo el próximo mes?');
+    await fireEvent.press(await screen.findByRole('button', { name: 'Ahora no' }));
+    expect(await screen.findByText('Vale, dejo tu plan general como estaba.')).toBeTruthy();
+    expect(screen.queryByText('Plan general · 2 semanas')).toBeNull();
+    expect(mockSaveWeekPlans).not.toHaveBeenCalled();
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
+  });
+
+  test('a failed save keeps the card with the error', async () => {
+    mockState.saveError = new Error('Sin conexión');
+    await render(<TalkScreen />);
+    await sendTyped('¿Cómo planteo el próximo mes?');
+    await fireEvent.press(await screen.findByRole('button', { name: 'Guardar en tu plan general' }));
+    expect(await screen.findByText('Sin conexión')).toBeTruthy();
+    expect(screen.getByText('Plan general · 2 semanas')).toBeTruthy();
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
+  });
+
+  test('answers without week plans show no card', async () => {
+    mockCoach.mockImplementation(async () => makeCoachResponse({ reply: 'Descansa hoy.', weekPlans: [] }));
+    await render(<TalkScreen />);
+    await sendTyped('Me duele la rodilla');
+    await screen.findByText('Descansa hoy.');
+    expect(screen.queryByRole('button', { name: 'Guardar en tu plan general' })).toBeNull();
   });
 });

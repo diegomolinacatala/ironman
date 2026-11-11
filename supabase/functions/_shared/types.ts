@@ -27,6 +27,24 @@ export type WorkoutSource = (typeof WORKOUT_SOURCES)[number];
 export const STEP_KINDS = ['warmup', 'work', 'recovery', 'cooldown', 'rest'] as const;
 export type WorkoutStepKind = (typeof STEP_KINDS)[number];
 
+/** Inclusive numeric range (heart rate, pace, power, RPE). */
+export interface NumberRange {
+  min: number;
+  max: number;
+}
+
+/** Explicit step targets; absent = derived from intensity + thresholds (planning/domain/zones.ts). */
+export interface StepTarget {
+  /** Heart rate, ppm. */
+  hr?: NumberRange;
+  /** Pace: s/km (run) or s/100 m (swim); `min` is the faster end. */
+  pace?: NumberRange;
+  /** Power, watts. */
+  power?: NumberRange;
+  /** Perceived exertion, CR-10. */
+  rpe?: NumberRange;
+}
+
 export interface WorkoutStep {
   kind: WorkoutStepKind;
   durationMin?: number;
@@ -34,6 +52,19 @@ export interface WorkoutStep {
   intensity?: Intensity;
   repeat?: number;
   note?: string;
+  target?: StepTarget;
+  /** How it should feel / what to focus on (≤ 200 chars). */
+  cue?: string;
+  /** Brick: the leg this step belongs to. */
+  leg?: 'bike' | 'run';
+}
+
+/** The coach's prescription for a session (≤ 200 chars per text, ≤ 4 keys of ≤ 160). */
+export interface WorkoutCoaching {
+  objective: string;
+  keys: string[];
+  success: string;
+  planB: string | null;
 }
 
 export interface CompletedData {
@@ -41,6 +72,8 @@ export interface CompletedData {
   distanceM?: number;
   avgHr?: number;
   rpe?: number;
+  /** Sensaciones after the session, 1 (muy mal) … 5 (genial). */
+  feel?: number;
   tss?: number;
   notes?: string;
   source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
@@ -67,6 +100,7 @@ export interface Workout {
   isKey: boolean;
   jointSessionId: UUID | null;
   externalId: string | null;
+  coaching?: WorkoutCoaching | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
@@ -86,6 +120,7 @@ export interface WorkoutDraft {
   source?: WorkoutSource;
   /** Imported activity id ('healthkit:<uuid>', 'garmin:<id>') — dedupe key for unplanned imports. */
   externalId?: string | null;
+  coaching?: WorkoutCoaching | null;
 }
 
 export const RACE_DISTANCES = [
@@ -112,6 +147,8 @@ export interface Race {
   location: string | null;
   goal: string | null;
   notes: string | null;
+  /** When the race was added: anchors the macrocycle (planning/domain/periodization.ts). */
+  createdAt?: ISODateTime;
 }
 
 export const LIFE_EVENT_KINDS = [
@@ -181,6 +218,13 @@ export interface Availability {
   poolDays: number[];
 }
 
+export type AthleteLevel = 'beginner' | 'intermediate' | 'advanced';
+export const TRAINABLE_SPORTS = ['swim', 'bike', 'run', 'strength', 'mobility'] as const;
+export type TrainableSport = (typeof TRAINABLE_SPORTS)[number];
+
+export const WATCH_BRANDS = ['garmin', 'coros'] as const;
+export type WatchBrand = (typeof WATCH_BRANDS)[number];
+
 export interface Thresholds {
   ftpW?: number;
   runThresholdPaceSecPerKm?: number;
@@ -202,6 +246,8 @@ export interface Profile {
   notificationPrefs: Record<string, unknown>;
   timezone: string;
   coachNotes: string | null;
+  /** The athlete's watch (null = not chosen, treated as Garmin). */
+  watchBrand?: WatchBrand | null;
 }
 
 export interface DailyCheckin {
@@ -217,7 +263,7 @@ export interface DailyCheckin {
 
 export interface DailyMetrics {
   date: ISODate;
-  source: 'healthkit' | 'garmin' | 'manual';
+  source: 'healthkit' | 'garmin' | 'coros' | 'manual';
   hrvMs: number | null;
   restingHr: number | null;
   sleepHours: number | null;
@@ -388,11 +434,35 @@ export interface CoachQuedada {
   reason: string;
 }
 
-/** `coach_jobs.extras`: what the coach remembered, the imprevisto it logged and the quedada it suggests. */
+/** `coach_jobs.extras`: what the coach remembered, the imprevisto it logged, the quedada and the week plan it suggests. */
 export interface CoachJobExtras {
   memory: string[];
   lifeEventId: UUID | null;
   quedada: CoachQuedada | null;
+  /** Week-level plan suggested in chat (saved by the app only when the athlete taps). */
+  weekPlans?: WeekPlanDraft[];
+}
+
+/** Week-level plan ("Plan → General"): overrides a prep/base/build week of the periodization. */
+export const WEEK_PLAN_KINDS = ['load', 'push', 'recovery', 'rest'] as const;
+export type WeekPlanKind = (typeof WEEK_PLAN_KINDS)[number];
+export type WeekPlanSource = 'manual' | 'ai_coach' | 'claude';
+
+export interface WeekPlan {
+  weekStart: ISODate;
+  kind: WeekPlanKind;
+  targetMinutes: number | null;
+  note: string | null;
+  source: WeekPlanSource;
+  updatedAt: ISODateTime;
+}
+
+export interface WeekPlanDraft {
+  weekStart: ISODate;
+  kind: WeekPlanKind;
+  targetMinutes?: number | null;
+  note?: string | null;
+  source?: WeekPlanSource;
 }
 
 export interface SyncResult {

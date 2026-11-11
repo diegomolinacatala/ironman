@@ -16,11 +16,25 @@ import type {
   ParticipantStatus,
   ProposalStatus,
   RaceDistance,
+  Score5,
   Severity,
   Sport,
+  WatchBrand,
   Weekday,
   WorkoutStatus,
 } from './types';
+
+const FEEL_LABELS: Record<Score5, string> = { 1: 'Muy mal', 2: 'Mal', 3: 'Normal', 4: 'Bien', 5: 'Genial' };
+
+/** Sensaciones after a session (CompletedData.feel): "Muy mal" … "Genial". */
+export function feelLabel(feel: Score5): string {
+  return FEEL_LABELS[feel] ?? '';
+}
+
+/** "Garmin" / "COROS" (always in capitals); null = not chosen yet → "tu reloj" in copy. */
+export function watchBrandLabel(brand: WatchBrand): string {
+  return brand === 'coros' ? 'COROS' : 'Garmin';
+}
 
 const SPORT_LABELS: Record<Sport, string> = {
   swim: 'Natación',
@@ -317,7 +331,7 @@ const PHASE_LABELS: Record<Phase, string> = {
   base: 'Base',
   build: 'Construcción',
   peak: 'Pico',
-  taper: 'Puesta a punto',
+  taper: 'Afinamiento',
   race_week: 'Semana de carrera',
   recovery: 'Recuperación',
   transition: 'Transición',

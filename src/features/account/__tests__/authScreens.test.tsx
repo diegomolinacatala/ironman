@@ -47,7 +47,7 @@ describe('sign-in', () => {
     expect(screen.getByRole('header', { name: 'Road to Ironman' })).toBeTruthy();
     expect(screen.getByTestId('brand-mark', { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByText('Tu coach de bolsillo para el triatlón')).toBeTruthy();
-    for (const point of ['Lee tu Garmin', 'Vive en tu calendario', 'Le hablas y se adapta']) {
+    for (const point of ['Lee tu Garmin o COROS', 'Vive en tu calendario', 'Le hablas y se adapta']) {
       expect(screen.getByText(point)).toBeTruthy();
     }
     // The retired race-bib identity: no all-caps wordmark, no numbered lime list.

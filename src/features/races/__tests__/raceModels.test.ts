@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 
 import type { Race } from '@/domain/types';
 
-import { initialRaceForm, toRaceDraft, validateRaceForm } from '../raceFormModel';
+import { changesSeason, initialRaceForm, toRaceDraft, validateRaceForm } from '../raceFormModel';
 import { PHASE_TIMELINE, PRIORITY_INFO, countdown, phaseName, splitRaces, timelineIndex } from '../raceModel';
 
 const TODAY = '2026-10-25';
@@ -46,7 +46,7 @@ describe('raceModel', () => {
   });
 
   test('timeline positions and names', () => {
-    expect(PHASE_TIMELINE.map((s) => s.label)).toEqual(['Base', 'Construcción', 'Pico', 'Puesta a punto', 'Carrera']);
+    expect(PHASE_TIMELINE.map((s) => s.label)).toEqual(['Base', 'Construcción', 'Pico', 'Afinamiento', 'Carrera']);
     expect(timelineIndex('prep')).toBe(-1);
     expect(timelineIndex('base')).toBe(0);
     expect(timelineIndex('race_week')).toBe(4);
@@ -86,5 +86,22 @@ describe('raceFormModel', () => {
     expect(badDate.ok).toBe(false);
     const ok = validateRaceForm({ ...base, name: 'Sprint de Gandía' });
     expect(ok.ok).toBe(true);
+  });
+});
+
+describe('changesSeason', () => {
+  const before = race({ id: 'r', date: '2027-04-18', distance: 'half', priority: 'A' });
+  const draft = { name: 'Valencia', date: '2027-04-18', distance: 'half' as const, priority: 'A' as const, location: null, goal: null, notes: null };
+
+  test('new upcoming races and new dates, distances or priorities reshape the season', () => {
+    expect(changesSeason(null, draft, TODAY)).toBe(true);
+    expect(changesSeason(before, { ...draft, date: '2027-05-02' }, TODAY)).toBe(true);
+    expect(changesSeason(before, { ...draft, distance: 'full' }, TODAY)).toBe(true);
+    expect(changesSeason(before, { ...draft, priority: 'B' }, TODAY)).toBe(true);
+  });
+
+  test('renaming a race or saving a past one does not', () => {
+    expect(changesSeason(before, { ...draft, name: 'Medio de Valencia' }, TODAY)).toBe(false);
+    expect(changesSeason(null, { ...draft, date: '2020-01-01' }, TODAY)).toBe(false);
   });
 });

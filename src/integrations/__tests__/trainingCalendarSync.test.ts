@@ -239,6 +239,22 @@ describe('syncWorkoutsToCalendar (iOS)', () => {
     expect(listed.map((c) => c.title)).toEqual(['Trabajo']);
   });
 
+  test("the notes carry the coach's targets with the athlete's thresholds; a threshold change rewrites them once", async () => {
+    await enableFor(USER);
+    const w1 = workout({ id: 'w1', date: TODAY, userId: USER, startTime: '18:30', intensity: 'endurance' });
+    const context = { ...CONTEXT, thresholds: { lthr: 170 }, raceDistance: 'half' as const };
+    expect(await syncWorkoutsToCalendar([w1], TODAY, context)).toEqual({ created: 1, updated: 0, deleted: 0 });
+    const notes = (kit.events[0] as { notes?: string } | undefined)?.notes ?? '';
+    expect(notes).toContain('Intensidad: Z2 · 145–151 ppm · RPE 3–4.');
+
+    expect(await syncWorkoutsToCalendar([w1], TODAY, context)).toEqual({ created: 0, updated: 0, deleted: 0 });
+    expect(await syncWorkoutsToCalendar([w1], TODAY, { ...context, thresholds: { lthr: 180 } })).toEqual({
+      created: 0,
+      updated: 1,
+      deleted: 0,
+    });
+  });
+
   test('the shared state lists the workouts that currently have an event', async () => {
     await enableFor(USER);
     await syncWorkoutsToCalendar([workout({ id: 'w1', date: TODAY, userId: USER })], TODAY, CONTEXT);

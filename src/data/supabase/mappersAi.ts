@@ -3,12 +3,13 @@
  * `meal` edge-function responses and `coach_jobs.extras`. Untrusted JSON in,
  * domain types (or null when the shape is unusable) out. Pure.
  */
-import { isISODate } from '@/domain/dates';
+import { addDays, isISODate, startOfWeek, weekdayOf } from '@/domain/dates';
 import { mealSlotForTime } from '@/domain/mealEstimate';
 import {
   INTENSITIES,
   MEAL_SLOTS,
   SPORTS,
+  WEEK_PLAN_KINDS,
   type Briefing,
   type ISODate,
   type ISODateTime,
@@ -18,6 +19,7 @@ import {
   type SleepSnapshot,
   type SleepVerdict,
   type UUID,
+  type WeekPlanDraft,
 } from '@/domain/types';
 
 import { asArray, asNumber, asString, isRecord, oneOf, oneOfOr, pick, type JsonRecord } from './narrow';
@@ -145,9 +147,56 @@ export interface CoachExtras {
   memory: string[];
   lifeEventId: UUID | null;
   quedada: QuedadaSuggestion | null;
+  /** Week-level plan the coach suggests (Plan → General), saved only on the athlete's tap. */
+  weekPlans: WeekPlanDraft[];
 }
 
-export const EMPTY_COACH_EXTRAS: CoachExtras = { memory: [], lifeEventId: null, quedada: null };
+export const EMPTY_COACH_EXTRAS: CoachExtras = { memory: [], lifeEventId: null, quedada: null, weekPlans: [] };
+
+/** Same limits as `week_plans` (and the repository validation). */
+const WEEK_PLAN_LIMITS = { maxMinutes: 3000, noteMax: 300, maxWeeks: 52 } as const;
+
+function weekPlanMinutes(value: unknown): number | null {
+  const n = asNumber(value);
+  return n !== null && n >= 0 && n <= WEEK_PLAN_LIMITS.maxMinutes ? Math.round(n) : null;
+}
+
+/**
+ * One suggested week (camelCase or snake_case) → WeekPlanDraft with source
+ * 'ai_coach', or null without a Monday or a known kind. Out-of-range minutes
+ * fall back to the periodization (null); the note is clipped to 300 chars.
+ */
+export function parseWeekPlanSuggestion(value: unknown): WeekPlanDraft | null {
+  const r = asJsonRecord(value);
+  if (!r) return null;
+  const weekStart = asString(pick(r, 'weekStart', 'week_start'));
+  const kind = oneOf(r.kind, WEEK_PLAN_KINDS);
+  if (!weekStart || !isISODate(weekStart) || weekdayOf(weekStart) !== 0 || !kind) return null;
+  const note = text(r.note);
+  return {
+    weekStart,
+    kind,
+    targetMinutes: weekPlanMinutes(pick(r, 'targetMinutes', 'target_minutes')),
+    note: note ? note.slice(0, WEEK_PLAN_LIMITS.noteMax).trimEnd() : null,
+    source: 'ai_coach',
+  };
+}
+
+/** Suggested weeks: valid entries only, one per Monday (the last one wins), ordered. */
+export function parseWeekPlanSuggestions(value: unknown): WeekPlanDraft[] {
+  const drafts = asArray(value)
+    .map(parseWeekPlanSuggestion)
+    .filter((d): d is WeekPlanDraft => d !== null);
+  const byWeek = new Map(drafts.map((d) => [d.weekStart, d] as const));
+  return [...byWeek.values()].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+}
+
+/** Keeps the suggestions the athlete can still save: from this week up to +52 weeks. */
+export function weekPlansFrom(drafts: readonly WeekPlanDraft[], today: ISODate): WeekPlanDraft[] {
+  const first = startOfWeek(today);
+  const last = addDays(first, WEEK_PLAN_LIMITS.maxWeeks * 7);
+  return drafts.filter((d) => d.weekStart >= first && d.weekStart <= last);
+}
 
 function boundedText(value: unknown, max: number): string | null {
   const s = text(value);
@@ -192,7 +241,10 @@ export function parseQuedadaSuggestion(value: unknown): QuedadaSuggestion | null
   };
 }
 
-/** `coach_jobs.extras` = `{ memory: string[], lifeEventId: uuid | null, quedada: {…} | null }`. */
+/**
+ * `coach_jobs.extras` = `{ memory: string[], lifeEventId: uuid | null,
+ * quedada: {…} | null, weekPlans: [{ weekStart, kind, targetMinutes, note }] | null }`.
+ */
 export function parseCoachExtras(value: unknown): CoachExtras {
   const r = asJsonRecord(value);
   if (!r) return EMPTY_COACH_EXTRAS;
@@ -201,5 +253,10 @@ export function parseCoachExtras(value: unknown): CoachExtras {
     .filter((line): line is string => line !== null)
     .slice(0, MAX_MEMORY);
   const id = asString(pick(r, 'lifeEventId', 'life_event_id'));
-  return { memory, lifeEventId: id && UUID_RE.test(id) ? id : null, quedada: parseQuedadaSuggestion(r.quedada) };
+  return {
+    memory,
+    lifeEventId: id && UUID_RE.test(id) ? id : null,
+    quedada: parseQuedadaSuggestion(r.quedada),
+    weekPlans: parseWeekPlanSuggestions(pick(r, 'weekPlans', 'week_plans')),
+  };
 }

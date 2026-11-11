@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
+import { Alert, type AlertButton } from 'react-native';
 
 import RaceEditScreen from '@/app/races/edit';
 
-const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
+const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockCreate = jest.fn(async () => ({ id: 'r1' }));
 let mockParams: Record<string, string> = {};
 
@@ -60,5 +61,32 @@ describe('races/edit', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
     expect(within(screen.getByTestId('form-footer')).getByText(/nombre/)).toBeTruthy();
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  test('a race added from Plan → General goes straight back there', async () => {
+    mockParams = { from: 'plan' };
+    const alert = jest.spyOn(Alert, 'alert');
+    await render(<RaceEditScreen />);
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la carrera'), 'Triatlón de Valencia');
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockRouter.dismissTo).toHaveBeenCalledWith('/week?view=general');
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  test('after adding a race it offers the general plan', async () => {
+    const answer = (index: number) =>
+      jest.spyOn(Alert, 'alert').mockImplementationOnce((_title, _message, buttons?: AlertButton[]) => buttons?.[index]?.onPress?.());
+    const alert = answer(1);
+    await render(<RaceEditScreen />);
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la carrera'), 'Triatlón de Valencia');
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
+    expect(alert.mock.calls[0]?.[0]).toBe('Carrera guardada');
+    expect(alert.mock.calls[0]?.[2]?.map((b) => b.text)).toEqual(['Ahora no', 'Ver plan general']);
+    expect(mockRouter.dismissTo).toHaveBeenCalledWith('/week?view=general');
+
+    answer(0);
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
+    expect(mockRouter.back).toHaveBeenCalledTimes(1);
   });
 });

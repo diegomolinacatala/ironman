@@ -211,6 +211,23 @@ describe('recoveryModel', () => {
     expect(sourceLabel('manual')).toBe('Manual');
   });
 
+  test('COROS (saved by Claude) beats Apple Salud but not Garmin, and is credited as COROS', () => {
+    const metrics = [
+      metric('2026-10-24', 'healthkit', { hrvMs: 40, sleepHours: 6 }),
+      metric('2026-10-24', 'coros', { hrvMs: 55, sleepHours: 7.5 }),
+      metric('2026-10-25', 'coros', { hrvMs: 58 }),
+      metric('2026-10-25', 'garmin', { hrvMs: 70 }),
+      metric('2026-10-25', 'manual', { restingHr: 50 }),
+    ];
+    const [hrv, rhr, sleep] = buildRecoverySeries(metrics, TODAY);
+    expect(hrv?.values.slice(-2)).toEqual([55, 70]);
+    expect(sleep?.latest).toBe(7.5);
+    expect(sleep?.sources).toEqual(['coros']);
+    expect(rhr?.sources).toEqual(['manual']);
+    expect(sourceLabel('coros')).toBe('COROS');
+    expect(attributionText([sleep!])).toBe('Datos: COROS');
+  });
+
   test('texts', () => {
     expect(deltaText(null)).toBeNull();
     expect(deltaText(0.001)).toBe('En tu media');

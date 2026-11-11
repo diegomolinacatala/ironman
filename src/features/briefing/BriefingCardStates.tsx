@@ -1,10 +1,11 @@
 /** Presentational pieces of the "Informe de hoy" card (one per state). */
 import { StyleSheet, View } from 'react-native';
 
+import type { WatchBrand } from '@/domain/types';
 import { errorMessage } from '@/lib/logger';
 import { Button, ErrorNotice, Icon, ProgressBar, Text, iconSize, radius, space, useTheme, type IconName } from '@/ui';
 
-import { listenLabel, type PlayerMode } from './briefingModel';
+import { connectWatchCopy, listenLabel, type PlayerMode } from './briefingModel';
 import { Skeleton } from './Skeleton';
 
 export function CardOverline({ engine }: { engine?: 'ai' | 'rules' }) {
@@ -61,26 +62,27 @@ export function ListenControls({ script, mode, progress, onToggle, onOpen }: Lis
   );
 }
 
-export function ConnectGarminBody({
+export function ConnectWatchBody({
+  brand,
   expired,
   onConnect,
   onSkip,
 }: {
+  brand: WatchBrand;
   expired: boolean;
   onConnect: () => void;
   onSkip: () => void;
 }) {
+  const copy = connectWatchCopy(brand, expired);
   return (
     <View style={styles.body}>
       <Medallion icon="watch" />
-      <Text variant="title">{expired ? 'Renueva tu Garmin' : 'Conecta tu Garmin'}</Text>
+      <Text variant="title">{copy.title}</Text>
       <Text variant="callout" color="textMuted">
-        {expired
-          ? 'Tu clave de Garmin ha caducado. Renuévala y cada mañana te cuento cómo has dormido.'
-          : 'Con tu Garmin, cada mañana te cuento cómo has dormido y qué toca hoy.'}
+        {copy.message}
       </Text>
-      <Button label={expired ? 'Renovar conexión' : 'Conectar Garmin'} icon="link" variant="secondary" onPress={onConnect} fullWidth />
-      <Button label="Prepararlo sin Garmin" variant="ghost" size="sm" onPress={onSkip} style={styles.center} />
+      <Button label={copy.connectLabel} icon="link" variant="secondary" onPress={onConnect} fullWidth />
+      <Button label={copy.skipLabel} variant="ghost" size="sm" onPress={onSkip} style={styles.center} />
     </View>
   );
 }

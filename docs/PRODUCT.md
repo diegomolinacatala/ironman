@@ -14,7 +14,7 @@ Resumen ejecutivo de `docs/research/01..05`. Fecha: 25-oct-2026.
 | **2PEAK / JOIN** | Franjas horarias por día, ajuste diario | Franjas por día de la semana + calendario del iPhone |
 | **Strava** | Feed social y "entrenasteis juntos" (a posteriori) | Feed ligero con kudos; las quedadas se planifican *antes* |
 | **Garmin Coach** | Sugerencias diarias, pero solo hasta media distancia | Tu Claude + reglas cubren distancia completa |
-| **Strava / COROS MCP** | Exponen datos a Claude por MCP (solo lectura) | Nuestro MCP es de **lectura y escritura** |
+| **Strava / COROS MCP** | Exponen datos a Claude por MCP (COROS: lectura y, desde el 21-sep-2026, crear entrenos de carrera y bici en su calendario) | Nuestro MCP es de **lectura y escritura** del plan entero; para amigos con COROS, su Claude usa los dos conectores a la vez (v4) |
 
 ## 2. Lo que nadie resuelve (nuestro diferenciador)
 

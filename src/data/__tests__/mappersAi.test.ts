@@ -1,5 +1,13 @@
 /// <reference types="jest" />
-import { parseBriefing, parseCoachExtras, parseMealAnalysis, parseSleepSnapshot, rowToBriefing } from '../supabase/mappersAi';
+import {
+  parseBriefing,
+  parseCoachExtras,
+  parseMealAnalysis,
+  parseSleepSnapshot,
+  parseWeekPlanSuggestions,
+  rowToBriefing,
+  weekPlansFrom,
+} from '../supabase/mappersAi';
 import { topicsForChange, OWN_TABLE_TOPICS } from '../supabase/realtime';
 import type { BriefingRow } from '../supabase/rows';
 
@@ -138,13 +146,15 @@ describe('coach job extras', () => {
       memory: ['Prefiere nadar por la mañana'],
       lifeEventId: id,
       quedada: null,
+      weekPlans: [],
     });
     expect(parseCoachExtras(JSON.stringify({ memory: ['a', 'b', 'c', 'd', 'e', 'f'], life_event_id: 'not-a-uuid' }))).toEqual({
       memory: ['a', 'b', 'c', 'd', 'e'],
       lifeEventId: null,
       quedada: null,
+      weekPlans: [],
     });
-    expect(parseCoachExtras(null)).toEqual({ memory: [], lifeEventId: null, quedada: null });
+    expect(parseCoachExtras(null)).toEqual({ memory: [], lifeEventId: null, quedada: null, weekPlans: [] });
   });
 
   const QUEDADA = {
@@ -189,6 +199,48 @@ describe('coach job extras', () => {
   it('ignores a non-object quedada', () => {
     expect(parseCoachExtras({ quedada: 'el sábado' }).quedada).toBeNull();
     expect(parseCoachExtras({ quedada: [QUEDADA] }).quedada).toBeNull();
+  });
+});
+
+describe('coach job extras: season plan weeks', () => {
+  it('reads suggested weeks (camelCase or snake_case) as ai_coach drafts, ordered, one per Monday', () => {
+    const extras = parseCoachExtras({
+      weekPlans: [
+        { week_start: '2026-11-23', kind: 'recovery', target_minutes: 330.4, note: ' Descarga antes del bloque ' },
+        { weekStart: '2026-11-16', kind: 'push', targetMinutes: null, note: null },
+        { weekStart: '2026-11-23', kind: 'rest', note: 'Viaje' },
+      ],
+    });
+    expect(extras.weekPlans).toEqual([
+      { weekStart: '2026-11-16', kind: 'push', targetMinutes: null, note: null, source: 'ai_coach' },
+      { weekStart: '2026-11-23', kind: 'rest', targetMinutes: null, note: 'Viaje', source: 'ai_coach' },
+    ]);
+    expect(parseCoachExtras({ week_plans: [{ week_start: '2026-11-30', kind: 'load', target_minutes: 600 }] }).weekPlans).toEqual([
+      { weekStart: '2026-11-30', kind: 'load', targetMinutes: 600, note: null, source: 'ai_coach' },
+    ]);
+  });
+
+  it('drops weeks without a Monday or a known kind; bad minutes fall back to the periodization; long notes are clipped', () => {
+    expect(
+      parseWeekPlanSuggestions([
+        { weekStart: '2026-11-17', kind: 'load' },
+        { weekStart: '2026-11-16', kind: 'taper' },
+        { weekStart: 'lunes', kind: 'load' },
+        'semana de descarga',
+        { weekStart: '2026-11-23', kind: 'load', targetMinutes: 3001, note: 'x'.repeat(320) },
+      ]),
+    ).toEqual([{ weekStart: '2026-11-23', kind: 'load', targetMinutes: null, note: 'x'.repeat(300), source: 'ai_coach' }]);
+    expect(parseCoachExtras({ weekPlans: 'descarga' }).weekPlans).toEqual([]);
+  });
+
+  it('keeps only the weeks the athlete can still save (this week up to +52)', () => {
+    const drafts = parseWeekPlanSuggestions([
+      { weekStart: '2026-10-19', kind: 'load' },
+      { weekStart: '2026-10-26', kind: 'push' },
+      { weekStart: '2027-10-25', kind: 'load' },
+      { weekStart: '2027-11-01', kind: 'load' },
+    ]);
+    expect(weekPlansFrom(drafts, '2026-10-28').map((d) => d.weekStart)).toEqual(['2026-10-26', '2027-10-25']);
   });
 });
 

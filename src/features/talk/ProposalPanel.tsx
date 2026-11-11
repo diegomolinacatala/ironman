@@ -8,6 +8,7 @@ import type { PlanProposal } from '@/domain/types';
 import { ChangeRow } from '@/features/coach/ChangeRow';
 import { changeCountLabel } from '@/features/coach/labels';
 import { buildDiffRows } from '@/features/coach/proposalDiff';
+import { usePrescriptionContext } from '@/features/coach/usePrescriptionContext';
 import { Button, Card, ErrorNotice, Icon, Text, space, useTheme } from '@/ui';
 
 import type { ProposalDecision } from './useProposalDecision';
@@ -25,7 +26,12 @@ export function ProposalPanel({ proposal, decision }: ProposalPanelProps) {
   // Plan proposals may cover two weeks.
   const range = useMemo(() => ({ from: proposal.weekStart, to: addDays(proposal.weekStart, 13) }), [proposal.weekStart]);
   const workouts = useWorkouts(range);
-  const rows = useMemo(() => buildDiffRows(proposal.changes, workouts.data ?? []), [proposal.changes, workouts.data]);
+  // New sessions show their objective and targets (ppm / pace / watts with the athlete's thresholds).
+  const prescription = usePrescriptionContext();
+  const rows = useMemo(
+    () => buildDiffRows(proposal.changes, workouts.data ?? [], {}, prescription),
+    [proposal.changes, workouts.data, prescription],
+  );
   const hidden = rows.length - MAX_INLINE_CHANGES;
   const busy = decision.isApplying || decision.isDiscarding;
   const { colors } = useTheme();

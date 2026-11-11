@@ -16,13 +16,15 @@ export interface StepsBarProps {
   steps: readonly WorkoutStep[];
   intensity: Intensity;
   sport: Sport;
+  /** One legend line per step ("3×8' · Series · Z4"). Off when the screen lists the steps itself. */
+  showLegend?: boolean;
 }
 
 /**
  * Workout structure as proportional blocks (width = time, height + colour =
- * intensity), followed by a legend of each step.
+ * intensity), optionally followed by a legend of each step.
  */
-export function StepsBar({ steps, intensity, sport }: StepsBarProps) {
+export function StepsBar({ steps, intensity, sport, showLegend = true }: StepsBarProps) {
   const { colors } = useTheme();
   const segments = stepSegments(steps, intensity, sport);
   if (segments.length === 0) return null;
@@ -44,16 +46,18 @@ export function StepsBar({ steps, intensity, sport }: StepsBarProps) {
           />
         ))}
       </View>
-      <View style={styles.legend}>
-        {segments.map((s) => (
-          <View key={s.key} style={styles.legendRow}>
-            <View style={[styles.swatch, { backgroundColor: intensityColor[s.intensity] }]} />
-            <Text variant="callout" style={styles.legendText}>
-              {s.label}
-            </Text>
-          </View>
-        ))}
-      </View>
+      {showLegend ? (
+        <View style={styles.legend}>
+          {segments.map((s) => (
+            <View key={s.key} style={styles.legendRow}>
+              <View style={[styles.swatch, { backgroundColor: intensityColor[s.intensity] }]} />
+              <Text variant="callout" style={styles.legendText}>
+                {s.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

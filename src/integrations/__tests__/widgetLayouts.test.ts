@@ -59,10 +59,21 @@ function containerBackgroundOf(element: FakeElement): FakeModifier | undefined {
   return element.props.modifiers?.find((m) => m.modifier === 'containerBackground');
 }
 
-const nextItem = { id: 'w1', title: 'Series 6x1000', sport: 'run', sportLabel: 'Carrera', when: 'Hoy 18:30', duration: "50'", partner: '' };
+const nextItem = {
+  id: 'w1',
+  title: 'Series 6x1000',
+  sport: 'run',
+  sportLabel: 'Carrera',
+  when: 'Hoy 18:30',
+  duration: "50'",
+  partner: '',
+  target: 'Z4 · 162–168 ppm',
+};
 
 const nextVariants: NextWorkoutWidgetProps[] = [
   { next: nextItem, linkBase: 'roadtoironman://' },
+  { next: { ...nextItem, target: '' }, linkBase: 'roadtoironman://' },
+  { next: { ...nextItem, partner: 'con Álex' }, linkBase: 'roadtoironman://' },
   { next: null, linkBase: 'roadtoironman://' },
 ];
 
@@ -127,6 +138,40 @@ describe.each(cases)('$name', ({ module, families, variants, lockScreen }) => {
       const root = layout(props, { widgetFamily: family, colorScheme: 'light' });
       expect(root.props.modifiers?.some((m) => m.modifier === 'widgetURL')).toBe(true);
     }
+  });
+});
+
+/** Every string rendered under `element` (Text children), depth first. */
+function textsOf(element: unknown): string[] {
+  if (typeof element === 'string') return [element];
+  if (Array.isArray(element)) return element.flatMap(textsOf);
+  if (element && typeof element === 'object' && 'props' in element) {
+    return textsOf((element as FakeElement).props.children);
+  }
+  return [];
+}
+
+describe('session targets on the detail line', () => {
+  test('the lock screen says duration and target (the symbol says the sport)', () => {
+    const layout = loadLayout('../widgets/NextWorkoutWidget');
+    const render = (props: NextWorkoutWidgetProps) => textsOf(layout(props, { widgetFamily: 'accessoryRectangular', colorScheme: 'light' }));
+    expect(render(nextVariants[0]!)).toContain("50' · Z4 · 162–168 ppm");
+    expect(render(nextVariants[1]!)).toContain("Carrera · 50'");
+    expect(render(nextVariants[2]!)).toContain("50' · con Álex · Z4 · 162–168 ppm");
+    // Stored by an older app version (no `target` key): reads as none.
+    const legacy = Object.fromEntries(Object.entries(nextItem).filter(([key]) => key !== 'target')) as typeof nextItem;
+    expect(render({ next: legacy, linkBase: 'roadtoironman://' })).toContain("Carrera · 50'");
+  });
+
+  test('Hoy rows add the target after time and duration; the small widget names it on its sport row', () => {
+    const layout = loadLayout('../widgets/TodayWidget');
+    const medium = textsOf(layout(todayVariants[0], { widgetFamily: 'systemMedium', colorScheme: 'light' }));
+    expect(medium).toContain("18:30 · 50' · Z4 · 162–168 ppm");
+    const small = textsOf(layout(todayVariants[0], { widgetFamily: 'systemSmall', colorScheme: 'light' }));
+    expect(small).toContain('Z4 · 162–168 ppm');
+    expect(small).not.toContain('Carrera');
+    const noTarget = { ...todayVariants[0]!, next: { ...nextItem, time: '18:30', done: false, target: '' } };
+    expect(textsOf(layout(noTarget, { widgetFamily: 'systemSmall', colorScheme: 'light' }))).toContain('Carrera');
   });
 });
 

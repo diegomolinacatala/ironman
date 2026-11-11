@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
+import type { WatchBrand } from '@/domain/types';
+import { useMyWatchBrand } from '@/features/settings/useMyWatchBrand';
 import { Button, Card, Divider, Text, fonts, intensityColor, space, useTheme, type Theme } from '@/ui';
 
 import {
@@ -53,11 +55,18 @@ function MetricRow({ series, showSource }: { series: RecoverySeries; showSource:
   );
 }
 
+function noRecoveryMessage(brand: WatchBrand): string {
+  return brand === 'coros'
+    ? 'Conecta tu COROS (Apple Salud y tu Claude) para ver tu VFC, tu pulso en reposo y tu sueño.'
+    : 'Conecta tu Garmin o Apple Salud para ver tu VFC, tu pulso en reposo y tu sueño.';
+}
+
 /** VFC, FC en reposo y sueño of the last 28 days. */
 export function RecoveryCard({ series }: { series: readonly RecoverySeries[] }) {
+  const brand = useMyWatchBrand();
   const hasAny = series.some((s) => s.latest != null);
   const attribution = attributionText(series);
-  // Per-row sources only matter when the card mixes Garmin and Salud.
+  // Per-row sources only matter when the card mixes sources (Garmin, COROS, Salud…).
   const mixed = new Set(series.flatMap((s) => s.sources)).size > 1;
   return (
     <Card variant="flat" padding="lg" style={styles.card}>
@@ -81,7 +90,7 @@ export function RecoveryCard({ series }: { series: readonly RecoverySeries[] }) 
       ) : (
         <View style={styles.empty}>
           <Text variant="callout" color="textMuted">
-            Conecta Garmin o Apple Salud para ver tu VFC, tu pulso en reposo y tu sueño.
+            {noRecoveryMessage(brand)}
           </Text>
           <Button label="Conexiones" icon="link" size="sm" variant="secondary" onPress={() => router.push('/settings/integrations')} />
         </View>

@@ -12,6 +12,8 @@ import {
   RACE_PRIORITIES,
   SLEEP_VERDICTS,
   SPORTS,
+  WATCH_BRANDS,
+  WEEK_PLAN_KINDS,
   WORKOUT_SOURCES,
   WORKOUT_STATUSES,
 } from '../types.ts';
@@ -32,7 +34,10 @@ import type {
   SleepSnapshot,
   SleepVerdict,
   Thresholds,
+  WatchBrand,
+  WeekPlan,
   Workout,
+  WorkoutCoaching,
   WorkoutStep,
 } from '../types.ts';
 
@@ -65,6 +70,16 @@ function steps(v: unknown): WorkoutStep[] {
   return Array.isArray(v) ? v.filter((s) => typeof s === 'object' && s !== null).map((s) => ({ ...(s as WorkoutStep) })) : [];
 }
 
+/** `workouts.coaching` jsonb → prescription; null when absent or without objective/success. */
+export function mapCoaching(v: unknown): WorkoutCoaching | null {
+  const c = asRow(v);
+  const objective = strOrNull(c.objective);
+  const success = strOrNull(c.success);
+  if (!objective || !success) return null;
+  const keys = Array.isArray(c.keys) ? c.keys.filter((k): k is string => typeof k === 'string' && k.trim().length > 0) : [];
+  return { objective, keys, success, planB: strOrNull(c.planB) };
+}
+
 export function mapWorkout(raw: unknown): Workout {
   const r = asRow(raw);
   return {
@@ -86,6 +101,7 @@ export function mapWorkout(raw: unknown): Workout {
     isKey: r.is_key === true,
     jointSessionId: strOrNull(r.joint_session_id),
     externalId: strOrNull(r.external_id),
+    coaching: mapCoaching(r.coaching),
     createdAt: str(r.created_at),
     updatedAt: str(r.updated_at),
   };
@@ -93,6 +109,8 @@ export function mapWorkout(raw: unknown): Workout {
 
 export function mapRace(raw: unknown): Race {
   const r = asRow(raw);
+  // Raw `created_at` (like the app's mapper): its date anchors the macrocycle in domain/periodization.ts.
+  const createdAt = strOrNull(r.created_at);
   return {
     id: str(r.id),
     name: str(r.name),
@@ -102,6 +120,20 @@ export function mapRace(raw: unknown): Race {
     location: strOrNull(r.location),
     goal: strOrNull(r.goal),
     notes: strOrNull(r.notes),
+    ...(createdAt ? { createdAt } : {}),
+  };
+}
+
+/** `week_plans` row → WeekPlan (Plan → General override of one week). */
+export function mapWeekPlan(raw: unknown): WeekPlan {
+  const r = asRow(raw);
+  return {
+    weekStart: dateStr(r.week_start),
+    kind: oneOf(WEEK_PLAN_KINDS, r.kind, 'load'),
+    targetMinutes: numOrNull(r.target_minutes),
+    note: strOrNull(r.note),
+    source: oneOf(['manual', 'ai_coach', 'claude'] as const, r.source, 'manual'),
+    updatedAt: instantOrNull(r.updated_at) ?? str(r.updated_at),
   };
 }
 
@@ -145,7 +177,7 @@ export function mapMetrics(raw: unknown): DailyMetrics {
   const r = asRow(raw);
   return {
     date: dateStr(r.date),
-    source: oneOf(['healthkit', 'garmin', 'manual'] as const, r.source, 'manual'),
+    source: oneOf(['healthkit', 'garmin', 'coros', 'manual'] as const, r.source, 'manual'),
     hrvMs: numOrNull(r.hrv_ms),
     restingHr: numOrNull(r.resting_hr),
     sleepHours: numOrNull(r.sleep_hours),
@@ -214,7 +246,13 @@ export function mapProfile(raw: unknown): Profile {
     notificationPrefs: { ...asRow(r.notification_prefs) },
     timezone: str(r.timezone, 'Europe/Madrid') || 'Europe/Madrid',
     coachNotes: strOrNull(r.coach_notes),
+    watchBrand: watchBrandOf(r.watch_brand),
   };
+}
+
+/** `profiles.watch_brand` → 'garmin' | 'coros', null when not chosen (treated as Garmin). */
+function watchBrandOf(v: unknown): WatchBrand | null {
+  return typeof v === 'string' && (WATCH_BRANDS as readonly string[]).includes(v) ? (v as WatchBrand) : null;
 }
 
 export function mapFriendWeekItem(raw: unknown): FriendWeekItem {

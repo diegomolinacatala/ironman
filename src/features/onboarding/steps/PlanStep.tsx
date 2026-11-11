@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { useProfile } from '@/data/queries';
 import { todayISO } from '@/domain/dates';
+import { SeasonPreview } from '@/features/season/SeasonPreview';
+import { useSeasonPreview } from '@/features/season/useSeasonPreview';
 import { errorMessage, logger } from '@/lib/logger';
 import { ErrorNotice, Icon, ProgressBar, Text, haptics, iconSize, space, useTheme } from '@/ui';
 
 import { Appear } from '../Appear';
 import { SuccessHero, WorkingState } from '../GuideParts';
 import { StepLayout, type StepAction, type StepNav } from '../StepLayout';
+import { planProgressCopy } from '../planSummary';
 import { usePlanGeneration, type PlanGeneration } from '../usePlanGeneration';
 
-export const PLAN_PROGRESS_COPY = ['Leyendo tu Garmin…', 'Mirando tu calendario…', 'Preparando tus próximas semanas…'] as const;
 const COPY_INTERVAL_MS = 1800;
 
 export interface PlanStepProps {
@@ -22,9 +25,14 @@ export interface PlanStepProps {
   onFinish: () => Promise<void>;
 }
 
-/** Step 7: generates and applies the first plan, shows a 3-line summary, then Hoy. */
+/**
+ * Step 7: generates and applies the first plan, shows a 3-line summary and how
+ * the next weeks lead to the race ("Así llegarás a tu carrera"), then Hoy.
+ */
 export function PlanStep({ nav, plannedWeeks, onWeekPlanned, onFinish }: PlanStepProps) {
   const plan = usePlanGeneration(todayISO(), { plannedWeeks, onWeekPlanned });
+  const profile = useProfile();
+  const season = useSeasonPreview();
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
 
@@ -49,28 +57,33 @@ export function PlanStep({ nav, plannedWeeks, onWeekPlanned, onFinish }: PlanSte
       primary={primaryFor(plan, finishing, finish)}
       secondary={secondaryFor(plan, finishing, finish)}>
       <Appear index={1}>
-        {plan.phase === 'working' ? <PlanProgress /> : null}
+        {plan.phase === 'working' ? <PlanProgress copy={planProgressCopy(profile.data?.watchBrand)} /> : null}
         {plan.phase === 'done' ? <PlanReady summary={plan.summary} /> : null}
         {plan.phase === 'error' ? (
           <ErrorNotice message={`${plan.error ?? 'No hemos podido preparar tu plan.'} Reinténtalo o empieza y lo preparas desde Plan.`} />
         ) : null}
       </Appear>
+      {plan.phase === 'done' && season ? (
+        <Appear index={2}>
+          <SeasonPreview season={season} />
+        </Appear>
+      ) : null}
       {finishError ? <ErrorNotice message={finishError} /> : null}
     </StepLayout>
   );
 }
 
-function PlanProgress() {
+function PlanProgress({ copy }: { copy: readonly string[] }) {
   const [index, setIndex] = useState(0);
   useEffect(() => {
-    if (index >= PLAN_PROGRESS_COPY.length - 1) return undefined;
+    if (index >= copy.length - 1) return undefined;
     const timer = setTimeout(() => setIndex((i) => i + 1), COPY_INTERVAL_MS);
     return () => clearTimeout(timer);
-  }, [index]);
+  }, [index, copy.length]);
   return (
     <View style={styles.block}>
-      <WorkingState title={PLAN_PROGRESS_COPY[index] ?? PLAN_PROGRESS_COPY[0]} message="Suele tardar menos de un minuto." />
-      <ProgressBar value={(index + 1) / (PLAN_PROGRESS_COPY.length + 1)} />
+      <WorkingState title={copy[index] ?? copy[0] ?? ''} message="Suele tardar menos de un minuto." />
+      <ProgressBar value={(index + 1) / (copy.length + 1)} />
     </View>
   );
 }

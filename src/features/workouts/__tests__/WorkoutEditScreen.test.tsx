@@ -32,9 +32,13 @@ jest.mock('@/data/queries', () => ({
   useWorkout: () => ({ data: mockWorkout, isLoading: false, error: null, refetch: jest.fn() }),
   useCreateWorkout: () => ({ mutateAsync: mockCreate, isPending: false }),
   useUpdateWorkout: () => ({ mutateAsync: mockUpdate, isPending: false }),
+  useProfile: () => ({ data: { thresholds: { lthr: 170 } } }),
+  useRaces: () => ({ data: [] }),
 }));
 
 jest.setTimeout(30000);
+
+const COACHING = { objective: 'Base aeróbica sin fatiga', keys: ['Cadencia alta'], success: 'FC estable todo el rodaje', planB: null };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -93,5 +97,36 @@ describe('workout editor', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
     expect(mockUpdate.mock.calls[0]?.[0]).toMatchObject({ id: 'w1', patch: { durationMin: 50, tss: null } });
+  });
+
+  test('changing the intensity of a coached session drops its stale coaching', async () => {
+    mockParams = { id: 'w1' };
+    mockWorkout = makeWorkout({ id: 'w1', intensity: 'endurance', coaching: COACHING });
+    await render(<WorkoutEditScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Umbral Z4' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    expect(mockUpdate.mock.calls[0]?.[0]).toMatchObject({ id: 'w1', patch: { intensity: 'threshold', coaching: null } });
+  });
+
+  test('a time-only edit keeps the coaching untouched', async () => {
+    mockParams = { id: 'w1' };
+    mockWorkout = makeWorkout({ id: 'w1', durationMin: 45, coaching: COACHING });
+    await render(<WorkoutEditScreen />);
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Sumar' })[0]!);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    expect(mockUpdate.mock.calls[0]?.[0].patch).not.toHaveProperty('coaching');
+  });
+
+  test('previews the main target and saves a cue per step', async () => {
+    mockParams = { id: 'w1' };
+    mockWorkout = makeWorkout({ id: 'w1', steps: [{ kind: 'work', durationMin: 45 }] });
+    await render(<WorkoutEditScreen />);
+    expect(screen.getByLabelText(/^Zona objetivo: .*145–151 ppm/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Sensaciones o técnica del paso 1'), '  Suelto, respiración cómoda  ');
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    expect(mockUpdate.mock.calls[0]?.[0].patch.steps).toEqual([{ kind: 'work', durationMin: 45, cue: 'Suelto, respiración cómoda' }]);
   });
 });

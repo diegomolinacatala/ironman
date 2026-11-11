@@ -22,6 +22,8 @@ export interface HealthActivity {
   durationMin: number;
   distanceM: number | null;
   avgHr: number | null;
+  /** App that wrote it to Apple Salud ("COROS", "Connect"…), when HealthKit tells. */
+  sourceName?: string | null;
 }
 
 export interface ImportCandidate {

@@ -1,32 +1,55 @@
 /**
  * Calendar feed content: the athlete's workouts (−14…+56 days) plus confirmed
  * quedadas without a linked workout. UIDs are stable per workout/session so
- * calendar apps update events in place.
+ * calendar apps update events in place. v4: each workout's notes carry the
+ * coach's prescription (mirrored prescriptionText: objective, structure with
+ * the athlete's numbers, keys, success criterion and plan B).
  */
+import { prescriptionText } from '../planning/domain/prescription.ts';
 import { formatDistance, formatDuration, intensityLabel, sportLabel } from '../planning/labels.ts';
-import type { JointSession, UUID, Workout } from '../types.ts';
+import type { JointSession, RaceDistance, Thresholds, UUID, Workout } from '../types.ts';
 import { buildCalendar } from './format.ts';
 import type { IcsEvent } from './format.ts';
 
 export const ICS_PAST_DAYS = 14;
 export const ICS_FUTURE_DAYS = 56;
 const UID_DOMAIN = 'roadtoironman.app';
+/** Calendar apps show long notes, but keep each event reasonable (the prescription is ~300–900 chars). */
+const NOTES_MAX = 1000;
+const PRESCRIPTION_MAX = 2000;
+
+/** What the prescription needs: the athlete's thresholds and the target race distance. */
+export interface PrescriptionOptions {
+  thresholds?: Thresholds | null;
+  raceDistance?: RaceDistance | null;
+}
+
+function clip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+function prescriptionOf(w: Workout, opts: PrescriptionOptions): string | null {
+  if (w.sport === 'rest') return null;
+  const text = prescriptionText(w, opts.thresholds ?? null, { raceDistance: opts.raceDistance ?? null }).trim();
+  return text ? clip(text, PRESCRIPTION_MAX) : null;
+}
 
 function partnerNames(session: JointSession | undefined, userId: UUID): string[] {
   if (!session) return [];
   return session.participants.filter((p) => p.userId !== userId && p.status !== 'declined').map((p) => p.displayName);
 }
 
-function workoutDescription(w: Workout, partners: readonly string[]): string {
+function workoutDescription(w: Workout, partners: readonly string[], opts: PrescriptionOptions): string {
   const c = w.completed;
   return [
     `${sportLabel(w.sport)} · ${formatDuration(w.durationMin)} · ${intensityLabel(w.intensity)}`,
     w.distanceM ? `Distancia: ${formatDistance(w.distanceM, w.sport)}` : null,
     w.isKey ? 'Sesión clave de la semana' : null,
     partners.length ? `Quedada con ${partners.join(', ')}` : null,
-    w.description,
+    w.description ? clip(w.description, NOTES_MAX) : null,
+    prescriptionOf(w, opts),
     w.status === 'completed' && c
-      ? `Hecho: ${formatDuration(c.durationMin ?? w.durationMin)}${c.avgHr ? ` · FC media ${c.avgHr}` : ''}${c.rpe ? ` · RPE ${c.rpe}` : ''}`
+      ? `Hecho: ${formatDuration(c.durationMin ?? w.durationMin)}${c.avgHr ? ` · FC media ${c.avgHr} ppm` : ''}${c.rpe ? ` · RPE ${c.rpe}` : ''}${c.feel ? ` · sensaciones ${c.feel}/5` : ''}`
       : null,
     'Plan de Road to Ironman',
   ]
@@ -39,7 +62,7 @@ function safeStamp(value: string, fallback: Date): Date {
   return Number.isNaN(d.getTime()) ? fallback : d;
 }
 
-export function workoutEvent(w: Workout, sessions: readonly JointSession[], userId: UUID, now: Date): IcsEvent {
+export function workoutEvent(w: Workout, sessions: readonly JointSession[], userId: UUID, now: Date, opts: PrescriptionOptions = {}): IcsEvent {
   const session = w.jointSessionId ? sessions.find((s) => s.id === w.jointSessionId) : undefined;
   const partners = partnerNames(session, userId);
   const done = w.status === 'completed';
@@ -48,7 +71,7 @@ export function workoutEvent(w: Workout, sessions: readonly JointSession[], user
     uid: `workout-${w.id}@${UID_DOMAIN}`,
     stamp: safeStamp(w.updatedAt || w.createdAt, now),
     summary,
-    description: workoutDescription(w, partners),
+    description: workoutDescription(w, partners, opts),
     date: w.date,
     startTime: w.startTime,
     durationMin: done ? (w.completed?.durationMin ?? w.durationMin) : w.durationMin,
@@ -74,7 +97,7 @@ export function jointEvent(s: JointSession, userId: UUID, stamp: Date): IcsEvent
   };
 }
 
-export interface FeedInput {
+export interface FeedInput extends PrescriptionOptions {
   userId: UUID;
   workouts: readonly Workout[];
   jointSessions: readonly JointSession[];
@@ -91,7 +114,7 @@ export function buildIcsFeed(input: FeedInput): string {
     return s.organizerId === input.userId || me?.status === 'accepted';
   });
   const events = [
-    ...visible.map((w) => workoutEvent(w, input.jointSessions, input.userId, input.now)),
+    ...visible.map((w) => workoutEvent(w, input.jointSessions, input.userId, input.now, input)),
     ...extraJoint.map((s) => jointEvent(s, input.userId, input.now)),
   ].sort((a, b) => (a.date + (a.startTime ?? '')).localeCompare(b.date + (b.startTime ?? '')));
   return buildCalendar(events, input.calendarName ?? 'Road to Ironman');

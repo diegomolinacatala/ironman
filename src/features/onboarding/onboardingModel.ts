@@ -3,8 +3,9 @@
  * The screen keeps the current step id, persists it per user (resume) and asks
  * this module where to go next/back and which steps block progress.
  */
-import type { IntegrationStatus, PersonalToken, Profile, ProfilePatch, TrainableSport } from '@/domain/types';
+import type { IntegrationStatus, PersonalToken, Profile, ProfilePatch, TrainableSport, WatchBrand } from '@/domain/types';
 import { usernameSchema } from '@/domain/validation';
+import { watchBrandOf, watchName } from '@/features/settings/watchBrand';
 import type { IconName } from '@/ui';
 
 import { suggestUsername } from '../settings/format';
@@ -44,11 +45,12 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     nativeOnly: false,
   },
   {
+    // Kept as 'garmin' so onboardings saved before COROS resume here: it is "Tu reloj" now.
     id: 'garmin',
     icon: 'watch',
-    overline: 'Garmin',
-    title: 'Conecta tu Garmin',
-    subtitle: 'Así sé cómo duermes, tu VFC y lo que entrenas. Es un minuto.',
+    overline: 'Tu reloj',
+    title: 'Conecta tu reloj',
+    subtitle: 'Así sé cómo duermes, cómo te recuperas y lo que entrenas. Es un minuto.',
     required: true,
     nativeOnly: false,
   },
@@ -125,26 +127,39 @@ export function canGoBack(steps: readonly OnboardingStep[], id: OnboardingStepId
   return prevStepId(steps, id) !== null;
 }
 
+/** "Conecta tu Garmin" / "Conecta tu COROS": the watch step names the watch chosen on it. */
+export function watchStepTitle(brand: WatchBrand): string {
+  return `Conecta tu ${watchName(brand)}`;
+}
+
 /** What we know about the athlete, to gate required steps and to resume. */
 export interface OnboardingFacts {
   displayName: string;
-  /** Garmin connected, or the athlete chose "Seguir sin Garmin". */
-  garminDone: boolean;
+  /**
+   * Their watch is connected (Garmin: the key; COROS: Apple Salud enabled on this device), or the
+   * athlete chose "Seguir sin reloj".
+   */
+  watchDone: boolean;
   /** Claude connected (a used `mcp` token), or the athlete chose to skip it for now. */
   claudeDone: boolean;
 }
 
-/** Facts from the server state plus the locally stored skip/done flags. */
+/**
+ * Facts from the server state, this device's Apple Salud opt-in (`healthEnabled`, what a COROS
+ * watch needs) and the locally stored skip/done flags.
+ */
 export function onboardingFacts(
-  profile: Pick<Profile, 'displayName'>,
+  profile: Pick<Profile, 'displayName' | 'watchBrand'>,
   integrations: readonly IntegrationStatus[] | undefined,
   tokens: readonly PersonalToken[] | undefined,
   local: Pick<StoredProgress, 'claudeDone' | 'garminSkipped'>,
+  healthEnabled = false,
 ): OnboardingFacts {
   const garminConnected = (integrations ?? []).some((i) => i.provider === 'garmin_personal' && i.state === 'connected');
+  const watchConnected = watchBrandOf(profile) === 'coros' ? healthEnabled : garminConnected;
   return {
     displayName: profile.displayName ?? '',
-    garminDone: local.garminSkipped || garminConnected,
+    watchDone: local.garminSkipped || watchConnected,
     claudeDone: local.claudeDone || claudeLinkState(tokens ?? [], null) === 'connected',
   };
 }
@@ -155,7 +170,7 @@ export function isStepSatisfied(id: OnboardingStepId, facts: OnboardingFacts): b
     case 'welcome':
       return facts.displayName.trim().length > 0;
     case 'garmin':
-      return facts.garminDone;
+      return facts.watchDone;
     case 'claude':
       return facts.claudeDone;
     default:
@@ -165,7 +180,7 @@ export function isStepSatisfied(id: OnboardingStepId, facts: OnboardingFacts): b
 
 /**
  * Where to resume: the saved step, unless an earlier required step is not
- * satisfied any more (e.g. Garmin was disconnected meanwhile). A saved step
+ * satisfied any more (e.g. the watch was disconnected meanwhile). A saved step
  * hidden on this platform resumes at the next visible one.
  */
 export function resolveResumeStep(
@@ -195,7 +210,10 @@ export interface StoredProgress {
   step: OnboardingStepId;
   /** Claude connected or skipped (demo connections have no `lastUsedAt` to check later). */
   claudeDone: boolean;
-  /** "Seguir sin Garmin" (no watch, Garmin down, key rejected…). */
+  /**
+   * "Seguir sin reloj" (no watch, Garmin down, key rejected, no iPhone for COROS…) or the demo's
+   * simulated COROS. Name kept from v2 so saved onboardings still parse.
+   */
   garminSkipped: boolean;
   /** Id (never the secret URL) of the connector token created by this onboarding, to avoid minting another. */
   claudeTokenId: string | null;
@@ -230,6 +248,13 @@ export const NAME_MAX = 60;
 
 /** Default time of the morning report ("Informe de cada mañana"). */
 export const DEFAULT_MORNING_TIME = '07:00';
+
+/** "Lee tu reloj" on the welcome step: the chosen watch, or both when none is chosen yet. */
+export function welcomeWatchValue(watchBrand: WatchBrand | null | undefined): { title: string; text: string } {
+  if (watchBrand === 'coros') return { title: 'Lee tu COROS', text: 'Sueño, recuperación y entrenos, sin apuntar nada.' };
+  if (watchBrand === 'garmin') return { title: 'Lee tu Garmin', text: 'Sueño, VFC y entrenos, sin apuntar nada.' };
+  return { title: 'Lee tu reloj', text: 'Garmin o COROS: sueño, recuperación y entrenos, sin apuntar nada.' };
+}
 
 /** Usernames auto-generated by the sign-up trigger ("u" + 8 hex chars). */
 export function isGeneratedUsername(username: string | null | undefined): boolean {

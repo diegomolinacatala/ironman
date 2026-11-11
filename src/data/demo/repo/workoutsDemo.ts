@@ -1,4 +1,4 @@
-import { applyPlanChanges as applyChanges } from '@/domain/changes';
+import { applyPlanChanges as applyChanges, normalizeCoaching, withCoachingPatch } from '@/domain/changes';
 import type { ApplyResult, CompletedData, DateRange, PlanChange, UUID, Workout, WorkoutDraft, WorkoutPatch } from '@/domain/types';
 
 import type { Repository } from '../../repository';
@@ -26,6 +26,7 @@ const NOT_FOUND = 'Ese entreno ya no existe.';
 
 export function draftToWorkout(draft: WorkoutDraft, userId: UUID, clock: DemoClock): Workout {
   return {
+    ...(draft.coaching ? { coaching: normalizeCoaching(draft.coaching) } : {}),
     id: clock.newId(),
     userId,
     date: draft.date,
@@ -53,14 +54,17 @@ export function draftToWorkout(draft: WorkoutDraft, userId: UUID, clock: DemoClo
 export function patchWorkout(db: DemoDb, me: UUID, id: UUID, patch: WorkoutPatch, clock: DemoClock): { db: DemoDb; result: Workout } {
   const current = db.workouts.find((w) => w.id === id && w.userId === me);
   if (!current) throw notFound(NOT_FOUND);
-  const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as WorkoutPatch;
-  const updated: Workout = {
-    ...current,
-    ...defined,
-    title: defined.title?.trim() ?? current.title,
-    durationMin: defined.durationMin === undefined ? current.durationMin : Math.round(defined.durationMin),
-    updatedAt: clock.now,
-  };
+  const { coaching, ...defined } = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as WorkoutPatch;
+  const updated: Workout = withCoachingPatch(
+    {
+      ...current,
+      ...defined,
+      title: defined.title?.trim() ?? current.title,
+      durationMin: defined.durationMin === undefined ? current.durationMin : Math.round(defined.durationMin),
+      updatedAt: clock.now,
+    },
+    coaching,
+  );
   const next = { ...db, workouts: db.workouts.map((w) => (w.id === id ? updated : w)) };
   const becameCompleted = current.status !== 'completed' && updated.status === 'completed';
   return { db: becameCompleted ? feedForJointCompletion(feedForCompletion(next, updated, clock), updated, clock) : next, result: updated };

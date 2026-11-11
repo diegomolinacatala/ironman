@@ -5,6 +5,7 @@
 import { readUserJson, writeUserJson } from '../deviceState';
 
 const MAX_REMEMBERED_IDS = 500;
+const MAX_REMEMBERED_SOURCES = 12;
 
 export async function isHealthEnabled(userId: string): Promise<boolean> {
   return (await readUserJson<unknown>('healthEnabled', userId, false)) === true;
@@ -38,4 +39,19 @@ export async function rememberImportedHealthIds(
   if (added.length === 0) return;
   const merged = [...previous, ...added.filter((id) => !previous.has(id))];
   await writeUserJson('healthImported', userId, merged.slice(-MAX_REMEMBERED_IDS));
+}
+
+/** Apps seen writing workouts or sleep to Apple Salud for this account ("COROS"…), most recent last. */
+export async function getHealthSources(userId: string): Promise<string[]> {
+  const value = await readUserJson<unknown>('healthSources', userId, []);
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
+}
+
+/** Adds the apps seen in a sync (seen again → moved to the end, capped). Returns the merged list. */
+export async function rememberHealthSources(userId: string, seen: readonly string[]): Promise<string[]> {
+  const previous = await getHealthSources(userId);
+  if (seen.length === 0) return previous;
+  const merged = [...previous.filter((name) => !seen.includes(name)), ...seen].slice(-MAX_REMEMBERED_SOURCES);
+  await writeUserJson('healthSources', userId, merged);
+  return merged;
 }

@@ -57,6 +57,29 @@ export type WorkoutSource = (typeof WORKOUT_SOURCES)[number];
 
 export type WorkoutStepKind = 'warmup' | 'work' | 'recovery' | 'cooldown' | 'rest';
 
+/** Inclusive numeric range (heart rate, pace, power, RPE). */
+export interface NumberRange {
+  min: number;
+  max: number;
+}
+
+/**
+ * Explicit targets of a step. Usually absent: the app derives ppm / pace /
+ * watts / RPE from the step intensity and the athlete's thresholds at render
+ * time (domain/zones.ts), so plans follow threshold updates. Set only when
+ * the intensity alone is not enough (sweet spot, CSS offsets, race pace…).
+ */
+export interface StepTarget {
+  /** Heart rate, ppm. */
+  hr?: NumberRange;
+  /** Pace: seconds per km (run) or per 100 m (swim). `min` is the faster end. */
+  pace?: NumberRange;
+  /** Power, watts (bike). */
+  power?: NumberRange;
+  /** Perceived exertion, CR-10 (1–10). */
+  rpe?: NumberRange;
+}
+
 export interface WorkoutStep {
   kind: WorkoutStepKind;
   durationMin?: number;
@@ -65,6 +88,28 @@ export interface WorkoutStep {
   /** Repeat this step N times (intervals). */
   repeat?: number;
   note?: string;
+  /** Explicit targets that win over the ones derived from `intensity` + thresholds. */
+  target?: StepTarget;
+  /** How it should feel / what to focus on ("Respiración cómoda: puedes hablar en frases"). ≤ 200 chars. */
+  cue?: string;
+  /** Brick: the leg this step belongs to. */
+  leg?: 'bike' | 'run';
+}
+
+/**
+ * The coach's prescription for a session (shown on the workout, Hoy, proposals,
+ * calendar notes): why it is in the plan, how to execute it, how to know it went
+ * well and what to do if it is not your day.
+ */
+export interface WorkoutCoaching {
+  /** Why this session, one sentence (≤ 200 chars). */
+  objective: string;
+  /** 0–4 execution keys (≤ 160 chars each). */
+  keys: string[];
+  /** How to know you nailed it (≤ 200 chars). */
+  success: string;
+  /** What to do if it is not your day (≤ 200 chars), null = rest. */
+  planB: string | null;
 }
 
 export interface CompletedData {
@@ -73,6 +118,8 @@ export interface CompletedData {
   avgHr?: number;
   /** Rate of perceived exertion 1–10. */
   rpe?: number;
+  /** Sensaciones after the session: 1 = muy mal … 5 = genial. */
+  feel?: Score5;
   tss?: number;
   notes?: string;
   source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
@@ -103,6 +150,8 @@ export interface Workout {
   jointSessionId: UUID | null;
   /** Id of the imported activity (Garmin / HealthKit) for unplanned workouts; dedupe key. */
   externalId: string | null;
+  /** Objective, keys, success criterion and plan B (rules engine, AI coach, Claude). Absent = none. */
+  coaching?: WorkoutCoaching | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
@@ -123,6 +172,7 @@ export interface WorkoutDraft {
   source?: WorkoutSource;
   /** Imported activity id ('healthkit:<uuid>', 'garmin:<id>') — dedupe key for unplanned imports. */
   externalId?: string | null;
+  coaching?: WorkoutCoaching | null;
 }
 
 export type WorkoutPatch = Partial<WorkoutDraft> & {
@@ -305,7 +355,8 @@ export interface DailyCheckin {
 
 export type CheckinDraft = Omit<DailyCheckin, 'userId'>;
 
-export type MetricsSource = 'healthkit' | 'garmin' | 'manual';
+/** 'coros' = COROS data the athlete's Claude saved through the connector (COROS → Apple Salud lands as 'healthkit'). */
+export type MetricsSource = 'healthkit' | 'garmin' | 'coros' | 'manual';
 
 export interface DailyMetrics {
   userId: UUID;
@@ -452,6 +503,14 @@ export interface NutritionDraft {
 
 /** What friends can see of my calendar. */
 export type CalendarVisibility = 'full' | 'summary' | 'busy';
+
+/**
+ * The athlete's watch. Garmin: Personal API key, synced by the server.
+ * COROS: no personal API, so Apple Salud on the iPhone (+ optionally the COROS
+ * connector in the athlete's own Claude for HRV, recovery and workouts on the watch).
+ */
+export const WATCH_BRANDS = ['garmin', 'coros'] as const;
+export type WatchBrand = (typeof WATCH_BRANDS)[number];
 export type AthleteLevel = 'beginner' | 'intermediate' | 'advanced';
 
 export interface Thresholds {
@@ -491,6 +550,8 @@ export interface Profile {
   onboardedAt: ISODateTime | null;
   /** When the user explicitly agreed to send their training/health context to the AI provider (Coach IA: Cloudflare Workers AI). */
   aiConsentAt: ISODateTime | null;
+  /** The athlete's watch; null/absent = not chosen yet (treated as Garmin). */
+  watchBrand?: WatchBrand | null;
   createdAt: ISODateTime;
 }
 
@@ -741,6 +802,8 @@ export interface CoachResponse {
   lifeEvent: LifeEvent | null;
   /** Quedada the coach suggests with a friend (never sent without the athlete's tap), or null. */
   quedada?: QuedadaSuggestion | null;
+  /** Week-level plan the coach suggests (Plan → General); saved only when the athlete taps. */
+  weekPlans?: WeekPlanDraft[];
 }
 
 /** A quedada proposed by the coach: the app turns it into a prefilled /joint/new form. */
@@ -756,6 +819,43 @@ export interface QuedadaSuggestion {
   location: string | null;
   /** One line on why this slot (Spanish). */
   reason: string;
+}
+
+// ---------------------------------------------------------------------------
+// Season plan ("Plan → General"): week-level plan without individual workouts
+// ---------------------------------------------------------------------------
+
+/**
+ * What the athlete (or the coach / Claude) decided for a week, overriding the
+ * computed periodization of a prep/base/build week (never a taper, race,
+ * transition or B/C race week):
+ * - load: normal load week (also turns a scheduled descarga into a load week)
+ * - push: more volume (+10 %)
+ * - recovery: descarga (about −40 %)
+ * - rest: semana libre (vacations, exams…): very low volume, no structure
+ */
+export const WEEK_PLAN_KINDS = ['load', 'push', 'recovery', 'rest'] as const;
+export type WeekPlanKind = (typeof WEEK_PLAN_KINDS)[number];
+export type WeekPlanSource = 'manual' | 'ai_coach' | 'claude';
+
+export interface WeekPlan {
+  /** Monday of the week. */
+  weekStart: ISODate;
+  kind: WeekPlanKind;
+  /** Planned training minutes (0–3000); null = weekly hours × the periodization factor. */
+  targetMinutes: number | null;
+  /** One line for the week ("Viaje a Londres: solo carrera"), ≤ 300 chars. */
+  note: string | null;
+  source: WeekPlanSource;
+  updatedAt: ISODateTime;
+}
+
+export interface WeekPlanDraft {
+  weekStart: ISODate;
+  kind: WeekPlanKind;
+  targetMinutes?: number | null;
+  note?: string | null;
+  source?: WeekPlanSource;
 }
 
 // ---------------------------------------------------------------------------

@@ -27,6 +27,25 @@ let mockMetrics: Partial<DailyMetrics>[] = [];
 let mockSession: { userId: string } | null = { userId: 'user-me' };
 /** False = cold start: queries disabled until the session is restored. */
 let mockFetched = true;
+let mockWatchBrand: 'garmin' | 'coros' | null = null;
+const mockHealth = {
+  available: true,
+  loaded: true,
+  enabled: false,
+  lastSync: null,
+  sources: [] as string[],
+  busy: false,
+  connect: jest.fn(async () => null),
+  syncNow: jest.fn(async (_opts?: { days?: number }) => ({
+    metricsDays: 0,
+    sleepNights: 0,
+    activitiesFound: 0,
+    workoutsCompleted: 0,
+    activitiesImported: 0,
+    sources: [] as string[],
+  })),
+  disable: jest.fn(async () => undefined),
+};
 const connected: IntegrationStatus[] = [
   { provider: 'garmin_personal', state: 'connected', expiresAt: null, lastSyncAt: null, lastError: null },
 ];
@@ -37,8 +56,10 @@ jest.mock(
   () => (jest.requireActual('react-native-safe-area-context/jest/mock') as { default: object }).default,
 );
 jest.mock('@/integrations/speech/useSpeaker', () => ({ useSpeaker: () => mockSpeaker }));
+jest.mock('@/integrations/hooks', () => ({ useHealthIntegration: () => mockHealth }));
 jest.mock('@/data/context', () => ({ useAuth: () => ({ session: mockSession, isLoading: false }) }));
 jest.mock('@/data/queries', () => ({
+  useProfile: () => ({ data: { watchBrand: mockWatchBrand }, isLoading: false }),
   useBriefing: () => ({
     data: mockFetched ? mockBriefingData : undefined,
     isLoading: false,
@@ -64,6 +85,8 @@ jest.setTimeout(30000);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockWatchBrand = null;
+  mockHealth.enabled = false;
   mockBriefingData = null;
   mockMetrics = [];
   mockSession = { userId: 'user-me' };
@@ -127,6 +150,26 @@ describe('/briefing', () => {
     expect(screen.queryByText(BRIEFING.script)).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Leer el informe' }));
     expect(screen.getByText(BRIEFING.script)).toBeTruthy();
+  });
+
+  test('COROS data is credited to COROS, never to Garmin', async () => {
+    mockWatchBrand = 'coros';
+    mockHealth.enabled = true;
+    mockBriefingData = BRIEFING;
+    mockMetrics = [{ date: DATE, source: 'healthkit' }, { date: DATE, source: 'coros' }];
+    await render(<BriefingDetail date={DATE} autoplay={false} />);
+    expect(screen.getByText('Datos de COROS')).toBeTruthy();
+    expect(screen.queryByText('Datos de Garmin')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Actualizar informe' }).props.accessibilityHint).toBe(
+      'Vuelve a leer tu COROS y reescribe el informe',
+    );
+  });
+
+  test('COROS without sleep and without Apple Salud: says how to connect COROS', async () => {
+    mockWatchBrand = 'coros';
+    mockBriefingData = { ...BRIEFING, sleep: null };
+    await render(<BriefingDetail date={DATE} autoplay={false} />);
+    expect(screen.getByText('Conecta tu COROS en Tú → Conexiones y aquí verás cómo has dormido.')).toBeTruthy();
   });
 
   test('player bar plays and refresh regenerates', async () => {

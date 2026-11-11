@@ -5,6 +5,7 @@ import { Linking } from 'react-native';
 import AvailabilitySettingsScreen from '@/app/settings/availability';
 import CalendarFeedScreen from '@/app/settings/calendar-feed';
 import ConnectClaudeScreen from '@/app/settings/claude';
+import CorosGuideScreen from '@/app/settings/coros';
 import IntegrationsScreen from '@/app/settings/integrations';
 import NotificationSettingsScreen from '@/app/settings/notifications';
 import ProfileSettingsScreen from '@/app/settings/profile';
@@ -12,7 +13,7 @@ import { addDays, todayISO } from '@/domain/dates';
 import type { CreatedToken, PersonalToken, Profile } from '@/domain/types';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
-const mockState: { mode: 'demo' | 'supabase'; tokens: PersonalToken[] } = { mode: 'supabase', tokens: [] };
+const mockState: { mode: 'demo' | 'supabase'; tokens: PersonalToken[]; profile: Profile | null } = { mode: 'supabase', tokens: [], profile: null };
 /** EXPO_PUBLIC_AI_COACH: off by default, as in the app. */
 const mockEnvFlags = { aiCoachEnabled: false };
 
@@ -61,6 +62,19 @@ const mockUpdateProfile = jest.fn(async (patch: Partial<Profile>) => ({ ...mockP
 const mockReschedule = jest.fn(async (_input: unknown) => 3);
 const mockSetString = jest.fn(async (_text: string) => true);
 const mockOpenBrowser = jest.fn(async (_url: string, _opts?: unknown) => ({ type: 'dismiss' }));
+const COROS_RESULT = { metricsDays: 26, sleepNights: 26, activitiesFound: 12, workoutsCompleted: 3, activitiesImported: 9, sources: ['COROS'] };
+/** Apple Salud on this device (how a COROS watch reaches us). */
+const mockHealth = {
+  available: true,
+  loaded: true,
+  enabled: false,
+  lastSync: null as string | null,
+  sources: [] as string[],
+  busy: false,
+  connect: jest.fn(async (_opts?: { days?: number }) => COROS_RESULT),
+  syncNow: jest.fn(async (_opts?: { days?: number }) => COROS_RESULT),
+  disable: jest.fn(async () => undefined),
+};
 const mockTraining = {
   enabled: false,
   enable: jest.fn(async () => true),
@@ -117,7 +131,7 @@ jest.mock('@/data/context', () => ({
 jest.mock('@/data/queries', () => {
   const mutation = <T,>(fn: T) => ({ mutateAsync: fn, isPending: false, variables: undefined });
   return {
-    useProfile: () => ({ data: mockProfile, isLoading: false, isError: false, refetch: jest.fn() }),
+    useProfile: () => ({ data: mockState.profile, isLoading: false, isError: false, refetch: jest.fn() }),
     useUpdateProfile: () => mutation(mockUpdateProfile),
     useUsernameAvailable: () => ({ data: true, isFetching: false, isError: false }),
     useWorkouts: () => ({ data: [], isLoading: false, isError: false }),
@@ -144,15 +158,8 @@ jest.mock('@/integrations/hooks', () => ({
     setSelected: async () => undefined,
     syncNow: async () => undefined,
   }),
-  useHealthIntegration: () => ({
-    available: true,
-    enabled: false,
-    lastSync: null,
-    busy: false,
-    connect: async () => undefined,
-    syncNow: async () => undefined,
-    disable: async () => undefined,
-  }),
+  FIRST_HEALTH_IMPORT_DAYS: 28,
+  useHealthIntegration: () => ({ ...mockHealth }),
 }));
 
 jest.mock('@/integrations/notifications', () => ({
@@ -163,6 +170,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockState.mode = 'supabase';
   mockState.tokens = [];
+  mockState.profile = mockProfile;
+  mockHealth.available = true;
+  mockHealth.enabled = false;
+  mockHealth.lastSync = null;
+  mockHealth.sources = [];
   mockEnvFlags.aiCoachEnabled = false;
   mockTraining.enabled = false;
 });
@@ -305,6 +317,86 @@ describe('Conexiones', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Usar una clave de prueba (demo)' }));
     await waitFor(() => expect(mockConnectGarmin).toHaveBeenCalledTimes(1));
     expect(mockConnectGarmin.mock.calls[0]?.[0]?.apiKey).toBe('demo-personal-api-key-road-to-ironman');
+  });
+});
+
+describe('Tu reloj › COROS', () => {
+  test('Conexiones: switching to COROS saves it and swaps the Garmin and Apple Salud cards for the COROS one', async () => {
+    await render(<IntegrationsScreen />);
+    expect(screen.getByRole('button', { name: 'Abrir Garmin Connect' })).toBeTruthy();
+    expect(screen.getByText('Apple Salud')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'COROS' }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith({ watchBrand: 'coros' }));
+    expect(await screen.findByRole('button', { name: 'Conectar Apple Salud' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Abrir Garmin Connect' })).toBeNull();
+    expect(screen.queryByText('Apple Salud')).toBeNull();
+  });
+
+  test('COROS card, Apple Salud off: the steps in the COROS app and a 4-week first import', async () => {
+    mockState.profile = { ...mockProfile, watchBrand: 'coros' };
+    await render(<IntegrationsScreen />);
+    expect(screen.getByText(/Perfil › Ajustes › Apps de terceros › Sincronización de datos › Apple Health/)).toBeTruthy();
+    expect(screen.getByText('Sin conectar')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Conectar Apple Salud' }));
+    await waitFor(() => expect(mockHealth.connect).toHaveBeenCalledWith({ days: 28 }));
+    expect(await screen.findByText('12 entrenos y 26 noches de sueño de tus últimas 4 semanas.')).toBeTruthy();
+  });
+
+  test('COROS card, connected: last read, «Sincronizar» and the step-by-step guide', async () => {
+    mockState.profile = { ...mockProfile, watchBrand: 'coros' };
+    mockHealth.enabled = true;
+    mockHealth.sources = ['COROS'];
+    mockHealth.lastSync = new Date().toISOString();
+    await render(<IntegrationsScreen />);
+    expect(screen.getByText(/^Última lectura .+ · por Apple Salud$/)).toBeTruthy();
+    // The COROS card comes first (the busy-calendar card has its own «Sincronizar»).
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Sincronizar' })[0]!);
+    await waitFor(() => expect(mockHealth.syncNow).toHaveBeenCalledWith({ days: 28 }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Guía paso a paso' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/coros');
+  });
+
+  test('COROS card, Apple Salud on but nothing from COROS: what to check', async () => {
+    mockState.profile = { ...mockProfile, watchBrand: 'coros' };
+    mockHealth.enabled = true;
+    mockHealth.sources = ['Salud'];
+    await render(<IntegrationsScreen />);
+    expect(screen.getByText('Esperando datos')).toBeTruthy();
+    expect(screen.getByText(/Aún no vemos datos de COROS/)).toBeTruthy();
+    expect(screen.getByText(/Salud › tu foto › Apps › COROS/)).toBeTruthy();
+  });
+
+  test('the complete guide: five sections, copyable prompts and connector URLs', async () => {
+    mockState.profile = { ...mockProfile, watchBrand: 'coros' };
+    await render(<CorosGuideScreen />);
+    for (const title of [
+      'Apple Salud (automático)',
+      'Tu Claude con COROS (recomendado)',
+      'Tus entrenos en el reloj',
+      'Mismos umbrales en las dos apps',
+      'Si algo falla',
+    ]) {
+      expect(screen.getByText(title)).toBeTruthy();
+    }
+    expect(screen.getByText(/Perfil › Biblioteca de entrenamientos › «\+»/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: /^Copiar: Guarda en Road to Ironman mi sueño, VFC y recuperación de COROS/ }));
+    await waitFor(() =>
+      expect(mockSetString).toHaveBeenCalledWith('Guarda en Road to Ironman mi sueño, VFC y recuperación de COROS de anoche'),
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Copiar Europa: https://mcpeu.coros.com/mcp' }));
+    await waitFor(() => expect(mockSetString).toHaveBeenLastCalledWith('https://mcpeu.coros.com/mcp'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Abrir tu perfil' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/profile');
+  });
+
+  test('Conecta tu Claude for a COROS athlete: the COROS connector and COROS prompts', async () => {
+    mockState.profile = { ...mockProfile, watchBrand: 'coros' };
+    mockState.tokens = [{ ...createdToken('mcp').token, lastUsedAt: new Date().toISOString() }];
+    await render(<ConnectClaudeScreen />);
+    expect(screen.getByText('Tu Claude puede leer tu COROS. Ahora también tu semana.')).toBeTruthy();
+    expect(screen.getByText('Añade también COROS a tu Claude')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Copiar: Planifica mi semana en Road to Ironman con mis datos de COROS/ })).toBeTruthy();
+    expect(screen.queryByText(/Body Battery/)).toBeNull();
   });
 });
 

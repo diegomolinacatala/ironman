@@ -1,5 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
+import type { WatchBrand } from '@/domain/types';
+import { useMyWatchBrand } from '@/features/settings/useMyWatchBrand';
 import { Card, EmptyState, Text, radius, space, useTheme } from '@/ui';
 
 import { chartPalette, type ChartPalette } from './chartPalette';
@@ -61,20 +63,22 @@ function Legend({ palette }: { palette: ChartPalette }) {
   );
 }
 
+function noLoadMessage(brand: WatchBrand): string {
+  const connect = brand === 'coros' ? 'conecta tu COROS' : 'conecta tu Garmin o Apple Salud';
+  return `Completa entrenos o ${connect} y aquí verás tu forma física, tu fatiga y tu frescura.`;
+}
+
 /** Hero card: latest Forma física / Fatiga / Frescura + chart + reading. */
 export function PmcCard({ series }: { series: PmcSeries }) {
   const theme = useTheme();
+  const brand = useMyWatchBrand();
   const palette = chartPalette(theme);
   const latest = series.latest;
 
   if (!series.hasData || !latest) {
     return (
       <Card variant="flat" padding="md">
-        <EmptyState
-          icon="progress"
-          title="Aún no hay carga registrada"
-          message="Completa entrenos o conecta Garmin o Apple Salud y aquí verás tu forma física, tu fatiga y tu frescura."
-        />
+        <EmptyState icon="progress" title="Aún no hay carga registrada" message={noLoadMessage(brand)} />
       </Card>
     );
   }
