@@ -19,6 +19,13 @@ const listing = JSON.parse(readFileSync(join(ROOT, 'store/listing.json'), 'utf8'
 const SCREENSHOTS_DIR = join(ROOT, 'store/screenshots');
 const EDITABLE = new Set(['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'METADATA_REJECTED', 'INVALID_BINARY']);
 
+const BOOLEAN_AGE_KEYS = new Set([
+  'gambling', 'unrestrictedWebAccess', 'lootBox', 'messagingAndChat', 'userGeneratedContent',
+  'healthOrWellnessTopics', 'parentalControls', 'ageAssurance', 'advertising', 'seventeenPlus',
+]);
+const SKIP_AGE_KEY = /Url$|Number$|Override|kidsAgeBand/;
+const ENUM_AGE_VALUE = /^(NONE|INFREQUENT_OR_MILD|FREQUENT_OR_INTENSE|INFREQUENT|FREQUENT)$/;
+
 const api = createClient();
 const submit = process.argv.includes('--submit');
 const problems = [];
@@ -26,7 +33,7 @@ const problems = [];
 async function step(name, fn) {
   try {
     const note = await fn();
-    console.log(`✓ ${name}${note ? `: ${note}` : ''}`);
+    console.log(`✓ ${name}${typeof note === 'string' ? `: ${note}` : ''}`);
   } catch (error) {
     problems.push(`${name}: ${error.message}`);
     console.log(`✗ ${name}: ${error.message}`);
@@ -81,14 +88,14 @@ async function ensureVersion(appId) {
 async function setAgeRating(appInfoId) {
   const res = await api.get(`/v1/appInfos/${appInfoId}/ageRatingDeclaration`);
   const decl = res.data;
-  // Everything "none/false" unless listing.ageRating says otherwise; unknown future keys are left alone.
+  // Everything "NONE"/false unless listing.ageRating says otherwise. Unset (null) attributes are
+  // enums ("NONE"…) except the known yes/no questions; URLs, numbers and overrides are left alone.
   const attributes = {};
   for (const [key, value] of Object.entries(decl.attributes)) {
-    if (typeof value === 'boolean' || value === null) attributes[key] = false;
-    if (typeof value === 'string' && /^(NONE|INFREQUENT_OR_MILD|FREQUENT_OR_INTENSE|INFREQUENT|FREQUENT)$/.test(value)) attributes[key] = 'NONE';
+    if (SKIP_AGE_KEY.test(key)) continue;
+    if (typeof value === 'boolean' || (value === null && BOOLEAN_AGE_KEYS.has(key))) attributes[key] = false;
+    else if (value === null || ENUM_AGE_VALUE.test(value)) attributes[key] = 'NONE';
   }
-  delete attributes.kidsAgeBand;
-  delete attributes.ageRatingOverride;
   for (const [key, value] of Object.entries(listing.ageRating)) {
     if (key in decl.attributes) attributes[key] = value;
   }
