@@ -111,6 +111,8 @@ function makeRepo() {
     sendFriendRequest: jest.fn(async (_username: string) => undefined),
     respondFriendRequest: jest.fn(async () => undefined),
     removeFriend: jest.fn(async () => undefined),
+    blockUser: jest.fn(async (_userId: string) => undefined),
+    reportUser: jest.fn(async (_report: unknown) => undefined),
     subscribe: jest.fn(() => () => undefined),
   };
 }
@@ -197,6 +199,31 @@ describe('friend week', () => {
     mockParams = { id: 'nobody' };
     await render(<FriendWeekScreen />, { wrapper: Providers });
     expect(await screen.findByText('No es tu amigo todavía')).toBeTruthy();
+  });
+
+  test('a friend can be reported with a reason and blocked from the options menu', async () => {
+    const confirmSpy = jest.spyOn(confirm, 'confirmAction').mockResolvedValue(true);
+    const noticeSpy = jest.spyOn(confirm, 'showNotice').mockImplementation(() => undefined);
+    const pick = (label: string) =>
+      jest.spyOn(confirm, 'showActionMenu').mockImplementationOnce((_title, options) => options.find((o) => o.label === label)?.onSelect());
+    mockParams = { id: ALEX };
+    await render(<FriendWeekScreen />, { wrapper: Providers });
+    await screen.findByText('Álex García');
+
+    pick('Denunciar');
+    pick('Acoso o insultos');
+    await fireEvent.press(screen.getByRole('button', { name: 'Opciones de amistad' }));
+    await waitFor(() =>
+      expect(repo.reportUser).toHaveBeenCalledWith({ userId: ALEX, reason: 'harassment', context: 'profile', targetId: null }),
+    );
+
+    pick('Bloquear');
+    await fireEvent.press(screen.getByRole('button', { name: 'Opciones de amistad' }));
+    await waitFor(() => expect(repo.blockUser).toHaveBeenCalledWith(ALEX));
+    await waitFor(() => expect(mockRouter.dismissTo).toHaveBeenCalledWith('/together'));
+    confirmSpy.mockRestore();
+    noticeSpy.mockRestore();
+    jest.restoreAllMocks();
   });
 
   test('removing a friend returns to the Juntos tab without stacking another tab bar', async () => {

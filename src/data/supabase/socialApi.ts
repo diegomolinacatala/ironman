@@ -9,11 +9,12 @@ import type {
   JointSession,
   JointSessionDraft,
   PublicProfile,
+  UserReportDraft,
   UUID,
 } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../repository';
-import { assertFriendRange, assertJointDraft } from '../demo/validation';
+import { assertFriendRange, assertJointDraft, assertReport } from '../demo/validation';
 import { run, runVoid, type SupabaseCtx } from './base';
 import { rowToPublicProfile } from './mappers';
 import { rowToFeedItem, rowToFriend, rowToFriendWeekItem } from './mappersRpc';
@@ -28,6 +29,8 @@ type SocialMethods = Pick<
   | 'sendFriendRequest'
   | 'respondFriendRequest'
   | 'removeFriend'
+  | 'blockUser'
+  | 'reportUser'
   | 'getFriendWeek'
   | 'listJointSessions'
   | 'getJointSession'
@@ -83,7 +86,7 @@ export function jointPatchToRpc(patch: JointSessionPatch): Record<string, unknow
 
 function friendsApi(
   ctx: SupabaseCtx,
-): Pick<Repository, 'searchProfiles' | 'listFriends' | 'sendFriendRequest' | 'respondFriendRequest' | 'removeFriend' | 'getFriendWeek'> {
+): Pick<Repository, 'searchProfiles' | 'listFriends' | 'sendFriendRequest' | 'respondFriendRequest' | 'removeFriend' | 'blockUser' | 'reportUser' | 'getFriendWeek'> {
   const { client } = ctx;
   return {
     async searchProfiles(query: string): Promise<PublicProfile[]> {
@@ -109,6 +112,23 @@ function friendsApi(
     },
     async removeFriend(friendshipId: UUID): Promise<void> {
       await runVoid('removeFriend', client.from('friendships').delete().eq('id', friendshipId));
+    },
+    async blockUser(userId: UUID): Promise<void> {
+      await runVoid('blockUser', client.rpc('block_user', { p_user: userId }), 'No se ha podido bloquear.');
+    },
+    async reportUser(report: UserReportDraft): Promise<void> {
+      const draft = assertReport(report);
+      await runVoid(
+        'reportUser',
+        client.rpc('report_user', {
+          p_user: draft.userId,
+          p_reason: draft.reason,
+          p_context: draft.context,
+          p_target: draft.targetId ?? null,
+          p_details: draft.details ?? null,
+        }),
+        'No se ha podido enviar la denuncia.',
+      );
     },
     async getFriendWeek(friendId: UUID, range: DateRange): Promise<FriendWeekItem[]> {
       assertFriendRange(range);

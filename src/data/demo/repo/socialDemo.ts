@@ -1,4 +1,4 @@
-import type { DateRange, FriendWeekItem, JointSession, JointSessionDraft, JointSessionPatch, UUID } from '@/domain/types';
+import type { DateRange, FriendWeekItem, JointSession, JointSessionDraft, JointSessionPatch, UserReportDraft, UUID } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../../repository';
 import { profileOf } from '../db';
@@ -8,13 +8,14 @@ import {
   feedFor,
   listFriendsFor,
   removeFriendship,
+  blockIn,
   respondRequest,
   searchProfilesIn,
   sendRequest,
   toggleKudosIn,
 } from '../socialOps';
 import { addComment, friendRacesFor, joinJoint, listCommentsFor, listOpenFor, updateJoint, updatedJointFor } from '../togetherOps';
-import { assertFriendRange } from '../validation';
+import { assertFriendRange, assertReport } from '../validation';
 import { requireMe, type DemoDeps } from './common';
 
 type SocialMethods = Pick<
@@ -24,6 +25,8 @@ type SocialMethods = Pick<
   | 'sendFriendRequest'
   | 'respondFriendRequest'
   | 'removeFriend'
+  | 'blockUser'
+  | 'reportUser'
   | 'getFriendWeek'
   | 'listJointSessions'
   | 'getJointSession'
@@ -68,7 +71,7 @@ function simulateRequestAccepted({ store, friendDelayMs }: DemoDeps, friendshipI
 
 function friendMethods(
   deps: DemoDeps,
-): Pick<Repository, 'searchProfiles' | 'listFriends' | 'sendFriendRequest' | 'respondFriendRequest' | 'removeFriend' | 'getFriendWeek'> {
+): Pick<Repository, 'searchProfiles' | 'listFriends' | 'sendFriendRequest' | 'respondFriendRequest' | 'removeFriend' | 'blockUser' | 'reportUser' | 'getFriendWeek'> {
   const { store } = deps;
   return {
     async searchProfiles(query: string) {
@@ -94,6 +97,17 @@ function friendMethods(
     async removeFriend(friendshipId: UUID) {
       const me = await requireMe(store);
       await store.update((db) => ({ db: removeFriendship(db, me, friendshipId), result: undefined }));
+    },
+    async blockUser(userId: UUID) {
+      const me = await requireMe(store);
+      await store.update((db, clock) => ({ db: blockIn(db, me, userId, clock), result: undefined }));
+    },
+    async reportUser(report: UserReportDraft) {
+      const me = await requireMe(store);
+      const draft = assertReport(report);
+      // The demo has no moderator: validate like the server and drop it.
+      if (draft.userId === me) throw new RepositoryError('validation', 'No puedes denunciarte a ti mismo.');
+      if (!profileOf(await store.read(), draft.userId)) throw new RepositoryError('not_found', 'No encontramos a esa persona.');
     },
     async getFriendWeek(friendId: UUID, range: DateRange): Promise<FriendWeekItem[]> {
       assertFriendRange(range);

@@ -10,6 +10,8 @@ import {
   type ISODate,
   type JointSessionDraft,
   type NutritionDraft,
+  type ReportReason,
+  type UserReportDraft,
   type WeekPlan,
   type WeekPlanDraft,
   type WorkoutDraft,
@@ -18,6 +20,19 @@ import {
 import { RepositoryError } from '../repository';
 
 export const MAX_FRIEND_WEEK_DAYS = 31;
+export const MAX_REPORT_DETAILS = 500;
+const REPORT_REASONS: readonly ReportReason[] = ['spam', 'harassment', 'inappropriate', 'other'];
+const REPORT_CONTEXTS: readonly UserReportDraft['context'][] = ['profile', 'request', 'comment'];
+
+/** Validates a report and returns it with trimmed details (null when empty). */
+export function assertReport(report: UserReportDraft): UserReportDraft {
+  if (!report.userId) throw new RepositoryError('validation', 'Denuncia no válida.');
+  if (!REPORT_REASONS.includes(report.reason)) throw new RepositoryError('validation', 'Elige un motivo.');
+  if (!REPORT_CONTEXTS.includes(report.context)) throw new RepositoryError('validation', 'Denuncia no válida.');
+  const details = report.details?.trim() || null;
+  if (details && details.length > MAX_REPORT_DETAILS) throw new RepositoryError('validation', 'Máximo 500 caracteres.');
+  return { ...report, targetId: report.targetId ?? null, details };
+}
 
 export function assertWorkoutDraft(draft: Partial<WorkoutDraft>, partial: boolean): void {
   const error = validateDraft(draft, partial);

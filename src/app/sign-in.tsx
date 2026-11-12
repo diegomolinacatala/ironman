@@ -9,6 +9,7 @@ import { authErrorMessage, isAuthCancellation } from '@/features/account/authErr
 import { BrandHero } from '@/features/account/BrandHero';
 import { DemoBanner } from '@/features/account/DemoBanner';
 import { isPlausibleEmail } from '@/features/settings/format';
+import { TERMS_URL, openPrivacyPolicy } from '@/features/settings/privacyPolicy';
 import { logger } from '@/lib/logger';
 import { Button, Divider, ErrorNotice, Text, TextField, haptics, space, useTheme } from '@/ui';
 
@@ -131,9 +132,15 @@ export default function SignInScreen() {
           ) : null}
           {error ? <ErrorNotice message={error} /> : null}
           <Text variant="caption" color="textMuted" align="center">
-            Tus datos son tuyos: puedes borrar la cuenta y todo su contenido cuando quieras desde Tú.
+            Al entrar aceptas las normas de uso: tolerancia cero con el acoso y el contenido ofensivo. Tus datos
+            son tuyos: puedes borrar la cuenta y todo su contenido cuando quieras desde Tú.
           </Text>
-          <Button label="Política de privacidad" variant="ghost" size="sm" onPress={() => router.push('/privacy')} />
+          <View style={styles.links}>
+            <Button label="Política de privacidad" variant="ghost" size="sm" onPress={() => router.push('/privacy')} />
+            {TERMS_URL ? (
+              <Button label="Normas de uso" variant="ghost" size="sm" onPress={() => void openPrivacyPolicy(TERMS_URL)} />
+            ) : null}
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -162,5 +169,6 @@ const styles = StyleSheet.create({
   block: { gap: space.md },
   heading: { gap: space.xs },
   or: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  links: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap' },
   flex: { flex: 1 },
 });

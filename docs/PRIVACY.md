@@ -1,9 +1,6 @@
-# Política de privacidad de Road to Ironman (borrador)
+# Política de privacidad de Road to Ironman
 
-> Borrador para publicar (por ejemplo en GitHub Pages o Notion) y enlazar en App Store Connect.
-> Sustituye los campos entre corchetes antes de publicarla. No es asesoramiento legal.
-
-**Responsable:** [Nombre y apellidos] · Contacto: [email de contacto] · Última actualización: [fecha]
+**Responsable:** Diego Molina · Contacto: [diegomolinacatala@gmail.com](mailto:diegomolinacatala@gmail.com) · Última actualización: 12 de noviembre de 2026
 
 ## Qué datos tratamos y para qué
 
@@ -19,6 +16,8 @@
 | Lo que le dices o escribes a tu coach (la voz se convierte en texto **en el iPhone**) | Tú | Entender lesiones, cambios de planes y preferencias, y ajustar tu plan |
 | Fotos de tus comidas (se guardan **solo en tu iPhone**) y lo que apuntas que comes | Tú | Estimar lo que comes y darte consejos para entrenar |
 | Informe de cada mañana (texto generado con tu sueño y tu plan del día) | La app | Contarte cómo has dormido y qué te toca; se lee en voz alta en el iPhone |
+| Mensajes en las quedadas, kudos y tu @usuario | Tú | Que tus amigos te encuentren y os organicéis |
+| Denuncias que envías (motivo, a quién y el mensaje denunciado) y bloqueos | Tú | Revisar abusos y que no te contacte quien bloqueas |
 | Token de notificaciones | Tu iPhone | Enviarte avisos |
 
 **No** vendemos datos, **no** hay publicidad y **no** usamos tus datos de salud para marketing.
@@ -52,7 +51,7 @@ tu Apple ID). Las claves de Garmin se guardan cifradas y se borran al desconecta
 
 ## Tus derechos
 
-Puedes acceder, rectificar, exportar u oponerte al tratamiento escribiendo a [email de contacto].
+Puedes acceder, rectificar, exportar u oponerte al tratamiento escribiendo a [diegomolinacatala@gmail.com](mailto:diegomolinacatala@gmail.com).
 Si no estás conforme, puedes reclamar ante la Agencia Española de Protección de Datos (aepd.es).
 
 ## Menores

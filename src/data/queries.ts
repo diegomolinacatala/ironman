@@ -25,6 +25,7 @@ import type {
   ProposalStatus,
   RaceDraft,
   TokenScope,
+  UserReportDraft,
   UUID,
   WeekPlanDraft,
   WorkoutDraft,
@@ -430,6 +431,16 @@ export function useRespondFriendRequest() {
 export function useRemoveFriend() {
   const repo = useRepository();
   return useRepoMutation((friendshipId: UUID) => repo.removeFriend(friendshipId), ['friends']);
+}
+
+export function useBlockUser() {
+  const repo = useRepository();
+  return useRepoMutation((userId: UUID) => repo.blockUser(userId), ['friends', 'feed', 'joint_sessions']);
+}
+
+export function useReportUser() {
+  const repo = useRepository();
+  return useRepoMutation((report: UserReportDraft) => repo.reportUser(report), []);
 }
 
 export function useFriendWeek(friendId: UUID | undefined, range: DateRange) {

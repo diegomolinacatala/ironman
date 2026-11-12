@@ -3,11 +3,13 @@
  * participants only. Newest at the bottom, composer under the list.
  */
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useAddJointComment, useJointComments } from '@/data/queries';
 import type { JointComment, UUID } from '@/domain/types';
+import { showActionMenu } from '@/features/social/confirm';
 import { relativeTime } from '@/features/social/relativeTime';
+import { useModeration } from '@/features/social/useModeration';
 import { errorMessage, logger } from '@/lib/logger';
 import { Avatar, Button, Card, ErrorNotice, Loading, SectionHeader, Text, TextField, haptics, space } from '@/ui';
 
@@ -21,9 +23,24 @@ export interface JointCommentsProps {
   now?: Date;
 }
 
-function CommentRow({ comment, isMe, now }: { comment: JointComment; isMe: boolean; now: Date }) {
+interface CommentRowProps {
+  comment: JointComment;
+  isMe: boolean;
+  now: Date;
+  /** Others' messages only: opens Denunciar / Bloquear. */
+  onMore?: () => void;
+}
+
+function CommentRow({ comment, isMe, now, onMore }: CommentRowProps) {
   return (
-    <View style={styles.comment} accessible accessibilityLabel={`${isMe ? 'Tú' : comment.displayName}: ${comment.body}`}>
+    <Pressable
+      style={styles.comment}
+      onLongPress={onMore}
+      disabled={!onMore}
+      accessibilityLabel={`${isMe ? 'Tú' : comment.displayName}: ${comment.body}`}
+      accessibilityHint={onMore ? 'Mantén pulsado para denunciar o bloquear' : undefined}
+      accessibilityActions={onMore ? [{ name: 'longpress', label: 'Denunciar o bloquear' }] : undefined}
+      onAccessibilityAction={onMore ? () => onMore() : undefined}>
       <Avatar name={comment.displayName} size={32} />
       <View style={styles.flex}>
         <Text variant="caption" color="textMuted">
@@ -31,13 +48,14 @@ function CommentRow({ comment, isMe, now }: { comment: JointComment; isMe: boole
         </Text>
         <Text variant="body">{comment.body}</Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 export function JointComments({ sessionId, myId, canWrite, now = new Date() }: JointCommentsProps) {
   const comments = useJointComments(sessionId);
   const add = useAddJointComment();
+  const moderation = useModeration();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const text = draft.trim();
@@ -67,7 +85,21 @@ export function JointComments({ sessionId, myId, canWrite, now = new Date() }: J
         <Card padding="md">
           <View style={styles.list}>
             {list.map((c) => (
-              <CommentRow key={c.id} comment={c} isMe={c.userId === myId} now={now} />
+              <CommentRow
+                key={c.id}
+                comment={c}
+                isMe={c.userId === myId}
+                now={now}
+                onMore={
+                  c.userId === myId
+                    ? undefined
+                    : () =>
+                        showActionMenu(
+                          c.displayName,
+                          moderation.actions({ userId: c.userId, displayName: c.displayName }, 'comment', { targetId: c.id }),
+                        )
+                }
+              />
             ))}
           </View>
         </Card>

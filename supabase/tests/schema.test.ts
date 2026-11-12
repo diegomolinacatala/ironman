@@ -16,6 +16,8 @@ const AUTHENTICATED_RPCS = [
   'is_username_available',
   'send_friend_request',
   'respond_friend_request',
+  'block_user',
+  'report_user',
   'list_friends',
   'search_profiles',
   'get_friend_week',

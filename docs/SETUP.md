@@ -295,13 +295,13 @@ ejecución y lo arreglo.
 
 ## 9. Política de privacidad (≈15 min)
 
-1. Rellena `docs/PRIVACY.md` (nombre, email de contacto, fecha) y publícala (página pública de Notion o
-   GitHub Pages).
-2. Pega la URL en App Store Connect → *Privacidad de la app*.
+1. `docs/PRIVACY.md` y `docs/TERMS.md` se publican solos en GitHub Pages (`.github/workflows/pages.yml`):
+   https://diegomolinacatala.github.io/ironman/privacy/
+2. Pega la URL en App Store Connect → *Privacidad de la app*. El resto de la ficha: `docs/APP_STORE.md`.
 3. Para que la pantalla *Privacidad* de la app enlace a ella:
 
 ```bash
-gh variable set EXPO_PUBLIC_PRIVACY_URL --body https://TU_URL
+gh variable set EXPO_PUBLIC_PRIVACY_URL --body https://diegomolinacatala.github.io/ironman/privacy/
 ```
 
 (Entra en la siguiente build.)

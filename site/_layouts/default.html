@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.title %}{{ page.title }} · {% endif %}Road to Ironman</title>
+  <meta name="description" content="Road to Ironman: planifica tu triatlón y entrena con tus amigos.">
+  <link rel="icon" href="{{ '/icon.png' | relative_url }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+  <style>
+    :root { --bg: #F6F5F1; --surface: #FFFFFF; --text: #14181F; --muted: #5B6472; --line: #E3E1DA; --accent: #1F3A68; --accent-ink: #2A4E8C; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0E1116; --surface: #161A21; --text: #ECEEF2; --muted: #9AA3B2; --line: #262C36; --accent: #8FB0E8; --accent-ink: #A9C3F0; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, system-ui, -apple-system, sans-serif; }
+    header { background: #1F3A68; color: #fff; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+    header .wrap { display: flex; align-items: center; gap: 12px; padding-top: 18px; padding-bottom: 18px; }
+    header img { width: 36px; height: 36px; border-radius: 9px; }
+    header a { color: #fff; text-decoration: none; font-weight: 700; letter-spacing: -0.01em; }
+    nav { margin-left: auto; display: flex; gap: 16px; font-size: 14px; }
+    nav a { font-weight: 600; opacity: .85; }
+    nav a:hover, nav a:focus-visible { opacity: 1; text-decoration: underline; }
+    main { padding: 32px 0 48px; }
+    h1 { font-size: clamp(1.7rem, 1.2rem + 2vw, 2.4rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 16px; }
+    h2 { font-size: 1.2rem; margin: 32px 0 8px; }
+    a { color: var(--accent-ink); }
+    .table-scroll, table { display: block; overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); border-radius: 12px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; }
+    footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; padding: 20px 0 40px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <img src="{{ '/icon.png' | relative_url }}" alt="" width="36" height="36">
+      <a href="{{ '/' | relative_url }}">Road to Ironman</a>
+      <nav aria-label="Páginas">
+        <a href="{{ '/privacy/' | relative_url }}">Privacidad</a>
+        <a href="{{ '/terms/' | relative_url }}">Normas</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+    {{ content }}
+  </main>
+  <footer class="wrap">Road to Ironman · <a href="mailto:diegomolinacatala@gmail.com">diegomolinacatala@gmail.com</a></footer>
+</body>
+</html>

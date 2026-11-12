@@ -62,6 +62,7 @@ function authClient(options: { session?: unknown; responses?: FakeResponses; inv
       code === 'good-code' ? { data: { session }, error: null } : { data: { session: null }, error: { message: 'invalid' } },
     ),
     verifyOtp: jest.fn(async () => ({ data: { session }, error: null })),
+    signInWithPassword: jest.fn(async () => ({ data: { session }, error: null })),
     signInWithIdToken: jest.fn(async () => ({ data: { session }, error: null })),
     updateUser: jest.fn(async () => ({ data: {}, error: null })),
     signOut: jest.fn(async () => ({ error: null })),
@@ -102,6 +103,16 @@ describe('Supabase auth', () => {
     expect(auth.verifyOtp).toHaveBeenCalledWith({ email: 'diego@example.com', token: '123456', type: 'email' });
     expect(session).toEqual({ userId: 'me', email: EMAIL_SESSION.user.email });
     expect(await api.getSession()).toEqual({ userId: 'me', email: EMAIL_SESSION.user.email });
+  });
+
+  it('signs the App Store review account in with its 6-digit password, without emailing a code', async () => {
+    const { client, auth } = authClient();
+    const api = createSupabaseAuth(client);
+    await api.sendEmailCode(' Revision@RoadToIronman.app ');
+    expect(auth.signInWithOtp).not.toHaveBeenCalled();
+    await api.verifyEmailCode('revision@roadtoironman.app', '482 913');
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'revision@roadtoironman.app', password: '482913' });
+    expect(auth.verifyOtp).not.toHaveBeenCalled();
   });
 
   it('completes the sign-in from the email link (PKCE code)', async () => {

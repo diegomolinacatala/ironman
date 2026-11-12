@@ -20,6 +20,15 @@ export function resolvePolicyUrl(raw: string | undefined): string | null {
 // Expo inlines EXPO_PUBLIC_* at build time: read it with its literal name.
 export const PRIVACY_POLICY_URL = resolvePolicyUrl(process.env.EXPO_PUBLIC_PRIVACY_URL);
 
+/** The terms page lives next to the policy on the same site (…/privacy/ → …/terms/). */
+export function termsUrlFrom(privacyUrl: string | null): string | null {
+  if (!privacyUrl) return null;
+  const terms = privacyUrl.replace(/\/privacy(\/|\.html)?$/i, '/terms/');
+  return terms === privacyUrl ? null : terms;
+}
+
+export const TERMS_URL = termsUrlFrom(PRIVACY_POLICY_URL);
+
 /** Opens the full policy in the in-app browser; false when there is no URL or it failed. */
 export async function openPrivacyPolicy(url: string | null = PRIVACY_POLICY_URL): Promise<boolean> {
   if (!url) return false;

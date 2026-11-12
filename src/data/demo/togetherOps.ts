@@ -18,6 +18,7 @@ import { RepositoryError } from '../repository';
 import { profileOf, type DemoClock, type DemoDb, type DemoJointSession } from './db';
 import { addFeedEvent, displayName, notify } from './events';
 import { areFriends, getJointFor, respondJoint, toJointSession } from './jointOps';
+import { isBlocked } from './socialOps';
 import { assertJointDraft } from './validation';
 
 export const MAX_COMMENT_LENGTH = 500;
@@ -50,6 +51,7 @@ function notifyOthers(
 ): DemoDb {
   return s.participants
     .filter((p) => p.userId !== except && p.status !== 'declined')
+    .filter((p) => input.type !== 'joint_comment' || !isBlocked(db, p.userId, except))
     .reduce(
       (acc, p) => notify(acc, p.userId, { ...input, data: { url: `/joint/${s.id}`, jointSessionId: s.id, fromUserId: except } }, clock),
       db,
@@ -212,7 +214,7 @@ export function listCommentsFor(db: DemoDb, me: UUID, sessionId: UUID): JointCom
   const declined = s.participants.some((p) => p.userId === me && p.status === 'declined');
   if (!isParticipant(s, me) || declined) throw new RepositoryError('not_found', 'Esa quedada ya no existe.');
   return db.jointComments
-    .filter((c) => c.sessionId === sessionId)
+    .filter((c) => c.sessionId === sessionId && (c.userId === me || !isBlocked(db, c.userId, me)))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .map((c) => ({ ...c, displayName: displayName(db, c.userId) }));
 }

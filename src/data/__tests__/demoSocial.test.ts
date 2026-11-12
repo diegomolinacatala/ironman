@@ -176,3 +176,26 @@ describe('demo friends and feed', () => {
     await repo.store.dispose();
   });
 });
+
+describe('demo moderation', () => {
+  it('blocking a friend ends the friendship and stops their requests', async () => {
+    const repo = await signedInRepo();
+    expect((await repo.listFriends()).some((f) => f.profile.id === DEMO_USERS.alex)).toBe(true);
+    await repo.blockUser(DEMO_USERS.alex);
+    expect((await repo.listFriends()).some((f) => f.profile.id === DEMO_USERS.alex)).toBe(false);
+    await expect(repo.getFriendWeek(DEMO_USERS.alex, NEXT_WEEK)).rejects.toMatchObject({ code: 'forbidden' });
+    await repo.store.dispose();
+  });
+
+  it('validates reports like the server', async () => {
+    const repo = await signedInRepo();
+    await expect(repo.reportUser({ userId: DEMO_USERS.alex, reason: 'spam', context: 'profile' })).resolves.toBeUndefined();
+    await expect(
+      repo.reportUser({ userId: DEMO_USERS.alex, reason: 'boring' as never, context: 'profile' }),
+    ).rejects.toMatchObject({ code: 'validation' });
+    await expect(
+      repo.reportUser({ userId: DEMO_USERS.alex, reason: 'other', context: 'comment', details: 'x'.repeat(501) }),
+    ).rejects.toMatchObject({ code: 'validation' });
+    await repo.store.dispose();
+  });
+});

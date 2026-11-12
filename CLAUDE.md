@@ -18,6 +18,10 @@ Done: friends by @username, visibility `full|summary|busy`, week compare + Hueco
 
 Next ideas (not built): Live Activity for a quedada in progress; Garmin "same activity" detection by time overlap when the quedada had no linked workout; shared weekly goals/challenges; group chat beyond one quedada; Android.
 
+## App Store (2026-11-12)
+
+`docs/APP_STORE.md` is the release checklist (TestFlight external link for friends, listing texts, review notes, privacy labels). Moderation for guideline 1.2: `block_user` / `report_user` (`20261112000100_moderation.sql`, `useModeration`). Review account `revision@roadtoironman.app` signs in with a password typed as the 6-digit code (`scripts/review-account.mjs`). Public pages (support, privacy, terms) are built from `site/` + `docs/PRIVACY.md` + `docs/TERMS.md` by `.github/workflows/pages.yml`.
+
 ## Coach v4 (2026-11-09) — un entrenador de verdad, COROS y plan general
 
 Every session carries targets (ppm / pace / W / RPE / sensations, derived from thresholds by `domain/zones.ts`, explicit `step.target` wins) and `coaching` (objective, keys, success, plan B); the coach (AI, rules, Claude, briefing) speaks with those numbers and reviews completed sessions (`domain/review.ts`). Watch = Garmin or COROS (`profiles.watch_brand`; COROS via Apple Salud + the official COROS connector in the athlete's Claude, guide in `/settings/coros` and `docs/SETUP.md` §8b). Plan → General (`?view=general`) shows the weeks to the race (carga, más volumen, descarga, afinamiento, carrera) from `domain/season.ts`; week-level overrides live in `week_plans` (MCP `set_week_plans`) and the weekly rules planner honours them. Deploy the two `20261109*` migrations before the functions and the app.

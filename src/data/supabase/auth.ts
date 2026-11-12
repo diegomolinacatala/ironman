@@ -18,6 +18,12 @@ import { unregisterStoredPushToken } from './pushToken';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CODE_RE = /^\d{6}$/;
 
+/**
+ * App Store review account (docs/APP_STORE.md): no mailbox behind it, so no code is emailed and
+ * the 6 digits typed on the code screen are its password (created by scripts/review-account.mjs).
+ */
+export const APP_REVIEW_EMAIL = 'revision@roadtoironman.app';
+
 /** Removes the account's device-only data (locally composed briefings: sleep data). Never throws. */
 async function clearDeviceData(client: SupabaseClient): Promise<void> {
   try {
@@ -115,6 +121,7 @@ export function createSupabaseAuth(client: SupabaseClient): AuthApi {
     async sendEmailCode(email) {
       const clean = email.trim().toLowerCase();
       if (!EMAIL_RE.test(clean)) throw new RepositoryError('validation', 'Ese email no parece válido.');
+      if (clean === APP_REVIEW_EMAIL) return;
       const { error } = await client.auth.signInWithOtp({
         email: clean,
         options: { shouldCreateUser: true, emailRedirectTo: emailRedirectUrl() },
@@ -135,7 +142,11 @@ export function createSupabaseAuth(client: SupabaseClient): AuthApi {
     async verifyEmailCode(email, code) {
       const token = code.replace(/\s/g, '');
       if (!CODE_RE.test(token)) throw new RepositoryError('validation', 'El código tiene 6 dígitos.');
-      const { data, error } = await client.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'email' });
+      const clean = email.trim().toLowerCase();
+      const { data, error } =
+        clean === APP_REVIEW_EMAIL
+          ? await client.auth.signInWithPassword({ email: clean, password: token })
+          : await client.auth.verifyOtp({ email: clean, token, type: 'email' });
       if (error) throw authError(error, 'No hemos podido verificar el código.');
       const session = toAuthSession(data.session);
       if (!session) throw new RepositoryError('unknown', 'No se ha podido iniciar sesión. Inténtalo de nuevo.');

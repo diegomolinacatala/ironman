@@ -8,7 +8,10 @@ import { StyleSheet, View } from 'react-native';
 import type { Friend } from '@/domain/types';
 import { useRemoveFriend, useRespondFriendRequest } from '@/data/queries';
 import { errorMessage, logger } from '@/lib/logger';
-import { Avatar, Button, Text, haptics, space } from '@/ui';
+import { Avatar, Button, IconButton, Text, haptics, space } from '@/ui';
+
+import { showActionMenu } from './confirm';
+import { useModeration } from './useModeration';
 
 type Busy = 'accept' | 'decline' | 'cancel' | null;
 
@@ -18,6 +21,8 @@ export function FriendRequestRow({ friend }: { friend: Friend }) {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const incoming = friend.direction === 'incoming';
+  const moderation = useModeration();
+  const target = { userId: friend.profile.id, displayName: friend.profile.displayName };
 
   const run = async (kind: Exclude<Busy, null>) => {
     setBusy(kind);
@@ -46,7 +51,13 @@ export function FriendRequestRow({ friend }: { friend: Friend }) {
             @{friend.profile.username} · {incoming ? 'quiere entrenar contigo' : 'solicitud enviada'}
           </Text>
         </View>
-        {incoming ? null : (
+        {incoming ? (
+          <IconButton
+            icon="more"
+            accessibilityLabel={`Más opciones de ${friend.profile.displayName}`}
+            onPress={() => showActionMenu(friend.profile.displayName, moderation.actions(target, 'request'))}
+          />
+        ) : (
           <Button label="Cancelar" variant="ghost" onPress={() => void run('cancel')} loading={busy === 'cancel'} />
         )}
       </View>

@@ -337,6 +337,8 @@ username `u` + 8 hex chars and display_name from email local part / `raw_user_me
 | `apply_plan_changes(p_changes jsonb, p_proposal_id uuid default null)` | `jsonb {applied int, failed [{index,error}]}` | Same semantics as `src/domain/changes.ts` (camelCase JSON as in `PlanChange`), only own planned workouts; marks proposal applied/partially_applied. |
 | `send_friend_request(p_username text)` | `uuid` | Creates pending; if reverse pending exists → accept it. Errors: not found, self, already friends. |
 | `respond_friend_request(p_friendship_id uuid, p_accept boolean)` | `void` | Addressee only. |
+| `block_user(p_user uuid)` | `void` | Pair row → `blocked`, owned by the blocker (only they can delete it = unblock). Repo `blockUser`. |
+| `report_user(p_user uuid, p_reason text, p_context text, p_target uuid, p_details text)` | `void` | Stores a row in `user_reports` (owner reviews it; 20/day per reporter). Repo `reportUser`. |
 | `list_friends()` | `table(friendship_id, status, direction, created_at, friend_id, username, display_name, avatar_url, sports)` | |
 | `search_profiles(p_query text)` | `table(id, username, display_name, avatar_url, sports)` | ≥2 chars, ilike on username/display_name, excludes self, limit 20. |
 | `get_friend_week(p_friend uuid, p_from date, p_to date)` | `table(kind, id, date, start_time, end_time, duration_min, sport, intensity, title, status, joint_session_id)` | Must be accepted friends; max 31 days; masked by friend's `visibility` (full: all; summary: no title; busy: only busy intervals). Busy blocks + timed workouts split per day in the friend's timezone, titles of busy blocks NEVER exposed. Life events: only padel/football/other_sport/travel/social, never health ones. |

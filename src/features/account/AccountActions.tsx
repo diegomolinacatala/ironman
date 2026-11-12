@@ -11,8 +11,12 @@ import { ErrorNotice, ListRow, Text, haptics, space } from '@/ui';
 import { confirmAction } from '../settings/confirm';
 import { GroupDivider, SettingsGroup } from './SettingsGroup';
 
+/** App Store guideline 1.4.1: training guidance, not medical advice. */
+export const HEALTH_DISCLAIMER =
+  'Road to Ironman te ayuda a organizar tu entrenamiento; no es consejo médico. Antes de empezar un plan exigente, o si tienes dolor o síntomas, consulta a un profesional sanitario.';
+
 function appVersion(): string {
-  const version = Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? '0.1.0';
+  const version = Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? '1.0.0';
   const build = Application.nativeBuildVersion;
   return build ? `${version} (${build})` : version;
 }
@@ -93,6 +97,9 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
         />
       </SettingsGroup>
       {error ? <ErrorNotice message={error} /> : null}
+      <Text variant="caption" color="textMuted" align="center">
+        {HEALTH_DISCLAIMER}
+      </Text>
       <Text variant="caption" color="textMuted" align="center">
         Road to Ironman {appVersion()}
         {isDemo ? ' · modo demo' : ''}

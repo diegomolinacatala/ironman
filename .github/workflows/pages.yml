@@ -1,0 +1,52 @@
+name: Web
+
+# Publica en GitHub Pages la página de soporte, la política de privacidad y las normas de uso
+# (las URLs que pide App Store Connect). La privacidad y las normas salen de docs/PRIVACY.md y
+# docs/TERMS.md: edita esos ficheros y se vuelve a publicar sola.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - docs/PRIVACY.md
+      - docs/TERMS.md
+      - assets/images/icon.png
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Preparar páginas
+        run: |
+          page() { printf -- '---\nlayout: default\ntitle: %s\npermalink: %s\n---\n\n' "$2" "$3" > "site/$4"; cat "$1" >> "site/$4"; }
+          page docs/PRIVACY.md 'Política de privacidad' /privacy/ privacy.md
+          page docs/TERMS.md 'Normas de uso' /terms/ terms.md
+          cp assets/images/icon.png site/icon.png
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./site
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

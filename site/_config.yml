@@ -1,0 +1,8 @@
+# Road to Ironman — public pages (GitHub Pages): support, privacy policy and terms.
+# privacy.md and terms.md are copied from docs/PRIVACY.md and docs/TERMS.md by .github/workflows/pages.yml.
+title: Road to Ironman
+lang: es
+markdown: kramdown
+kramdown:
+  input: GFM
+exclude: [README.md]

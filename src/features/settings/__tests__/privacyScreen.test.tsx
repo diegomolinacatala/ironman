@@ -6,7 +6,7 @@ import PrivacyScreen from '@/app/privacy';
 import type { Profile } from '@/domain/types';
 
 import { AI_CONSENT_TITLE } from '../AiConsentCard';
-import { calendarPrivacyNote, openPrivacyPolicy, privacySummary, resolvePolicyUrl } from '../privacyPolicy';
+import { calendarPrivacyNote, openPrivacyPolicy, privacySummary, resolvePolicyUrl, termsUrlFrom } from '../privacyPolicy';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockState: { mode: 'demo' | 'supabase'; consentAt: string | null } = { mode: 'supabase', consentAt: null };
@@ -120,6 +120,13 @@ describe('privacy policy link', () => {
     expect(resolvePolicyUrl('http://roadtoironman.app/privacidad')).toBeNull();
     expect(resolvePolicyUrl('javascript:alert(1)')).toBeNull();
     expect(resolvePolicyUrl(undefined)).toBeNull();
+  });
+
+  test('the terms page sits next to the policy on the same site', () => {
+    expect(termsUrlFrom('https://diegomolinacatala.github.io/ironman/privacy/')).toBe('https://diegomolinacatala.github.io/ironman/terms/');
+    expect(termsUrlFrom('https://example.com/privacy.html')).toBe('https://example.com/terms/');
+    expect(termsUrlFrom('https://notion.site/politica')).toBeNull();
+    expect(termsUrlFrom(null)).toBeNull();
   });
 
   test('opens the policy in the in-app browser', async () => {

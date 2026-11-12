@@ -571,6 +571,19 @@ export interface PublicProfile {
 
 export type FriendshipStatus = 'pending' | 'accepted' | 'declined' | 'blocked';
 
+export type ReportReason = 'spam' | 'harassment' | 'inappropriate' | 'other';
+/** Where the report was made: a friend's screen, a friend request or a quedada message. */
+export type ReportContext = 'profile' | 'request' | 'comment';
+
+export interface UserReportDraft {
+  userId: UUID;
+  reason: ReportReason;
+  context: ReportContext;
+  /** The reported message (context 'comment'). */
+  targetId?: UUID | null;
+  details?: string | null;
+}
+
 export interface Friend {
   friendshipId: UUID;
   profile: PublicProfile;

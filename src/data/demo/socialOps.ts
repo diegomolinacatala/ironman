@@ -20,7 +20,7 @@ export function searchProfilesIn(db: DemoDb, me: UUID, query: string): PublicPro
   const q = normalize(query.trim().replace(/^@/, ''));
   if (q.length < 2) return [];
   return db.profiles
-    .filter((p) => p.id !== me && (normalize(p.username).includes(q) || normalize(p.displayName).includes(q)))
+    .filter((p) => p.id !== me && !isBlocked(db, p.id, me) && (normalize(p.username).includes(q) || normalize(p.displayName).includes(q)))
     .slice(0, 20)
     .map(toPublicProfile);
 }
@@ -35,6 +35,11 @@ export function friendshipBetween(db: DemoDb, a: UUID, b: UUID): DemoFriendship 
       (f) => (f.requesterId === a && f.addresseeId === b) || (f.requesterId === b && f.addresseeId === a),
     ) ?? null
   );
+}
+
+/** Mirrors `private.is_blocked`: either side blocked the other. */
+export function isBlocked(db: DemoDb, a: UUID, b: UUID): boolean {
+  return friendshipBetween(db, a, b)?.status === 'blocked';
 }
 
 export function listFriendsFor(db: DemoDb, me: UUID): Friend[] {
@@ -107,6 +112,24 @@ export function respondRequest(db: DemoDb, me: UUID, friendshipId: UUID, acceptI
   if (acceptIt) return accept(db, f, clock);
   const declined: DemoFriendship = { ...f, status: 'declined', respondedAt: clock.now };
   return { ...db, friendships: db.friendships.map((x) => (x.id === f.id ? declined : x)) };
+}
+
+/** Mirrors `block_user`: the pair's row becomes 'blocked', owned by the blocker. */
+export function blockIn(db: DemoDb, me: UUID, userId: UUID, clock: DemoClock): DemoDb {
+  if (userId === me) throw new RepositoryError('validation', 'No puedes bloquearte a ti mismo.');
+  if (!profileOf(db, userId)) throw new RepositoryError('not_found', 'No encontramos a esa persona.');
+  const existing = friendshipBetween(db, me, userId);
+  // Already blocked by either side: never hand the block (and the right to lift it) over.
+  if (existing?.status === 'blocked') return db;
+  const blocked: DemoFriendship = {
+    id: existing?.id ?? clock.newId(),
+    requesterId: me,
+    addresseeId: userId,
+    status: 'blocked',
+    createdAt: existing?.createdAt ?? clock.now,
+    respondedAt: clock.now,
+  };
+  return { ...db, friendships: [...db.friendships.filter((f) => f.id !== existing?.id), blocked] };
 }
 
 export function removeFriendship(db: DemoDb, me: UUID, friendshipId: UUID): DemoDb {

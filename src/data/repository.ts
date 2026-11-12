@@ -53,6 +53,7 @@ import type {
   SpeechVoice,
   SyncResult,
   TokenScope,
+  UserReportDraft,
   UUID,
   WeekPlan,
   WeekPlanDraft,
@@ -225,6 +226,10 @@ export interface Repository {
   sendFriendRequest(username: string): Promise<void>;
   respondFriendRequest(friendshipId: UUID, accept: boolean): Promise<void>;
   removeFriend(friendshipId: UUID): Promise<void>;
+  /** Ends any friendship or request with `userId` and stops new requests from them. */
+  blockUser(userId: UUID): Promise<void>;
+  /** Sends a report about a user (App Store guideline 1.2); the owner reviews it within 24 h. */
+  reportUser(report: UserReportDraft): Promise<void>;
   /** Friend's calendar, masked by their visibility setting. */
   getFriendWeek(friendId: UUID, range: DateRange): Promise<FriendWeekItem[]>;
   listJointSessions(range: DateRange): Promise<JointSession[]>;

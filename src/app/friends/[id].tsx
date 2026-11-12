@@ -10,6 +10,7 @@ import { startOfWeek, todayISO } from '@/domain/dates';
 import type { Friend, ISODate, UUID } from '@/domain/types';
 import { confirmAction, showActionMenu, showNotice } from '@/features/social/confirm';
 import { findAcceptedFriend, firstName } from '@/features/social/friendModel';
+import { useModeration } from '@/features/social/useModeration';
 import { CompareDayCard } from '@/features/together/CompareDayCard';
 import { defaultCompareWeek } from '@/features/together/compareModel';
 import { CompareLegend } from '@/features/together/CompareLegend';
@@ -124,6 +125,7 @@ export default function FriendWeekScreen() {
   const name = friend ? firstName(friend.profile.displayName) : 'Tu amigo';
   const data = useTogetherWeek(friend?.profile.id, weekStart, today);
   const confirmRemove = useRemoveFlow(friend);
+  const moderation = useModeration();
 
   const headerOptions = {
     title: friend ? `Con ${name}` : 'Juntos',
@@ -132,7 +134,14 @@ export default function FriendWeekScreen() {
           <IconButton
             icon="settings"
             accessibilityLabel="Opciones de amistad"
-            onPress={() => showActionMenu(friend.profile.displayName, [{ label: 'Eliminar amigo', destructive: true, onSelect: () => void confirmRemove() }])}
+            onPress={() =>
+              showActionMenu(friend.profile.displayName, [
+                { label: 'Eliminar amigo', destructive: true, onSelect: () => void confirmRemove() },
+                ...moderation.actions({ userId: friend.profile.id, displayName: friend.profile.displayName }, 'profile', {
+                  onBlocked: returnToTogether,
+                }),
+              ])
+            }
           />
         )
       : undefined,
