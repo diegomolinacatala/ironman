@@ -1,24 +1,47 @@
 #!/usr/bin/env node
 /**
- * Creates (or resets) the App Store review account and prints its 6-digit code.
+ * Creates (or resets) the App Store review account, prints its 6-digit code and stores it as the
+ * GitHub secret ASC_REVIEW_CODE (read by .github/workflows/app-store.yml).
  *
  * The app never emails a code to APP_REVIEW_EMAIL: the 6 digits typed on the code screen are this
- * account's password (src/data/supabase/auth.ts). Paste email + code in App Store Connect →
- * App Review Information. Run again to rotate the code.
+ * account's password (src/data/supabase/auth.ts). Run again to rotate the code (and re-run the
+ * App Store workflow so App Review gets the new one).
  *
- *   SUPABASE_URL=https://XXXX.supabase.co SUPABASE_SECRET_KEY=sb_secret_… node scripts/review-account.mjs
+ *   node scripts/review-account.mjs
  *
- * The secret key is in Supabase → Project Settings → API Keys. It is only read from the
- * environment and never written anywhere.
+ * Uses the linked project (supabase/.temp/project-ref) and takes the secret key from the logged-in
+ * Supabase CLI; SUPABASE_URL / SUPABASE_SECRET_KEY override both. The key is never written anywhere.
  */
+import { execFileSync } from 'node:child_process';
 import { randomInt } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 
 const APP_REVIEW_EMAIL = 'revision@roadtoironman.app';
 const PAGE_SIZE = 1000;
 
+const IS_WINDOWS = process.platform === 'win32';
+
+function run(cmd, args) {
+  return execFileSync(cmd, args, { encoding: 'utf8', shell: IS_WINDOWS, stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
+function linkedRef() {
+  const file = new URL('../supabase/.temp/project-ref', import.meta.url);
+  return existsSync(file) ? readFileSync(file, 'utf8').trim() : '';
+}
+
+/** sb_secret_… of the linked project, through the logged-in Supabase CLI. */
+function secretKeyFromCli() {
+  const out = run('npx', ['--yes', 'supabase@latest', 'projects', 'api-keys', '--reveal', '--output-format', 'json']);
+  const match = out.match(/sb_secret_[A-Za-z0-9_-]+/);
+  return match ? match[0] : '';
+}
+
 function config() {
-  const url = (process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').replace(/\/+$/, '');
-  const key = process.env.SUPABASE_SECRET_KEY ?? '';
+  const ref = linkedRef();
+  const fallbackUrl = ref ? `https://${ref}.supabase.co` : '';
+  const url = (process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? fallbackUrl).replace(/\/+$/, '');
+  const key = process.env.SUPABASE_SECRET_KEY ?? secretKeyFromCli();
   if (!/^https:\/\/.+/.test(url) || !key) {
     console.error('Faltan SUPABASE_URL (https://XXXX.supabase.co) y SUPABASE_SECRET_KEY (sb_secret_…).');
     process.exit(1);
@@ -62,7 +85,12 @@ async function main() {
   console.log(existing ? 'Cuenta de revisión actualizada.' : 'Cuenta de revisión creada.');
   console.log(`  Email:  ${APP_REVIEW_EMAIL}`);
   console.log(`  Código: ${code}`);
-  console.log('Pégalos en App Store Connect → Información para la revisión (y en TestFlight → Información de prueba).');
+  try {
+    run('gh', ['secret', 'set', 'ASC_REVIEW_CODE', '--body', code]);
+    console.log('Guardado en el secreto ASC_REVIEW_CODE de GitHub (lo usa el workflow App Store).');
+  } catch {
+    console.log('No he podido guardar el secreto: ejecuta  gh secret set ASC_REVIEW_CODE  y pega el código.');
+  }
 }
 
 main().catch((error) => {

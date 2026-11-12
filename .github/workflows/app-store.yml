@@ -1,0 +1,41 @@
+name: App Store
+
+# Rellena la ficha de la App Store desde store/listing.json y store/screenshots/ (texto, categorías,
+# edad, precio, disponibilidad, revisión, build y capturas) y, si marcas "submit", la envía a revisión.
+# Lanzar: Actions → App Store → Run workflow (o `gh workflow run app-store.yml -f submit=true`).
+#
+# Secretos (además de los ASC_* de ios.yml):
+#   ASC_REVIEW_CODE    código de la cuenta de revisión (lo guarda scripts/review-account.mjs)
+#   ASC_CONTACT_PHONE  teléfono de contacto para el equipo de revisión de Apple (+34…)
+on:
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: Enviar a revisión al terminar
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-store
+  cancel-in-progress: false
+
+jobs:
+  listing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Ficha de la App Store
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_REVIEW_CODE: ${{ secrets.ASC_REVIEW_CODE }}
+          ASC_CONTACT_PHONE: ${{ secrets.ASC_CONTACT_PHONE }}
+        run: node scripts/asc/app-store-connect.mjs ${{ inputs.submit && '--submit' || '' }}

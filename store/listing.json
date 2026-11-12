@@ -1,0 +1,33 @@
+{
+  "bundleId": "io.github.diegomolinacatala.ironman",
+  "version": "1.0.0",
+  "locale": "es-ES",
+  "copyright": "2026 Diego Molina",
+  "primaryCategory": "HEALTH_AND_FITNESS",
+  "secondaryCategory": "SPORTS",
+  "appInfo": {
+    "name": "Road to Ironman",
+    "subtitle": "Triatlón con tu coach y amigos",
+    "privacyPolicyUrl": "https://diegomolinacatala.github.io/ironman/privacy/"
+  },
+  "version_localization": {
+    "promotionalText": "Tu plan de triatlón con objetivos de verdad, un informe cada mañana y Juntos: mira los huecos que compartes con tus amigos y quedad para entrenar.",
+    "description": "Road to Ironman es tu entrenador de triatlón de bolsillo, pensado para entrenar con tus amigos.\n\nPLAN CON OBJETIVOS DE VERDAD\nCada sesión de natación, bici, carrera y fuerza llega con su estructura (calentamiento, series, vuelta a la calma) y sus cifras: pulsaciones, ritmo, vatios y sensaciones calculados con tus umbrales. Sabes para qué sirve cada entreno, qué claves cuidar y qué hacer si no es tu día.\n\nHOY\nUn informe cada mañana con cómo has dormido y lo que te toca. Si tienes un imprevisto (trabajo, pádel, una molestia), cuéntaselo al coach y reorganiza tu semana.\n\nJUNTOS\nAñade a tus amigos por su @usuario, mira vuestras semanas lado a lado, encuentra los huecos comunes y propón una quedada. Tú decides qué ven: todo, un resumen u \"ocupado\".\n\nTU RELOJ\nCon Apple Salud se marcan solos los entrenos hechos de tu Garmin o COROS, con tu sueño, VFC y pulso en reposo.\n\nPLAN GENERAL\nLas semanas que quedan hasta tu carrera: carga, descarga, afinamiento y carrera.\n\nGratis, sin anuncios. Tus datos de salud no se venden ni se usan para publicidad.\n\nRoad to Ironman te ayuda a organizar tu entrenamiento; no es consejo médico.",
+    "keywords": "triatlon,entrenamiento,plan,triatleta,correr,ciclismo,natacion,maraton,amigos,coach,running,fc,zonas",
+    "supportUrl": "https://diegomolinacatala.github.io/ironman/",
+    "marketingUrl": "https://diegomolinacatala.github.io/ironman/"
+  },
+  "review": {
+    "contactFirstName": "Diego",
+    "contactLastName": "Molina",
+    "contactEmail": "diegomolinacatala@gmail.com",
+    "demoAccountName": "revision@roadtoironman.app",
+    "notes": "Para entrar escribe revision@roadtoironman.app, pulsa \"Recibir código\" y escribe el código de 6 dígitos indicado arriba como contraseña (en esta cuenta el código es fijo; a los usuarios normales les llega por email). También funciona \"Iniciar sesión con Apple\".\n\nLa app planifica entrenamientos de triatlón. Apple Salud (HealthKit) se usa solo para leer entrenos, sueño, VFC, pulso en reposo, VO2máx y pasos y marcar sesiones como hechas; nunca escribe en Salud. Garmin, COROS y el conector de Claude son opcionales: la app funciona sin ellos.\n\nContenido entre usuarios (solo entre amigos que se aceptan mutuamente): se puede denunciar y bloquear desde la pantalla de un amigo (botón de opciones → Denunciar / Bloquear), desde una solicitud de amistad (⋯) y manteniendo pulsado un mensaje de una quedada. Revisamos las denuncias en menos de 24 h. Normas de uso: https://diegomolinacatala.github.io/ironman/terms/\n\nBorrar cuenta: Tú → Borrar cuenta.\n\n---\nTo sign in: type revision@roadtoironman.app, tap \"Recibir código\" and enter the 6-digit code above (fixed for this account; regular users get it by email). Sign in with Apple also works. HealthKit is read-only. Users can report and block others from a friend's screen, a friend request (⋯) or by long-pressing a message."
+  },
+  "ageRating": {
+    "messagingAndChat": true,
+    "userGeneratedContent": true,
+    "healthOrWellnessTopics": true
+  },
+  "screenshotDisplayType": "APP_IPHONE_67"
+}
