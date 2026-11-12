@@ -22,6 +22,7 @@ const EDITABLE = new Set(['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJEC
 const BOOLEAN_AGE_KEYS = new Set([
   'gambling', 'unrestrictedWebAccess', 'lootBox', 'messagingAndChat', 'userGeneratedContent',
   'healthOrWellnessTopics', 'parentalControls', 'ageAssurance', 'advertising', 'seventeenPlus',
+  'socialMedia', 'socialMediaAgeRestricted',
 ]);
 const SKIP_AGE_KEY = /Url$|Number$|Override|kidsAgeBand/;
 const ENUM_AGE_VALUE = /^(NONE|INFREQUENT_OR_MILD|FREQUENT_OR_INTENSE|INFREQUENT|FREQUENT)$/;

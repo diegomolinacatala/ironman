@@ -24,6 +24,12 @@ jest.mock(
   () => (jest.requireActual('react-native-safe-area-context/jest/mock') as { default: object }).default,
 );
 jest.mock('expo-web-browser', () => ({ openBrowserAsync: jest.fn(async () => ({ type: 'opened' })) }));
+// The policy URL is inlined from EXPO_PUBLIC_PRIVACY_URL (set in CI): these tests run without one.
+jest.mock('@/features/settings/privacyPolicy', () => ({
+  ...jest.requireActual<typeof import('@/features/settings/privacyPolicy')>('@/features/settings/privacyPolicy'),
+  PRIVACY_POLICY_URL: null,
+  TERMS_URL: null,
+}));
 jest.mock('@/lib/env', () => {
   const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
   // A lazy getter (not a spread, which would read it at import time) so each test can flip the flag.
