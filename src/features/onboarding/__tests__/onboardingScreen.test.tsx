@@ -325,7 +325,9 @@ describe('v2 onboarding', () => {
     expect(await screen.findByText('Tu plan está listo')).toBeTruthy();
     expect(mockCoach).toHaveBeenCalledWith(expect.objectContaining({ mode: 'plan_week' }));
     expect(mockApply).toHaveBeenCalledWith({ changes: expect.any(Array), proposalId: 'p1' });
-    expect(screen.getByText(/1 sesión en los próximos días/)).toBeTruthy();
+    // Friday–Sunday the first plan also covers next week (weeksToPlan): one session per planned week.
+    const sessions = weeksToPlan(todayISO()).length;
+    expect(screen.getByText(sessions === 1 ? /1 sesión en los próximos días/ : new RegExp(`${sessions} sesiones en los próximos días`))).toBeTruthy();
     await press('Empezar');
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/today'));
     expect(mockUpdateProfile).toHaveBeenLastCalledWith({ onboardedAt: expect.any(String) });
