@@ -25,7 +25,11 @@ export function makeToken({ keyP8, keyId, issuerId }, now = Math.floor(Date.now(
 
 export class AscError extends Error {
   constructor(method, path, status, body) {
-    const details = (body?.errors ?? []).map((e) => `${e.code}: ${e.detail ?? e.title}`).join(' | ');
+    // Submission errors carry the real reasons in meta.associatedErrors ({ "/v1/…/id": [errors] }).
+    const describe = (e) => `${e.code}: ${e.detail ?? e.title}`;
+    const details = (body?.errors ?? [])
+      .flatMap((e) => [describe(e), ...Object.values(e.meta?.associatedErrors ?? {}).flat().map(describe)])
+      .join(' | ');
     super(`${method} ${path} → ${status}${details ? ` (${details})` : ''}`);
     this.status = status;
     this.errors = body?.errors ?? [];
