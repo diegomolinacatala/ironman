@@ -104,8 +104,7 @@ async function setAgeRating(appInfoId) {
 }
 
 async function setFreePrice(appId) {
-  const existing = await api.maybe(`/v1/apps/${appId}/appPriceSchedule`);
-  if (existing?.data) return 'ya tenía precio';
+  // A schedule can exist without any price ("APP_PRICING_REQUIRED"): always (re)set it to free.
   const points = await api.get(`/v1/apps/${appId}/appPricePoints?filter[territory]=USA&limit=200`);
   const free = points.data.find((p) => Number(p.attributes.customerPrice) === 0);
   if (!free) throw new Error('No encuentro el precio gratuito.');
@@ -230,6 +229,16 @@ async function main() {
   const app = await findApp();
   console.log(`App: ${app.attributes.name} (${app.id})`);
   const appInfo = await editableAppInfo(app.id);
+  if (process.argv.includes('--inspect')) {
+    const medical = (label, attrs) =>
+      console.log(`${label}: ${Object.keys(attrs).filter((k) => /medic|regulat|device/i.test(k)).join(', ') || '(nada)'}`);
+    medical('app', app.attributes);
+    medical('appInfo', appInfo.attributes);
+    const decl = await api.get(`/v1/appInfos/${appInfo.id}/ageRatingDeclaration`);
+    medical('ageRating', decl.data.attributes);
+    console.log('appInfo relationships:', Object.keys(appInfo.relationships ?? {}).join(', '));
+    console.log('app relationships:', Object.keys(app.relationships ?? {}).join(', '));
+  }
   const version = await ensureVersion(app.id);
   console.log(`Versión ${listing.version}: ${stateOf(version)}`);
   let versionLocId = null;
