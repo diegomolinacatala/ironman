@@ -38,4 +38,4 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_REVIEW_CODE: ${{ secrets.ASC_REVIEW_CODE }}
           ASC_CONTACT_PHONE: ${{ secrets.ASC_CONTACT_PHONE }}
-        run: node scripts/asc/app-store-connect.mjs ${{ inputs.submit && '--submit' || '' }} --inspect
+        run: node scripts/asc/app-store-connect.mjs ${{ inputs.submit && '--submit' || '' }}
