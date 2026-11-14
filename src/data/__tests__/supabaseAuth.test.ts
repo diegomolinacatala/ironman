@@ -111,7 +111,7 @@ describe('Supabase auth', () => {
     await api.sendEmailCode(' Revision@RoadToIronman.app ');
     expect(auth.signInWithOtp).not.toHaveBeenCalled();
     await api.verifyEmailCode('revision@roadtoironman.app', '482 913');
-    expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'revision@roadtoironman.app', password: '482913' });
+    expect(auth.signInWithPassword).toHaveBeenCalledWith({ email: 'revision@roadtoironman.app', password: 'rti-review-482913' });
     expect(auth.verifyOtp).not.toHaveBeenCalled();
   });
 

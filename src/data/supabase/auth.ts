@@ -23,6 +23,8 @@ const CODE_RE = /^\d{6}$/;
  * the 6 digits typed on the code screen are its password (created by scripts/review-account.mjs).
  */
 export const APP_REVIEW_EMAIL = 'revision@roadtoironman.app';
+/** Supabase wants ≥ 8 characters: the stored password is this prefix + the 6 digits typed. */
+export const APP_REVIEW_PASSWORD_PREFIX = 'rti-review-';
 
 /** Removes the account's device-only data (locally composed briefings: sleep data). Never throws. */
 async function clearDeviceData(client: SupabaseClient): Promise<void> {
@@ -145,7 +147,7 @@ export function createSupabaseAuth(client: SupabaseClient): AuthApi {
       const clean = email.trim().toLowerCase();
       const { data, error } =
         clean === APP_REVIEW_EMAIL
-          ? await client.auth.signInWithPassword({ email: clean, password: token })
+          ? await client.auth.signInWithPassword({ email: clean, password: `${APP_REVIEW_PASSWORD_PREFIX}${token}` })
           : await client.auth.verifyOtp({ email: clean, token, type: 'email' });
       if (error) throw authError(error, 'No hemos podido verificar el código.');
       const session = toAuthSession(data.session);
