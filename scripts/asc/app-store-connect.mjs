@@ -212,7 +212,7 @@ async function uploadScreenshots(localizationId) {
 }
 
 async function submitForReview(appId, versionId) {
-  const open = await api.get(`/v1/reviewSubmissions?filter[app]=${appId}&filter[platform]=IOS&filter[state]=READY_FOR_REVIEW`);
+  const open = await api.get(`/v1/reviewSubmissions?filter[app]=${appId}&filter[platform]=IOS&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES`);
   const submission = open.data[0] ?? (await api.post('/v1/reviewSubmissions', {
     data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: rel('apps', appId) } },
   })).data;

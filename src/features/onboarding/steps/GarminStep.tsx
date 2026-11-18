@@ -7,10 +7,10 @@ import { ErrorNotice, Loading, space } from '@/ui';
 import { Appear } from '../Appear';
 import { GarminGuide, GarminImported, GarminPasteControl, GarminPastePanel } from '../garmin/GarminParts';
 import { useGarminConnect, type GarminConnect } from '../garmin/useGarminConnect';
-import { DEMO_GARMIN_KEY, GARMIN_SKIP_AFTER_MS } from '../connectModel';
+import { DEMO_GARMIN_KEY } from '../connectModel';
 import { SkipLink, WorkingState } from '../GuideParts';
 import { StepLayout, type StepAction, type StepNav } from '../StepLayout';
-import { SKIP_WATCH_HINT, SKIP_WATCH_LABEL, confirmSkipWatch, useElapsed } from '../watchSkip';
+import { SKIP_WATCH_HINT, SKIP_WATCH_LABEL, confirmSkipWatch } from '../watchSkip';
 
 export interface GarminStepProps {
   nav: StepNav;
@@ -32,12 +32,12 @@ export interface GarminStepProps {
  * "Seguir sin reloj" appears after a failed attempt or 45 s (no watch,
  * Garmin down, App Review…).
  */
-export function GarminStep({ nav, isDemo, skipped, onSkip, picker, title }: GarminStepProps) {
+export function GarminStep({ nav, isDemo, onSkip, picker, title }: GarminStepProps) {
   const today = todayISO();
   const garmin = useGarminConnect({ isDemo, today });
   const busy = garmin.phase === 'connecting';
-  const waitedLong = useElapsed(GARMIN_SKIP_AFTER_MS);
-  const canSkip = !busy && garmin.phase !== 'connected' && (skipped || garmin.failed || waitedLong);
+  // Always offered (App Review 2.1: someone without a watch must never be stuck here).
+  const canSkip = !busy && garmin.phase !== 'connected';
 
   const skip = async () => {
     if (await confirmSkipWatch()) onSkip();
@@ -46,10 +46,10 @@ export function GarminStep({ nav, isDemo, skipped, onSkip, picker, title }: Garm
   return (
     <StepLayout nav={nav} busy={busy} title={title} primary={primaryFor(garmin, nav)} secondary={secondaryFor(garmin, isDemo)}>
       {picker}
+      {canSkip ? <SkipLink label={SKIP_WATCH_LABEL} hint={SKIP_WATCH_HINT} onPress={() => void skip()} /> : null}
       <Appear index={1}>
         <GarminBody garmin={garmin} today={today} />
       </Appear>
-      {canSkip ? <SkipLink label={SKIP_WATCH_LABEL} hint={SKIP_WATCH_HINT} onPress={() => void skip()} /> : null}
     </StepLayout>
   );
 }

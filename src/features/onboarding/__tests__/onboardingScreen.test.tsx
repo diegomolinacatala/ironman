@@ -371,16 +371,13 @@ describe('v2 onboarding', () => {
     warn.mockRestore();
   });
 
-  test('"Seguir sin reloj" also appears after 45 s on the step', async () => {
+  test('"Seguir sin reloj" is offered right away (App Review: no watch must never get stuck)', async () => {
     mockState.stored['rti.onboarding.v2.u1'] = { version: 2, step: 'garmin', claudeDone: false };
-    jest.useFakeTimers();
     await render(<OnboardingScreen />);
     expect(await screen.findByText('Conecta tu Garmin')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Seguir sin reloj' })).toBeNull();
-    await act(async () => {
-      jest.advanceTimersByTime(45_000);
-    });
-    expect(screen.getByRole('button', { name: 'Seguir sin reloj' })).toBeTruthy();
+    confirmEverything();
+    await press('Seguir sin reloj');
+    expect(await screen.findByText('Conecta tu Claude')).toBeTruthy();
   });
 
   test('a skipped Garmin does not send the athlete back on resume', async () => {
@@ -428,19 +425,14 @@ describe('v2 onboarding', () => {
     warn.mockRestore();
   });
 
-  test('"Saltar por ahora" appears only after 45 s waiting for Claude', async () => {
+  test('"Saltar por ahora" is offered right away while waiting for Claude', async () => {
     mockState.profile = baseProfile({ aiConsentAt: '2026-10-27T08:00:00Z' });
     mockState.integrations = [{ provider: 'garmin_personal', state: 'connected', expiresAt: null, lastSyncAt: null, lastError: null }];
     mockState.stored['rti.onboarding.v2.u1'] = { version: 2, step: 'claude', claudeDone: false };
-    jest.useFakeTimers();
     await render(<OnboardingScreen />);
     await waitFor(() => expect(mockCreateToken).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/Esperando a que Claude se conecte/)).toBeTruthy();
     expect(mockState.stored['rti.onboarding.v2.u1']).toMatchObject({ claudeTokenId: 'tNew' });
-    expect(screen.queryByRole('button', { name: 'Saltar por ahora' })).toBeNull();
-    await act(async () => {
-      jest.advanceTimersByTime(45_000);
-    });
     await press('Saltar por ahora');
     expect(await screen.findByText('Tu plan, en tu calendario')).toBeTruthy();
     expect(mockState.stored['rti.onboarding.v2.u1']).toMatchObject({ step: 'calendar', claudeDone: true });
@@ -520,13 +512,12 @@ describe('Tu reloj › COROS', () => {
     expect(await screen.findByText('Conecta tu COROS')).toBeTruthy();
   });
 
-  test('a failed connection offers «Seguir sin reloj» right away', async () => {
+  test('a failed COROS connection still offers «Seguir sin reloj»', async () => {
     mockState.profile = baseProfile({ watchBrand: 'coros' });
     mockState.stored[KEY] = { version: 2, step: 'garmin', claudeDone: false };
     mockHealth.connect.mockRejectedValueOnce(new Error('No se pudo pedir acceso a Apple Salud. Revisa Ajustes > Salud > Road to Ironman.'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     await render(<OnboardingScreen />);
-    expect(screen.queryByRole('button', { name: 'Seguir sin reloj' })).toBeNull();
     await press('Conectar Apple Salud');
     expect(await screen.findByText(/No se pudo pedir acceso a Apple Salud/)).toBeTruthy();
     confirmEverything();

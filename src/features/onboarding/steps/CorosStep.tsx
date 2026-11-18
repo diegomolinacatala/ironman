@@ -4,12 +4,11 @@ import { openCorosApp } from '@/features/settings/corosLinks';
 import { Loading } from '@/ui';
 
 import { Appear } from '../Appear';
-import { GARMIN_SKIP_AFTER_MS } from '../connectModel';
 import { CorosGuideIntro, CorosImported, CorosOnlyOnIphone } from '../coros/CorosParts';
 import { useCorosConnect, type CorosConnect } from '../coros/useCorosConnect';
 import { SkipLink, WorkingState } from '../GuideParts';
 import { StepLayout, type StepAction, type StepNav } from '../StepLayout';
-import { SKIP_WATCH_HINT, SKIP_WATCH_LABEL, confirmSkipWatch, useElapsed } from '../watchSkip';
+import { SKIP_WATCH_HINT, SKIP_WATCH_LABEL, confirmSkipWatch } from '../watchSkip';
 
 export interface CorosStepProps {
   nav: StepNav;
@@ -33,12 +32,12 @@ export interface CorosStepProps {
  * Done once Apple Salud is on. "Seguir sin reloj" after a failure, 45 s, or at once without
  * Apple Salud (signed in on the web).
  */
-export function CorosStep({ nav, isDemo, skipped, onSkip, onSimulatedDone, picker, title }: CorosStepProps) {
+export function CorosStep({ nav, isDemo, onSkip, onSimulatedDone, picker, title }: CorosStepProps) {
   const coros = useCorosConnect({ isDemo });
   const busy = coros.phase === 'connecting';
-  const waitedLong = useElapsed(GARMIN_SKIP_AFTER_MS);
   const unavailable = coros.phase === 'unavailable';
-  const canSkip = !busy && !coros.done && !unavailable && (skipped || coros.failed || waitedLong);
+  // Always offered (App Review 2.1: someone without a watch must never be stuck here).
+  const canSkip = !busy && !coros.done && !unavailable;
 
   const skip = async () => {
     if (await confirmSkipWatch()) onSkip();
@@ -48,10 +47,10 @@ export function CorosStep({ nav, isDemo, skipped, onSkip, onSimulatedDone, picke
   return (
     <StepLayout nav={nav} busy={busy} title={title} primary={primary} secondary={secondaryFor(coros)}>
       {picker}
+      {canSkip ? <SkipLink label={SKIP_WATCH_LABEL} hint={SKIP_WATCH_HINT} onPress={() => void skip()} /> : null}
       <Appear index={1}>
         <CorosBody coros={coros} />
       </Appear>
-      {canSkip ? <SkipLink label={SKIP_WATCH_LABEL} hint={SKIP_WATCH_HINT} onPress={() => void skip()} /> : null}
     </StepLayout>
   );
 }

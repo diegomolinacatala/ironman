@@ -33,10 +33,10 @@ export interface ClaudeStepProps {
 /**
  * Step 4 (required): (a) consent to share data with the AI provider (Cloudflare), (b) create +
  * copy the personal connector URL and open claude.ai, (c) live verification
- * until THIS link is used. "Saltar por ahora" appears after 45 s. A COROS athlete also gets
+ * until THIS link is used. "Saltar por ahora" is always there. A COROS athlete also gets
  * the optional "Añade también COROS a tu Claude" (HRV, recovery and load only arrive that way).
  */
-export function ClaudeStep({ nav, profile, isDemo, token, onToken, storedTokenId, done, onDone }: ClaudeStepProps) {
+export function ClaudeStep({ nav, profile, isDemo, token, onToken, storedTokenId, onDone }: ClaudeStepProps) {
   const consent = useAiConsent(profile, onDone);
   const claude = useClaudeConnect({
     created: token,
@@ -65,7 +65,7 @@ export function ClaudeStep({ nav, profile, isDemo, token, onToken, storedTokenId
 
   const connected = claude.link === 'connected';
   return (
-    <StepLayout nav={nav} busy={claude.creating} primary={primaryFor(claude, onDone)} secondary={secondaryFor(claude, done, onDone)}>
+    <StepLayout nav={nav} busy={claude.creating} primary={primaryFor(claude, onDone)} secondary={secondaryFor(claude, onDone)}>
       <Appear index={1}>
         {connected ? <ClaudeConnected lastUsedAt={claude.lastUsedAt} /> : <ClaudeConnectPanel claude={claude} isDemo={isDemo} />}
       </Appear>
@@ -122,9 +122,8 @@ function primaryFor(claude: ClaudeConnect, onDone: () => void): StepAction {
   };
 }
 
-function secondaryFor(claude: ClaudeConnect, done: boolean, onDone: () => void): StepAction | null {
+function secondaryFor(claude: ClaudeConnect, onDone: () => void): StepAction | null {
   if (claude.link === 'connected') return null;
-  // A link that cannot be created (server down) must not trap the athlete either.
-  const stuck = Boolean(claude.error) && !claude.created && !claude.pending;
-  return claude.canSkip || stuck || done ? { label: 'Saltar por ahora', onPress: onDone } : null;
+  // Always offered: Claude is optional and App Review (2.1) has no claude.ai account.
+  return { label: 'Saltar por ahora', onPress: onDone };
 }

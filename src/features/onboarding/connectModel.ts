@@ -10,8 +10,6 @@ import { errorMessage } from '@/lib/logger';
 // Garmin
 // ---------------------------------------------------------------------------
 
-/** "Seguir sin Garmin" appears after a failed attempt or after this long on the step. */
-export const GARMIN_SKIP_AFTER_MS = 45_000;
 /** We ask the athlete to choose "1 año" when creating the key in Garmin Connect. */
 export const GARMIN_KEY_DAYS = 365;
 /** Any key works in demo mode; short ones are replaced by this (the demo repo wants ≥ 16 chars). */

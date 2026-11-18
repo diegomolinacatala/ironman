@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 import { confirmAction } from '@/features/settings/confirm';
 
 /** The discreet way out of "Tu reloj" (no watch, Garmin down, no iPhone for COROS…). */
@@ -15,14 +13,4 @@ export function confirmSkipWatch(): Promise<boolean> {
     confirmLabel: SKIP_WATCH_LABEL,
     cancelLabel: 'Volver',
   });
-}
-
-/** True once `ms` have passed since mount (the way out appears after a while on the step). */
-export function useElapsed(ms: number): boolean {
-  const [elapsed, setElapsed] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setElapsed(true), ms);
-    return () => clearTimeout(timer);
-  }, [ms]);
-  return elapsed;
 }
