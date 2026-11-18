@@ -216,13 +216,21 @@ async function submitForReview(appId, versionId) {
   const submission = open.data[0] ?? (await api.post('/v1/reviewSubmissions', {
     data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: rel('apps', appId) } },
   })).data;
-  await api.post('/v1/reviewSubmissionItems', {
-    data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: rel('reviewSubmissions', submission.id), appStoreVersion: rel('appStoreVersions', versionId) } },
-  }).catch((error) => {
-    if (!/already|ENTITY_ERROR\.RELATIONSHIP/i.test(error.message)) throw error;
-  });
+  if (submission.attributes?.state === 'UNRESOLVED_ISSUES') {
+    // After a rejection the same submission is sent again: mark its rejected items as resolved.
+    const items = await api.get(`/v1/reviewSubmissions/${submission.id}/items`);
+    for (const item of items.data.filter((i) => !i.attributes.resolved && !i.attributes.removed)) {
+      await api.patch(`/v1/reviewSubmissionItems/${item.id}`, { data: { type: 'reviewSubmissionItems', id: item.id, attributes: { resolved: true } } });
+    }
+  } else {
+    await api.post('/v1/reviewSubmissionItems', {
+      data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: rel('reviewSubmissions', submission.id), appStoreVersion: rel('appStoreVersions', versionId) } },
+    }).catch((error) => {
+      if (!/already|ENTITY_ERROR\.RELATIONSHIP/i.test(error.message)) throw error;
+    });
+  }
   await api.patch(`/v1/reviewSubmissions/${submission.id}`, { data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } } });
-  return 'enviada a revisión';
+  return submission.attributes?.state === 'UNRESOLVED_ISSUES' ? 'reenviada a revisión' : 'enviada a revisión';
 }
 
 async function main() {
