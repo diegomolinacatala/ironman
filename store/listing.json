@@ -29,5 +29,8 @@
     "userGeneratedContent": true,
     "healthOrWellnessTopics": true
   },
-  "screenshotDisplayType": "APP_IPHONE_67"
+  "screenshotDisplayType": "APP_IPHONE_67",
+  "excludedTerritories": [
+    "CHN"
+  ]
 }

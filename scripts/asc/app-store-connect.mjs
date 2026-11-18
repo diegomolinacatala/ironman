@@ -122,9 +122,32 @@ async function setFreePrice(appId) {
   return 'gratis';
 }
 
+/**
+ * Turns off the territories in listing.excludedTerritories (China mainland: its security and AIGC
+ * compliance forms block new submissions). Returns the ones it changed.
+ */
+async function excludeTerritories(availabilityId) {
+  const excluded = new Set(listing.excludedTerritories ?? []);
+  const changed = [];
+  for (let next = `/v2/appAvailabilities/${availabilityId}/territoryAvailabilities?include=territory&limit=200`; next; ) {
+    const page = await api.get(next);
+    for (const ta of page.data) {
+      const territory = ta.relationships?.territory?.data?.id;
+      if (!excluded.has(territory) || ta.attributes.available === false) continue;
+      await api.patch(`/v1/territoryAvailabilities/${ta.id}`, { data: { type: 'territoryAvailabilities', id: ta.id, attributes: { available: false } } });
+      changed.push(territory);
+    }
+    next = page.links?.next ? page.links.next.replace('https://api.appstoreconnect.apple.com', '') : null;
+  }
+  return changed;
+}
+
 async function setAvailability(appId) {
   const existing = await api.maybe(`/v1/apps/${appId}/appAvailabilityV2`);
-  if (existing?.data) return 'ya estaba configurada';
+  if (existing?.data) {
+    const changed = await excludeTerritories(existing.data.id);
+    return changed.length ? `quitados ${changed.join(', ')}` : 'ya estaba configurada';
+  }
   const territories = [];
   for (let next = '/v1/territories?limit=200'; next; ) {
     const page = await api.get(next);
@@ -143,7 +166,7 @@ async function setAvailability(appId) {
     included: territories.map((t) => ({
       type: 'territoryAvailabilities',
       id: `\${${t}}`,
-      attributes: { available: true },
+      attributes: { available: !(listing.excludedTerritories ?? []).includes(t) },
       relationships: { territory: rel('territories', t) },
     })),
   });
