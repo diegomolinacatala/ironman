@@ -10,7 +10,7 @@ import { raceDistanceLabel } from '@/domain/labels';
 import type { FriendRace, ISODate } from '@/domain/types';
 import { firstName } from '@/features/social/friendModel';
 import { joinNames } from '@/features/social/feedText';
-import { Card, Icon, SectionHeader, Text, radius, space, useTheme } from '@/ui';
+import { Card, Disclosure, Icon, SectionHeader, Text, radius, space, useTheme } from '@/ui';
 
 import { countdownLabel, sharedRaces } from './sharedModel';
 
@@ -20,7 +20,8 @@ function friendRaceLine(r: FriendRace, today: ISODate): string {
   return [r.name ?? raceDistanceLabel(r.distance), formatDayLabel(r.date, today)].join(' · ');
 }
 
-export function SharedRacesCard({ today }: { today: ISODate }) {
+/** `folded`: a closed "Carreras" section (Juntos keeps the secondary content folded). */
+export function SharedRacesCard({ today, folded = false }: { today: ISODate; folded?: boolean }) {
   const { colors } = useTheme();
   const mine = useRaces();
   const friends = useFriendRaces();
@@ -30,9 +31,10 @@ export function SharedRacesCard({ today }: { today: ISODate }) {
   const others = friendRaces.filter((r) => !sharedIds.has(r.raceId)).slice(0, MAX_OTHERS);
   if (shared.length === 0 && others.length === 0) return null;
 
-  return (
+  const title = shared.length > 0 ? 'Carreras juntos' : 'Carreras de tus amigos';
+  const body = (
     <View style={styles.section}>
-      <SectionHeader title={shared.length > 0 ? 'Carreras juntos' : 'Carreras de tus amigos'} />
+      {folded ? null : <SectionHeader title={title} />}
       {shared.map((s) => (
         <Card key={s.race.id} padding="md" variant="tinted" tint={colors.accentSoft}>
           <View style={styles.row}>
@@ -65,6 +67,13 @@ export function SharedRacesCard({ today }: { today: ISODate }) {
         </Card>
       ) : null}
     </View>
+  );
+  if (!folded) return body;
+  const summary = shared.length > 0 ? `${shared.length === 1 ? '1 carrera' : `${shared.length} carreras`} con amigos` : `${others.length} de tus amigos`;
+  return (
+    <Disclosure variant="plain" title={title} summary={summary} storageKey="together.races">
+      {body}
+    </Disclosure>
   );
 }
 

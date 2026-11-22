@@ -1,10 +1,13 @@
 /**
  * State + actions of the voice coach: sends spoken/typed messages through the
- * AI consent gate, keeps the turns of this visit and lets the user cancel a
- * slow answer (the AI can take ~2 min; a cancelled answer is ignored).
+ * AI consent gate, keeps today's turns (restored from the device when the
+ * screen opens, saved after every change; "Nueva conversación" clears them)
+ * and lets the user cancel a slow answer (the AI can take ~2 min; a cancelled
+ * answer is ignored).
  */
 import { useEffect, useMemo, useReducer, useRef } from 'react';
 
+import { useAuth } from '@/data/context';
 import { useCoach, useFriends } from '@/data/queries';
 import { todayISO } from '@/domain/dates';
 import type { CoachResponse } from '@/domain/types';
@@ -24,6 +27,7 @@ import {
   type TalkChannel,
   type TalkState,
 } from './talkSession';
+import { loadTalk, saveTalk } from './talkStorage';
 
 const FAILED_TEXT = 'Tu coach no ha podido responder. Inténtalo de nuevo.';
 
@@ -57,6 +61,36 @@ export function useTalkSession(voiceAvailable: boolean): TalkSession {
   useEffect(() => {
     if (!voiceAvailable && latest.current.inputMode === 'voice') dispatch({ type: 'mode', mode: 'text' });
   }, [voiceAvailable]);
+
+  // Today's conversation: restored once per user, then saved after every change of the turns.
+  const userId = useAuth().session?.userId ?? null;
+  const restored = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId) return undefined;
+    let alive = true;
+    restored.current = null;
+    loadTalk(userId, todayISO()).then(
+      (turns) => {
+        if (!alive) return;
+        restored.current = userId;
+        if (turns.length > 0) dispatch({ type: 'hydrate', turns });
+        // Turns sent while reading had nothing to merge with: save them now.
+        else if (latest.current.turns.length > 0) void saveTalk(userId, todayISO(), latest.current.turns);
+      },
+      (error: unknown) => {
+        logger.warn('talk conversation not restored', error);
+        if (alive) restored.current = userId;
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+  useEffect(() => {
+    // Never overwrite the stored conversation before it has been read.
+    if (!userId || restored.current !== userId) return;
+    saveTalk(userId, todayISO(), state.turns).catch((error: unknown) => logger.warn('talk conversation not saved', error));
+  }, [userId, state.turns]);
 
   const start = (prepared: PreparedRequest): boolean => {
     if (latest.current.pending) return false;

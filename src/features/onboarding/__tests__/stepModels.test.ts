@@ -18,7 +18,7 @@ import {
   reusableClaudeTokenForSettings,
   tokensToRevokeBeforeCreate,
 } from '../connectModel';
-import { clampHours, goalError, goalProfilePatch, goalRaceDraft, initialGoal, nextRace, raceNeedsSave, type GoalInput } from '../goalModel';
+import { goalError, goalProfilePatch, goalRaceDraft, initialGoal, nextRace, raceNeedsSave, type GoalInput } from '../goalModel';
 import { planSummary, weeksToPlan } from '../planSummary';
 
 const TODAY = '2026-10-27'; // Tuesday
@@ -45,17 +45,17 @@ const profile = {
 } as unknown as Profile;
 
 describe('goal', () => {
-  test('prefills the next A race and the profile hours/sports', () => {
+  test('prefills the next A race and the profile sports', () => {
     const races = [race({ id: 'past', date: '2026-05-01' }), race({ id: 'b', priority: 'B', date: '2026-12-01' }), race({ id: 'a' })];
     expect(nextRace(races, TODAY)?.id).toBe('a');
     const goal = initialGoal(profile, races, TODAY);
-    expect(goal).toMatchObject({ hasRace: true, raceId: 'a', weeklyHours: 9, sports: ['swim', 'bike', 'run'] });
+    expect(goal).toMatchObject({ hasRace: true, raceId: 'a', sports: ['swim', 'bike', 'run'] });
     expect(goal.race).toEqual({ name: 'Valencia', date: '2027-04-18', distance: 'olympic' });
   });
 
-  test('without races or profile: empty race, 8 h, triathlon sports', () => {
+  test('without races or profile: empty race, triathlon sports', () => {
     const goal = initialGoal(null, [], TODAY);
-    expect(goal).toMatchObject({ hasRace: true, raceId: null, weeklyHours: 8, sports: ['swim', 'bike', 'run'] });
+    expect(goal).toMatchObject({ hasRace: true, raceId: null, sports: ['swim', 'bike', 'run'] });
   });
 
   test('validation: sports, then the race only when "Tengo carrera"', () => {
@@ -78,12 +78,10 @@ describe('goal', () => {
     expect(raceNeedsSave({ ...goal, hasRace: false }, races)).toBe(false);
   });
 
-  test('hours are clamped to half hours and keep the rest of the availability', () => {
-    expect(clampHours(0)).toBe(2);
-    expect(clampHours(40)).toBe(25);
-    expect(clampHours(7.3)).toBe(7.5);
-    const patch = goalProfilePatch({ ...initialGoal(profile, [], TODAY), weeklyHours: 6 }, profile);
-    expect(patch.availability).toEqual({ ...profile.availability, weeklyHoursTarget: 6 });
+  test('saves only the sports: no weekly hours to ask, the availability stays automatic', () => {
+    const patch = goalProfilePatch({ ...initialGoal(profile, [], TODAY), sports: ['run'] });
+    expect(patch).toEqual({ sports: ['run'] });
+    expect(patch.availability).toBeUndefined();
   });
 });
 

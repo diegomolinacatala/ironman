@@ -1,6 +1,7 @@
 /**
  * Tú (settings hub): row titles and subtitles derived from the profile and races (pure).
  */
+import { isAutoAvailability } from '@/domain/availability';
 import { levelLabel, raceDistanceLabel, sportLabel, weekdayLabel } from '@/domain/labels';
 import type { Availability, ISODate, Profile, Race } from '@/domain/types';
 
@@ -25,8 +26,9 @@ export function raceRow(races: readonly Race[] | undefined, today: ISODate): Row
   return { title: 'Tu carrera', subtitle: `${name} · ${when}` };
 }
 
-/** "9 h/semana · descanso el domingo". */
+/** Automatic: "Automático · según tu calendario"; manual: "9 h/semana · descanso el domingo". */
 export function availabilitySubtitle(availability: Availability): string {
+  if (isAutoAvailability(availability)) return 'Automático · según tu calendario';
   const hours = `${formatHours(availability.weeklyHoursTarget)}/semana`;
   return availability.restDay === null ? `${hours} · sin día fijo de descanso` : `${hours} · descanso el ${weekdayLabel(availability.restDay).toLowerCase()}`;
 }

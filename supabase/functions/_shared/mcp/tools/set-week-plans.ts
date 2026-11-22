@@ -8,6 +8,7 @@
 import { addDays, DEFAULT_TZ, diffDays, startOfWeek, todayIn } from '../../dates.ts';
 import { dateSchema } from '../../planning/changes.ts';
 import { NotFoundError } from '../../planning/context.ts';
+import { manualWeeklyHours } from '../../planning/domain/season.ts';
 import { seasonOf, seasonView } from '../../planning/season-view.ts';
 import type { SeasonView } from '../../planning/season-view.ts';
 import { checkWeekPlans, checkWeekStart, CLAUDE_WEEK_PLAN_WEEKS, WEEK_PLAN_LIMITS } from '../../planning/week-plans.ts';
@@ -79,7 +80,7 @@ async function resultingSeason(store: PlanningStore, userId: UUID, situation: Si
   const last = touched.reduce((max, d) => (d > max ? d : max), monday);
   const rows = Math.max(MIN_SEASON_ROWS, diffDays(last, monday) / 7 + 1);
   const weekPlans = await store.listWeekPlans(userId, monday, addDays(monday, 7 * CLAUDE_WEEK_PLAN_WEEKS));
-  const weeklyHoursTarget = profile.availability.weeklyHoursTarget;
+  const weeklyHoursTarget = manualWeeklyHours(profile.availability);
   const season = seasonOf({ today, races, level: profile.level, weeklyHoursTarget, weekPlans, horizonWeeks: rows });
   return seasonView(season, rows);
 }

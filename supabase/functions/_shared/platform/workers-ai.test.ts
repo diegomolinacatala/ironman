@@ -14,7 +14,7 @@ import { MEAL_OUTPUT_JSON_SCHEMA } from '../meal/output.ts';
 import { briefingRecorder, usageRecorder } from '../testing/ai-fakes.ts';
 import { coachJob, runningRecorder, stateWithWeek } from '../testing/coach-fakes.ts';
 import { emptyState, fakeStore, fixedNow, USER } from '../testing/fakes.ts';
-import { chatBody, cleanModelJson, clientKey, createWorkersAiPort, QUOTA_MESSAGE, toChatMessages, toStrictSchema } from './workers-ai.ts';
+import { chatBody, cleanModelJson, clientKey, createWorkersAiPort, QUOTA_MESSAGE, toChatMessages, toStrictSchema, WORKER_TIMEOUT_MESSAGE } from './workers-ai.ts';
 import type { FetchFn } from './workers-ai.ts';
 
 const MODEL = '@cf/nvidia/nemotron-3-120b-a12b';
@@ -133,6 +133,25 @@ test('model text is cleaned to JSON: fences, <think>, prose around it, double-en
   assert.equal(cleanModelJson('Aquí tienes: {"a":{"b":2}} ¡Suerte!'), '{"a":{"b":2}}');
   assert.equal(cleanModelJson(JSON.stringify('{"a":1}')), '{"a":1}');
   assert.equal(cleanModelJson('sin json'), 'sin json');
+  // Thinking text used as a fallback: braces in the reasoning before the real answer.
+  assert.equal(cleanModelJson('Pienso en {semana} y {carga}. Respuesta: {"reply":"Hola","changes":[]}'), '{"reply":"Hola","changes":[]}');
+});
+
+test('generate: a hung worker fails at its own per-call timeout, not at the job deadline', async () => {
+  const hanging = fakeFetch(
+    ({ init }) =>
+      new Promise<Response>((_, reject) => {
+        init.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+      }),
+  );
+  const started = Date.now();
+  await assert.rejects(
+    port(hanging).generate(request({ timeoutMs: 30, signal: new AbortController().signal })),
+    (e: unknown) => e instanceof CoachAiError && e.code === 'timeout' && e.message === WORKER_TIMEOUT_MESSAGE,
+  );
+  assert.ok(Date.now() - started < 2_000);
+  const fast = await port(fakeFetch(() => ok('{"a":1}'))).generate(request({ timeoutMs: 5_000 }));
+  assert.equal(fast.text, '{"a":1}', 'a quick answer is unaffected (and the timer is cleared)');
 });
 
 test('generate: POST /v1/chat with the bearer secret; answer mapped to the Claude response shape', async () => {
@@ -224,7 +243,7 @@ test('a Workers AI answer flows through the coach job and records the Workers mo
   const calls: Call[] = [];
   await runCoachJob(
     { reader: fakeStore(stateWithWeek()), store: rec.store, claude: port(fakeFetch(() => ok(`Claro:\n${answer}`), calls)), now: fixedNow, logger: silentLogger },
-    coachJob({ mode: 'chat' }),
+    coachJob({ mode: 'chat', message: '¿Qué hago hoy?' }),
   );
   assert.equal(rec.jobs[0].status, 'done');
   assert.match(rec.jobs[0].reply ?? '', /Descansa hoy/);

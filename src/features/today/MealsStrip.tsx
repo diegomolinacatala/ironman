@@ -6,7 +6,7 @@ import { mealLabel } from '@/domain/labels';
 import type { ISODate, NutritionLog } from '@/domain/types';
 import { MEAL_CAMERA_ROUTE } from '@/features/accessory/coachActions';
 import { mealPhotoUri } from '@/integrations/camera/mealPhoto';
-import { Icon, SectionHeader, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
+import { Button, Icon, SectionHeader, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
 import { formatThousands, mealTotals, mealTotalsA11y, mealTotalsLine } from './todayModel';
 
@@ -65,14 +65,16 @@ function AddPhotoTile() {
 }
 
 /** Today's meals as photo tiles + day totals; "+ Foto" opens the camera analysis. */
-export function MealsStrip({ date, meals }: { date: ISODate; meals: NutritionLog[] }) {
+export function MealsStrip({ date, meals, embedded = false }: { date: ISODate; meals: NutritionLog[]; embedded?: boolean }) {
   const totals = mealTotals(meals);
   const line = mealTotalsLine(totals);
   const openDay = () => router.push(`/nutrition?date=${date}`);
   return (
     <View style={styles.root}>
-      <SectionHeader title="Comidas de hoy" action={meals.length > 0 ? { label: 'Ver todo', onPress: openDay } : undefined} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll} contentContainerStyle={styles.row}>
+      {embedded ? null : (
+        <SectionHeader title="Comidas de hoy" action={meals.length > 0 ? { label: 'Ver todo', onPress: openDay } : undefined} />
+      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={embedded ? styles.scrollEmbedded : styles.scroll} contentContainerStyle={styles.row}>
         <AddPhotoTile />
         {meals.map((meal) => (
           <MealTile key={meal.id} meal={meal} onPress={openDay} />
@@ -87,6 +89,7 @@ export function MealsStrip({ date, meals }: { date: ISODate; meals: NutritionLog
           Haz una foto a lo que comes y te calculo calorías e hidratos.
         </Text>
       ) : null}
+      {embedded && meals.length > 0 ? <Button label="Ver el día completo" variant="ghost" size="sm" onPress={openDay} /> : null}
     </View>
   );
 }
@@ -95,6 +98,7 @@ const styles = StyleSheet.create({
   root: { gap: space.sm },
   // Bleed to the screen edges so tiles scroll under the gutter.
   scroll: { marginHorizontal: -space.lg },
+  scrollEmbedded: { marginHorizontal: -space.lg },
   row: { paddingHorizontal: space.lg, gap: space.md },
   tile: { width: TILE_WIDTH, gap: 2 },
   thumb: { width: TILE_WIDTH, height: THUMB_HEIGHT, borderRadius: radius.md, marginBottom: space.xs },

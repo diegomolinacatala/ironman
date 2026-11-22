@@ -57,15 +57,16 @@ export interface TodaySocialCardProps {
   today: ISODate;
   jointSessions: readonly JointSession[];
   now?: Date;
+  embedded?: boolean;
 }
 
-export function TodaySocialCard({ myId, today, jointSessions, now = new Date() }: TodaySocialCardProps) {
+export function TodaySocialCard({ myId, today, jointSessions, now = new Date(), embedded = false }: TodaySocialCardProps) {
   const sessions = todayQuedadas(myId, today, jointSessions, now);
   if (sessions.length === 0) return null;
   return (
     <View style={styles.root}>
-      <SectionHeader title="Juntos hoy" action={{ label: 'Ver Juntos', onPress: () => router.navigate('/together') }} />
-      <Card padding="sm">
+      {embedded ? null : <SectionHeader title="Juntos hoy" action={{ label: 'Ver Juntos', onPress: () => router.navigate('/together') }} />}
+      <Card padding="sm" variant={embedded ? 'tinted' : 'flat'} tint={embedded ? 'transparent' : undefined} style={embedded ? { borderWidth: 0, marginHorizontal: -space.sm } : undefined}>
         {sessions.map((s, i) => (
           <View key={s.id}>
             {i > 0 ? <Divider inset={TILE_INSET + space.sm} /> : null}

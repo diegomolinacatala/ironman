@@ -210,10 +210,12 @@ export function mapNutrition(raw: unknown): NutritionLog {
   };
 }
 
-const DEFAULT_AVAILABILITY: Availability = { weeklyHoursTarget: 8, restDay: 0, longSessionDays: [5, 6], windows: [], poolDays: [] };
+const DEFAULT_AVAILABILITY: Availability = { mode: 'auto', weeklyHoursTarget: 8, restDay: null, longSessionDays: [5, 6], windows: [], poolDays: [] };
 
+/** Like the app's parser: no `mode` = automatic, which has no fixed rest day and no windows. */
 function availability(v: unknown): Availability {
   const a = asRow(v);
+  const manual = a.mode === 'manual';
   const days = (x: unknown): number[] => (Array.isArray(x) ? x.map((d) => num(d, -1)).filter((d) => d >= 0 && d <= 6) : []);
   const windows = Array.isArray(a.windows)
     ? a.windows.map(asRow).flatMap((w) => {
@@ -224,10 +226,11 @@ function availability(v: unknown): Availability {
       })
     : [];
   return {
+    mode: manual ? 'manual' : 'auto',
     weeklyHoursTarget: num(a.weeklyHoursTarget, DEFAULT_AVAILABILITY.weeklyHoursTarget),
-    restDay: a.restDay === null ? null : numOrNull(a.restDay) ?? DEFAULT_AVAILABILITY.restDay,
+    restDay: !manual || a.restDay === null ? null : (numOrNull(a.restDay) ?? 0),
     longSessionDays: Array.isArray(a.longSessionDays) ? days(a.longSessionDays) : DEFAULT_AVAILABILITY.longSessionDays,
-    windows,
+    windows: manual ? windows : [],
     poolDays: days(a.poolDays),
   };
 }

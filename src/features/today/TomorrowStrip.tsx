@@ -8,12 +8,14 @@ import { Card, Icon, SectionHeader, SportBadge, Text, space, useTheme } from '@/
 import { workoutA11yLabel, workoutMetaLine } from '@/features/workouts/format';
 
 /** Compact preview of tomorrow's sessions. */
-export function TomorrowStrip({ date, workouts }: { date: ISODate; workouts: Workout[] }) {
+export function TomorrowStrip({ date, workouts, embedded = false }: { date: ISODate; workouts: Workout[]; embedded?: boolean }) {
   const { colors } = useTheme();
   const training = workouts.filter((w) => w.sport !== 'rest');
   return (
     <View style={styles.root}>
-      <SectionHeader title={`Mañana · ${formatDayShort(date)}`} action={{ label: 'Ver plan', onPress: () => router.navigate('/week') }} />
+      {embedded ? null : (
+        <SectionHeader title={`Mañana · ${formatDayShort(date)}`} action={{ label: 'Ver plan', onPress: () => router.navigate('/week') }} />
+      )}
       {training.length === 0 ? (
         <Card variant="tinted" padding="md">
           <View style={styles.row}>
@@ -24,7 +26,7 @@ export function TomorrowStrip({ date, workouts }: { date: ISODate; workouts: Wor
           </View>
         </Card>
       ) : (
-        <Card padding="sm">
+        <Card padding="sm" variant={embedded ? 'tinted' : 'flat'} tint={embedded ? 'transparent' : undefined} style={embedded ? { borderWidth: 0, marginHorizontal: -space.sm } : undefined}>
           {training.map((w, i) => (
             <View key={w.id}>
               {i > 0 ? <View style={[styles.sep, { backgroundColor: colors.border }]} /> : null}

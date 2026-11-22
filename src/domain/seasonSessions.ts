@@ -9,6 +9,7 @@
  * App-only: not mirrored to the edge functions.
  */
 import { allocateSessions } from './allocation';
+import { normalWeekHours } from './availability';
 import { addDays, formatDuration } from './dates';
 import { distanceKindOf, phaseFor, type PhaseInfo } from './periodization';
 import { activeWeekPlan, enforceIntensityDistribution, pinnedRaceSessions } from './plannerSupport';
@@ -56,7 +57,7 @@ const QUALITY_NAMES: Partial<Record<SessionCode, string>> = {
 function weekPhase(week: SeasonWeek, input: SeasonDetailInput): { info: PhaseInfo; freeWeek: boolean } {
   const raw = phaseFor(week.weekStart, input.races, { level: input.profile.level });
   const plan = activeWeekPlan(raw, week.plan, week.weekStart);
-  return { info: applyWeekPlan(raw, plan, input.profile.availability.weeklyHoursTarget), freeWeek: plan?.kind === 'rest' };
+  return { info: applyWeekPlan(raw, plan, normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null)), freeWeek: plan?.kind === 'rest' };
 }
 
 /** Race-week sessions plus the ideal sessions for the rest of the week's target minutes. */

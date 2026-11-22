@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CoachRequest, PlanProposal } from '@/domain/types';
 
 import type { SupabaseCtx } from '../supabase/base';
-import { COACH_NOTICES, createCoachRequester, parseJobId } from '../supabase/coach';
+import { COACH_NOTICES, createCoachRequester, failureNotice, parseJobId } from '../supabase/coach';
 import { createSupabaseRepository } from '../supabase/SupabaseRepository';
 import type { RulesCoachRepo } from '../demo/rulesCoach';
 import { fakeClient } from './supabaseFake';
@@ -139,6 +139,19 @@ describe('Supabase requestCoach with the AI coach on', () => {
     await createCoachRequester({ ...fastDeps, ctx: fakeCtx({ data: { jobId: 'job' }, error: null }, [{ status: 'running' }]) })(REQUEST);
     const notices = mockRunRulesCoach.mock.calls.map((call) => (call[2] as { notice: string }).notice);
     expect(notices).toEqual([COACH_NOTICES.rateLimited, COACH_NOTICES.failed, COACH_NOTICES.timeout]);
+  });
+
+  it('says why the AI job failed (quota, cut answer…) before the rules answer', async () => {
+    const quota = 'La IA gratuita ha llegado a su límite de hoy. Vuelve a intentarlo mañana.';
+    await createCoachRequester({ ...fastDeps, ctx: fakeCtx({ data: { jobId: 'job' }, error: null }, [{ status: 'error', error: quota }]) })(REQUEST);
+    const notice = (mockRunRulesCoach.mock.calls.at(-1)?.[2] as { notice: string }).notice;
+    expect(notice).toBe(`${quota} Mientras, te respondo con el motor de reglas.`);
+    expect(failureNotice('El coach con IA ha tardado demasiado. Te propongo el plan automático mientras tanto.')).toBe(
+      'El coach con IA ha tardado demasiado. Mientras, te respondo con el motor de reglas.',
+    );
+    expect(failureNotice('Reformúlala o usa el plan automático')).toBe('Reformúlala. Mientras, te respondo con el motor de reglas.');
+    expect(failureNotice(null)).toBe(COACH_NOTICES.failed);
+    expect(failureNotice('  ')).toBe(COACH_NOTICES.failed);
   });
 
   it('falls back with a consent notice when the user has not accepted AI processing (403)', async () => {

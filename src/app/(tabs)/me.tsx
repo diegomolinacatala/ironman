@@ -4,7 +4,7 @@ import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { AccountActions } from '@/features/account/AccountActions';
 import { CoachNotesSection } from '@/features/account/CoachNotesSection';
 import { ConnectionsSection } from '@/features/account/ConnectionsSection';
-import { CoachVoiceRow, PreferencesGroup, PrivacyGroup, TrainingGroup } from '@/features/account/HubSections';
+import { CoachVoiceRow, PreferencesGroup, TrainingGroup } from '@/features/account/HubSections';
 import { MorningSection } from '@/features/account/MorningSection';
 import { ProfileHero } from '@/features/account/ProfileHero';
 import { GroupDivider, SettingsGroup } from '@/features/account/SettingsGroup';
@@ -13,7 +13,7 @@ import { EmptyState, ErrorNotice, Loading, Screen } from '@/ui';
 
 /**
  * Tú: the settings hub — who you are, then grouped lists (Entrenamiento, Tu coach,
- * Conexiones, Preferencias, Privacidad) and, apart, Cuenta. See docs/DESIGN.md §6.
+ * Conexiones, Preferencias incl. privacidad) and, apart, Cuenta. See docs/DESIGN.md §6.
  */
 export default function MeScreen() {
   const { mode } = useAuth();
@@ -66,7 +66,6 @@ export default function MeScreen() {
       </SettingsGroup>
       <ConnectionsSection profile={me} />
       <PreferencesGroup />
-      <PrivacyGroup />
       <AccountActions isDemo={isDemo} />
     </Screen>
   );

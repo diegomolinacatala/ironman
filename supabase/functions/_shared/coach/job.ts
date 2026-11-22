@@ -1,11 +1,19 @@
 /**
- * Background part of the coach: context → Claude (structured output) →
- * validated changes (with each session's steps and prescription) →
+ * Background part of the coach: context (short workout ids) → model
+ * (structured output) → ids mapped back and validated changes (with each
+ * session's steps and prescription, defaults filled server-side) →
  * plan_proposals (source 'ai_coach') → memory lines in coach_notes + logged
  * imprevisto + suggested quedada + suggested general plan (week plans) →
  * coach_jobs done (with `extras`).
+ *
+ * Reliability: chat uses the concise context (cheaper) and thinks harder only
+ * when the athlete asks to change the plan; each model call has its own
+ * timeout; ONE repair re-prompt runs (time allowing) when the answer is cut,
+ * not valid JSON, every change was dropped, or a requested change is missing;
+ * the reply never claims changes that are not in the proposal.
  * Any failure (including the overall deadline) ends the job with status
- * 'error' and a Spanish message, so the app can fall back to the rules engine.
+ * 'error' and a Spanish message, so the app can say why and fall back to the
+ * rules engine.
  */
 import { addDays } from '../dates.ts';
 import type { Logger } from '../log.ts';
@@ -14,18 +22,28 @@ import { checkChanges, PLAN_WINDOW_DAYS, withSource } from '../planning/changes.
 import { buildPlanningContext, NotFoundError } from '../planning/context.ts';
 import type { PlanningContext } from '../planning/context.ts';
 import type { PlanningReader } from '../planning/store.ts';
-import type { CoachJobExtras, CoachRequest, PlanChange, ProposalKind, UUID } from '../types.ts';
+import type { CoachJobExtras, CoachRequest, PlanChange, ProposalKind, UUID, Workout } from '../types.ts';
 import { COACH_DEADLINE_MS, startDeadline, timeoutError, withDeadline } from './deadline.ts';
+import { withDefaultCoaching } from './defaults.ts';
 import { applyCoachExtras } from './extras.ts';
+import { claimsChanges, wantsPlanChange } from './intent.ts';
 import { buildCoachMessages } from './messages.ts';
 import type { FriendWeek } from './messages.ts';
 import { COACH_OUTPUT_JSON_SCHEMA, parseCoachOutput, toPlanChanges } from './output.ts';
-import type { CoachOutput } from './output.ts';
+import type { CoachOutput, FlatChange } from './output.ts';
 import { CoachAiError } from './ports.ts';
-import type { ClaudePort, ClaudeResponse, CoachStore } from './ports.ts';
+import type { ClaudeMessage, ClaudePort, ClaudeRequest, ClaudeResponse, CoachStore } from './ports.ts';
 import { COACH_SYSTEM_PROMPT } from './prompt.ts';
+import { idLegend, resolveWorkoutId, shortenUuids, shortIdsFor } from './short-ids.ts';
+import type { ShortIds } from './short-ids.ts';
 
 export const COACH_MAX_TOKENS = 16000;
+/** Longest first model call: a hung worker must leave time for the repair. */
+export const FIRST_CALL_MAX_MS = 80_000;
+/** Time the repair re-prompt needs to be worth trying. */
+export const REPAIR_MIN_MS = 30_000;
+const CALL_MARGIN_MS = 2_000;
+const PREVIOUS_ANSWER_MAX = 6000;
 
 export interface CoachJob {
   jobId: UUID;
@@ -45,6 +63,10 @@ export interface CoachJobDeps {
 
 const KIND: Record<CoachRequest['mode'], ProposalKind> = { plan_week: 'generate_week', replan: 'replan', chat: 'chat' };
 
+const CUT_MESSAGE = 'La respuesta del coach se ha cortado por ser demasiado larga. Prueba con una petición más concreta.';
+const BAD_OUTPUT_MESSAGE = 'La respuesta del coach no tenía el formato esperado. Inténtalo de nuevo.';
+const HOW_TO_ASK = 'Dímelo con el día y la sesión (por ejemplo, «mueve el rodaje del martes al jueves») y te lo propongo.';
+
 function friendWeeks(deps: CoachJobDeps, job: CoachJob, context: PlanningContext): Promise<FriendWeek[]> {
   const wanted = context.friends.filter((f) => job.request.friendIds?.includes(f.friendId));
   return Promise.all(
@@ -54,15 +76,6 @@ function friendWeeks(deps: CoachJobDeps, job: CoachJob, context: PlanningContext
       items: await deps.reader.getFriendWeek(job.userId, f.friendId, context.weekStart, addDays(context.weekStart, 13)),
     })),
   );
-}
-
-function checkStop(response: ClaudeResponse): void {
-  if (response.stopReason === 'refusal') {
-    throw new CoachAiError('refusal', 'El coach con IA no ha podido responder a esta petición. Reformúlala o usa el plan automático.');
-  }
-  if (response.stopReason === 'max_tokens') {
-    throw new CoachAiError('max_tokens', 'La respuesta del coach se ha cortado por ser demasiado larga. Prueba con una petición más concreta.');
-  }
 }
 
 async function recordUsage(deps: CoachJobDeps, job: CoachJob, response: ClaudeResponse): Promise<void> {
@@ -78,23 +91,211 @@ async function recordUsage(deps: CoachJobDeps, job: CoachJob, response: ClaudeRe
   }
 }
 
-interface ValidatedChanges {
+export function userFacingError(error: unknown): string {
+  if (error instanceof CoachAiError) return error.message;
+  if (error instanceof NotFoundError) return error.message;
+  return 'El coach con IA no está disponible ahora mismo. Te propongo el plan automático mientras tanto.';
+}
+
+// ---------------------------------------------------------------------------
+// Preparation and model calls
+// ---------------------------------------------------------------------------
+
+export interface Prepared {
+  context: PlanningContext;
+  ids: ShortIds;
+  messages: ClaudeMessage[];
+  effort: ClaudeRequest['effort'];
+  /** Chat message that asks to change the plan: changes are mandatory. */
+  wantsChange: boolean;
+  /** Planned + done workouts of the 14-day window (validation, loose id matching). */
+  workouts: Workout[];
+}
+
+async function prepare(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal): Promise<Prepared> {
+  const chat = job.request.mode === 'chat';
+  const context = await withDeadline(
+    buildPlanningContext(deps.reader, {
+      userId: job.userId,
+      weekStart: job.request.weekStart,
+      now: deps.now(),
+      // Chat: ids, dates, sport, title, duration, intensity and busy times are enough (saves free neurons).
+      detail: chat ? 'concise' : 'detailed',
+      includeNextWeek: true,
+    }),
+    signal,
+  );
+  const lifeEvent = job.request.lifeEventId ? context.lifeEvents.find((e) => e.id === job.request.lifeEventId) ?? null : null;
+  const [friends, workouts] = await withDeadline(
+    Promise.all([friendWeeks(deps, job, context), deps.reader.listWorkouts(job.userId, context.weekStart, addDays(context.weekStart, PLAN_WINDOW_DAYS - 1))]),
+    signal,
+  );
+  const ids = shortIdsFor(context);
+  const wantsChange = chat && wantsPlanChange(job.request.message);
+  return {
+    context,
+    ids,
+    messages: buildCoachMessages(job.request, context, { lifeEvent, friends, ids }),
+    effort: chat && !wantsChange ? 'low' : 'medium',
+    wantsChange,
+    workouts,
+  };
+}
+
+interface Clock {
+  signal: AbortSignal;
+  remaining: () => number;
+}
+
+async function callModel(deps: CoachJobDeps, job: CoachJob, clock: Clock, messages: ClaudeMessage[], effort: ClaudeRequest['effort'], capMs: number): Promise<ClaudeResponse> {
+  const response = await withDeadline(
+    deps.claude.generate({
+      userId: job.userId,
+      system: COACH_SYSTEM_PROMPT,
+      messages,
+      effort,
+      schema: COACH_OUTPUT_JSON_SCHEMA,
+      maxTokens: COACH_MAX_TOKENS,
+      signal: clock.signal,
+      timeoutMs: Math.max(1_000, Math.min(capMs, clock.remaining() - CALL_MARGIN_MS)),
+    }),
+    clock.signal,
+  );
+  await recordUsage(deps, job, response);
+  if (response.fallbackUsed) deps.logger.info('coach served by fallback model', { model: response.model });
+  return response;
+}
+
+// ---------------------------------------------------------------------------
+// Validation (short ids → UUIDs, loose matching, plan checks, defaults)
+// ---------------------------------------------------------------------------
+
+export interface Validated {
   changes: PlanChange[];
   dropped: number;
+  /** Why changes were dropped (Spanish, short ids instead of UUIDs). */
+  issues: string[];
+  loose: number;
 }
 
-async function validateAgainstPlan(deps: CoachJobDeps, job: CoachJob, context: PlanningContext, raw: Parameters<typeof toPlanChanges>[0]): Promise<ValidatedChanges> {
-  const converted = toPlanChanges(raw);
-  const workouts = await deps.reader.listWorkouts(job.userId, context.weekStart, addDays(context.weekStart, PLAN_WINDOW_DAYS - 1));
-  const checked = checkChanges(converted.changes, { weekStart: context.weekStart, today: context.today, workouts });
-  const dropped = converted.rejected.length + checked.issues.length;
-  if (dropped > 0) {
-    deps.logger.info('coach changes dropped', { jobId: job.jobId, dropped, issues: [...converted.rejected, ...checked.issues].slice(0, 10) });
+function resolveIds(output: CoachOutput, prep: Prepared): { changes: FlatChange[]; loose: number } {
+  let loose = 0;
+  const changes = output.changes.map((c): FlatChange => {
+    if (c.op === 'add') return { ...c, workoutId: null };
+    const resolved = resolveWorkoutId(c.workoutId, { op: c.op, title: c.title, sport: c.sport, date: c.date }, prep.ids, prep.workouts, prep.context.today);
+    if (resolved.loose) loose += 1;
+    return resolved.id ? { ...c, workoutId: resolved.id } : c;
+  });
+  return { changes, loose };
+}
+
+export function validateOutput(output: CoachOutput, prep: Prepared): Validated {
+  const resolved = resolveIds(output, prep);
+  const converted = toPlanChanges(resolved.changes);
+  const checked = checkChanges(converted.changes, { weekStart: prep.context.weekStart, today: prep.context.today, workouts: prep.workouts });
+  const issues = [...converted.rejected, ...checked.issues].map((i) => shortenUuids(i.error, prep.ids));
+  const valid = withDefaultCoaching(withSource(checked.valid, 'ai_coach'), prep.context.athlete.zones);
+  return { changes: valid, dropped: issues.length + output.malformedChanges, issues, loose: resolved.loose };
+}
+
+// ---------------------------------------------------------------------------
+// Attempts and the one repair
+// ---------------------------------------------------------------------------
+
+type Problem = 'cut' | 'bad_json' | 'dropped' | 'missing';
+
+interface Attempt {
+  text: string;
+  output: CoachOutput | null;
+  validated: Validated | null;
+  problem: Problem | null;
+  model: string;
+}
+
+function evaluate(response: ClaudeResponse, prep: Prepared): Attempt {
+  if (response.stopReason === 'refusal') {
+    throw new CoachAiError('refusal', 'El coach con IA no ha podido responder a esta petición. Reformúlala o usa el plan automático.');
   }
-  return { changes: withSource(checked.valid, 'ai_coach'), dropped };
+  const base = { text: response.text, model: response.model };
+  if (response.stopReason === 'max_tokens') return { ...base, output: null, validated: null, problem: 'cut' };
+  const output = parseCoachOutput(response.text);
+  if (!output) return { ...base, output: null, validated: null, problem: 'bad_json' };
+  const validated = validateOutput(output, prep);
+  const proposed = output.changes.length + output.malformedChanges;
+  const extrasOnly = output.week_plans !== null || output.quedada !== null;
+  const problem: Problem | null =
+    proposed > 0 && validated.changes.length === 0 ? 'dropped' : prep.wantsChange && proposed === 0 && !extrasOnly ? 'missing' : null;
+  return { ...base, output, validated, problem };
 }
 
-function finalReply(reply: string, dropped: number, hasProposal: boolean): string {
+function repairInstruction(problem: Problem, attempt: Attempt, prep: Prepared): string {
+  const today = prep.context.today;
+  const windowEnd = addDays(prep.context.weekStart, PLAN_WINDOW_DAYS - 1);
+  const legend = idLegend(prep.context, prep.ids, today) || '(no hay entrenos planificados: usa add)';
+  switch (problem) {
+    case 'bad_json':
+      return 'Tu respuesta anterior no era un JSON válido con el formato pedido. Repite la respuesta SOLO con el objeto JSON (reply, summary, changes, memory, life_event, quedada, week_plans), sin texto alrededor.';
+    case 'cut':
+      return 'Tu respuesta anterior se cortó por larga. Repite la respuesta completa pero más corta: reply de 2-3 frases, como mucho 8 cambios, prescription solo en las sesiones nuevas y con pocos pasos.';
+    case 'dropped':
+      return `Ninguno de tus cambios era válido: ${(attempt.validated?.issues ?? []).slice(0, 5).join('; ')}. Hoy es ${today}. Usa solo estos ids (entrenos planificados de hoy en adelante):\n${legend}\nRepite la respuesta completa con cambios que usen esos ids y fechas entre ${today} y ${windowEnd}.`;
+    case 'missing':
+      return `El atleta ha pedido un cambio en su plan y no has devuelto ninguno. Repite la respuesta completa con los cambios concretos en changes, usando estos ids:\n${legend}\nFechas entre ${today} y ${windowEnd}. Si de verdad no se puede, deja changes vacío y explica por qué en reply, sin decir que has cambiado nada.`;
+  }
+}
+
+function repairMessages(prep: Prepared, attempt: Attempt, problem: Problem): ClaudeMessage[] {
+  const previous = attempt.text.trim().slice(0, PREVIOUS_ANSWER_MAX) || '(respuesta vacía)';
+  return [...prep.messages, { role: 'assistant', content: previous }, { role: 'user', content: repairInstruction(problem, attempt, prep) }];
+}
+
+/** The better of the two attempts: usable changes first, then any usable reply. */
+function better(first: Attempt, second: Attempt): Attempt {
+  const valid = (a: Attempt): number => a.validated?.changes.length ?? -1;
+  if (!second.output) return first;
+  if (!first.output) return second;
+  if (valid(second) > 0 || second.problem === null) return second;
+  return valid(first) >= valid(second) ? first : second;
+}
+
+async function withRepair(deps: CoachJobDeps, job: CoachJob, clock: Clock, prep: Prepared, first: Attempt, log: Logger): Promise<Attempt> {
+  const problem = first.problem;
+  if (!problem) return first;
+  if (clock.remaining() < REPAIR_MIN_MS) {
+    log.info('coach repair skipped: no time left', { problem });
+    return first;
+  }
+  log.info('coach repair', { problem, issues: first.validated?.issues.slice(0, 5) ?? [] });
+  try {
+    const effort = problem === 'bad_json' || problem === 'cut' ? 'low' : prep.effort;
+    const response = await callModel(deps, job, clock, repairMessages(prep, first, problem), effort, clock.remaining());
+    return better(first, evaluate(response, prep));
+  } catch (error) {
+    if (clock.signal.aborted) throw timeoutError();
+    // The repair failing must not lose a usable first answer.
+    if (first.output) {
+      log.warn('coach repair failed, keeping the first answer', errorInfo(error));
+      return first;
+    }
+    throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reply
+// ---------------------------------------------------------------------------
+
+/** One friendly reason from the validation issues. */
+export function friendlyIssue(issues: readonly string[]): string {
+  const text = issues.join(' ');
+  if (/ya ha pasado/.test(text)) return 'esa fecha ya ha pasado';
+  if (/fuera de la ventana/.test(text)) return 'solo puedo tocar esta semana y la siguiente';
+  if (/completado|saltado/.test(text)) return 'esa sesión ya está hecha o saltada';
+  if (/no existe|workoutId|UUID/.test(text)) return 'no he encontrado esa sesión en tu plan';
+  return 'el cambio no encajaba con tu calendario';
+}
+
+export function finalReply(reply: string, dropped: number, hasProposal: boolean): string {
   const trimmed = reply.trim().slice(0, 4000);
   const notes = [
     dropped > 0 ? `He descartado ${dropped} cambio${dropped === 1 ? '' : 's'} que no encajaba${dropped === 1 ? '' : 'n'} con tu calendario.` : '',
@@ -103,40 +304,21 @@ function finalReply(reply: string, dropped: number, hasProposal: boolean): strin
   return notes.length ? `${trimmed}\n\n${notes.join(' ')}` : trimmed;
 }
 
-export function userFacingError(error: unknown): string {
-  if (error instanceof CoachAiError) return error.message;
-  if (error instanceof NotFoundError) return error.message;
-  return 'El coach con IA no está disponible ahora mismo. Te propongo el plan automático mientras tanto.';
+/** The reply as the athlete reads it: honest when no change survived. */
+export function composeReply(output: CoachOutput, validated: Validated, hasProposal: boolean): string {
+  const proposed = output.changes.length + output.malformedChanges;
+  if (!hasProposal && proposed > 0) {
+    return `No he podido preparar el cambio en tu plan: ${friendlyIssue(validated.issues)}. ${HOW_TO_ASK}`;
+  }
+  if (!hasProposal && claimsChanges(output.reply)) {
+    return `No he podido preparar ese cambio en tu plan. ${HOW_TO_ASK}`;
+  }
+  return finalReply(output.reply, validated.dropped, hasProposal);
 }
 
-interface Generated {
-  context: PlanningContext;
-  response: ClaudeResponse;
-}
-
-/** Context + Claude call, both bounded by the job deadline. */
-async function generate(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal): Promise<Generated> {
-  const context = await withDeadline(
-    buildPlanningContext(deps.reader, { userId: job.userId, weekStart: job.request.weekStart, now: deps.now(), detail: 'detailed', includeNextWeek: true }),
-    signal,
-  );
-  const lifeEvent = job.request.lifeEventId ? context.lifeEvents.find((e) => e.id === job.request.lifeEventId) ?? null : null;
-  const friends = await withDeadline(friendWeeks(deps, job, context), signal);
-  const messages = buildCoachMessages(job.request, context, { lifeEvent, friends });
-  const response = await withDeadline(
-    deps.claude.generate({
-      userId: job.userId,
-      system: COACH_SYSTEM_PROMPT,
-      messages,
-      effort: job.request.mode === 'chat' ? 'low' : 'medium',
-      schema: COACH_OUTPUT_JSON_SCHEMA,
-      maxTokens: COACH_MAX_TOKENS,
-      signal,
-    }),
-    signal,
-  );
-  return { context, response };
-}
+// ---------------------------------------------------------------------------
+// Storage
+// ---------------------------------------------------------------------------
 
 /** The validated changes as an ai_coach proposal (none without changes). */
 async function storeProposal(
@@ -177,32 +359,41 @@ async function markFailed(deps: CoachJobDeps, job: CoachJob, log: Logger, error:
   }
 }
 
+function attemptError(attempt: Attempt): CoachAiError {
+  return attempt.problem === 'cut' ? new CoachAiError('max_tokens', CUT_MESSAGE) : new CoachAiError('bad_output', BAD_OUTPUT_MESSAGE);
+}
+
 /** Runs one job end to end. Never throws: failures are written to the job row. */
 export async function runCoachJob(deps: CoachJobDeps, job: CoachJob): Promise<void> {
   const log = deps.logger.child({ jobId: job.jobId, mode: job.request.mode });
-  const deadline = startDeadline(deps.deadlineMs ?? COACH_DEADLINE_MS);
+  const budget = deps.deadlineMs ?? COACH_DEADLINE_MS;
+  const deadline = startDeadline(budget);
   const started = Date.now();
+  const clock: Clock = { signal: deadline.signal, remaining: () => budget - (Date.now() - started) };
   try {
-    const { context, response } = await generate(deps, job, deadline.signal);
-    await recordUsage(deps, job, response);
-    if (response.fallbackUsed) log.info('coach served by fallback model', { model: response.model });
-    checkStop(response);
-    const output = parseCoachOutput(response.text);
-    if (!output) throw new CoachAiError('bad_output', 'La respuesta del coach no tenía el formato esperado. Inténtalo de nuevo.');
-    const validated = await withDeadline(validateAgainstPlan(deps, job, context, output.changes), deadline.signal);
-    const changes = validated.changes;
-    const dropped = validated.dropped + output.malformedChanges;
+    const prep = await prepare(deps, job, clock.signal);
+    const firstResponse = await callModel(deps, job, clock, prep.messages, prep.effort, FIRST_CALL_MAX_MS);
+    const attempt = await withRepair(deps, job, clock, prep, evaluate(firstResponse, prep), log);
+    if (!attempt.output || !attempt.validated) throw attemptError(attempt);
+    const { output, validated } = attempt;
     // Past the deadline the app has already fallen back: do not add a competing proposal.
-    if (deadline.signal.aborted) throw timeoutError();
-    const proposalId = await storeProposal(deps, job, context, output, changes, response.model);
-    const extras = await withDeadline(applyCoachExtras(deps, job.userId, job.request, output, context, log), deadline.signal);
+    if (clock.signal.aborted) throw timeoutError();
+    const proposalId = await storeProposal(deps, job, prep.context, output, validated.changes, attempt.model);
+    const extras = await withDeadline(applyCoachExtras(deps, job.userId, job.request, output, prep.context, log), clock.signal);
     const finished = await deps.store.finishJob(job.userId, job.jobId, {
-      reply: finalReply(output.reply, dropped, proposalId !== null),
+      reply: composeReply(output, validated, proposalId !== null),
       proposalId,
       extras,
     });
     if (!finished) log.warn('coach job was no longer running when it finished', { proposalId });
-    log.info('coach job done', { ms: Date.now() - started, changes: changes.length, dropped, ...extrasFields(extras) });
+    log.info('coach job done', {
+      ms: Date.now() - started,
+      changes: validated.changes.length,
+      dropped: validated.dropped,
+      loose: validated.loose,
+      wantsChange: prep.wantsChange,
+      ...extrasFields(extras),
+    });
   } catch (error) {
     await markFailed(deps, job, log, error);
   } finally {

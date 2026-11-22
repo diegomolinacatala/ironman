@@ -1,9 +1,9 @@
 /**
- * Progreso — form (PMC) → volume & compliance → recovery → nutrition → races.
- * A tab since the 2026-11 rebrand; every section has one clear way into its detail screen.
+ * Progreso — form (PMC, open) and folded sections: volume & compliance, recovery, nutrition,
+ * races. Each one opens on demand and is remembered on the device.
  */
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { isoWeekNumber, todayISO } from '@/domain/dates';
 import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
@@ -15,7 +15,7 @@ import { useProgressData } from '@/features/progress/useProgressData';
 import { VolumeCard } from '@/features/progress/VolumeCard';
 import { RaceCountdownCard } from '@/features/races/RaceCountdownCard';
 import { phaseName } from '@/features/races/raceModel';
-import { ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
+import { Button, Disclosure, ErrorNotice, Loading, Screen, space } from '@/ui';
 
 export default function ProgressScreen() {
   const today = todayISO();
@@ -31,48 +31,41 @@ export default function ProgressScreen() {
       overline={overline}
       onRefresh={data.refetch}
       refreshing={data.isRefetching}
-      contentStyle={bottomPadding != null ? { paddingBottom: bottomPadding } : undefined}>
+      contentStyle={[styles.content, bottomPadding != null ? { paddingBottom: bottomPadding } : null]}>
       {data.error ? <ErrorNotice message={data.error} onRetry={data.refetch} /> : null}
       {data.isLoading ? <Loading label="Calculando tu forma…" /> : null}
 
       {data.pmc ? (
-        <View style={styles.section}>
-          <SectionHeader title="Tu forma" />
+        <Disclosure variant="plain" title="Tu forma" summary="Forma física, fatiga y frescura" defaultOpen storageKey="progress.form">
           <PmcCard series={data.pmc} />
-        </View>
+        </Disclosure>
       ) : null}
 
       {data.volume.length > 0 ? (
-        <View style={styles.section}>
-          <SectionHeader title="Volumen y cumplimiento" />
+        <Disclosure variant="plain" title="Volumen y cumplimiento" summary="Horas por semana y lo que has cumplido" storageKey="progress.volume">
           <VolumeCard weeks={data.volume} />
           <ComplianceCard weeks={data.volume.slice(-5)} />
-        </View>
+        </Disclosure>
       ) : null}
 
-      <View style={styles.section}>
-        <SectionHeader
-          title="Recuperación"
-          action={{ label: 'Conexiones', onPress: () => router.push('/settings/integrations') }}
-        />
+      <Disclosure variant="plain" title="Recuperación" summary="VFC, pulso en reposo y sueño" storageKey="progress.recovery">
         <RecoveryCard series={data.recovery} />
-      </View>
+        <Button label="Conexiones" icon="plug" variant="ghost" size="sm" onPress={() => router.push('/settings/integrations')} />
+      </Disclosure>
 
-      <View style={styles.section}>
-        <SectionHeader title="Nutrición" />
+      <Disclosure variant="plain" title="Nutrición" summary="Calorías e hidratos de hoy" storageKey="progress.nutrition">
         <NutritionSummaryCard totals={data.nutrition?.totals ?? null} entries={data.nutrition?.entries ?? 0} />
-      </View>
+      </Disclosure>
 
       {!data.isLoading ? (
-        <View style={styles.section}>
-          <SectionHeader title="Carreras" />
+        <Disclosure variant="plain" title="Carreras" summary={data.race ? data.race.name : 'Añade tu próxima carrera'} storageKey="progress.races">
           <RaceCountdownCard race={data.race} phase={data.phase} today={today} />
-        </View>
+        </Disclosure>
       ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: space.md, marginTop: space.sm },
+  content: { gap: space.lg },
 });

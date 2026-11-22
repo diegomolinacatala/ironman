@@ -53,7 +53,7 @@ test('profile, race, event and metrics mappers apply safe defaults', () => {
     display_name: 'Diego',
     sports: ['swim'],
     thresholds: { ftpW: 250 },
-    availability: { weeklyHoursTarget: 10, restDay: null, longSessionDays: [5, 6, 9], windows: [{ weekday: 1, start: '07:00:00', end: '09:00' }, { weekday: 8, start: 'x', end: 'y' }], poolDays: [1] },
+    availability: { mode: 'manual', weeklyHoursTarget: 10, restDay: null, longSessionDays: [5, 6, 9], windows: [{ weekday: 1, start: '07:00:00', end: '09:00' }, { weekday: 8, start: 'x', end: 'y' }], poolDays: [1] },
     notification_prefs: { social: false },
     timezone: '',
   });
@@ -62,6 +62,10 @@ test('profile, race, event and metrics mappers apply safe defaults', () => {
   assert.deepEqual(p.availability.windows, [{ weekday: 1, start: '07:00', end: '09:00' }]);
   assert.equal(p.timezone, 'Europe/Madrid');
   assert.equal(mapProfile({}).availability.weeklyHoursTarget, 8);
+  // No mode (rows stored before it existed) = automatic: no fixed rest day, no windows.
+  const auto = mapProfile({ availability: { weeklyHoursTarget: 8, restDay: 0, windows: [{ weekday: 1, start: '07:00', end: '09:00' }], poolDays: [2] } }).availability;
+  assert.deepEqual([auto.mode, auto.restDay, auto.windows, auto.poolDays], ['auto', null, [], [2]]);
+  assert.equal(p.availability.mode, 'manual');
   assert.equal(mapRace({ id: 'r', name: 'X', date: '2027-04-18', distance: 'half', priority: 'A' }).distance, 'half');
   const e = mapLifeEvent({ id: 'e', kind: 'padel', title: 'Pádel', start_date: '2026-10-28', end_date: '2026-10-28', start_time: '20:00:00', severity: 3 });
   assert.equal(e.startTime, '20:00');

@@ -165,7 +165,7 @@ describe('Tú', () => {
     expect(screen.getByText('Entrenamiento')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: /^Tu carrera\. Valencia · .* · faltan 128 días/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/races');
-    await fireEvent.press(screen.getByRole('button', { name: /^Disponibilidad\. 9 h\/semana · descanso el lunes/ }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Tus horarios\./ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/availability');
     await fireEvent.press(screen.getByRole('button', { name: /^Perfil deportivo\. Natación, Bici, Carrera/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/profile');
@@ -194,15 +194,6 @@ describe('Tú', () => {
     // Tapping a row opens its settings.
     await fireEvent.press(screen.getByLabelText(/^Garmin: Conectado/));
     expect(mockRouter.push).toHaveBeenLastCalledWith('/settings/integrations');
-  });
-
-  test('Tu reloj: switching to COROS saves it and the watch row becomes COROS', async () => {
-    await render(<MeScreen />);
-    expect(screen.getByLabelText(/^Garmin: Sin conectar/)).toBeTruthy();
-    await fireEvent.press(screen.getByRole('tab', { name: 'COROS' }));
-    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith({ watchBrand: 'coros' }));
-    expect(await screen.findByLabelText(/^COROS: Sin conectar/)).toBeTruthy();
-    expect(screen.queryByLabelText(/^Garmin:/)).toBeNull();
   });
 
   test('COROS row: last Apple Salud read and one-tap sync', async () => {

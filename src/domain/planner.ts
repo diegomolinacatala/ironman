@@ -31,10 +31,12 @@ import { reasonFor, summaryFor } from './plannerText';
 import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
 import { NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
+import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
 import { applyWeekPlan } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
 import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, Sport, Weekday, WeekPlan, Workout } from './types';
-import { buildWeekModel, type FixedInput } from './weekModel';
+import { rangesLength } from './timeRanges';
+import { buildWeekModel, type DayState, type FixedInput } from './weekModel';
 
 /** Share of endurance time in Z1-Z2 (kept here for the public API; lives in plannerSupport). */
 export { lowIntensityShare } from './plannerSupport';
@@ -149,10 +151,38 @@ interface Budget {
   qualityCut: number;
 }
 
-function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: { plannable: ISODate[]; fixed: FixedInput[]; events: LifeEvent[]; week: WeekRestrictionSummary; lifeStress: boolean }): Budget {
+/** Automatic availability: most a normal day / a long-session day can hold, whatever the free time. [H] */
+export const AUTO_DAY_MAX_MIN = 150;
+export const AUTO_LONG_DAY_MAX_MIN = 330;
+
+/**
+ * Training minutes the calendar leaves on the plannable days (automatic
+ * availability): free time after busy blocks, timed sessions and the night,
+ * capped per day so a free day is not read as 15 hours of training.
+ */
+export function freeTrainingMinutes(days: readonly DayState[]): number {
+  return days
+    .filter((d) => d.plannable)
+    .reduce((sum, d) => sum + Math.max(0, Math.min(rangesLength(d.free) - d.untimedMin, d.isLongDay ? AUTO_LONG_DAY_MAX_MIN : AUTO_DAY_MAX_MIN)), 0);
+}
+
+interface BudgetContext {
+  plannable: ISODate[];
+  fixed: FixedInput[];
+  events: LifeEvent[];
+  week: WeekRestrictionSummary;
+  lifeStress: boolean;
+  /** Hours of a normal week (manual or automatic). */
+  weeklyHours: number;
+  /** Automatic availability: the week never asks for more than the free time (`freeMinutes`). */
+  auto: boolean;
+  freeMinutes: number;
+}
+
+function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: BudgetContext): Budget {
   const warnings: string[] = [];
   const fraction = ctx.plannable.length / 7;
-  let target = input.profile.availability.weeklyHoursTarget * 60 * info.volumeFactor * fraction * ctx.week.factor;
+  let target = ctx.weeklyHours * 60 * info.volumeFactor * fraction * ctx.week.factor;
   const readinessLevel = input.readiness?.level;
   if (readinessLevel === 'red') target *= READINESS_EFFECTS.plannerRedWeekFactor;
   if (readinessLevel === 'amber') target *= READINESS_EFFECTS.plannerAmberWeekFactor;
@@ -163,6 +193,10 @@ function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: { plannable: I
   }
   const inPlannable = (date: ISODate) => ctx.plannable.includes(date);
   const existingMin = ctx.fixed.filter((f) => inPlannable(f.date) && f.sport !== 'rest').reduce((s, f) => s + f.durationMin, 0);
+  if (ctx.auto && target > ctx.freeMinutes + existingMin) {
+    target = ctx.freeMinutes + existingMin;
+    warnings.push('Tu calendario va lleno esta semana: he ajustado el volumen a tus huecos libres.');
+  }
   const sportEvents = ctx.events.filter((e) => isSportEvent(e) && ctx.plannable.some((d) => d >= e.startDate && d <= e.endDate));
   const otherMin = sportEvents.reduce((s, e) => s + (e.durationMin ?? 90), 0);
   const hardOthers = sportEvents.filter((e) => e.kind === 'football' || e.kind === 'padel' || e.severity >= 3).length;
@@ -211,6 +245,9 @@ interface WeekContext {
   ownRestDates: ISODate[];
   /** Race dates inside the week. */
   raceDates: ISODate[];
+  /** Hours of a normal week: the manual target, else the automatic one (level × race distance). */
+  weeklyHours: number;
+  auto: boolean;
 }
 
 function weekPlanContext(input: PlannerInput): WeekContext {
@@ -221,7 +258,8 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   const lifeStress = events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
   const raw = phaseFor(range.from, input.races, { level: input.profile.level, lifeStress });
   const weekPlan = activeWeekPlan(raw, input.weekPlan, range.from);
-  const info = applyWeekPlan(raw, weekPlan, input.profile.availability.weeklyHoursTarget);
+  const weeklyHours = normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null);
+  const info = applyWeekPlan(raw, weekPlan, weeklyHours);
   const target = info.raceInWeek && info.phase === 'race_week' && info.targetRace?.id === info.raceInWeek.id ? info.targetRace : null;
   const plannable = dates.filter((d) => d >= firstPlannable && !(target !== null && d > target.date));
   const restrictions = restrictionsForDates(dates, input.lifeEvents);
@@ -245,6 +283,8 @@ function weekPlanContext(input: PlannerInput): WeekContext {
     week: summarizeRestrictions(plannable, restrictions),
     existing,
     fixed,
+    weeklyHours,
+    auto: isAutoAvailability(input.profile.availability),
   };
 }
 
@@ -296,15 +336,19 @@ function raceDatesOf(races: readonly Race[], priority: Race['priority']): ISODat
   return races.filter((r) => r.priority === priority).map((r) => r.date);
 }
 
-function placeWeek(input: PlannerInput, ctx: WeekContext, budget: Budget, specs: readonly SessionSpec[]): WeekPlacement {
+function longDaysOf(profile: Profile): Weekday[] {
+  return profile.availability.longSessionDays.length > 0 ? profile.availability.longSessionDays : DEFAULT_LONG_DAYS;
+}
+
+/** Week model before the rest day: free time (windows or the waking day − busy − timed sessions) per day. */
+function draftWeekDays(input: PlannerInput, ctx: WeekContext): DayState[] {
   const profile = input.profile;
-  const longDays = profile.availability.longSessionDays.length > 0 ? profile.availability.longSessionDays : DEFAULT_LONG_DAYS;
   const today = input.today && input.today >= ctx.range.from && input.today <= ctx.range.to ? input.today : null;
-  const draftDays = buildWeekModel({
+  return buildWeekModel({
     dates: ctx.dates,
     firstPlannable: ctx.firstPlannable,
     restDay: null,
-    longSessionDays: longDays,
+    longSessionDays: longDaysOf(profile),
     poolDays: profile.availability.poolDays,
     windows: profile.availability.windows,
     busyBlocks: input.busyBlocks,
@@ -314,6 +358,12 @@ function placeWeek(input: PlannerInput, ctx: WeekContext, budget: Budget, specs:
     today: today ?? undefined,
     nowMinutes: today ? input.nowMinutes : undefined,
   }).map((d) => ({ ...d, plannable: d.plannable && ctx.plannable.includes(d.date) }));
+}
+
+function placeWeek(input: PlannerInput, ctx: WeekContext, budget: Budget, specs: readonly SessionSpec[], draftDays: DayState[]): WeekPlacement {
+  const profile = input.profile;
+  const longDays = longDaysOf(profile);
+  const today = input.today && input.today >= ctx.range.from && input.today <= ctx.range.to ? input.today : null;
   const rest = planRestDays({
     profile,
     days: draftDays,
@@ -323,6 +373,11 @@ function placeWeek(input: PlannerInput, ctx: WeekContext, budget: Budget, specs:
     raceDates: ctx.raceDates,
     pinnedDates: [...new Set(specs.flatMap((s) => s.allowedDates ?? []))],
   });
+  return placeOn(input, ctx, budget, specs, rest, today);
+}
+
+function placeOn(input: PlannerInput, ctx: WeekContext, budget: Budget, specs: readonly SessionSpec[], rest: RestDayPlan, today: ISODate | null): WeekPlacement {
+  const profile = input.profile;
   const placement = placeSessions(specs, rest.days, {
     kind: ctx.kind,
     maxHardDays: maxHardDays(budget.targetMinutes / 60, profile.level === 'advanced'),
@@ -400,11 +455,23 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
 }
 
 /** Full planner output (used by generateWeek and tests). */
-export function planWeek(input: PlannerInput): PlanWeekResult {
+export function planWeek(rawInput: PlannerInput): PlanWeekResult {
+  // Automatic availability: no fixed rest day and no windows, the calendar decides.
+  const input = { ...rawInput, profile: { ...rawInput.profile, availability: planningAvailability(rawInput.profile.availability) } };
   const ctx = weekPlanContext(input);
-  const budget = computeBudget(input, ctx.info, { plannable: ctx.plannable, fixed: ctx.fixed, events: ctx.events, week: ctx.week, lifeStress: ctx.lifeStress });
+  const draftDays = draftWeekDays(input, ctx);
+  const budget = computeBudget(input, ctx.info, {
+    plannable: ctx.plannable,
+    fixed: ctx.fixed,
+    events: ctx.events,
+    week: ctx.week,
+    lifeStress: ctx.lifeStress,
+    weeklyHours: ctx.weeklyHours,
+    auto: ctx.auto,
+    freeMinutes: freeTrainingMinutes(draftDays),
+  });
   const { specs, runCapped } = buildSpecs(input, ctx, budget);
-  return finalize(input, ctx, budget, placeWeek(input, ctx, budget, specs), runCapped);
+  return finalize(input, ctx, budget, placeWeek(input, ctx, budget, specs, draftDays), runCapped);
 }
 
 /** Rules-engine week proposal: only 'add' changes, never touches existing workouts. */

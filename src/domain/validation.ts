@@ -244,6 +244,7 @@ const windowSchema = z
   .refine((w) => timeToMinutes(w.end) > timeToMinutes(w.start), { error: 'La franja debe terminar después de empezar' });
 
 export const availabilitySchema = z.object({
+  mode: z.enum(['auto', 'manual']).optional(),
   weeklyHoursTarget: z.number({ error: 'Horas semanales: debe ser un número' }).min(0).max(40, { error: 'Máximo 40 h por semana' }),
   restDay: weekdaySchema.nullable(),
   longSessionDays: z.array(weekdaySchema).max(7),

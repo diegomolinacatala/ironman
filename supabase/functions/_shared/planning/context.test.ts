@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { emptyState, fakeStore, FRIEND, NOW, OTHER_USER, USER, workout } from '../testing/fakes.ts';
+import { emptyState, fakeStore, FRIEND, NOW, OTHER_USER, profile, USER, workout } from '../testing/fakes.ts';
 import { buildPlanningContext, NotFoundError } from './context.ts';
 
 function seeded() {
@@ -60,6 +60,19 @@ test('builds a compact context for the requested week (normalized to Monday)', a
   assert.equal(ctx.nextWeek, undefined);
   assert.equal(ctx.recentSessions, undefined);
   assert.deepEqual((ctx.athlete.availability as { restDay: string }).restDay, 'lunes');
+});
+
+test('automatic availability: the coach and Claude read the mode and the target of the week', async () => {
+  const store = seeded();
+  store.profiles = [{ ...profile(), availability: { mode: 'auto', weeklyHoursTarget: 9, restDay: null, longSessionDays: [5, 6], windows: [], poolDays: [] } }];
+  const ctx = await buildPlanningContext(fakeStore(store), { userId: USER, weekStart: '2026-10-29', now: NOW, detail: 'concise' });
+  const availability = ctx.athlete.availability as { mode: string; how: string; restDay: null; weekTargetMinutes: number; normalWeekHours: number };
+  assert.equal(availability.mode, 'auto');
+  assert.equal(availability.restDay, null);
+  assert.match(availability.how, /tiempo libre/);
+  assert.equal(availability.weekTargetMinutes, ctx.phase.targetMinutes);
+  assert.ok(availability.normalWeekHours > 9, 'automatic hours for the level and race, not the stored 9 h');
+  assert.ok(ctx.notes.some((n) => n.includes('mode=auto')));
 });
 
 test('detailed mode adds descriptions, next week and recent sessions', async () => {

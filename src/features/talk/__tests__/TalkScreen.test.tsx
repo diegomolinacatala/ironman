@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
@@ -16,6 +17,7 @@ import type {
   WeekPlanDraft,
 } from '@/domain/types';
 import { makeCoachResponse, makeLifeEvent, makeProposal, makeWorkout } from '@/features/coach/__tests__/fixtures';
+import { EXAMPLE_PROMPTS } from '@/features/talk/talkSession';
 import type { VoiceInput } from '@/integrations/speech/useVoiceInput';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn(), canGoBack: jest.fn(() => true) };
@@ -125,7 +127,9 @@ const PROPOSAL: PlanProposal = makeProposal({
   ],
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Today's conversation is kept on the device (talkStorage): every test starts with none.
+  await AsyncStorage.clear();
   jest.clearAllMocks();
   mockState.mode = 'demo';
   mockState.params = {};
@@ -141,20 +145,21 @@ async function sendTyped(text: string) {
 }
 
 describe('Talk — idle', () => {
-  test('greets with examples and one big mic', async () => {
+  test('greets with examples and one composer: mic, text and send', async () => {
     await render(<TalkScreen />);
     expect(screen.getByText('¿Qué te cuentas?')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Me he torcido el tobillo' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: EXAMPLE_PROMPTS[0] ?? '' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Hablar con tu coach' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Escribir' })).toBeTruthy();
+    expect(screen.getByLabelText('Mensaje para tu coach')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Enviar a tu coach' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cerrar' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Nueva conversación' })).toBeNull();
   });
 
   test('an example prefills the keyboard composer without sending', async () => {
     await render(<TalkScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Prefiero nadar por la mañana' }));
-    expect(screen.getByLabelText('Mensaje para tu coach').props.value).toBe('Prefiero nadar por la mañana');
+    await fireEvent.press(screen.getByRole('button', { name: EXAMPLE_PROMPTS[2] ?? '' }));
+    expect(screen.getByLabelText('Mensaje para tu coach').props.value).toBe(EXAMPLE_PROMPTS[2]);
     expect(mockCoach).not.toHaveBeenCalled();
   });
 
@@ -181,19 +186,6 @@ describe('Talk — idle', () => {
     await waitFor(() => expect(mockCoach).toHaveBeenCalledTimes(1));
     expect(mockCoach.mock.calls[0]?.[0]).toMatchObject({ mode: 'chat', message: 'me duele el tobillo', channel: 'voice' });
     expect(mockVoice.reset).toHaveBeenCalled();
-  });
-
-  test('switching to the keyboard mid-take discards it silently', async () => {
-    Object.assign(mockVoice, { state: 'listening', transcript: 'mañana no' });
-    await render(<TalkScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Escribir' }));
-    expect(mockVoice.cancel).toHaveBeenCalled();
-
-    Object.assign(mockVoice, { state: 'idle', transcript: '' });
-    await screen.rerender(<TalkScreen />);
-    expect(screen.getByLabelText('Mensaje para tu coach')).toBeTruthy();
-    expect(screen.queryByText(/No te he oído/)).toBeNull();
-    expect(mockCoach).not.toHaveBeenCalled();
   });
 
   test('a take that ends empty asks to try again', async () => {
@@ -242,7 +234,7 @@ describe('Talk — result', () => {
     expect(mockCoach.mock.calls[0]?.[0]).toMatchObject({ message: 'Me he torcido el tobillo', channel: 'text' });
     expect(screen.getByLabelText('Lo recordaré: Prefiere nadar por la mañana')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Apuntado: Esguince de tobillo' })).toBeTruthy();
-    expect(screen.getByText('Respuesta automática (sin IA)')).toBeTruthy();
+    expect(screen.getByText('Modo sin IA')).toBeTruthy();
     expect(screen.getByText('Cambios en tu plan · 2 cambios')).toBeTruthy();
     expect(screen.getByText('Rodaje suave')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Nueva conversación' })).toBeTruthy();
@@ -417,24 +409,27 @@ describe('Talk — a new session in the proposal', () => {
     mockCoach.mockImplementation(async () => makeCoachResponse({ reply: 'Te añado unas series el jueves.', proposal: SERIES }));
   });
 
-  test("shows what the session asks with the athlete's targets and its steps on demand", async () => {
+  test("the change is one calm line; what the session asks and its steps wait under \"Ver detalles\"", async () => {
     mockState.thresholds = { lthr: 170 };
     await render(<TalkScreen />);
     await sendTyped('Quiero series esta semana');
-    expect(await screen.findByText('Subir tu umbral sin pasarte.')).toBeTruthy();
-    expect(screen.getByText("3×8' Z4 · 162–168 ppm · RPE 7–8")).toBeTruthy();
+    const details = await screen.findByRole('button', { name: "Ver detalles de «Series 3×8'»" });
+    expect(screen.queryByText('Subir tu umbral sin pasarte.')).toBeNull();
     expect(screen.queryByText('Mismo ritmo en las tres.')).toBeNull();
 
-    await fireEvent.press(screen.getByRole('button', { name: 'Ver la estructura, 3 pasos' }));
+    await fireEvent.press(details);
+    expect(screen.getByText('Subir tu umbral sin pasarte.')).toBeTruthy();
+    expect(screen.getByText("3×8' Z4 · 162–168 ppm · RPE 7–8")).toBeTruthy();
     expect(screen.getByText('Mismo ritmo en las tres.')).toBeTruthy();
     expect(screen.getByText('162–168 ppm · RPE 7–8')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Ocultar la estructura' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ocultar detalles' })).toBeTruthy();
   });
 
   test('without thresholds the zone and RPE still show', async () => {
     await render(<TalkScreen />);
     await sendTyped('Quiero series esta semana');
-    expect(await screen.findByText("3×8' Z4 · RPE 7–8")).toBeTruthy();
+    await fireEvent.press(await screen.findByRole('button', { name: "Ver detalles de «Series 3×8'»" }));
+    expect(screen.getByText("3×8' Z4 · RPE 7–8")).toBeTruthy();
   });
 });
 

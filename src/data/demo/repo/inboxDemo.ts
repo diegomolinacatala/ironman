@@ -1,4 +1,5 @@
-import type { AppNotification, PlanProposal, ProposalDraft, ProposalStatus, UUID } from '@/domain/types';
+import { addDays } from '@/domain/dates';
+import type { AppNotification, ISODate, PlanProposal, ProposalDraft, ProposalStatus, UUID } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../../repository';
 import { notify } from '../events';
@@ -19,6 +20,26 @@ const PROPOSALS_LIMIT = 50;
 
 export function proposalTitle(count: number): string {
   return count === 1 ? 'Tu semana tiene 1 cambio propuesto' : `Tu semana tiene ${count} cambios propuestos`;
+}
+
+/** Days a proposal may touch from its week_start (same as the DB trigger). */
+const PROPOSAL_WINDOW_DAYS = 14;
+
+function windowsOverlap(a: ISODate, b: ISODate): boolean {
+  return a <= addDays(b, PROPOSAL_WINDOW_DAYS - 1) && b <= addDays(a, PROPOSAL_WINDOW_DAYS - 1);
+}
+
+/**
+ * Mirrors `private.on_plan_proposal_insert` (20261122000400): a new proposal
+ * discards the user's older pending rules proposals whose 14-day window
+ * overlaps its own, so stale ones never pile up on Hoy.
+ */
+export function supersedeRulesProposals(proposals: readonly PlanProposal[], created: PlanProposal): PlanProposal[] {
+  return proposals.map((p) =>
+    p.id !== created.id && p.userId === created.userId && p.status === 'pending' && p.source === 'rules' && windowsOverlap(p.weekStart, created.weekStart)
+      ? { ...p, status: 'discarded' as const }
+      : p,
+  );
 }
 
 export function inboxDemo({ store }: DemoDeps): InboxMethods {
@@ -77,7 +98,7 @@ export function inboxDemo({ store }: DemoDeps): InboxMethods {
           status: 'pending',
           createdAt: clock.now,
         };
-        const next = { ...db, proposals: [proposal, ...db.proposals] };
+        const next = { ...db, proposals: [proposal, ...supersedeRulesProposals(db.proposals, proposal)] };
         // Mirrors the DB trigger: only external coaches notify.
         const notified =
           draft.source === 'rules'

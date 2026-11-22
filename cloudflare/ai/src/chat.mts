@@ -181,16 +181,28 @@ const count = (...values: unknown[]): number => {
   return typeof n === 'number' ? Math.round(n) : 0;
 };
 
-/** Workers AI output (OpenAI `choices[0].message.content` or legacy `response`) → ChatResult. */
+/**
+ * With thinking on, reasoning models (Nemotron 3) sometimes leave `content` empty and put
+ * everything, the JSON answer included, in the reasoning field: use it as a fallback (the
+ * caller extracts the JSON object from it).
+ */
+function reasoningOf(o: Obj, message: Obj): string {
+  const candidates = [message.reasoning_content, message.reasoning, o.reasoning_content, o.reasoning];
+  return candidates.map(textOf).find((t) => t.trim().length > 0) ?? '';
+}
+
+/** Workers AI output (OpenAI `choices[0].message.content`, legacy `response`, reasoning fallback) → ChatResult. */
 export function normalizeOutput(output: unknown, model: string): ChatResult {
   const o = isObj(output) ? output : {};
   const choice = Array.isArray(o.choices) && isObj(o.choices[0]) ? o.choices[0] : {};
   const message = isObj(choice.message) ? choice.message : {};
   const content = o.response !== undefined && o.response !== null ? o.response : message.content;
+  const primary = textOf(content);
+  const text = primary.trim().length > 0 ? primary : reasoningOf(o, message);
   const rawFinish = typeof choice.finish_reason === 'string' ? choice.finish_reason : typeof o.finish_reason === 'string' ? o.finish_reason : 'stop';
   const usage = isObj(o.usage) ? o.usage : {};
   return {
-    text: textOf(content),
+    text,
     finishReason: rawFinish === 'length' ? 'max_tokens' : rawFinish,
     usage: { inputTokens: count(usage.prompt_tokens, usage.input_tokens), outputTokens: count(usage.completion_tokens, usage.output_tokens) },
     model,

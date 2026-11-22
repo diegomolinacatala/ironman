@@ -83,6 +83,14 @@ test('normalizeOutput reads choices[0].message.content or response, maps length 
   assert.equal(normalizeOutput(null, 'm').text, '');
 });
 
+test('normalizeOutput falls back to the reasoning text when thinking left content empty', () => {
+  const thinking = { choices: [{ message: { content: '', reasoning_content: 'Pienso… {"reply":"Hola"}' }, finish_reason: 'stop' }] };
+  assert.equal(normalizeOutput(thinking, 'm').text, 'Pienso… {"reply":"Hola"}');
+  assert.equal(normalizeOutput({ choices: [{ message: { content: null, reasoning: '{"a":1}' } }] }, 'm').text, '{"a":1}');
+  const both = { choices: [{ message: { content: '{"reply":"Bien"}', reasoning_content: 'razono' } }] };
+  assert.equal(normalizeOutput(both, 'm').text, '{"reply":"Bien"}', 'content wins when present');
+});
+
 test('quota errors are recognised by code or message', () => {
   assert.equal(isQuotaError(new Error('3036: Account limited: you have used up your daily free allocation of 10,000 neurons')), true);
   assert.equal(isQuotaError(new Error('4006: daily free allocation')), true);

@@ -40,7 +40,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     icon: 'flag',
     overline: 'Tu objetivo',
     title: '¿A por qué vamos?',
-    subtitle: 'Con tu carrera y tus horas, el plan sabe cuánto apretar.',
+    subtitle: 'Con tu carrera y tu calendario, el plan sabe cuánto apretar.',
     required: false,
     nativeOnly: false,
   },

@@ -48,12 +48,51 @@ export function rangeToWindow(range: DateRange): TimeWindow {
   };
 }
 
-/** True when the event blocks time: not all-day, not free/transparent, not cancelled. */
+/** All-day events the user marked busy (vacations, trips): they block the whole day. */
+const ALL_DAY_BUSY: readonly string[] = ['busy', 'unavailable'];
+
+/**
+ * True when the event blocks time: not free/transparent, not cancelled; an
+ * all-day event only when it is explicitly busy or unavailable (iOS creates
+ * all-day events as "free": birthdays, holidays and reminders never block).
+ */
 export function isBlockingEvent(event: CalendarEventLike): boolean {
-  if (event.allDay) return false;
-  if (event.availability === 'free') return false;
   if (event.status === 'canceled') return false;
+  if (event.allDay) return ALL_DAY_BUSY.includes(event.availability ?? '');
+  if (event.availability === 'free') return false;
   return true;
+}
+
+/** Local midnight after `time`. */
+function nextMidnight(time: number): number {
+  const d = new Date(time);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0).getTime();
+}
+
+/** Local midnight on or before `time`. */
+function midnightOf(time: number): number {
+  const d = new Date(time);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+}
+
+/** A busy all-day event (one or several days) as one whole-day block per local day inside the window. */
+function allDayBlocks(event: CalendarEventLike, window: TimeWindow): BusyBlockDraft[] {
+  const rawStart = toTime(event.startDate);
+  const rawEnd = toTime(event.endDate);
+  if (!Number.isFinite(rawStart) || !Number.isFinite(rawEnd) || rawEnd < rawStart) return [];
+  const blocks: BusyBlockDraft[] = [];
+  // EventKit ends all-day events at 23:59:59 of the last day (or at the next midnight).
+  const end = Math.min(Math.max(rawEnd, rawStart + 1), window.end.getTime());
+  for (let day = Math.max(midnightOf(rawStart), window.start.getTime()); day < end; day = nextMidnight(day)) {
+    blocks.push({
+      start: new Date(day).toISOString(),
+      end: new Date(nextMidnight(day)).toISOString(),
+      source: 'device_calendar',
+      title: cleanTitle(event.title),
+      externalId: event.id ? event.id.slice(0, MAX_TEXT) : null,
+    });
+  }
+  return blocks;
 }
 
 function toBlock(event: CalendarEventLike, window: TimeWindow): BusyBlockDraft | null {
@@ -73,15 +112,17 @@ function toBlock(event: CalendarEventLike, window: TimeWindow): BusyBlockDraft |
 }
 
 /**
- * Busy blocks for the window: skips all-day / free / cancelled events, clips to
- * the window, clamps each block to 24 h (DB constraint) and drops duplicates
- * (same event id and start, e.g. an event present in two selected calendars).
+ * Busy blocks for the window: skips free / cancelled events (and all-day ones
+ * not marked busy), turns busy all-day events into whole-day blocks (the
+ * planner leaves those days empty), clips to the window, clamps each block to
+ * 24 h (DB constraint) and drops duplicates (same event id and start, e.g. an
+ * event present in two selected calendars).
  */
 export function mapEventsToBusyBlocks(events: readonly CalendarEventLike[], window: TimeWindow): BusyBlockDraft[] {
   const seen = new Set<string>();
   return events
     .filter(isBlockingEvent)
-    .map((e) => toBlock(e, window))
+    .flatMap((e) => (e.allDay ? allDayBlocks(e, window) : [toBlock(e, window)]))
     .filter((b): b is BusyBlockDraft => b !== null)
     .filter((b) => {
       const key = `${b.externalId ?? ''}|${b.start}|${b.end}`;

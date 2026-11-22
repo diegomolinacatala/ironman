@@ -63,9 +63,9 @@ function SeasonBody({ data, onAdjust }: { data: SeasonData; onAdjust: (week: Sea
     return (
       <EmptyState
         icon="profile"
-        title="Completa tu disponibilidad"
-        message="Con tus horas por semana preparamos el plan general hasta tu carrera."
-        action={<Button label="Tu disponibilidad" variant="secondary" onPress={() => router.push('/settings/availability')} />}
+        title="Completa tu perfil"
+        message="Con tus deportes y tu nivel preparamos el plan general hasta tu carrera; las horas salen de tu calendario."
+        action={<Button label="Tu perfil" variant="secondary" onPress={() => router.push('/settings/profile')} />}
       />
     );
   }

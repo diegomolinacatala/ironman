@@ -186,3 +186,31 @@ describe('previewTotals', () => {
     expect(preview.failed).toEqual([]);
   });
 });
+
+describe('calm rows: one summary line, the rest under "Ver detalles"', () => {
+  test('an update summarises only day + what changed among time, duration and intensity', () => {
+    const target = makeWorkout({ id: 'u', date: '2026-10-27', startTime: '18:30', durationMin: 80, intensity: 'threshold', tss: 112.9, title: 'Series' });
+    const [row] = buildDiffRows(
+      [{ op: 'update', workoutId: 'u', patch: { durationMin: 45, intensity: 'endurance', tss: 37.8, description: 'Suave' }, reason: 'r' }],
+      [target],
+    );
+    expect(row?.summary).toBe("mar 27 · 1h 20' → 45' · Umbral Z4 → Fondo Z2");
+    expect(row?.details).toEqual([{ label: 'Notas', before: 'Sin notas', after: 'Suave' }]);
+    // The load (TSS) is never shown, so no "112.9 → 37.8".
+    expect(row?.fields.some((f) => f.label === 'Carga')).toBe(false);
+  });
+
+  test('a day or time change leads the line; moves read "before → after"', () => {
+    const target = makeWorkout({ id: 'u', date: '2026-10-27', startTime: '18:30', durationMin: 60, title: 'Rodaje' });
+    const [update, move] = buildDiffRows(
+      [
+        { op: 'update', workoutId: 'u', patch: { date: '2026-10-29', startTime: '07:00' }, reason: 'r' },
+        { op: 'move', workoutId: 'u', toDate: '2026-10-30', reason: 'r' },
+      ],
+      [target],
+    );
+    expect(update?.summary).toBe('mar 27 → jue 29 · 18:30 → 07:00');
+    expect(update?.details).toEqual([]);
+    expect(move?.summary).toMatch(/^mar 27 · 18:30 → vie 30 · 18:30$/);
+  });
+});

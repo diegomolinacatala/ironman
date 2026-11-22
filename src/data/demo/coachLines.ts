@@ -9,7 +9,7 @@ import { formatDayLabel, formatDuration, formatWeekRange } from '@/domain/dates'
 import { raceDistanceLabel, sportLabel } from '@/domain/labels';
 import { nextRace } from '@/domain/periodization';
 import { sessionFeel, targetSummary } from '@/domain/prescription';
-import { buildSeason, type SeasonOverview, type SeasonWeek } from '@/domain/season';
+import { buildSeason, manualWeeklyHours, type SeasonOverview, type SeasonWeek } from '@/domain/season';
 import type { ISODate, Workout } from '@/domain/types';
 import {
   athleteZones,
@@ -150,7 +150,7 @@ export function seasonOf(ctx: CoachContext): SeasonOverview {
     today: ctx.today,
     races: ctx.races,
     level: ctx.profile.level,
-    weeklyHoursTarget: ctx.profile.availability.weeklyHoursTarget,
+    weeklyHoursTarget: manualWeeklyHours(ctx.profile.availability),
     weekPlans: ctx.weekPlans,
   });
 }

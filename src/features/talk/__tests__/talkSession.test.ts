@@ -8,9 +8,11 @@ import {
   EXAMPLE_PROMPTS,
   THINKING_LINES,
   THINKING_ROTATE_MS,
+  MAX_PROPOSAL_NOTE,
   coachHistory,
   initialTalkState,
   openProposal,
+  proposalNote,
   resolutionNotice,
   routePrefill,
   talkReducer,
@@ -38,9 +40,16 @@ function sent(state: TalkState, id: string): TalkState {
 }
 
 describe('talk reducer', () => {
-  test('starts in voice mode only when the recogniser is available', () => {
-    expect(initialTalkState(true).inputMode).toBe('voice');
+  test('starts with the single composer (inputMode kept for compatibility, always text)', () => {
+    expect(initialTalkState(true).inputMode).toBe('text');
     expect(initialTalkState(false).inputMode).toBe('text');
+  });
+
+  test("hydrate restores today's stored turns before the ones of this visit, without duplicates", () => {
+    const visit = { ...initialTalkState(), turns: [turn('t3')] };
+    const restored = talkReducer(visit, { type: 'hydrate', turns: [turn('t1'), turn('t2'), turn('t3')] });
+    expect(restored.turns.map((t) => t.id)).toEqual(['t1', 't2', 't3']);
+    expect(talkReducer(visit, { type: 'hydrate', turns: [] })).toBe(visit);
   });
 
   test('a sent message becomes a turn when its answer arrives', () => {
@@ -128,6 +137,28 @@ describe('requests and history', () => {
     expect(history).toHaveLength(10);
     expect(history.at(-1)).toEqual({ role: 'assistant', content: 'respuesta t7' });
     expect(coachHistory([turn('x', { response: makeCoachResponse({ reply: '  ' }) })])).toEqual([{ role: 'user', content: 'pregunta x' }]);
+  });
+
+  test('the coach message in the history summarises its proposal and what became of it', () => {
+    const proposal = makeProposal({
+      changes: [
+        { op: 'move', workoutId: 'w-uuid-1', toDate: '2026-10-29', reason: 'Pádel' },
+        { op: 'delete', workoutId: 'w-uuid-2', reason: 'Descanso' },
+        { op: 'add', workout: { date: '2026-10-30', sport: 'swim', title: 'Técnica', durationMin: 40, intensity: 'recovery' }, reason: 'Piscina' },
+        { op: 'update', workoutId: 'w-uuid-3', patch: { title: 'Rodaje suave', durationMin: 40 }, reason: 'Más suave' },
+      ],
+    });
+    const pendingTurn = turn('p', { response: makeCoachResponse({ reply: 'Te propongo esto.', proposal }) });
+    const content = coachHistory([pendingTurn])[1]?.content ?? '';
+    expect(content).toBe(
+      "Te propongo esto.\n\n[Propuesta pendiente: el atleta aún no la ha aceptado: 1) mover w-uuid-1 al 2026-10-29; 2) quitar w-uuid-2; 3) añadir «Técnica» el 2026-10-30 (swim, 40'); 4) cambiar w-uuid-3 («Rodaje suave», 40')]",
+    );
+    const applied = coachHistory([{ ...pendingTurn, resolution: { kind: 'applied', applied: 3, failed: 1 } }])[1]?.content;
+    expect(applied).toMatch(/\[Propuesta aplicada en parte \(3 de 4\):/);
+    expect(coachHistory([{ ...pendingTurn, resolution: { kind: 'discarded' } }])[1]?.content).toMatch(/Propuesta descartada por el atleta/);
+    expect(proposalNote(turn('n'))).toBeNull();
+    const many = makeProposal({ changes: Array.from({ length: 40 }, (_, i) => ({ op: 'delete' as const, workoutId: `id-${i}-xxxxxxxxxxxxxxxx`, reason: 'x' })) });
+    expect(proposalNote(turn('m', { response: makeCoachResponse({ proposal: many }) }))?.length).toBeLessThanOrEqual(MAX_PROPOSAL_NOTE);
   });
 
   test('route params: a message prefills, a replan link becomes a request card', () => {

@@ -23,7 +23,7 @@ export const INTEGRATIONS_ROUTE = '/settings/integrations';
  * "Informe de hoy" card on Hoy (flat: the raised card is today's session, the screen's one primary): headline + last night + ▶ Escuchar, or the way to get one
  * (prepare it, or connect your watch first: Garmin or COROS).
  */
-export function BriefingCard({ date }: { date: ISODate }) {
+export function BriefingCard({ date, embedded = false }: { date: ISODate; embedded?: boolean }) {
   const ctrl = useBriefingController(date);
   const player = useBriefingPlayer();
   const step = useRotatingStep(ctrl.state === 'generating', ctrl.steps.length);
@@ -35,8 +35,8 @@ export function BriefingCard({ date }: { date: ISODate }) {
   };
 
   return (
-    <Card padding="lg" style={styles.card}>
-      <CardOverline engine={briefing?.engine} />
+    <Card padding={embedded ? 0 : 'lg'} variant={embedded ? 'tinted' : 'flat'} tint={embedded ? 'transparent' : undefined} style={[styles.card, embedded && styles.embedded]}>
+      {embedded ? null : <CardOverline engine={briefing?.engine} />}
       {ctrl.state === 'ready' && briefing ? (
         <>
           <View style={styles.text}>
@@ -77,5 +77,6 @@ export function BriefingCard({ date }: { date: ISODate }) {
 
 const styles = StyleSheet.create({
   card: { gap: space.lg },
+  embedded: { borderWidth: 0, borderRadius: 0 },
   text: { gap: space.sm },
 });

@@ -91,21 +91,21 @@ export function TurnView({ turn, latest, open, decision, speaking, onListen, onS
       <UserBubble text={turn.text} channel={turn.channel} />
       <FadeIn style={styles.reply}>
         <CoachBubble>
-          <Text variant="body" style={latest ? styles.hero : undefined} selectable accessibilityLabel={`Tu coach: ${response.reply}`}>
+          <Text variant="body" selectable accessibilityLabel={`Tu coach: ${response.reply}`}>
             {response.reply}
           </Text>
           <View style={styles.row}>
             <Button
               label={speaking ? 'Parar' : 'Escuchar'}
               icon={speaking ? 'stop' : 'speaker'}
-              variant="secondary"
+              variant="ghost"
               size="sm"
               accessibilityHint={speaking ? 'Deja de leer la respuesta' : 'Lee la respuesta en voz alta'}
               onPress={speaking ? onStopSpeaking : onListen}
             />
             {response.engine === 'rules' ? (
               <Text variant="caption" color="textMuted" style={styles.flex}>
-                Respuesta automática (sin IA)
+                Modo sin IA
               </Text>
             ) : null}
           </View>
@@ -138,15 +138,14 @@ const styles = StyleSheet.create({
   flexShrink: { flexShrink: 1 },
   reply: { gap: space.md },
   coachBubble: {
-    gap: space.md,
-    padding: space.lg,
+    gap: space.sm,
+    padding: space.md + 2,
     borderRadius: radius.lg,
     borderTopLeftRadius: radius.sm / 2,
     borderWidth: StyleSheet.hairlineWidth,
   },
   byline: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   avatar: { width: 24, height: 24, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
-  hero: { fontSize: 19, lineHeight: 27 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, flexWrap: 'wrap' },
   flex: { flex: 1 },
 });

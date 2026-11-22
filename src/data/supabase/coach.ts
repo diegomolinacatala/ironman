@@ -8,7 +8,8 @@
  * proposal, the saved memory lines, the logged life event, the suggested
  * quedada and the suggested season-plan weeks (`extras`).
  * Falls back to the local rules engine (with a notice) when AI is unavailable
- * or anything fails.
+ * or anything fails; a failed job's notice says why (quota, cut or malformed
+ * answer, too slow…).
  */
 import type { CoachRequest, CoachResponse, ISODate, LifeEvent, UUID } from '@/domain/types';
 import { env } from '@/lib/env';
@@ -35,6 +36,23 @@ export const COACH_NOTICES = {
   consentRequired:
     'Para usar el coach IA primero tienes que darnos tu permiso para que la IA lea tus datos. Mientras, te respondo con el motor de reglas.',
 } as const;
+
+/** Server sentences that point to the old "plan automático" wording: the notice adds its own ending. */
+const FALLBACK_TAILS = [/,?\s*o usa el plan automático/gi, /\s*Te propongo el plan automático mientras tanto\.?/gi, /\s*Usa el plan automático\.?/gi];
+const MIN_REASON_LENGTH = 8;
+const MAX_REASON_LENGTH = 240;
+
+/**
+ * Notice for a failed AI job that says WHY (the job's Spanish error: free quota used up,
+ * answer cut, bad format, too slow…), then that the rules engine answers instead.
+ */
+export function failureNotice(error: string | null | undefined): string {
+  const reason = FALLBACK_TAILS.reduce((text, tail) => text.replace(tail, ''), (error ?? '').replace(/\s+/g, ' ')).trim();
+  if (reason.length < MIN_REASON_LENGTH) return COACH_NOTICES.failed;
+  const clipped = reason.slice(0, MAX_REASON_LENGTH).trim();
+  const sentence = /[.!?…]$/.test(clipped) ? clipped : `${clipped}.`;
+  return `${sentence} Mientras, te respondo con el motor de reglas.`;
+}
 
 export interface CoachDeps {
   ctx: SupabaseCtx;
@@ -168,7 +186,7 @@ export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) =
     if (!job) return fallback(request, COACH_NOTICES.timeout);
     if (job.status === 'error') {
       logger.warn('coach job error', job.error);
-      return fallback(request, COACH_NOTICES.failed);
+      return fallback(request, failureNotice(job.error));
     }
     return jobToResponse(deps, job);
   };

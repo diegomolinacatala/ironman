@@ -1,4 +1,5 @@
-import { addDays, DEFAULT_TZ, isIsoDate, startOfWeek, todayIn } from '../../dates.ts';
+import { addDays, DEFAULT_TZ, isIsoDate, startOfWeek, todayIn, zonedToUtc } from '../../dates.ts';
+import { busyView } from '../../planning/context.ts';
 import {
   checkChanges,
   dateSchema,
@@ -9,7 +10,7 @@ import {
   withSource,
 } from '../../planning/changes.ts';
 import { boolean, object, optional, string } from '../../schema.ts';
-import type { Workout } from '../../types.ts';
+import type { PlanChange, Workout } from '../../types.ts';
 import { defineTool, toolOk, ToolInputError } from '../tool.ts';
 import type { RegisteredTool } from '../tool.ts';
 
@@ -21,6 +22,13 @@ const input = object({
     boolean('false (por defecto): se guarda como propuesta y el usuario la acepta en la app. true: se aplica ya; úsalo solo si el usuario lo pide explícitamente.'),
   ),
 });
+
+/** One line naming a change, so Claude knows which one failed. */
+function describeForClaude(change: PlanChange): string {
+  if (change.op === 'add') return `add ${change.workout.date} ${change.workout.title}`;
+  if (change.op === 'move') return `move ${change.workoutId} → ${change.toDate}${change.toStartTime ? ` ${change.toStartTime}` : ''}`;
+  return `${change.op} ${change.workoutId}`;
+}
 
 function plannedList(workouts: readonly Workout[]): string {
   const planned = workouts.filter((w) => w.status === 'planned');
@@ -41,7 +49,7 @@ export const proposePlanChangesTool: RegisteredTool = defineTool({
     '{"op":"update","workoutId","patch":{…solo campos que cambian},"reason"} ·',
     '{"op":"move","workoutId","toDate","toStartTime?","reason"} ·',
     '{"op":"delete","workoutId","reason"}.',
-    'workoutId es el id de get_planning_context; solo se pueden tocar entrenos planificados (no completados) dentro de los 14 días desde week_start y nunca en fechas pasadas.',
+    'workoutId es el id de get_planning_context; solo se pueden tocar entrenos planificados (no completados) dentro de los 14 días desde week_start y nunca en fechas pasadas. Una hora (startTime / toStartTime) que choque con las franjas ocupadas (busy de get_planning_context) se rechaza: elige un hueco libre o deja la hora en null.',
     'Duraciones en minutos, fechas YYYY-MM-DD, horas HH:mm (Europe/Madrid). Cada cambio lleva un reason breve en español.',
     'Cada sesión nueva o cuya estructura cambia es una prescripción completa:',
     'steps = [{kind warmup|work|recovery|cooldown|rest, durationMin (0.5 = 30") o distanceM, intensity, repeat (una serie son pasos seguidos con el mismo repeat: trabajo + recuperación), target? {hr|pace|power|rpe: {min,max}} (ppm; s/km o s/100 m con min = extremo rápido; vatios; RPE 1-10), cue? (≤ 200: sensaciones o técnica), leg? (bike|run, tramo de un brick), note?}]',
@@ -62,8 +70,14 @@ export const proposePlanChangesTool: RegisteredTool = defineTool({
     const weekStart = startOfWeek(args.week_start);
     const profile = await ctx.store.getProfile(ctx.userId);
     const today = todayIn(profile?.timezone ?? DEFAULT_TZ, ctx.now());
-    const workouts = await ctx.store.listWorkouts(ctx.userId, weekStart, addDays(weekStart, PLAN_WINDOW_DAYS - 1));
-    const { valid, issues } = checkChanges(args.changes, { weekStart, today, workouts });
+    const tz = profile?.timezone ?? DEFAULT_TZ;
+    const windowEnd = addDays(weekStart, PLAN_WINDOW_DAYS - 1);
+    const [workouts, blocks] = await Promise.all([
+      ctx.store.listWorkouts(ctx.userId, weekStart, windowEnd),
+      ctx.store.listBusyBlocks(ctx.userId, zonedToUtc(weekStart, '00:00', tz), zonedToUtc(addDays(windowEnd, 1), '00:00', tz)),
+    ]);
+    const busy = busyView(blocks, tz, weekStart, windowEnd);
+    const { valid, issues } = checkChanges(args.changes, { weekStart, today, workouts, busy });
     if (issues.length > 0) {
       const problems = issues.map((i) => `cambio ${i.index}: ${i.error}`).join(' | ');
       throw new ToolInputError(
@@ -71,6 +85,7 @@ export const proposePlanChangesTool: RegisteredTool = defineTool({
       );
     }
     const changes = withSource(valid, 'claude');
+    // apply_now: stored as applied so the user is not asked to review what is already done (no notification).
     const proposalId = await ctx.store.insertProposal(ctx.userId, {
       kind: proposalKindFor(changes),
       source: 'claude',
@@ -78,18 +93,35 @@ export const proposePlanChangesTool: RegisteredTool = defineTool({
       summary: args.summary,
       changes,
       model: 'claude (conector MCP)',
+      status: args.apply_now ? 'applied' : 'pending',
     });
     const base = { proposalId, weekStart, changes: changes.length, appLink: `roadtoironman://proposal/${proposalId}` };
     if (!args.apply_now) {
       return toolOk({ ...base, status: 'pending', message: 'Propuesta guardada. El usuario la revisará y aceptará en la app.' });
     }
-    const result = await ctx.store.applyPlanChanges(ctx.userId, changes, proposalId);
+    let result: Awaited<ReturnType<typeof ctx.store.applyPlanChanges>>;
+    try {
+      result = await ctx.store.applyPlanChanges(ctx.userId, changes, proposalId);
+    } catch (error) {
+      // Stored as applied but nothing went through: never leave a false "applied" behind.
+      await ctx.store.setProposalStatus(ctx.userId, proposalId, 'discarded').catch(() => undefined);
+      throw error;
+    }
+    const status = result.failed.length === 0 ? 'applied' : result.applied > 0 ? 'partially_applied' : 'failed';
+    // Partly applied: the user can retry the rest from the app. Nothing applied: the proposal is dropped.
+    if (status !== 'applied') await ctx.store.setProposalStatus(ctx.userId, proposalId, status === 'failed' ? 'discarded' : 'partially_applied');
+    const failed = result.failed.map((f) => ({ ...f, change: changes[f.index] ? describeForClaude(changes[f.index] as PlanChange) : null }));
     return toolOk({
       ...base,
-      status: result.failed.length === 0 ? 'applied' : result.applied > 0 ? 'partially_applied' : 'failed',
+      status,
       applied: result.applied,
-      failed: result.failed,
-      message: result.failed.length === 0 ? 'Cambios aplicados al plan.' : 'Algunos cambios no se pudieron aplicar (ver failed).',
+      failed,
+      message:
+        status === 'applied'
+          ? 'Cambios aplicados al plan.'
+          : status === 'partially_applied'
+            ? 'Algunos cambios no se pudieron aplicar (ver failed). El usuario puede reintentarlos desde la propuesta en la app.'
+            : 'No se pudo aplicar ningún cambio (ver failed): corrígelos y vuelve a llamar.',
     });
   },
 });

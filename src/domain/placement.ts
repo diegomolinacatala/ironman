@@ -146,10 +146,47 @@ function findSlot(day: DayState, spec: SessionSpec, duration: number): Slot | nu
   const need = duration + margin;
   const capacity = day.free.reduce((sum, r) => sum + (r.end - r.start), 0) - day.untimedMin;
   if (capacity < need) return null;
+  if (!day.hasUserWindows) return calendarSlot(day, spec, duration, need);
   const range = day.free.find((r) => r.end - r.start >= need);
   if (!range) return null;
   const start = Math.min(range.end - duration, range.start + (START_OFFSET_MIN[sport] ?? 0));
-  return { startTime: day.hasUserWindows ? minutesToTime(start) : null, range: { start: range.start, end: range.start + need } };
+  return { startTime: minutesToTime(start), range: { start: range.start, end: range.start + need } };
+}
+
+/** Preferred start times without training windows. [H] */
+const MORNING_START_MIN = 7 * 60;
+const WEEKEND_MORNING_START_MIN = 8 * 60;
+const EVENING_START_MIN = 18 * 60 + 30;
+/** Weekends (Sat/Sun): the long session goes in the morning. */
+const WEEKEND: readonly number[] = [5, 6];
+
+/**
+ * Without training windows (automatic availability) every session still gets
+ * a real time in a free gap of the day (waking day − calendar busy blocks −
+ * sessions already there), so the re-planner can spot calendar conflicts:
+ * as close as possible to the morning (07:00, 08:00 on weekends and long
+ * days) or the evening (18:30); long sessions and bricks prefer the morning.
+ */
+function calendarSlot(day: DayState, spec: SessionSpec, duration: number, need: number): Slot | null {
+  const offset = START_OFFSET_MIN[specSport(spec)] ?? 0;
+  const cls = specClass(spec);
+  const morning = WEEKEND.includes(day.weekday) || day.isLongDay ? WEEKEND_MORNING_START_MIN : MORNING_START_MIN;
+  const long = cls === 'LONG' || cls === 'BRICK';
+  const anchors = long ? [morning] : [morning, EVENING_START_MIN];
+  let best: { start: number; score: number } | null = null;
+  for (const range of day.free) {
+    if (range.end - range.start < need) continue;
+    const lo = range.start + offset;
+    const hi = range.end - need + offset;
+    for (const anchor of anchors) {
+      const start = Math.min(hi, Math.max(lo, anchor));
+      // Long sessions far from the morning (e.g. a 3 h ride at 17:00) only when nothing else fits.
+      const score = Math.abs(start - anchor) + (long && start > anchor + 120 ? 600 : 0);
+      if (!best || score < best.score) best = { start, score };
+    }
+  }
+  if (!best) return null;
+  return { startTime: minutesToTime(best.start), range: { start: best.start - offset, end: best.start - offset + need } };
 }
 
 function bigWeekendOk(s: State, ctx: PlacementContext, i: number, spec: SessionSpec): boolean {
@@ -374,7 +411,7 @@ export function placeSessions(specs: readonly SessionSpec[], days: readonly DayS
     const pendingBikeLong = queue.slice(idx + 1).some((x) => BIKE_LONGS.includes(x.code));
     const next = tryPlace(state, ctx, spec, pendingBikeLong);
     if (next) state = next;
-    else dropped.push({ spec, reason: 'No hay hueco que cumpla las reglas de descanso y tu disponibilidad.' });
+    else dropped.push({ spec, reason: 'No hay hueco en tu calendario que cumpla las reglas de descanso.' });
   });
   const placed = state.placed.flat().sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99') || a.spec.code.localeCompare(b.spec.code));
   return { placed, dropped, bigWeekend: state.bigWeekendUsed };

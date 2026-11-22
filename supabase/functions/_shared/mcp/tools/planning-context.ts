@@ -14,7 +14,9 @@ const input = object({
       'concise (por defecto): lo necesario para planificar (8 semanas de season). detailed: añade la prescripción completa y los pasos de cada entreno, 16 semanas de season, 14 días de bienestar, sesiones recientes con plan frente a hecho y nutrición de los últimos 3 días.',
     ),
   ),
-  include_next_week: optional(boolean('true para incluir también la semana siguiente (útil a partir del jueves o para planificar dos semanas).')),
+  include_next_week: optional(
+    boolean('true (por defecto) incluye también la semana siguiente: propose_plan_changes trabaja con 14 días. false para ver solo esta semana.'),
+  ),
 });
 
 export const getPlanningContextTool: RegisteredTool = defineTool({
@@ -38,7 +40,8 @@ export const getPlanningContextTool: RegisteredTool = defineTool({
       weekStart: args.week_start,
       now: ctx.now(),
       detail: args.detail ?? 'concise',
-      includeNextWeek: args.include_next_week ?? false,
+      // Proposals span 14 days: Claude needs the ids and busy blocks of both weeks.
+      includeNextWeek: args.include_next_week ?? true,
     });
     return toolOk({ ...context });
   },

@@ -89,8 +89,8 @@ describe('PlanStep', () => {
     expect(screen.getByText(/^Sin carrera a la vista\. Próximas 8 semanas: /)).toBeTruthy();
   });
 
-  test('no preview without weekly hours to plan from', async () => {
-    mockProfile = makeProfile({ availability: { ...makeProfile().availability, weeklyHoursTarget: 0 } });
+  test('no preview with manual availability and no weekly hours to plan from', async () => {
+    mockProfile = makeProfile({ availability: { ...makeProfile().availability, mode: 'manual', weeklyHoursTarget: 0 } });
     await renderStep();
     expect(screen.getByText('Tu plan está listo')).toBeTruthy();
     expect(screen.queryByText('Tus próximas semanas')).toBeNull();

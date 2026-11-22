@@ -2,33 +2,11 @@ import { Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { MAX_MESSAGE_LENGTH } from '@/features/coach/requests';
 import type { VoiceInput } from '@/integrations/speech/useVoiceInput';
-import { Button, Icon, IconButton, Text, fonts, haptics, radius, space, useTheme, type IconName } from '@/ui';
+import { Button, Icon, IconButton, Text, fonts, radius, space, useTheme } from '@/ui';
 
-import { MicButton } from './MicButton';
 import { FadeIn } from './motion';
 import type { InputMode } from './talkSession';
 import { micCopy, needsSettings } from './voiceModel';
-
-/** Labelled switch between talking and typing (icon + word, 56 pt). */
-function ModeToggle({ icon, label, hint, onPress }: { icon: IconName; label: string; hint: string; onPress: () => void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      onPress={() => {
-        haptics.tap();
-        onPress();
-      }}
-      style={({ pressed }) => [styles.toggle, { backgroundColor: pressed ? colors.surfacePressed : 'transparent' }]}>
-      <Icon name={icon} size={22} color={colors.accentInk} />
-      <Text variant="caption" color="textMuted">
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
 
 export function NoticeBanner({ text }: { text: string }) {
   const { colors } = useTheme();
@@ -84,66 +62,77 @@ export interface TalkDockProps {
   onCancel: () => void;
 }
 
-function VoiceComposer({ voice, quiet, hint, onMic, onMode }: Pick<TalkDockProps, 'voice' | 'quiet' | 'hint' | 'onMic' | 'onMode'>) {
+/** Mic inside the composer: tap to dictate, tap again to send what you said. */
+function InlineMic({ voice, onMic }: Pick<TalkDockProps, 'voice' | 'onMic'>) {
+  const { colors } = useTheme();
+  const copy = micCopy(voice.state);
+  const live = voice.state === 'listening' || voice.state === 'requesting' || voice.state === 'stopping';
   return (
-    <View style={styles.voice}>
-      {voice.error ? <VoiceError message={voice.error} onType={() => onMode('text')} /> : null}
-      <View style={styles.micRow}>
-        <View style={styles.side} />
-        <MicButton state={voice.state} level={voice.level} quiet={quiet} onPress={onMic} />
-        <View style={styles.side}>
-          <ModeToggle icon="keyboard" label="Escribir" hint="Cambia al teclado" onPress={() => onMode('text')} />
-        </View>
-      </View>
-      <Text variant="callout" color="textMuted" align="center" accessibilityLiveRegion="polite">
-        {hint ?? micCopy(voice.state).caption}
-      </Text>
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={copy.label}
+      accessibilityHint={copy.hint}
+      accessibilityState={{ busy: voice.state === 'requesting' || voice.state === 'stopping' }}
+      onPress={onMic}
+      hitSlop={6}
+      style={({ pressed }) => [
+        styles.mic,
+        { backgroundColor: live ? colors.danger : pressed ? colors.surfacePressed : colors.surfaceAlt },
+      ]}>
+      <Icon name={live ? 'stop' : 'mic'} size={20} color={live ? colors.onAccent : colors.accentInk} />
+    </Pressable>
   );
 }
 
-function TextComposer({ voice, quiet, draft, onDraft, onSendText, onMode }: Pick<TalkDockProps, 'voice' | 'quiet' | 'draft' | 'onDraft' | 'onSendText' | 'onMode'>) {
+function Composer({ voice, quiet, draft, hint, onDraft, onSendText, onMic }: Pick<TalkDockProps, 'voice' | 'quiet' | 'draft' | 'hint' | 'onDraft' | 'onSendText' | 'onMic'>) {
   const { colors } = useTheme();
   const canSend = draft.trim().length > 0;
+  const listening = voice.state === 'listening';
   return (
-    <View style={styles.textRow}>
-      {voice.available ? <ModeToggle icon="mic" label="Hablar" hint="Cambia al micrófono" onPress={() => onMode('voice')} /> : null}
-      <TextInput
-        value={draft}
-        onChangeText={onDraft}
-        placeholder="Escribe a tu coach…"
-        placeholderTextColor={colors.textFaint}
-        selectionColor={colors.accentInk}
-        accessibilityLabel="Mensaje para tu coach"
-        multiline
-        maxLength={MAX_MESSAGE_LENGTH}
-        maxFontSizeMultiplier={1.4}
-        style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.borderStrong }]}
-      />
-      <IconButton
-        icon="send"
-        variant={quiet ? 'filled' : 'accent'}
-        size={50}
-        disabled={!canSend}
-        accessibilityLabel="Enviar a tu coach"
-        onPress={onSendText}
-      />
+    <View style={styles.composer}>
+      {hint || listening ? (
+        <Text variant="caption" color="textMuted" align="center" accessibilityLiveRegion="polite">
+          {hint ?? micCopy(voice.state).caption}
+        </Text>
+      ) : null}
+      <View style={styles.textRow}>
+        {voice.available ? <InlineMic voice={voice} onMic={onMic} /> : null}
+        <TextInput
+          value={draft}
+          onChangeText={onDraft}
+          placeholder="Escribe a tu coach…"
+          placeholderTextColor={colors.textFaint}
+          selectionColor={colors.accentInk}
+          accessibilityLabel="Mensaje para tu coach"
+          multiline
+          maxLength={MAX_MESSAGE_LENGTH}
+          maxFontSizeMultiplier={1.4}
+          style={[styles.input, { color: colors.text, backgroundColor: colors.surface, borderColor: colors.border }]}
+        />
+        <IconButton
+          icon="arrowUp"
+          variant={quiet ? 'filled' : 'accent'}
+          size={44}
+          disabled={!canSend}
+          accessibilityLabel="Enviar a tu coach"
+          onPress={onSendText}
+        />
+      </View>
     </View>
   );
 }
 
-/** Bottom control: big mic (or keyboard), and "Cancelar" while the coach works. */
+/** Bottom control: one messenger-style composer (mic + text + send), "Cancelar" while the coach works. */
 export function TalkDock(props: TalkDockProps) {
-  const { mode, sending, notice, onCancel } = props;
+  const { sending, notice, onCancel, voice, onMode } = props;
   return (
     <View style={styles.dock}>
       {notice ? <NoticeBanner text={notice} /> : null}
+      {voice.error ? <VoiceError message={voice.error} onType={() => onMode('text')} /> : null}
       {sending ? (
         <Button label="Cancelar" variant="secondary" icon="close" fullWidth accessibilityHint="Deja de esperar la respuesta" onPress={onCancel} />
-      ) : mode === 'voice' && props.voice.available ? (
-        <VoiceComposer {...props} />
       ) : (
-        <TextComposer {...props} />
+        <Composer {...props} />
       )}
     </View>
   );
@@ -151,20 +140,18 @@ export function TalkDock(props: TalkDockProps) {
 
 const styles = StyleSheet.create({
   dock: { gap: space.md, paddingTop: space.sm },
-  voice: { gap: space.xs, alignItems: 'stretch' },
-  micRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  side: { flex: 1, alignItems: 'center' },
-  toggle: { minWidth: 56, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: radius.md, padding: space.xs },
+  composer: { gap: space.xs },
+  mic: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   textRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   input: {
     flex: 1,
-    minHeight: 50,
+    minHeight: 44,
     maxHeight: 140,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: space.md,
-    paddingTop: 14,
-    paddingBottom: 12,
+    borderRadius: 22,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: space.lg,
+    paddingTop: 11,
+    paddingBottom: 10,
     fontFamily: fonts.body,
     fontSize: 16,
   },

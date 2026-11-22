@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import type { WorkoutCoaching } from '@/domain/types';
-import { Button, Card, Divider, Icon, Text, iconSize, space, useTheme, type IconName } from '@/ui';
+import { Button, Card, Disclosure, Divider, Icon, Text, iconSize, space, useTheme, type IconName } from '@/ui';
 
 const TILE = 32;
 const TILE_RADIUS = 10;
@@ -86,7 +86,11 @@ export function ClosingCard({ success, showPlanB, planB, canEase, onEase, busy }
   const hasPlanB = showPlanB && planBText.length > 0;
   if (!successText && !hasPlanB) return null;
   return (
-    <Card padding="md" style={styles.card}>
+    <Disclosure
+      title={hasPlanB ? 'Si no es tu día' : 'Lo has hecho bien si…'}
+      summary={hasPlanB ? (canEase ? 'Plan B y versión suave en un toque' : 'Plan B') : successText}
+      icon={hasPlanB ? 'heartOutline' : 'checkCircle'}
+      storageKey="workout.closing">
       {successText ? (
         <CoachBlock icon="checkCircle" title="Lo has hecho bien si…">
           <Text variant="body">{successText}</Text>
@@ -110,7 +114,7 @@ export function ClosingCard({ success, showPlanB, planB, canEase, onEase, busy }
           ) : null}
         </CoachBlock>
       ) : null}
-    </Card>
+    </Disclosure>
   );
 }
 

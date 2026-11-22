@@ -2,6 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 
 import { addDays } from '@/domain/dates';
 import { phaseFor } from '@/domain/periodization';
+import { autoWeeklyHours } from '@/domain/season';
 import type { WeekPlan } from '@/domain/types';
 import { makeBusy, makeEvent, makeProfile, makeRace, makeWorkout } from '@/features/workouts/__tests__/fixtures';
 
@@ -147,7 +148,16 @@ describe('weekPhaseOf (Plan → General override in the week view)', () => {
     const week = weekPhaseOf(raceWeek, [race], profile, [plan({ weekStart: raceWeek, kind: 'push' })]);
     expect(week.plan).toBeNull();
     expect(week.phase?.phase).toBe('race_week');
-    expect(weekPhaseOf(MONDAY, undefined, profile, [plan()])).toEqual({ phase: null, plan: null, targetHours: 10 });
+    // Automatic availability: the hours depend on the race, so nothing until the races load; manual keeps its hours.
+    expect(weekPhaseOf(MONDAY, undefined, profile, [plan()])).toEqual({ phase: null, plan: null, targetHours: null });
+    const manual = { ...profile, availability: { ...profile.availability, mode: 'manual' as const } };
+    expect(weekPhaseOf(MONDAY, undefined, manual, [plan()])).toEqual({ phase: null, plan: null, targetHours: 10 });
+  });
+
+  test('automatic availability aims at the hours for the level and race distance', () => {
+    const auto = weekPhaseOf(MONDAY, [race], profile, []);
+    const hours = autoWeeklyHours('intermediate', race.distance);
+    expect(auto.targetHours).toBe(Math.round((hours * 60 * (auto.phase?.volumeFactor ?? 0)) / 5) * 5 / 60);
     expect(weekPhaseOf(MONDAY, [], null, []).targetHours).toBeNull();
   });
 

@@ -4,8 +4,11 @@
  * repository. Reads everything through the Repository interface and stores
  * proposals with `source: 'rules'`. The week's entry of the season plan
  * (Plan → General) shapes the planned and re-planned week; in the chat, a
- * clear "planifícame la semana" runs the planner and "pon la semana del 23
- * de descarga" suggests that week-level entry.
+ * clear "planifícame la semana" runs the planner, "pon la semana del 23
+ * de descarga" suggests that week-level entry, and plan edits ("mueve el
+ * rodaje al jueves", "quita lo de mañana", "hoy no puedo", "tengo pádel el
+ * jueves", "cambia las series por un rodaje suave") become a proposal
+ * (`coachEdits`).
  */
 import { addDays, maxDate, minDate, startOfWeek } from '@/domain/dates';
 import { computeReadiness } from '@/domain/readiness';
@@ -31,7 +34,8 @@ import type {
 import { logger } from '@/lib/logger';
 
 import { RepositoryError, type Repository } from '../repository';
-import { detectPlanAction, detectWeekPlanRequest, requestedWeekStart } from './coachIntents';
+import { chatEdit, type EditContext, type EditResult } from './coachEdits';
+import { detectIntent, detectPlanAction, detectWeekPlanRequest, requestedWeekStart } from './coachIntents';
 import { buildChatReply, weekPlanSuggestion } from './coachReply';
 
 /** Shared part of the replanner inputs (domain `ReplanInput`). */
@@ -315,6 +319,27 @@ function chatResponse(request: CoachRequest, ctx: CoachContext, options: RulesCo
   return { reply: withNotice(options.notice, reply), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED, ...weekPlans };
 }
 
+/** The workouts a chat edit can see: this week plus the next 7 days (Sunday → next week too). */
+function editContext(ctx: CoachContext): EditContext {
+  const byId = new Map([...ctx.weekWorkouts, ...ctx.upcoming].map((w) => [w.id, w] as const));
+  const workouts = [...byId.values()];
+  return { today: ctx.today, workouts, replanInput: { ...replanInput(ctx), today: ctx.today, weekWorkouts: workouts } };
+}
+
+/** A plan edit asked for in the chat (not a season-plan request), or null. */
+export function chatEditFor(request: CoachRequest, ctx: CoachContext, options: Pick<RulesCoachOptions, 'injuryLogged'> = {}): EditResult | null {
+  const message = request.message ?? '';
+  if (request.mode !== 'chat' || !message.trim() || detectWeekPlanRequest(message, ctx.today)) return null;
+  return chatEdit(message, editContext(ctx), { injury: options.injuryLogged || detectIntent(message) === 'injury' });
+}
+
+async function editResponse(repo: RulesCoachRepo, ctx: CoachContext, edit: EditResult, notice: string | undefined): Promise<CoachResponse> {
+  if (edit.changes.length === 0) return { reply: withNotice(notice, edit.summary), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED };
+  const proposal = await repo.createProposal({ kind: 'chat', source: 'rules', weekStart: ctx.weekStart, summary: edit.summary, changes: edit.changes, model: null });
+  const reply = `${edit.summary}\n\n${changesSentence(edit.changes.length)}`;
+  return { reply: withNotice(notice, reply), proposal, engine: 'rules', ...NOTHING_REMEMBERED };
+}
+
 /** Runs the rules engine for a coach request and stores the proposal (if any). */
 export async function runRulesCoach(
   repo: RulesCoachRepo,
@@ -324,7 +349,10 @@ export async function runRulesCoach(
   const request = chatPlanRequest(original, options.today);
   const ctx = await loadCoachContext(repo, request, options.today);
   const plan = planForRequest(request, ctx);
-  if (!plan) return chatResponse(request, ctx, options);
+  if (!plan) {
+    const edit = chatEditFor(request, ctx, options);
+    return edit ? editResponse(repo, ctx, edit, options.notice) : chatResponse(request, ctx, options);
+  }
   if (plan.changes.length === 0) {
     const summary = plan.summary || 'Tu semana ya está bien encajada: no veo cambios necesarios.';
     return { reply: withNotice(options.notice, summary), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED };

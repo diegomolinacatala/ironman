@@ -3,7 +3,7 @@
  * WeekPlan draft it saves and the hours the plan gives each option.
  */
 import { phaseFor } from '@/domain/periodization';
-import { WEEK_PLAN_OPTIONS, applyWeekPlan, type SeasonWeek } from '@/domain/season';
+import { WEEK_PLAN_OPTIONS, applyWeekPlan, weeklyHoursFor, type SeasonWeek } from '@/domain/season';
 import { WEEK_PLAN_KINDS, type AthleteLevel, type ISODate, type Race, type WeekPlanDraft, type WeekPlanKind } from '@/domain/types';
 import type { IconName } from '@/ui';
 
@@ -23,7 +23,8 @@ export interface AdjustForm {
 export interface AdjustContext {
   races: readonly Race[];
   level?: AthleteLevel;
-  weeklyHoursTarget: number;
+  /** Manual weekly hours; null = automatic availability (level × race distance). */
+  weeklyHoursTarget: number | null;
 }
 
 export interface AdjustOption {
@@ -87,6 +88,7 @@ export function toWeekPlanDraft(form: AdjustForm, weekStart: ISODate): WeekPlanD
 /** Target minutes the plan gives the week with this option and no explicit hours (as `buildSeason`). */
 export function autoMinutes(weekStart: ISODate, kind: WeekPlanKind, ctx: AdjustContext): number {
   const raw = phaseFor(weekStart, ctx.races, { level: ctx.level });
-  const info = applyWeekPlan(raw, { weekStart, kind, targetMinutes: null }, ctx.weeklyHoursTarget);
-  return Math.max(0, Math.round((ctx.weeklyHoursTarget * 60 * info.volumeFactor) / 5) * 5);
+  const hours = weeklyHoursFor(ctx.weeklyHoursTarget, ctx.level, raw.targetRace?.distance ?? null);
+  const info = applyWeekPlan(raw, { weekStart, kind, targetMinutes: null }, hours);
+  return Math.max(0, Math.round((hours * 60 * info.volumeFactor) / 5) * 5);
 }

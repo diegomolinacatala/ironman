@@ -2,6 +2,8 @@
  * Smoke tests for the Juntos screens against an in-memory fake repository.
  */
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+
+import { resetDisclosureState } from '@/ui/disclosureState';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
@@ -133,6 +135,7 @@ function Providers({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
+  resetDisclosureState();
   jest.clearAllMocks();
   repo = makeRepo();
   mockParams = {};
@@ -141,6 +144,8 @@ beforeEach(() => {
 describe('Juntos', () => {
   test('shows friends, requests, quedada invites and the feed', async () => {
     await render(<TogetherScreen />, { wrapper: Providers });
+    await fireEvent.press(await screen.findByRole('button', { name: /^Actividad/ }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Tú y Álex/ }));
     expect(await screen.findByText('Álex completó Rodaje Z2')).toBeTruthy();
     // v2: a stack screen; the title "Juntos" lives in the native header (root stack).
     expect(screen.getByText('1 amigo')).toBeTruthy();
@@ -149,15 +154,17 @@ describe('Juntos', () => {
     expect(await screen.findByText('Te han invitado')).toBeTruthy();
   });
 
-  test('actionable blocks come first, each with a sentence-case header', async () => {
+  test('actionable blocks come first, each with a sentence-case header; the rest is folded', async () => {
     await render(<TogetherScreen />, { wrapper: Providers });
+    await fireEvent.press(await screen.findByRole('button', { name: /^Tú y Álex/ }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Actividad/ }));
     await screen.findByText('Álex completó Rodaje Z2');
     await screen.findByText('Huecos comunes');
     const headers = screen.getAllByRole('header').map((h) => {
       const children = h.props.children as unknown;
       return Array.isArray(children) ? children.join('') : String(children);
     });
-    const order = ['Solicitud de amistad', 'Próximas quedadas', 'Tú y Álex', 'Actividad'].map((title) => headers.indexOf(title));
+    const order = ['Solicitud de amistad', 'Próximas quedadas', 'Huecos comunes'].map((title) => headers.indexOf(title));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(headers.filter((h) => h.length > 3 && h === h.toUpperCase())).toEqual([]);

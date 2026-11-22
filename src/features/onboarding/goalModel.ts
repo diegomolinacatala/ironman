@@ -1,6 +1,7 @@
 /**
- * "Tu objetivo" step (pure): next race (or none yet), weekly hours and sports.
- * Prefilled from the existing profile and the next upcoming race.
+ * "Tu objetivo" step (pure): next race (or none yet) and sports. Prefilled from
+ * the existing profile and the next upcoming race. No weekly hours: the
+ * availability is automatic (the planner fills the calendar's free time).
  */
 import type {
   ISODate,
@@ -14,10 +15,6 @@ import type {
 } from '@/domain/types';
 import { firstError, raceDraftSchema } from '@/domain/validation';
 
-export const HOURS_MIN = 2;
-export const HOURS_MAX = 25;
-export const HOURS_STEP = 0.5;
-export const DEFAULT_HOURS = 8;
 export const DEFAULT_SPORTS: readonly TrainableSport[] = ['swim', 'bike', 'run'];
 
 export interface GoalRaceInput {
@@ -32,7 +29,6 @@ export interface GoalInput {
   race: GoalRaceInput;
   /** The existing race being edited (prefilled), null for a new one. */
   raceId: UUID | null;
-  weeklyHours: number;
   sports: TrainableSport[];
 }
 
@@ -48,19 +44,12 @@ export function nextRace(races: readonly Race[], today: ISODate): Race | null {
   return sorted[0] ?? null;
 }
 
-export function clampHours(hours: number): number {
-  if (!Number.isFinite(hours)) return DEFAULT_HOURS;
-  const rounded = Math.round(hours / HOURS_STEP) * HOURS_STEP;
-  return Math.min(HOURS_MAX, Math.max(HOURS_MIN, rounded));
-}
-
 export function initialGoal(profile: Profile | null | undefined, races: readonly Race[], today: ISODate): GoalInput {
   const race = nextRace(races, today);
   return {
     hasRace: true,
     race: race ? { name: race.name, date: race.date, distance: race.distance } : EMPTY_RACE,
     raceId: race?.id ?? null,
-    weeklyHours: clampHours(profile?.availability?.weeklyHoursTarget ?? DEFAULT_HOURS),
     sports: profile?.sports?.length ? [...profile.sports] : [...DEFAULT_SPORTS],
   };
 }
@@ -92,9 +81,7 @@ export function raceNeedsSave(goal: GoalInput, races: readonly Race[]): boolean 
   return existing.name !== draft.name || existing.date !== draft.date || existing.distance !== draft.distance;
 }
 
-export function goalProfilePatch(goal: GoalInput, profile: Profile): ProfilePatch {
-  return {
-    sports: goal.sports,
-    availability: { ...profile.availability, weeklyHoursTarget: clampHours(goal.weeklyHours) },
-  };
+/** Only the sports: the availability stays as it is (automatic unless the athlete chose manual). */
+export function goalProfilePatch(goal: GoalInput): ProfilePatch {
+  return { sports: goal.sports };
 }

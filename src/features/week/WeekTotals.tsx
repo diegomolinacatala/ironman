@@ -15,10 +15,12 @@ export interface WeekTotalsProps {
   summary: WeekSummary;
   /** Target hours for this week (availability × phase volume), null if unknown. */
   targetHours: number | null;
+  /** Inside a fold: no card of its own. */
+  embedded?: boolean;
 }
 
 /** Totals header: done vs planned hours, load, compliance and per-sport bars. */
-export function WeekTotals({ summary, targetHours }: WeekTotalsProps) {
+export function WeekTotals({ summary, targetHours, embedded = false }: WeekTotalsProps) {
   const { colors } = useTheme();
   const state = weekComplianceState(summary.compliancePct);
   const pct = summary.compliancePct;
@@ -26,7 +28,7 @@ export function WeekTotals({ summary, targetHours }: WeekTotalsProps) {
   const sports = SPORTS.filter((s) => s !== 'rest' && summary.bySport[s] != null);
 
   return (
-    <Card variant="raised" padding="lg" style={styles.card}>
+    <Card variant={embedded ? 'tinted' : 'raised'} tint={embedded ? 'transparent' : undefined} padding={embedded ? 0 : 'lg'} style={[styles.card, embedded && styles.embedded]}>
       <View style={styles.top}>
         <View
           style={styles.hours}
@@ -98,6 +100,7 @@ function SportBar({ sport, planned, done }: { sport: Sport; planned: number; don
 
 const styles = StyleSheet.create({
   card: { gap: space.lg },
+  embedded: { borderWidth: 0, borderRadius: 0 },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: space.lg },
   hours: { flex: 1, gap: 2 },
   baseline: { flexDirection: 'row', alignItems: 'baseline' },

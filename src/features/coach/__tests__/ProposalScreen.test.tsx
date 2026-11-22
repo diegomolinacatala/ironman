@@ -7,7 +7,7 @@ import type { PlanChange, PlanProposal } from '@/domain/types';
 
 import { buildDiffRows } from '../proposalDiff';
 import type { ProposalReview } from '../useProposalReview';
-import { makeProposal } from './fixtures';
+import { makeProposal, makeWorkout } from './fixtures';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockHeader: { left: (() => ReactElement) | null } = { left: null };
@@ -59,6 +59,8 @@ function review(overrides: Partial<ProposalReview> = {}): ProposalReview {
     rows: [],
     selected: [true],
     selectedCount: 1,
+    applied: [false],
+    isRetry: false,
     toggle: jest.fn(),
     setAll: jest.fn(),
     preview: null,
@@ -117,21 +119,51 @@ describe('Propuesta — what the coach proposes', () => {
     expect(screen.queryByText(/llama/)).toBeNull();
   });
 
-  test('an added session shows its objective, its main target and its steps on demand', async () => {
+  test('an added session is one calm line; objective, target and steps wait under "Ver detalles"', async () => {
     mockProposal.data = makeProposal({ changes: [ADD_SERIES] });
     const rows = buildDiffRows([ADD_SERIES], [], {}, { thresholds: { lthr: 170 }, raceDistance: null });
     mockReview = review({ rows });
     await render(<ProposalScreen />);
     expect(screen.getByText("Series 3×8'")).toBeTruthy();
+    expect(screen.getByText(rows[0]?.summary ?? '')).toBeTruthy();
+    expect(screen.queryByText('Subir tu umbral sin pasarte.')).toBeNull();
+    expect(screen.getByRole('checkbox', { name: /Añadir «Series 3×8'»\. .*La sesión clave de la semana/ })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: "Ver detalles de «Series 3×8'»" }));
     expect(screen.getByText('Subir tu umbral sin pasarte.')).toBeTruthy();
     expect(screen.getByText("3×8' Z4 · 162–168 ppm · RPE 7–8")).toBeTruthy();
-    // The checkbox reads the whole change, objective and target included.
-    expect(screen.getByRole('checkbox', { name: /Subir tu umbral sin pasarte\. Intensidad: 3×8' Z4 · 162–168 ppm/ })).toBeTruthy();
-
-    await fireEvent.press(screen.getByRole('button', { name: 'Ver la estructura, 3 pasos' }));
     expect(screen.getByLabelText("Series · Z4: 3×8'. 162–168 ppm, RPE 7–8. Mismo ritmo en las tres.")).toBeTruthy();
     expect(screen.getByText('Calentamiento · Z1')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Ocultar la estructura' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Ocultar detalles' }));
     expect(screen.queryByText('Mismo ritmo en las tres.')).toBeNull();
   });
+
+  test('an update reads as one line of what changed: no load decimals, notes and structure folded', async () => {
+    const target = {
+      ...makeWorkoutForRow(),
+      intensity: 'threshold' as const,
+      durationMin: 80,
+      tss: 112.9,
+      description: 'Series en pista',
+    };
+    const change: PlanChange = {
+      op: 'update',
+      workoutId: target.id,
+      patch: { durationMin: 45, intensity: 'endurance', tss: 37.8, description: 'Rodaje suave', title: 'Rodaje suave' },
+      reason: 'Hoy mejor suave',
+    };
+    mockProposal.data = makeProposal({ changes: [change] });
+    mockReview = review({ rows: buildDiffRows([change], [target]) });
+    await render(<ProposalScreen />);
+    expect(screen.getByText("mar 27 · 1h 20' → 45' · Umbral Z4 → Fondo Z2")).toBeTruthy();
+    expect(screen.queryByText(/112\.9|37\.8|Carga/)).toBeNull();
+    expect(screen.queryByText('Series en pista')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalles de «Series»' }));
+    expect(screen.getByText('Series en pista')).toBeTruthy();
+    expect(screen.queryByText(/112\.9|37\.8|Carga/)).toBeNull();
+  });
 });
+
+function makeWorkoutForRow() {
+  return makeWorkout({ id: 'w-up', date: '2026-10-27', title: 'Series', sport: 'run' });
+}

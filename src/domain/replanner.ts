@@ -36,7 +36,7 @@ import {
   type WorkingPlan,
 } from './replanCore';
 import { replanIllness, replanInjury, replanOtherSport, replanSocial, replanStress, replanTravel, resolveTimeConflicts } from './replanEvents';
-import { applyWeekPlan } from './season';
+import { applyWeekPlan, manualWeeklyHours, weeklyHoursFor } from './season';
 import type { ISODate, LifeEvent, Sport, WeekPlan, Workout } from './types';
 
 export type { ReplanResult } from './replanCore';
@@ -72,15 +72,24 @@ function applyEvent(plan: WorkingPlan, ctx: ReplanCtx, e: LifeEvent): WorkingPla
       return replanTravel(plan, ctx, e);
     case 'social':
       return replanSocial(plan, ctx, e);
+    case 'other':
+      // No load rules: only the time it takes (resolveTimeConflicts).
+      return plan;
     default:
       return plan;
   }
 }
 
+/** Descarga, semana libre or race week once the week plan (Plan → General) is applied. */
+function isEasyWeek(input: ReplanInput, today: ISODate): boolean {
+  const { phase } = todayPhase(input, today);
+  return phase.phase === 'race_week' || phase.isRecoveryWeek;
+}
+
 /** Re-plan the rest of the week after an "imprevisto". */
 export function replanForEvent(input: ReplanInput & { event: LifeEvent }): ReplanResult {
   const e = input.event;
-  const ctx = makeCtx(input, [e]);
+  const ctx: ReplanCtx = { ...makeCtx(input, [e]), easyWeek: isEasyWeek(input, input.today) };
   const handled = applyEvent(startPlan(input), ctx, e);
   const plan = e.kind === 'injury' || e.kind === 'illness' ? handled : resolveTimeConflicts(handled, ctx, e);
   const when = e.endDate > e.startDate ? `${formatDayMedium(e.startDate)} – ${formatDayMedium(e.endDate)}` : formatDayMedium(e.startDate);
@@ -201,7 +210,7 @@ function placeMissed(plan: WorkingPlan, ctx: ReplanCtx, w: Workout): WorkingPlan
 function todayPhase(input: ReplanInput, today: ISODate): { phase: PhaseInfo; weekPlan: WeekPlan | null } {
   const raw = phaseFor(today, input.races ?? [], { level: input.profile.level });
   const weekPlan = activeWeekPlan(raw, input.weekPlan, startOfWeek(today));
-  return { phase: applyWeekPlan(raw, weekPlan, input.profile.availability.weeklyHoursTarget), weekPlan };
+  return { phase: applyWeekPlan(raw, weekPlan, weeklyHoursFor(manualWeeklyHours(input.profile.availability), input.profile.level, raw.targetRace?.distance ?? null)), weekPlan };
 }
 
 function easyWeekNote(phase: PhaseInfo, weekPlan: WeekPlan | null): string {

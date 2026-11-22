@@ -3,7 +3,8 @@
  * activity feed. A tab since the 2026-11 rebrand (Hoy · Plan · Juntos · Progreso · Tú).
  *
  * Order = most actionable first: friend requests → Proponer quedada / Añadir amigo → upcoming
- * quedadas (invites first) → friends' open quedadas → per-friend compare → shared races → feed.
+ * quedadas (invites first) → friends' open quedadas; then folded sections (per-friend compare,
+ * shared races, feed) so the screen stays calm.
  */
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -26,7 +27,7 @@ import { OpenQuedadasSection } from '@/features/together/OpenQuedadasSection';
 import { SharedRacesCard } from '@/features/together/SharedRacesCard';
 import { TogetherPanel } from '@/features/together/TogetherPanel';
 import { errorMessage } from '@/lib/logger';
-import { Button, ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
+import { Button, Disclosure, ErrorNotice, Loading, Screen, space } from '@/ui';
 
 function overlineFor(count: number): string {
   if (count === 0) return 'Entrena en compañía';
@@ -61,11 +62,14 @@ interface FriendBlockProps {
 /** "Tú y Álex": pick a friend (when there are several), then compare, Huecos, Oportunidades. */
 function FriendBlock({ friends, selected, onSelect, myName, today }: FriendBlockProps) {
   return (
-    <View style={styles.section}>
-      <SectionHeader title={`Tú y ${firstName(selected.profile.displayName)}`} />
+    <Disclosure
+      variant="plain"
+      title={`Tú y ${firstName(selected.profile.displayName)}`}
+      summary="Huecos comunes, oportunidades y volumen"
+      storageKey="together.compare">
       {friends.length > 1 ? <FriendSelector friends={friends} selectedId={selected.profile.id} onSelect={onSelect} /> : null}
       <TogetherPanel friend={selected} myName={myName} today={today} />
-    </View>
+    </Disclosure>
   );
 }
 
@@ -136,8 +140,12 @@ export default function TogetherScreen() {
           today={today}
         />
       ) : null}
-      {hasFriends ? <SharedRacesCard today={today} /> : null}
-      {hasFriends ? <FeedSection myId={myId} today={today} /> : null}
+      {hasFriends ? <SharedRacesCard today={today} folded /> : null}
+      {hasFriends ? (
+        <Disclosure variant="plain" title="Actividad" summary="Lo último de tus amigos" storageKey="together.feed">
+          <FeedSection myId={myId} today={today} hideHeader />
+        </Disclosure>
+      ) : null}
     </Screen>
   );
 }
@@ -145,5 +153,4 @@ export default function TogetherScreen() {
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: space.sm },
   flex: { flex: 1 },
-  section: { gap: space.md },
 });

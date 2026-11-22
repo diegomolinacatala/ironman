@@ -11,6 +11,7 @@ import {
   hasWindow,
   normalizeAvailability,
   removeWindow,
+  setAvailabilityMode,
   setRestDay,
   toggleWeekday,
   toggleWindow,
@@ -90,5 +91,22 @@ describe('availabilityModel', () => {
     expect(next.restDay).toBe(6);
     expect(next.longSessionDays).toEqual([5]);
     expect(setRestDay(next, null).longSessionDays).toEqual([5]);
+  });
+});
+
+describe('automatic / manual mode', () => {
+  test('automatic is the default and normalizes a legacy value without mode', () => {
+    expect(DEFAULT_AVAILABILITY.mode).toBe('auto');
+    expect(normalizeAvailability({ weeklyHoursTarget: 9 }).mode).toBe('auto');
+    expect(normalizeAvailability({ mode: 'manual' }).mode).toBe('manual');
+  });
+
+  test('to manual starts from the automatic hours (clamped to half hours); to automatic drops rest day and windows', () => {
+    const manual = setAvailabilityMode(DEFAULT_AVAILABILITY, 'manual', 12.2);
+    expect(manual).toMatchObject({ mode: 'manual', weeklyHoursTarget: 12 });
+    expect(setAvailabilityMode(DEFAULT_AVAILABILITY, 'manual', 40).weeklyHoursTarget).toBe(25);
+    expect(setAvailabilityMode({ ...manual, weeklyHoursTarget: 7 }, 'manual').weeklyHoursTarget).toBe(7);
+    const back = setAvailabilityMode({ ...manual, restDay: 2, windows: [{ weekday: 1, start: '07:00', end: '08:00' }] }, 'auto');
+    expect(back).toMatchObject({ mode: 'auto', restDay: null, windows: [], weeklyHoursTarget: 12 });
   });
 });

@@ -26,7 +26,7 @@ import {
 } from './constants.ts';
 import { addDays, diffDays, startOfWeek } from './dates.ts';
 import { distanceKindOf, phaseFor, type Phase, type PhaseInfo } from './periodization.ts';
-import type { AthleteLevel, ISODate, Race, WeekPlan, WeekPlanDraft, WeekPlanKind } from './types.ts';
+import type { AthleteLevel, ISODate, Race, RaceDistance, WeekPlan, WeekPlanDraft, WeekPlanKind } from './types.ts';
 
 /** What a week is for, in coach words. */
 export type SeasonWeekKind = WeekPlanKind | 'taper' | 'race' | 'transition';
@@ -73,11 +73,74 @@ export interface SeasonInput {
   today: ISODate;
   races: readonly Race[];
   level?: AthleteLevel;
-  /** The athlete's weekly hours target (a normal week). */
-  weeklyHoursTarget: number;
+  /**
+   * The athlete's manual weekly hours (a normal week); null = automatic
+   * availability (`autoWeeklyHours` for the level and each week's target race).
+   */
+  weeklyHoursTarget: number | null;
   weekPlans?: readonly WeekPlan[];
   /** Weeks to show without a target race (default 8). */
   horizonWeeks?: number;
+}
+
+/** The part of the athlete's availability that decides the weekly hours (client and server shapes). */
+export interface WeeklyHoursSource {
+  /** 'manual' = `weeklyHoursTarget`; anything else (absent included) = automatic. */
+  mode?: string | null;
+  weeklyHoursTarget?: number | null;
+}
+
+/**
+ * Automatic availability: weekly hours of a normal load week (volume factor
+ * 1.0, the last build weeks) per race distance and level — ambitious but
+ * sensible for an age grouper training "as much as the calendar allows".
+ * The phase scales them (base ≈ 60–85 %, descarga ≈ 60 %, afinamiento…), the
+ * ramp cap (plannerSupport `rampCapMinutes`) keeps jumps safe and the planner
+ * never asks for more than the calendar's free time.
+ */
+export const AUTO_PEAK_HOURS: Readonly<Record<RaceDistance | 'none', Readonly<Record<AthleteLevel, number>>>> = {
+  sprint: { beginner: 6, intermediate: 8, advanced: 10 },
+  olympic: { beginner: 7, intermediate: 10, advanced: 12 },
+  half: { beginner: 9, intermediate: 12, advanced: 15 },
+  full: { beginner: 11, intermediate: 15, advanced: 18 },
+  run_5k: { beginner: 4, intermediate: 6, advanced: 8 },
+  run_10k: { beginner: 5, intermediate: 7, advanced: 9 },
+  run_half: { beginner: 6, intermediate: 8, advanced: 10 },
+  run_marathon: { beginner: 7, intermediate: 9, advanced: 12 },
+  other: { beginner: 6, intermediate: 9, advanced: 11 },
+  none: { beginner: 6, intermediate: 9, advanced: 11 },
+};
+
+/** Automatic weekly hours of a normal week (factor 1.0) for the level and the target race distance. */
+export function autoWeeklyHours(level: AthleteLevel | null | undefined, distance: RaceDistance | null | undefined): number {
+  const row = AUTO_PEAK_HOURS[distance ?? 'none'] ?? AUTO_PEAK_HOURS.none;
+  return row[level ?? 'intermediate'] ?? row.intermediate;
+}
+
+/** Automatic target minutes of a week with this volume factor (multiple of 5). */
+export function autoWeeklyMinutes(level: AthleteLevel | null | undefined, distance: RaceDistance | null | undefined, volumeFactor: number): number {
+  return round5(autoWeeklyHours(level, distance) * 60 * volumeFactor);
+}
+
+/** The athlete's manual weekly hours, or null when availability is automatic (the default). */
+export function manualWeeklyHours(source: WeeklyHoursSource | null | undefined): number | null {
+  if (!source || source.mode !== 'manual') return null;
+  const hours = source.weeklyHoursTarget;
+  return typeof hours === 'number' && Number.isFinite(hours) && hours >= 0 ? hours : null;
+}
+
+/** Hours of a normal week: the manual hours, else the automatic ones for the level and distance. */
+export function weeklyHoursFor(manual: number | null | undefined, level: AthleteLevel | null | undefined, distance: RaceDistance | null | undefined): number {
+  return typeof manual === 'number' && Number.isFinite(manual) && manual >= 0 ? manual : autoWeeklyHours(level, distance);
+}
+
+/** Target minutes of a week (multiple of 5): weekly hours (manual or automatic) × its volume factor. */
+export function weeklyTargetMinutes(
+  manual: number | null | undefined,
+  level: AthleteLevel | null | undefined,
+  info: Pick<PhaseInfo, 'volumeFactor' | 'targetRace'>,
+): number {
+  return round5(weeklyHoursFor(manual, level, info.targetRace?.distance ?? null) * 60 * info.volumeFactor);
 }
 
 /** Labels and help for the override picker. */
@@ -308,8 +371,9 @@ export function buildSeason(input: SeasonInput): SeasonOverview {
     raw.warnings.forEach((w) => warnings.add(w));
     const editable = canOverride(raw);
     const plan = editable ? (plans.get(weekStart) ?? null) : null;
-    const info = applyWeekPlan(raw, plan, input.weeklyHoursTarget);
-    const targetMinutes = round5(input.weeklyHoursTarget * 60 * info.volumeFactor);
+    const hours = weeklyHoursFor(input.weeklyHoursTarget, input.level, raw.targetRace?.distance ?? null);
+    const info = applyWeekPlan(raw, plan, hours);
+    const targetMinutes = round5(hours * 60 * info.volumeFactor);
     const prev = weeks[weeks.length - 1] ?? null;
     const trend = prev && prev.targetMinutes > 0 ? round2((targetMinutes - prev.targetMinutes) / prev.targetMinutes) : null;
     const kind = kindOf(raw, plan);

@@ -19,7 +19,12 @@ function changesLabel(n: number): string {
   return n === 1 ? '1 cambio propuesto' : `${n} cambios propuestos`;
 }
 
-/** Actionable banners: pending quedada invites and pending plan proposals. */
+/** Newest proposals first: an old pending one must never hide the one just created. */
+export function newestProposals(proposals: readonly PlanProposal[], max = MAX_BANNERS): PlanProposal[] {
+  return [...proposals].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).slice(0, max);
+}
+
+/** Actionable banners: pending quedada invites and pending plan proposals (newest first). */
 export function Banners({ invites, proposals, today }: { invites: JointSession[]; proposals: PlanProposal[]; today: ISODate }) {
   if (invites.length === 0 && proposals.length === 0) return null;
   return (
@@ -38,7 +43,7 @@ export function Banners({ invites, proposals, today }: { invites: JointSession[]
           />
         );
       })}
-      {proposals.slice(0, MAX_BANNERS).map((p) => (
+      {newestProposals(proposals).map((p) => (
         <Banner
           key={p.id}
           icon="sparkles"

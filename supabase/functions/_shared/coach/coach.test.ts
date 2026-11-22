@@ -25,8 +25,8 @@ test('parseCoachRequest validates and normalizes the app request', () => {
 test('structured output schema has every property required and no numeric bounds', () => {
   const schema = COACH_OUTPUT_JSON_SCHEMA as { required: string[]; properties: { changes: { items: { required: string[]; additionalProperties: boolean } } } };
   assert.deepEqual(schema.required, ['reply', 'summary', 'changes', 'memory', 'life_event', 'quedada', 'week_plans']);
-  assert.equal(schema.properties.changes.items.required.length, 17);
-  assert.deepEqual(schema.properties.changes.items.required.slice(12), ['steps', 'objective', 'keys', 'success', 'planB']);
+  // Short change shape: the prescription is one nullable object, so a move is op + id + date + nulls.
+  assert.deepEqual(schema.properties.changes.items.required, ['op', 'workoutId', 'reason', 'date', 'startTime', 'sport', 'title', 'durationMin', 'intensity', 'prescription']);
   assert.equal(schema.properties.changes.items.additionalProperties, false);
   assert.ok(!JSON.stringify(schema).includes('minimum'));
   assert.ok(!JSON.stringify(schema).includes('maximum'));
@@ -99,8 +99,9 @@ test('runCoachJob without changes finishes without a proposal (chat uses low eff
   const seen: ClaudeRequest[] = [];
   await runCoachJob(
     { reader: fakeStore(stateWithWeek()), store: rec.store, claude: claudeReturning({ text: JSON.stringify({ reply: 'Hidrátate bien.', summary: '', changes: [] }) }, seen), now: fixedNow, logger: silentLogger },
-    job({ mode: 'chat' }),
+    job({ mode: 'chat', message: '¿Cuánto bebo en la tirada larga?' }),
   );
+  assert.equal(seen.length, 1, 'a question needs no repair');
   assert.equal(rec.jobs[0].status, 'done');
   assert.equal(rec.jobs[0].proposalId, null);
   assert.equal(seen[0].effort, 'low');

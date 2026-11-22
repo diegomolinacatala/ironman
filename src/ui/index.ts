@@ -43,3 +43,5 @@ export {
   useResolvedColorScheme,
   type AppearancePreference,
 } from './appearance';
+export { Disclosure, GroupedList, type DisclosureProps, type DisclosureVariant } from './Disclosure';
+export { loadDisclosureState } from './disclosureState';

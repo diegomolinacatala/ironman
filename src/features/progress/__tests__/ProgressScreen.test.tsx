@@ -12,6 +12,7 @@ import { AuthContext, RepositoryContext } from '@/data/context';
 import { createDemoRepository, type DemoRepository } from '@/data/demo/DemoRepository';
 import type { Repository } from '@/data/repository';
 import { RecoveryCard } from '@/features/progress/RecoveryCard';
+import { resetDisclosureState } from '@/ui/disclosureState';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), navigate: jest.fn() };
 
@@ -55,6 +56,7 @@ async function renderProgress() {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  resetDisclosureState();
   repo = createDemoRepository({ persistDebounceMs: 0, friendDelayMs: 60_000 });
   userId = (await repo.auth.signInWithApple()).userId;
 });
@@ -63,12 +65,17 @@ afterEach(async () => {
   await repo.store.dispose();
 });
 
+/** Every section but "Tu forma" starts folded. */
+async function openFold(title: string): Promise<void> {
+  await fireEvent.press(await screen.findByRole('button', { name: new RegExp(`^${title}\\.`) }));
+}
+
 describe('Progreso tab', () => {
   test('renders the sections in order: forma, volumen, recuperación, nutrición, carreras', async () => {
     await renderProgress();
-    const headers = screen.getAllByRole('header').map((h) => String(h.props.children));
+    const folds = screen.getAllByRole('button').map((b) => String(b.props.accessibilityLabel ?? ''));
     const order = ['Tu forma', 'Volumen y cumplimiento', 'Recuperación', 'Nutrición', 'Carreras'];
-    const positions = order.map((title) => headers.indexOf(title));
+    const positions = order.map((title) => folds.findIndex((label) => label.startsWith(`${title}.`)));
     expect(positions.every((p) => p >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     expect(screen.getByText('Progreso')).toBeTruthy();
@@ -76,6 +83,7 @@ describe('Progreso tab', () => {
 
   test('shows a single races entry (no duplicate countdown or links card)', async () => {
     await renderProgress();
+    await openFold('Carreras');
     expect(screen.getAllByText('Carreras')).toHaveLength(1);
     expect(screen.queryByText('Próxima carrera')).toBeNull();
     expect(screen.queryByText('Calendario de carreras y prioridades A/B/C')).toBeNull();
@@ -83,6 +91,7 @@ describe('Progreso tab', () => {
 
   test('the races card opens Carreras', async () => {
     await renderProgress();
+    await openFold('Carreras');
     const card = screen.getByRole('button', { name: /para .*Ver carreras\.$|Sin carrera a la vista/ });
     await fireEvent.press(card);
     expect(mockRouter.push).toHaveBeenCalledWith('/races');
@@ -90,6 +99,7 @@ describe('Progreso tab', () => {
 
   test('the nutrition section opens the log and the meal camera', async () => {
     await renderProgress();
+    await openFold('Nutrición');
     expect(await screen.findByText(/comidas? apuntadas?|Nada apuntado todavía/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: /^Lo que has comido hoy/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/nutrition');
@@ -99,6 +109,7 @@ describe('Progreso tab', () => {
 
   test('recovery links to Conexiones', async () => {
     await renderProgress();
+    await openFold('Recuperación');
     await fireEvent.press(screen.getAllByRole('button', { name: 'Conexiones' })[0]!);
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/integrations');
   });

@@ -26,7 +26,9 @@ export function seedProfiles(createdAt: ISODateTime): Profile[] {
     level: 'intermediate',
     // Realistic for an intermediate age-grouper: LTHR 168 (run), 4:40 /km threshold, FTP 240 W, CSS 1:45 /100 m.
     thresholds: { lthr: 168, maxHr: 188, restingHr: 50, ftpW: 240, runThresholdPaceSecPerKm: 280, swimCssSecPer100m: 105 },
+    // Demo athletes keep their hand-made week (manual availability): stable demo data and tests.
     availability: {
+      mode: 'manual',
       weeklyHoursTarget: 10,
       restDay: 0,
       longSessionDays: [5, 6],
@@ -53,7 +55,9 @@ export function seedProfiles(createdAt: ISODateTime): Profile[] {
     sports: ['swim', 'bike', 'run'],
     level: 'advanced',
     thresholds: { ftpW: 272, runThresholdPaceSecPerKm: 252, swimCssSecPer100m: 96, maxHr: 188, lthr: 168, restingHr: 46 },
+    // Demo athletes keep their hand-made week (manual availability): stable demo data and tests.
     availability: {
+      mode: 'manual',
       weeklyHoursTarget: 11,
       restDay: 4,
       longSessionDays: [5, 6],
@@ -82,7 +86,9 @@ function simpleProfile(id: string, username: string, displayName: string, create
     sports: ['swim', 'bike', 'run'],
     level: 'intermediate',
     thresholds: {},
+    // Demo athletes keep their hand-made week (manual availability): stable demo data and tests.
     availability: {
+      mode: 'manual',
       weeklyHoursTarget: 7,
       restDay: 0,
       longSessionDays: [5, 6],

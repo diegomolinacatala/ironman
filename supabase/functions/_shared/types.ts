@@ -211,6 +211,9 @@ export interface TrainingWindow {
 }
 
 export interface Availability {
+  /** 'auto' (default, also when absent in the row) = the calendar decides; 'manual' = the fields below. */
+  mode?: 'auto' | 'manual';
+  /** Manual mode only. */
   weeklyHoursTarget: number;
   restDay: number | null;
   longSessionDays: number[];

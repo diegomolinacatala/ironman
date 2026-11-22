@@ -1,13 +1,18 @@
 /**
  * Builds the user-side messages for the coach call: mode instruction, the
- * compact JSON context (+ optional triggering imprevisto and friends' masked
- * weeks), chat history and the athlete's message. Always ends with a user turn
- * (no assistant prefill).
+ * compact JSON context with short workout ids (+ optional triggering
+ * imprevisto and friends' masked weeks), chat history (workout UUIDs in it
+ * shown as their short ids) and the athlete's message. In chat, a message that
+ * asks to change the plan makes concrete changes mandatory. Always ends with a
+ * user turn (no assistant prefill).
  */
 import { addDays } from '../dates.ts';
 import type { PlanningContext } from '../planning/context.ts';
 import type { CoachMode, CoachRequest, FriendWeekItem } from '../types.ts';
+import { mentionsNextWeek, wantsPlanChange } from './intent.ts';
 import type { ClaudeMessage } from './ports.ts';
+import { promptContext, shortenUuids, shortIdsFor } from './short-ids.ts';
+import type { ShortIds } from './short-ids.ts';
 
 export interface FriendWeek {
   friendId: string;
@@ -21,8 +26,12 @@ const MODE_TASK: Record<CoachMode, (weekStart: string) => string> = {
   replan: (w) =>
     `Modo replan. Replanifica lo que queda de la semana del ${w} (y la siguiente si hace falta) con los cambios mínimos para absorber la situación descrita; las sesiones nuevas o cambiadas llevan su prescripción completa.`,
   chat: (w) =>
-    `Modo chat sobre la semana del ${w}. Responde a la pregunta del atleta; incluye cambios solo si los pide o son necesarios por seguridad, y usa week_plans si pide planificar varias semanas por encima.`,
+    `Modo chat sobre la semana del ${w} (y la siguiente). Responde a lo que dice el atleta. Si te pide cambiar su plan, propón los cambios concretos en changes; si solo pregunta, changes vacío salvo que la seguridad lo exija. Usa week_plans si pide planificar varias semanas por encima.`,
 };
+
+/** Chat turn that asks to change the plan: changes are mandatory and must use the context ids. */
+const CHANGE_TASK =
+  'El atleta pide cambiar su plan: DEBES devolver en changes los cambios concretos que lo resuelven (move, update, delete o add), usando los ids cortos del contexto (w1, w2…) y fechas dentro de la ventana, de hoy en adelante. Si de verdad no se puede hacer sin romper sus reglas, changes vacío y explica en reply por qué y qué alternativa le propones. Nunca digas en reply que ya has cambiado algo: es una propuesta que el atleta acepta.';
 
 function friendsBlock(friends: readonly FriendWeek[]): string {
   if (friends.length === 0) return '';
@@ -44,19 +53,32 @@ function friendsBlock(friends: readonly FriendWeek[]): string {
   return `\n\nCalendario de amigos con los que quiere coincidir (compartido según su privacidad):\n${JSON.stringify(compact)}`;
 }
 
-export function buildCoachMessages(
-  request: CoachRequest,
-  context: PlanningContext,
-  extras: { lifeEvent?: Record<string, unknown> | null; friends?: FriendWeek[] },
-): ClaudeMessage[] {
+export interface CoachMessageExtras {
+  lifeEvent?: Record<string, unknown> | null;
+  friends?: FriendWeek[];
+  /** Short ids of the context's workouts (computed from the context when missing). */
+  ids?: ShortIds;
+}
+
+function taskText(request: CoachRequest): string {
+  const base = MODE_TASK[request.mode](request.weekStart);
+  if (request.mode !== 'chat') return base;
+  const nextWeek = mentionsNextWeek(request.message)
+    ? ` Habla de la semana que viene: del ${addDays(request.weekStart, 7)} al ${addDays(request.weekStart, 13)} (nextWeek en el contexto).`
+    : '';
+  return `${base}${nextWeek}${wantsPlanChange(request.message) ? ` ${CHANGE_TASK}` : ''}`;
+}
+
+export function buildCoachMessages(request: CoachRequest, context: PlanningContext, extras: CoachMessageExtras): ClaudeMessage[] {
+  const ids = extras.ids ?? shortIdsFor(context);
   const parts = [
-    MODE_TASK[request.mode](request.weekStart),
+    taskText(request),
     extras.lifeEvent ? `\n\nImprevisto que motiva el cambio:\n${JSON.stringify(extras.lifeEvent)}` : '',
     friendsBlock(extras.friends ?? []),
-    `\n\nContexto del atleta (JSON):\n${JSON.stringify(context)}`,
+    `\n\nContexto del atleta (JSON):\n${JSON.stringify(promptContext(context, ids))}`,
   ];
   const contextMessage: ClaudeMessage = { role: 'user', content: parts.join('') };
-  const history = (request.history ?? []).map((m) => ({ role: m.role, content: m.content }));
+  const history = (request.history ?? []).map((m) => ({ role: m.role, content: shortenUuids(m.content, ids) }));
   const message = request.message?.trim();
   const finalText = !message
     ? 'Sin mensaje adicional del atleta: aplica el modo indicado.'

@@ -2,11 +2,12 @@
  * PlanChange schemas (camelCase, identical to src/domain/types.ts) and the
  * semantic checks every proposal goes through before it is stored: dates
  * inside the 14-day window starting at `weekStart`, not in the past, target
- * workouts owned by the user and still planned. v4: steps carry optional
+ * workouts owned by the user and still planned, timed sessions clear of the
+ * busy calendar blocks (when given). v4: steps carry optional
  * explicit targets (ppm, pace, W, RPE ranges), a cue and the brick leg;
  * drafts and patches carry the coach's prescription (`coaching`).
  */
-import { addDays, isIsoDate } from '../dates.ts';
+import { addDays, isIsoDate, timeToMinutes } from '../dates.ts';
 import {
   array,
   boolean,
@@ -160,11 +161,22 @@ export const planChangeSchema: Schema<PlanChange> = discriminated<PlanChange>(
 
 export const planChangesSchema = array(planChangeSchema, { min: 1, max: MAX_CHANGES });
 
+/** A busy calendar interval in local time (same shape as get_planning_context `busy`). */
+export interface BusySlot {
+  date: ISODate;
+  /** HH:mm */
+  start: string;
+  /** HH:mm ('23:59' when it runs past midnight) */
+  end: string;
+}
+
 export interface ChangeCheckContext {
   weekStart: ISODate;
   today: ISODate;
   /** The user's workouts in [weekStart, weekStart + 13]. */
   workouts: readonly Workout[];
+  /** Busy calendar blocks of the window: a timed session may not overlap them. */
+  busy?: readonly BusySlot[];
 }
 
 export interface ChangeIssue {
@@ -193,19 +205,40 @@ function checkTarget(id: UUID, ctx: ChangeCheckContext, deleted: ReadonlySet<UUI
   return null;
 }
 
+/** A timed session [startTime, +durationMin) on `date` that overlaps a busy calendar block, explained; else null. */
+function checkBusy(date: ISODate, startTime: string | null | undefined, durationMin: number, ctx: ChangeCheckContext): string | null {
+  if (!startTime || !ctx.busy || ctx.busy.length === 0 || !TIME_PATTERN.test(startTime)) return null;
+  const start = timeToMinutes(startTime);
+  const end = start + Math.max(0, durationMin);
+  const clash = ctx.busy.find((b) => b.date === date && timeToMinutes(b.start) < end && timeToMinutes(b.end) > start);
+  if (!clash) return null;
+  return `el ${date} a las ${startTime} (${Math.round(durationMin)} min) choca con una franja ocupada del calendario (${clash.start}–${clash.end}): elige otra hora libre o startTime null`;
+}
+
 function checkOne(change: PlanChange, ctx: ChangeCheckContext, deleted: ReadonlySet<UUID>): string | null {
   switch (change.op) {
     case 'add':
-      return checkDate(change.workout.date, ctx);
+      return checkDate(change.workout.date, ctx) ?? checkBusy(change.workout.date, change.workout.startTime, change.workout.durationMin, ctx);
     case 'delete':
       return checkTarget(change.workoutId, ctx, deleted);
-    case 'move':
-      return checkTarget(change.workoutId, ctx, deleted) ?? checkDate(change.toDate, ctx);
+    case 'move': {
+      const error = checkTarget(change.workoutId, ctx, deleted) ?? checkDate(change.toDate, ctx);
+      if (error) return error;
+      const target = ctx.workouts.find((w) => w.id === change.workoutId);
+      const time = change.toStartTime === undefined ? target?.startTime : change.toStartTime;
+      return checkBusy(change.toDate, time, target?.durationMin ?? 0, ctx);
+    }
     case 'update': {
       if (Object.keys(change.patch).length === 0) return 'patch vacío: indica al menos un campo';
-      const target = checkTarget(change.workoutId, ctx, deleted);
-      if (target) return target;
-      return change.patch.date ? checkDate(change.patch.date, ctx) : null;
+      const targetError = checkTarget(change.workoutId, ctx, deleted);
+      if (targetError) return targetError;
+      const dateError = change.patch.date ? checkDate(change.patch.date, ctx) : null;
+      if (dateError) return dateError;
+      const p = change.patch;
+      if (p.date === undefined && p.startTime === undefined && p.durationMin === undefined) return null;
+      const target = ctx.workouts.find((w) => w.id === change.workoutId);
+      const time = p.startTime === undefined ? target?.startTime : p.startTime;
+      return checkBusy(p.date ?? target?.date ?? '', time, p.durationMin ?? target?.durationMin ?? 0, ctx);
     }
   }
 }

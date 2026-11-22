@@ -75,6 +75,11 @@ export interface ClaudeRequest {
   maxTokens: number;
   /** Aborts the streamed call when the job deadline passes. */
   signal?: AbortSignal;
+  /**
+   * Budget of this one call (Workers AI): a hung worker fails fast instead of
+   * eating the whole job deadline, leaving time for a repair attempt.
+   */
+  timeoutMs?: number;
 }
 
 export interface ClaudeResponse {

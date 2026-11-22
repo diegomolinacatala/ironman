@@ -153,7 +153,9 @@ describe('Tú hub rows', () => {
   });
 
   test('availability and sport profile subtitles', () => {
-    const availability = { weeklyHoursTarget: 9.5, restDay: 6, longSessionDays: [], windows: [], poolDays: [] } as const;
+    const availability = { mode: 'manual', weeklyHoursTarget: 9.5, restDay: 6, longSessionDays: [], windows: [], poolDays: [] } as const;
+    expect(availabilitySubtitle({ ...availability, mode: 'auto', longSessionDays: [], windows: [], poolDays: [] })).toBe('Automático · según tu calendario');
+    expect(availabilitySubtitle({ weeklyHoursTarget: 8, restDay: null, longSessionDays: [], windows: [], poolDays: [] })).toBe('Automático · según tu calendario');
     expect(availabilitySubtitle({ ...availability, longSessionDays: [], windows: [], poolDays: [] })).toBe('9,5 h/semana · descanso el domingo');
     expect(availabilitySubtitle({ ...availability, restDay: null, longSessionDays: [], windows: [], poolDays: [] })).toBe('9,5 h/semana · sin día fijo de descanso');
     expect(sportsProfileSubtitle({ sports: ['swim', 'run'], level: 'beginner' })).toMatch(/^Natación, Carrera · /);

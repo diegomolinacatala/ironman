@@ -321,8 +321,18 @@ export interface TrainingWindow {
   end: ISOTime;
 }
 
+/**
+ * 'auto' (default, also when absent): the planner fills the free time of the
+ * calendar up to an ambitious-but-sensible volume for the athlete's level, race
+ * distance and phase, with no fixed rest day and no training windows.
+ * 'manual': the athlete's own hours, rest day and windows (Ajustes avanzados).
+ */
+export type AvailabilityMode = 'auto' | 'manual';
+
 export interface Availability {
-  /** Target training hours per (normal, non-recovery) week. */
+  /** Absent = 'auto' (profiles stored before the mode existed are automatic). */
+  mode?: AvailabilityMode;
+  /** Target training hours per (normal, non-recovery) week. Only used in 'manual' mode. */
   weeklyHoursTarget: number;
   /** Preferred full rest day, null = no fixed rest day. */
   restDay: Weekday | null;

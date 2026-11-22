@@ -13,8 +13,11 @@ import {
   mealTotalsA11y,
   mealTotalsLine,
   mealsOfDay,
+  mealsSummary,
+  raceCountdownLine,
   refreshSyncFor,
   structureSummary,
+  tomorrowSummary,
 } from '../todayModel';
 
 function meal(overrides: Partial<NutritionLog> = {}): NutritionLog {
@@ -118,5 +121,23 @@ describe('refreshSyncFor (pull-to-refresh)', () => {
   test('COROS pulls Apple Salud (where COROS writes) instead of Garmin', () => {
     expect(refreshSyncFor({ watchBrand: 'coros', garminConnected: true, healthReady: true })).toBe('health');
     expect(refreshSyncFor({ watchBrand: 'coros', garminConnected: true, healthReady: false })).toBeNull();
+  });
+});
+
+describe('folded sections of Hoy', () => {
+  test('meals summary', () => {
+    expect(mealsSummary([])).toBe('Haz una foto y te calculo kcal e hidratos');
+  });
+
+  test('tomorrow summary', () => {
+    expect(tomorrowSummary([])).toBe('Descanso');
+  });
+
+  test('race countdown keeps the race name short', () => {
+    const race = { name: 'Triatlón de Valencia · Media distancia', date: '2026-12-01' };
+    expect(raceCountdownLine(race, '2026-11-22')).toBe('Faltan 9 días para Triatlón de Valencia');
+    expect(raceCountdownLine(race, '2026-11-30')).toBe('Mañana es Triatlón de Valencia');
+    expect(raceCountdownLine(race, '2026-12-01')).toBe('Hoy es Triatlón de Valencia');
+    expect(raceCountdownLine(null, '2026-12-01')).toBeNull();
   });
 });

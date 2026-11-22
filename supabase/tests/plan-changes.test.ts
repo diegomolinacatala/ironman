@@ -59,8 +59,8 @@ function toDomain(row: DbWorkout): Workout {
     isKey: row.is_key,
     jointSessionId: row.joint_session_id,
     externalId: row.external_id,
-    createdAt: '2026-10-25T00:00:00Z',
-    updatedAt: '2026-10-25T00:00:00Z',
+    createdAt: '2036-10-25T00:00:00Z',
+    updatedAt: '2036-10-25T00:00:00Z',
   };
 }
 
@@ -154,37 +154,37 @@ describe('apply_plan_changes', () => {
   });
 
   test('same results as src/domain/changes.ts for a mixed batch', async () => {
-    const planned = await insertWorkout(me, { date: '2026-11-02', title: 'Rodaje' });
-    const planned2 = await insertWorkout(me, { date: '2026-11-03', title: 'Series' });
-    const planned3 = await insertWorkout(me, { date: '2026-11-04', title: 'Cuestas' });
-    const done = await insertWorkout(me, { date: '2026-10-30', title: 'Hecho', status: 'completed' });
-    const foreign = await insertWorkout(other, { date: '2026-11-02', title: 'Ajeno' });
+    const planned = await insertWorkout(me, { date: '2036-11-02', title: 'Rodaje' });
+    const planned2 = await insertWorkout(me, { date: '2036-11-03', title: 'Series' });
+    const planned3 = await insertWorkout(me, { date: '2036-11-04', title: 'Cuestas' });
+    const done = await insertWorkout(me, { date: '2036-10-30', title: 'Hecho', status: 'completed' });
+    const foreign = await insertWorkout(other, { date: '2036-11-02', title: 'Ajeno' });
 
     const changes: PlanChange[] = [
-      { op: 'add', workout: { date: '2026-11-05', startTime: '18:00', sport: 'swim', title: '  Técnica ', durationMin: 45.4, intensity: 'endurance', distanceM: 2000, isKey: true, source: 'claude', steps: [{ kind: 'work', durationMin: 10 }] }, reason: 'r' },
-      { op: 'add', workout: { date: '2026-11-05', startTime: '25:00', sport: 'swim', title: 'Mal', durationMin: 30, intensity: 'endurance' }, reason: 'r' },
-      { op: 'add', workout: { date: '2026-11-05', sport: 'bike', title: 'Larga', durationMin: 800, intensity: 'endurance' }, reason: 'r' },
-      { op: 'add', workout: { date: '2026-11-05', sport: 'bike', title: '   ', durationMin: 60, intensity: 'endurance' }, reason: 'r' },
+      { op: 'add', workout: { date: '2036-11-05', startTime: '18:00', sport: 'swim', title: '  Técnica ', durationMin: 45.4, intensity: 'endurance', distanceM: 2000, isKey: true, source: 'claude', steps: [{ kind: 'work', durationMin: 10 }] }, reason: 'r' },
+      { op: 'add', workout: { date: '2036-11-05', startTime: '25:00', sport: 'swim', title: 'Mal', durationMin: 30, intensity: 'endurance' }, reason: 'r' },
+      { op: 'add', workout: { date: '2036-11-05', sport: 'bike', title: 'Larga', durationMin: 800, intensity: 'endurance' }, reason: 'r' },
+      { op: 'add', workout: { date: '2036-11-05', sport: 'bike', title: '   ', durationMin: 60, intensity: 'endurance' }, reason: 'r' },
       { op: 'add', workout: { date: '5/11/2026', sport: 'bike', title: 'Fecha', durationMin: 60, intensity: 'endurance' }, reason: 'r' },
       { op: 'update', workoutId: planned, patch: { durationMin: 30, title: ' Rodaje corto ', intensity: 'recovery', source: 'ai_coach' }, reason: 'r' },
       { op: 'update', workoutId: done, patch: { title: 'Hecho (editado)', description: 'nota' }, reason: 'r' },
-      { op: 'move', workoutId: done, toDate: '2026-11-06', reason: 'r' },
+      { op: 'move', workoutId: done, toDate: '2036-11-06', reason: 'r' },
       { op: 'delete', workoutId: done, reason: 'r' },
-      { op: 'move', workoutId: planned2, toDate: '2026-11-07', toStartTime: null, reason: 'r' },
-      { op: 'move', workoutId: planned3, toDate: '2026-11-08', reason: 'r' },
+      { op: 'move', workoutId: planned2, toDate: '2036-11-07', toStartTime: null, reason: 'r' },
+      { op: 'move', workoutId: planned3, toDate: '2036-11-08', reason: 'r' },
       { op: 'delete', workoutId: randomUUID(), reason: 'r' },
       { op: 'delete', workoutId: foreign, reason: 'r' },
       { op: 'update', workoutId: planned3, patch: { startTime: '7:00' }, reason: 'r' },
       { op: 'update', workoutId: planned3, patch: { durationMin: -5 }, reason: 'r' },
       { op: 'move', workoutId: planned3, toDate: 'mañana', reason: 'r' },
-      { op: 'move', workoutId: planned3, toDate: '2026-11-08', toStartTime: '6:30', reason: 'r' },
+      { op: 'move', workoutId: planned3, toDate: '2036-11-08', toStartTime: '6:30', reason: 'r' },
       { op: 'delete', workoutId: planned, reason: 'r' },
       { op: 'update', workoutId: planned, patch: { title: 'Ya no existe' }, reason: 'r' },
       { op: 'update', workoutId: planned2, patch: { isKey: true, tss: 55.5, distanceM: null, startTime: '19:15' }, reason: 'r' },
     ];
 
     const before = await workoutsOf(me);
-    const expected = applyPlanChanges(before, changes, { userId: me, now: '2026-10-25T10:00:00Z', newId: () => randomUUID() });
+    const expected = applyPlanChanges(before, changes, { userId: me, now: '2036-10-25T10:00:00Z', newId: () => randomUUID() });
     const actual = await apply(me, changes);
 
     assert.deepEqual(actual, { applied: expected.applied, failed: expected.failed });
@@ -196,19 +196,19 @@ describe('apply_plan_changes', () => {
   });
 
   test('database-only validations are reported per change without aborting the batch', async () => {
-    const id = await insertWorkout(me, { date: '2026-11-10', title: 'Base' });
+    const id = await insertWorkout(me, { date: '2036-11-10', title: 'Base' });
     const result = await apply(me, [
       { op: 'add', workout: { date: '2026-02-30', sport: 'run', title: 'Fecha imposible', durationMin: 30, intensity: 'endurance' } },
-      { op: 'add', workout: { date: '2026-11-11', sport: 'ski', title: 'Esquí', durationMin: 30, intensity: 'endurance' } },
-      { op: 'add', workout: { date: '2026-11-11', sport: 'run', title: 'Z9', durationMin: 30, intensity: 'z9' } },
-      { op: 'add', workout: { date: '2026-11-11', sport: 'run', title: 'Pasos', durationMin: 30, intensity: 'endurance', steps: 'no' } },
+      { op: 'add', workout: { date: '2036-11-11', sport: 'ski', title: 'Esquí', durationMin: 30, intensity: 'endurance' } },
+      { op: 'add', workout: { date: '2036-11-11', sport: 'run', title: 'Z9', durationMin: 30, intensity: 'z9' } },
+      { op: 'add', workout: { date: '2036-11-11', sport: 'run', title: 'Pasos', durationMin: 30, intensity: 'endurance', steps: 'no' } },
       { op: 'fly', workoutId: id },
       'no soy un objeto',
       { op: 'update', workoutId: 'not-a-uuid', patch: { title: 'X' } },
       { op: 'update', workoutId: id, patch: { sport: null } },
       { op: 'update', workoutId: id, patch: { title: 'x'.repeat(121) } },
       { op: 'update', workoutId: id, patch: { status: 'completed', completed: { rpe: 9 }, jointSessionId: randomUUID(), userId: other } },
-      { op: 'add', workout: { date: '2026-11-12', sport: 'run', title: 'Válido', durationMin: 0, intensity: 'recovery' } },
+      { op: 'add', workout: { date: '2036-11-12', sport: 'run', title: 'Válido', durationMin: 0, intensity: 'recovery' } },
     ]);
     assert.equal(result.applied, 2);
     assert.deepEqual(result.failed, [
@@ -248,14 +248,14 @@ describe('apply_plan_changes', () => {
   });
 
   test('marks the proposal applied / partially applied (own proposals only)', async () => {
-    const id = await insertWorkout(me, { date: '2026-11-20', title: 'Para mover' });
+    const id = await insertWorkout(me, { date: '2036-11-20', title: 'Para mover' });
     const changes = [
-      { op: 'move', workoutId: id, toDate: '2026-11-21', reason: 'r' },
-      { op: 'add', workout: { date: '2026-11-22', sport: 'run', title: 'Nuevo', durationMin: 40, intensity: 'endurance' }, reason: 'r' },
+      { op: 'move', workoutId: id, toDate: '2036-11-21', reason: 'r' },
+      { op: 'add', workout: { date: '2036-11-22', sport: 'run', title: 'Nuevo', durationMin: 40, intensity: 'endurance' }, reason: 'r' },
     ];
     const proposal = async (user: string) => {
       const [row] = await t.admin<{ id: string }>(
-        `insert into public.plan_proposals (user_id, kind, source, week_start, changes) values ($1, 'replan', 'rules', '2026-11-16', $2::jsonb) returning id`,
+        `insert into public.plan_proposals (user_id, kind, source, week_start, changes) values ($1, 'replan', 'rules', '2036-11-16', $2::jsonb) returning id`,
         [user, JSON.stringify(changes)],
       );
       assert.ok(row?.id);
@@ -290,7 +290,7 @@ describe('apply_plan_changes', () => {
       t.asUser(me, `select public.svc_apply_plan_changes($1, '[]'::jsonb, null)`, [me]),
       pgError({ code: '42501' }),
     );
-    const id = await insertWorkout(other, { date: '2026-11-25', title: 'De other' });
+    const id = await insertWorkout(other, { date: '2036-11-25', title: 'De other' });
     const [row] = await t.asService<{ r: ApplyJson }>(
       'select public.svc_apply_plan_changes($1, $2::jsonb, null) as r',
       [other, JSON.stringify([{ op: 'update', workoutId: id, patch: { title: 'Por Claude' }, reason: 'r' }])],
@@ -304,17 +304,17 @@ describe('apply_plan_changes', () => {
 
   test('claude / ai_coach proposals notify the owner with a deep link', async () => {
     const changes = [
-      { op: 'add', workout: { date: '2026-11-22', sport: 'run', title: 'A', durationMin: 40, intensity: 'endurance' }, reason: 'r' },
-      { op: 'add', workout: { date: '2026-11-23', sport: 'run', title: 'B', durationMin: 40, intensity: 'endurance' }, reason: 'r' },
+      { op: 'add', workout: { date: '2036-11-22', sport: 'run', title: 'A', durationMin: 40, intensity: 'endurance' }, reason: 'r' },
+      { op: 'add', workout: { date: '2036-11-23', sport: 'run', title: 'B', durationMin: 40, intensity: 'endurance' }, reason: 'r' },
     ];
     const [claude] = await t.asService<{ id: string }>(
       `insert into public.plan_proposals (user_id, kind, source, week_start, summary, changes)
-       values ($1, 'replan', 'claude', '2026-11-16', 'Muevo la tirada por el pádel', $2::jsonb) returning id`,
+       values ($1, 'replan', 'claude', '2036-11-16', 'Muevo la tirada por el pádel', $2::jsonb) returning id`,
       [me, JSON.stringify(changes)],
     );
-    await t.asUser(me, `insert into public.plan_proposals (kind, source, week_start, changes) values ('replan', 'rules', '2026-11-16', $1::jsonb)`, [JSON.stringify(changes)]);
+    await t.asUser(me, `insert into public.plan_proposals (kind, source, week_start, changes) values ('replan', 'rules', '2036-11-16', $1::jsonb)`, [JSON.stringify(changes)]);
     await t.asService(
-      `insert into public.plan_proposals (user_id, kind, source, week_start, changes) values ($1, 'chat', 'ai_coach', '2026-11-16', '[]')`,
+      `insert into public.plan_proposals (user_id, kind, source, week_start, changes) values ($1, 'chat', 'ai_coach', '2036-11-16', '[]')`,
       [me],
     );
     const rows = await t.asUser<{ title: string; body: string; data: { url: string; proposalId: string } }>(
@@ -336,7 +336,7 @@ describe('apply_plan_changes', () => {
       return row.id;
     };
     const draft = (title: string, extra: Record<string, unknown> = {}) => ({
-      date: '2026-12-01',
+      date: '2036-12-01',
       sport: 'run',
       title,
       durationMin: 60,
@@ -372,7 +372,7 @@ describe('apply_plan_changes', () => {
     });
 
     test('update replaces coaching, a patch without it keeps it and null clears it', async () => {
-      const id = await insertWorkout(me, { date: '2026-12-02', title: 'Para pautar' });
+      const id = await insertWorkout(me, { date: '2036-12-02', title: 'Para pautar' });
       assert.deepEqual(await apply(me, [{ op: 'update', workoutId: id, patch: { coaching: COACHING_INPUT }, reason: 'r' }]), {
         applied: 1,
         failed: [],
@@ -396,13 +396,13 @@ describe('apply_plan_changes', () => {
       await apply(me, [{ op: 'update', workoutId: id, patch: { intensity: 'recovery', coaching: easier }, reason: 'r' }]);
       assert.deepEqual(await coachingOf(id), easier, 'new intensity with coaching = replaced');
 
-      const done = await insertWorkout(me, { date: '2026-11-28', title: 'Hecho con pautas', status: 'completed' });
+      const done = await insertWorkout(me, { date: '2036-11-28', title: 'Hecho con pautas', status: 'completed' });
       await apply(me, [{ op: 'update', workoutId: done, patch: { coaching: easier }, reason: 'r' }]);
       assert.deepEqual(await coachingOf(done), easier, 'completed workouts take coaching through update');
     });
 
     test('invalid coaching is reported per change in Spanish and never stored', async () => {
-      const kept = await insertWorkout(me, { date: '2026-12-03', title: 'Con pautas buenas' });
+      const kept = await insertWorkout(me, { date: '2036-12-03', title: 'Con pautas buenas' });
       await apply(me, [{ op: 'update', workoutId: kept, patch: { coaching: COACHING_INPUT }, reason: 'r' }]);
 
       const valid: Coaching = { objective: 'Rodar', keys: ['Cadencia alta'], success: 'Sin molestias', planB: null };
@@ -486,7 +486,7 @@ describe('apply_plan_changes', () => {
         t.asUser(
           me,
           `insert into public.workouts (date, sport, title, duration_min, intensity, coaching)
-           values ('2026-12-05', 'run', 'Directo', 40, 'endurance', $1::jsonb) returning id`,
+           values ('2036-12-05', 'run', 'Directo', 40, 'endurance', $1::jsonb) returning id`,
           [JSON.stringify(coaching)],
         );
       await assert.rejects(insert(['Rodar']), pgError({ code: '23514' }));

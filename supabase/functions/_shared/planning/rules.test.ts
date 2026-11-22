@@ -92,7 +92,11 @@ test('phase applies the week plan like the app and labels the week like Plan →
   // Race week: a week plan never overrides it.
   const raceWeek = phaseFor('2027-04-12', races, { weekPlans: [{ ...plan, weekStart: '2027-04-12' }] });
   assert.deepEqual([raceWeek.phase, raceWeek.adjusted, raceWeek.raceInWeek?.date], ['race_week', false, '2027-04-18']);
-  assert.equal(phaseFor('2026-10-26', races).targetMinutes, null, 'no weekly hours target, no minutes');
+  // Automatic availability (no manual hours): intermediate half distance = 12 h for a normal week × the week's factor.
+  const auto = phaseFor('2026-10-26', races, { level: 'intermediate' });
+  assert.equal(auto.targetMinutes, Math.round((12 * 60 * auto.volumeFactor) / 5) * 5);
+  assert.ok((auto.targetMinutes ?? 0) > (plain.targetMinutes ?? 0), 'automatic aims higher than 8 h');
+  assert.equal(phaseFor('2026-10-26', races, { weeklyHoursTarget: 0 }).targetMinutes, null, 'manual 0 h, no minutes');
 });
 
 test('matching respects day, sport compatibility, 50–150 % duration and start time', () => {

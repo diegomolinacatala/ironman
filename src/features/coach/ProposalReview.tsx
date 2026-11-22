@@ -47,13 +47,29 @@ function ReadOnlyBanner({ proposal }: { proposal: PlanProposal }) {
   );
 }
 
-/** Diff review of a plan proposal with per-change selection. */
+function RetryBanner({ missing }: { missing: number }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.banner, { backgroundColor: colors.surface, borderColor: colors.warning }]}>
+      <Icon name="warning" size={18} color={colors.warning} />
+      <Text variant="callout" style={styles.flex}>
+        {missing > 0
+          ? `Parte de esta propuesta ya está en tu plan. Puedes volver a intentar ${changeCountLabel(missing)} que faltan.`
+          : 'Parte de esta propuesta ya está en tu plan.'}
+      </Text>
+    </View>
+  );
+}
+
+/** Diff review of a plan proposal with per-change selection (a partially applied one can retry what is missing). */
 export function ProposalReview({ proposal }: { proposal: PlanProposal }) {
   const review = useProposalReview(proposal);
-  const readOnly = proposal.status !== 'pending' || review.outcome !== null;
+  const editable = proposal.status === 'pending' || review.isRetry;
+  const readOnly = !editable || review.outcome !== null;
+  const missing = review.applied.filter((done) => !done).length;
   const failures = new Map((review.outcome?.failed ?? []).map((f) => [f.index, f.error]));
   const expected = new Map((review.preview?.failed ?? []).map((f) => [f.index, f.error]));
-  const allOn = review.selectedCount === proposal.changes.length;
+  const allOn = review.selectedCount === (review.isRetry ? missing : proposal.changes.length);
 
   const onDiscard = async () => {
     if (await review.discard()) closeModal();
@@ -89,7 +105,8 @@ export function ProposalReview({ proposal }: { proposal: PlanProposal }) {
     <Screen inSheet footer={footer} contentStyle={styles.content}>
       <ProposalHeader proposal={proposal} />
       {review.outcome ? <OutcomeBanner outcome={review.outcome} /> : null}
-      {!review.outcome && proposal.status !== 'pending' ? <ReadOnlyBanner proposal={proposal} /> : null}
+      {!review.outcome && !editable ? <ReadOnlyBanner proposal={proposal} /> : null}
+      {!review.outcome && review.isRetry ? <RetryBanner missing={missing} /> : null}
       {readOnly && review.actionError ? <ErrorNotice message={review.actionError} /> : null}
       {review.weekError ? <ErrorNotice message={review.weekError} onRetry={review.reloadWeek} /> : null}
       {!readOnly && review.preview ? (
@@ -104,16 +121,20 @@ export function ProposalReview({ proposal }: { proposal: PlanProposal }) {
         {proposal.changes.length === 0 ? (
           <EmptyState icon="checkCircle" title="Sin cambios" message="Tu semana ya encaja: el coach no propone cambios." />
         ) : null}
-        {review.rows.map((row) => (
-          <ChangeRow
-            key={row.index}
-            row={row}
-            checked={readOnly ? undefined : review.selected[row.index]}
-            onToggle={readOnly ? undefined : () => review.toggle(row.index)}
-            error={failures.get(row.index) ?? (readOnly || !review.selected[row.index] ? null : expected.get(row.index))}
-            skipped={review.outcome !== null && !review.selected[row.index]}
-          />
-        ))}
+        {review.rows.map((row) => {
+          const done = review.applied[row.index] ?? false;
+          return (
+            <ChangeRow
+              key={row.index}
+              row={row}
+              checked={readOnly || done ? undefined : review.selected[row.index]}
+              onToggle={readOnly || done ? undefined : () => review.toggle(row.index)}
+              error={failures.get(row.index) ?? (readOnly || done || !review.selected[row.index] ? null : expected.get(row.index))}
+              skipped={!done && review.outcome !== null && !review.selected[row.index]}
+              applied={done}
+            />
+          );
+        })}
       </View>
     </Screen>
   );

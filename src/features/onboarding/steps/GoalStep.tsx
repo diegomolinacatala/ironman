@@ -8,14 +8,10 @@ import { TRAINABLE_SPORTS, type Profile, type Race } from '@/domain/types';
 import { DistancePicker } from '@/features/races/DistancePicker';
 import { RaceDateField } from '@/features/races/RaceDateField';
 import { errorMessage, logger } from '@/lib/logger';
-import { Card, Chip, ErrorNotice, Loading, Segmented, Stepper, Text, TextField, haptics, space } from '@/ui';
+import { Card, Chip, ErrorNotice, Loading, Segmented, Text, TextField, haptics, space } from '@/ui';
 
-import { formatHours } from '../../settings/availabilityModel';
 import { Appear } from '../Appear';
 import {
-  HOURS_MAX,
-  HOURS_MIN,
-  HOURS_STEP,
   goalError,
   goalProfilePatch,
   goalRaceDraft,
@@ -33,7 +29,7 @@ export interface GoalStepProps {
   profile: Profile;
 }
 
-/** Step 2: next race (or "Aún no tengo carrera"), weekly hours and sports. */
+/** Step 2: next race (or "Aún no tengo carrera") and sports; the weekly hours come from the calendar. */
 export function GoalStep({ nav, profile }: GoalStepProps) {
   const races = useRaces();
   if (races.isLoading) {
@@ -67,7 +63,7 @@ function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
     setSaving(true);
     setError(null);
     try {
-      await updateProfile.mutateAsync(goalProfilePatch(goal, profile));
+      await updateProfile.mutateAsync(goalProfilePatch(goal));
       const draft = goalRaceDraft(goal);
       if (draft && raceNeedsSave(goal, races)) {
         if (goal.raceId) await updateRace.mutateAsync({ id: goal.raceId, patch: draft });
@@ -118,17 +114,8 @@ function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
         )}
       </Appear>
       <Appear index={2} style={styles.block}>
-        <Stepper
-          label="Horas a la semana"
-          value={goal.weeklyHours}
-          step={HOURS_STEP}
-          min={HOURS_MIN}
-          max={HOURS_MAX}
-          format={formatHours}
-          onChange={(weeklyHours) => set({ weeklyHours })}
-        />
-        <Text variant="caption" color="textMuted">
-          Lo habitual: 5–8 h para un olímpico, 8–12 h para media distancia. Mejor quedarse corto que pasarse.
+        <Text variant="callout" color="textMuted">
+          Entrenaremos todo lo que tu calendario permita, con cabeza.
         </Text>
       </Appear>
       <Appear index={3} style={styles.block}>

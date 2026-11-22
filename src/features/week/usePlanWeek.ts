@@ -25,7 +25,7 @@ export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => P
 
   const plan = async (weekStart: ISODate, data: WeekData) => {
     if (!data.profile) {
-      notify('Completa tu perfil', 'Necesitamos tu disponibilidad y deportes para planificar la semana.');
+      notify('Completa tu perfil', 'Necesitamos tus deportes y tu nivel para planificar la semana.');
       return;
     }
     const weekEnd = addDays(weekStart, 6);
@@ -51,7 +51,7 @@ export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => P
         weekPlan: data.weekPlan,
       });
       if (result.changes.length === 0) {
-        notify('Tu semana ya está completa', result.summary || 'No hay huecos libres que rellenar con tu disponibilidad actual.');
+        notify('Tu semana ya está completa', result.summary || 'No quedan huecos libres en tu calendario que rellenar.');
         return;
       }
       const proposal = await create.mutateAsync({

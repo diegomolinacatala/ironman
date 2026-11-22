@@ -5,15 +5,14 @@ import { errorMessage } from '@/lib/logger';
 import { Loading } from '@/ui';
 
 import { useWatchBrand } from '../settings/useWatchBrand';
-import { WatchBrandPicker } from '../settings/WatchBrandPicker';
 import { ConnectionFeedback, ConnectionRow } from './ConnectionRow';
 import { calendarConnectionView, calendarFeedConnectionView, claudeConnectionView } from './connectionsModel';
 import { GroupDivider, SettingsGroup } from './SettingsGroup';
 import { WatchConnectionRow } from './WatchConnectionRow';
 
 /**
- * Conexiones: your watch (Garmin | COROS) and its connection, the training calendar,
- * Claude and the calendar feed — live status and the one-tap fix.
+ * Conexiones: your watch connection (Garmin | COROS, the brand is picked inside), the training
+ * calendar, Claude and the calendar feed — one row each with its live status.
  */
 export function ConnectionsSection({ profile }: { profile: Pick<Profile, 'watchBrand'> }) {
   const integrations = useIntegrations();
@@ -31,8 +30,6 @@ export function ConnectionsSection({ profile }: { profile: Pick<Profile, 'watchB
 
   return (
     <SettingsGroup title="Conexiones">
-      <WatchBrandPicker choice={watch} />
-      <GroupDivider />
       <WatchConnectionRow brand={watch.brand} integrations={integrations.data} />
       <GroupDivider />
       <ConnectionRow icon="calendarCheck" title="Calendario" view={calendarConnectionView(calendar)} href="/settings/integrations" />

@@ -12,13 +12,13 @@ const FEED_LIMIT = 30;
 const ROW_INSET = 40 + space.md;
 
 /** "Actividad": light feed of my circle, newest first, with kudos. */
-export function FeedSection({ myId, today }: { myId: UUID | null; today: ISODate }) {
+export function FeedSection({ myId, today, hideHeader = false }: { myId: UUID | null; today: ISODate; hideHeader?: boolean }) {
   const feed = useFeed(FEED_LIMIT);
   const myName = useProfile().data?.displayName ?? null;
   const items = feed.data ?? [];
   return (
     <View style={styles.section}>
-      <SectionHeader title="Actividad" />
+      {hideHeader ? null : <SectionHeader title="Actividad" />}
       {feed.isLoading ? <Loading label="Cargando actividad" /> : null}
       {feed.error ? (
         <ErrorNotice message={errorMessage(feed.error, 'No se ha podido cargar la actividad.')} onRetry={() => void feed.refetch()} />

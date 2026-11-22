@@ -3,7 +3,8 @@
  * Each handler receives the working plan and returns a new one.
  */
 import { CARDIAC_WARNING, INJURY, INJURY_DISCLAIMER, LIFE_STRESS, OTHER_SPORT_PROFILES, SUBSTITUTION_RATIO, TRAVEL } from './constants';
-import { addDays, diffDays, formatDayMedium, timeToMinutes } from './dates';
+import { addDays, diffDays, formatDayMedium, startOfWeek, timeToMinutes } from './dates';
+import { eventRangeOn, takesTime } from './freeTime';
 import { lifeEventLoad, workoutLoad } from './load';
 import { bodyAreaLabel, lifeEventLabel, sportLabel } from './labels';
 import {
@@ -26,7 +27,11 @@ import {
   record,
   restrictionOn,
   remove,
+  amendUpdate,
+  isEditable,
   shorten,
+  untimedFits,
+  updateFor,
   withPartner,
   type ReplanCtx,
   type WorkingPlan,
@@ -53,12 +58,25 @@ function sportName(e: LifeEvent): string {
   return `«${e.title}»`;
 }
 
+/** A timed session overlapping the event's slot that day (every day of a multi-day event, default duration by kind). */
 function overlapsEvent(w: Workout, e: LifeEvent): boolean {
-  if (!w.startTime || !e.startTime || w.date !== e.startDate) return false;
+  if (!w.startTime) return false;
+  const range = eventRangeOn(e, w.date);
+  if (!range) return false;
   const ws = timeToMinutes(w.startTime);
-  const es = timeToMinutes(e.startTime);
-  const ee = es + (e.durationMin ?? 60);
-  return ws < ee && ws + w.durationMin > es;
+  return ws < range.end && ws + w.durationMin > range.start;
+}
+
+/**
+ * The session clashes with the event: a timed one overlaps its slot; an
+ * untimed one no longer has a gap long enough that day once busy blocks,
+ * timed sessions and the event (timed, or its minutes when untimed) are out.
+ */
+export function conflictsWithEvent(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, e: LifeEvent): boolean {
+  if (w.startTime) return overlapsEvent(w, e);
+  if (untimedFits(plan, ctx, w)) return false;
+  // Only this event's fault: without it the session had room that day.
+  return untimedFits(plan, { ...ctx, events: ctx.events.filter((x) => x.id !== e.id) }, w);
 }
 
 /** First preferred sport the athlete does that is allowed on `date` (swim only on pool days). */
@@ -146,15 +164,24 @@ function lockoutsOtherSport(plan: WorkingPlan, ctx: ReplanCtx, e: LifeEvent): Wo
   return p;
 }
 
+/** Load of the event's calendar week (callers may load more days than that week). */
+function eventWeekLoad(workouts: readonly Workout[], e: LifeEvent): number {
+  const from = startOfWeek(e.startDate);
+  const to = addDays(from, 6);
+  return workouts.filter((w) => w.status !== 'skipped' && w.date >= from && w.date <= to).reduce((s, w) => s + workoutLoad(w), 0);
+}
+
 function weeklyLoadCap(plan: WorkingPlan, ctx: ReplanCtx, e: LifeEvent): WorkingPlan {
-  const planned = ctx.input.weekWorkouts.filter((w) => w.status !== 'skipped').reduce((s, w) => s + workoutLoad(w), 0);
+  const planned = eventWeekLoad(ctx.input.weekWorkouts, e);
   if (planned <= 0) return plan;
   let p = plan;
-  const projected = () => p.workouts.filter((w) => w.status !== 'skipped').reduce((s, w) => s + workoutLoad(w), 0) + lifeEventLoad(e);
-  if (projected() <= 1.1 * planned) return p;
+  const projected = () => eventWeekLoad(p.workouts, e) + lifeEventLoad(e);
+  // A descarga or semana libre absorbs nothing extra.
+  const [trigger, goal] = ctx.easyWeek ? [1, 1] : [1.1, 1.05];
+  if (projected() <= trigger * planned) return p;
   const candidates = pending(p, ctx, isLowPriority).sort((a, b) => workoutLoad(b) - workoutLoad(a) || a.id.localeCompare(b.id));
   for (const w of candidates) {
-    if (projected() <= 1.05 * planned) break;
+    if (projected() <= goal * planned) break;
     p = remove(p, ctx, w, `Con ${sportName(e)} la semana ya va cargada: quito esta sesión suave`);
   }
   return p;
@@ -327,21 +354,53 @@ export function replanSocial(plan: WorkingPlan, ctx: ReplanCtx, e: LifeEvent): W
   return p;
 }
 
-/** Workouts whose time overlaps the event: new time that day, another day, or a note. */
+function resolveConflict(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, e: LifeEvent): WorkingPlan {
+  // Same day first, at a real time inside the largest free gap.
+  const sameDay = pickStartTime(plan, ctx, { ...w, startTime: null }, w.date, w.durationMin, { needTime: true });
+  if (sameDay.ok && sameDay.time) {
+    const reason = w.startTime
+      ? `Coincide con «${e.title}»: lo paso a las ${sameDay.time}`
+      : `Con «${e.title}» ese día va justo de tiempo: lo fijo a las ${sameDay.time}, que es cuando tienes hueco`;
+    return record(plan, { op: 'move', workoutId: w.id, toDate: w.date, toStartTime: sameDay.time, reason: withPartner(w, ctx, reason) });
+  }
+  if (ctx.easyWeek && !isProtected(w) && !isKeyish(w)) {
+    const dropped = remove(plan, ctx, w, `Coincide con «${e.title}» y esta semana es suave: esta sesión no hace falta recuperarla`);
+    return note(dropped, 'Semana suave (descarga, libre o de carrera): lo que no cabe no se recupera.');
+  }
+  const target = findMoveTarget(plan, ctx, w, { windowDays: 3, allowSwap: !isProtected(w) });
+  if (target) return moveTo(plan, ctx, w, target, `Coincide con «${e.title}»: lo muevo al ${formatDayMedium(target.date)}`);
+  return note(plan, `«${w.title}» coincide con «${e.title}» y no veo otro hueco: cámbialo de hora si puedes.`);
+}
+
+/**
+ * Sessions on the event's days that clash with it (timed overlap, or no room
+ * left for an untimed one): a real time that day, another day, or a note.
+ * Easy sessions give way before protected ones.
+ */
 export function resolveTimeConflicts(plan: WorkingPlan, ctx: ReplanCtx, e: LifeEvent): WorkingPlan {
-  if (!e.startTime || !e.durationMin) return plan;
+  if (!takesTime(e)) return plan;
+  const days = eventDates(e, ctx);
+  // Untouched sessions, and those only shortened or made easy (a shorter session may still not fit).
+  const open = (p: WorkingPlan, id: string) => !p.touched.has(id) || updateFor(p, id) !== null;
+  const candidates = plan.workouts
+    .filter((x) => isEditable(x, ctx) && days.includes(x.date) && open(plan, x.id))
+    .sort((a, b) => Number(isProtected(a)) - Number(isProtected(b)) || a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   let p = plan;
-  for (const w of pending(p, ctx, (x) => overlapsEvent(x, e))) {
-    const sameDay = pickStartTime(p, ctx, { ...w, startTime: null }, w.date, w.durationMin);
-    if (sameDay.ok && sameDay.time) {
-      p = record(p, { op: 'move', workoutId: w.id, toDate: w.date, toStartTime: sameDay.time, reason: withPartner(w, ctx, `Coincide con «${e.title}»: lo paso a las ${sameDay.time}`) });
-      continue;
-    }
-    const target = findMoveTarget(p, ctx, w, { windowDays: 3, allowSwap: !isProtected(w) });
-    if (target) p = moveTo(p, ctx, w, target, `Coincide con «${e.title}»: lo muevo al ${formatDayMedium(target.date)}`);
-    else p = note(p, `«${w.title}» coincide con «${e.title}» y no veo otro hueco: cámbialo de hora si puedes.`);
+  for (const candidate of candidates) {
+    const w = open(p, candidate.id) ? p.workouts.find((x) => x.id === candidate.id) : undefined;
+    if (!w || !days.includes(w.date) || !conflictsWithEvent(p, ctx, w, e)) continue;
+    p = updateFor(p, w.id) ? resolveUpdatedConflict(p, ctx, w, e) : resolveConflict(p, ctx, w, e);
   }
   return p;
+}
+
+/** A session already adjusted for the event that still clashes: the same change also gets a time or a day. */
+function resolveUpdatedConflict(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, e: LifeEvent): WorkingPlan {
+  const sameDay = pickStartTime(plan, ctx, { ...w, startTime: null }, w.date, w.durationMin, { needTime: true });
+  if (sameDay.ok && sameDay.time) return amendUpdate(plan, w.id, { startTime: sameDay.time }, `con «${e.title}» la paso a las ${sameDay.time}`);
+  const target = findMoveTarget(plan, ctx, w, { windowDays: 3, allowSwap: false });
+  if (target) return amendUpdate(plan, w.id, { date: target.date, startTime: target.time }, `con «${e.title}» ese día no cabe, así que va al ${formatDayMedium(target.date)}`);
+  return note(plan, `«${w.title}» coincide con «${e.title}» y no veo otro hueco: cámbialo de hora si puedes.`);
 }
 
 /** Hard days of the remaining week (for tests and summaries). */

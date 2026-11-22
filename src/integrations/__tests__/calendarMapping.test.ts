@@ -39,13 +39,27 @@ describe('mapEventsToBusyBlocks', () => {
     expect(Object.keys(blocks[0] ?? {})).not.toContain('notes');
   });
 
-  test('skips all-day, free and cancelled events', () => {
-    expect(isBlockingEvent(event({ allDay: true }))).toBe(false);
+  test('skips free, cancelled and all-day events not marked busy', () => {
+    expect(isBlockingEvent(event({ allDay: true, availability: 'free' }))).toBe(false);
+    expect(isBlockingEvent(event({ allDay: true, availability: null }))).toBe(false);
+    expect(isBlockingEvent(event({ allDay: true, availability: 'busy', status: 'canceled' }))).toBe(false);
     expect(isBlockingEvent(event({ availability: 'free' }))).toBe(false);
     expect(isBlockingEvent(event({ status: 'canceled' }))).toBe(false);
     expect(isBlockingEvent(event({ availability: 'tentative' }))).toBe(true);
-    const blocks = mapEventsToBusyBlocks([event({ allDay: true }), event({ id: 'b', availability: 'free' })], WINDOW);
+    const blocks = mapEventsToBusyBlocks([event({ allDay: true, availability: 'free' }), event({ id: 'b', availability: 'free' })], WINDOW);
     expect(blocks).toEqual([]);
+  });
+
+  test('a busy all-day event (vacation, trip) blocks each whole day inside the window', () => {
+    expect(isBlockingEvent(event({ allDay: true, availability: 'busy' }))).toBe(true);
+    expect(isBlockingEvent(event({ allDay: true, availability: 'unavailable' }))).toBe(true);
+    const trip = event({ id: 'trip', title: 'Viaje', allDay: true, startDate: new Date(2026, 9, 28, 0, 0), endDate: new Date(2026, 9, 29, 23, 59, 59) });
+    const blocks = mapEventsToBusyBlocks([trip], WINDOW);
+    expect(blocks.map((b) => [b.start, b.end])).toEqual([
+      [new Date(2026, 9, 28).toISOString(), new Date(2026, 9, 29).toISOString()],
+      [new Date(2026, 9, 29).toISOString(), new Date(2026, 9, 30).toISOString()],
+    ]);
+    expect(blocks.every((b) => b.externalId === 'trip' && b.source === 'device_calendar')).toBe(true);
   });
 
   test('clamps long events to 24 h and clips them to the window', () => {

@@ -3,18 +3,22 @@
  * human "before → after" rows (with what each new or rewritten session asks:
  * objective, targets and steps) and previews the week totals in memory.
  */
-import { applyPlanChanges, describeChange } from '@/domain/changes';
-import { formatDayShort, formatDistance, formatDuration, formatTime } from '@/domain/dates';
+import { applyPlanChanges, describeChange, normalizeCoaching } from '@/domain/changes';
+import { addDays, formatDayShort, formatDistance, formatDuration, formatTime } from '@/domain/dates';
 import { intensityLabel, sportLabel } from '@/domain/labels';
 import { weekSummary } from '@/domain/load';
 import type {
+  DateRange,
   ISODate,
   Intensity,
   ISOTime,
   PlanChange,
+  PlanProposal,
+  ProposalStatus,
   Sport,
   UUID,
   Workout,
+  WorkoutCoaching,
   WorkoutDraft,
 } from '@/domain/types';
 
@@ -46,6 +50,36 @@ export interface DiffRow {
   description: string;
   /** What the new (or rewritten) session asks: added sessions and updates of steps/coaching. */
   session: SessionPreview | null;
+  /**
+   * The one calm line of the row: "mar 24 · 1h 20' → 45' · Umbral Z4 → Fondo Z2"
+   * (day, and only what changed among day/time, duration and intensity).
+   */
+  summary: string | null;
+  /** Changed fields not in the summary (notes, structure, sport…): shown only under "Ver detalles". */
+  details: FieldDiff[];
+}
+
+/** Fields the summary line already tells. */
+const SUMMARY_LABELS: ReadonlySet<string> = new Set(['Día', 'Hora', 'Duración', 'Intensidad']);
+
+function arrow(before: string, after: string): string {
+  return `${before} → ${after}`;
+}
+
+/** "mar 24 · 18:30 → 07:00 · 1h 20' → 45' · Umbral Z4 → Fondo Z2" from the update's changed fields. */
+function updateSummary(target: Workout, fields: readonly FieldDiff[]): string {
+  const of = (label: string) => fields.find((f) => f.label === label);
+  const day = of('Día');
+  const time = of('Hora');
+  const parts = [
+    day ? arrow(day.before, day.after) : formatDayShort(target.date),
+    time ? arrow(time.before, time.after) : null,
+    ...['Duración', 'Intensidad'].map((label) => {
+      const f = of(label);
+      return f ? arrow(f.before, f.after) : null;
+    }),
+  ];
+  return parts.filter(Boolean).join(' · ');
 }
 
 const OP_LABEL: Record<DiffOp, string> = { add: 'Añadir', delete: 'Quitar', move: 'Mover', update: 'Ajustar' };
@@ -114,7 +148,6 @@ const FIELD_SPECS: readonly FieldSpec[] = [
     label: 'Distancia',
     show: (t, p) => [distanceText(t.distanceM, t.sport), distanceText(p.distanceM, p.sport ?? t.sport)],
   },
-  { key: 'tss', label: 'Carga', show: (t, p) => [t.tss != null ? `${t.tss}` : '—', p.tss != null ? `${p.tss}` : '—'] },
   { key: 'isKey', label: 'Sesión clave', show: (t, p) => [t.isKey ? 'Sí' : 'No', p.isKey ? 'Sí' : 'No'] },
   { key: 'description', label: 'Notas', show: (t, p) => [notesText(t.description), notesText(p.description)] },
   { key: 'steps', label: 'Estructura', show: (t, p) => [structureText(t), structureText(patchedSession(t, p))] },
@@ -171,6 +204,8 @@ function addRow(change: Extract<PlanChange, { op: 'add' }>, index: number, ctx: 
     warnings: [],
     missing: false,
     session: sessionPreview(w, ctx.prescription),
+    summary: workoutLine(w),
+    details: [],
   };
 }
 
@@ -190,25 +225,26 @@ function rowFor(change: PlanChange, index: number, ctx: RowContext): DiffRow {
     session: null,
   };
   if (change.op === 'delete') {
-    return { ...common, before: target ? workoutLine(target) : null, after: 'Se quita del plan', fields: [] };
+    const line = target ? workoutLine(target) : null;
+    return { ...common, before: line, after: 'Se quita del plan', fields: [], summary: line, details: [] };
   }
   if (change.op === 'move') {
     const toTime = change.toStartTime === undefined ? (target?.startTime ?? null) : change.toStartTime;
-    return {
-      ...common,
-      before: target ? when(target.date, target.startTime) : null,
-      after: when(change.toDate, toTime),
-      fields: [],
-    };
+    const before = target ? when(target.date, target.startTime) : null;
+    const after = when(change.toDate, toTime);
+    return { ...common, before, after, fields: [], summary: before ? arrow(before, after) : after, details: [] };
   }
   const rewritten = target && rewritesSession(change.patch) ? sessionPreview(patchedSession(target, change.patch), ctx.prescription) : null;
+  const fields = target ? updateFieldDiffs(target, change.patch) : [];
   return {
     ...common,
     sport: change.patch.sport ?? common.sport,
     before: null,
     after: null,
-    fields: target ? updateFieldDiffs(target, change.patch) : [],
+    fields,
     session: rewritten,
+    summary: target ? updateSummary(target, fields) : null,
+    details: fields.filter((f) => !SUMMARY_LABELS.has(f.label)),
   };
 }
 
@@ -224,6 +260,83 @@ export function buildDiffRows(
 ): DiffRow[] {
   const ctx: RowContext = { workouts, jointNames, prescription };
   return changes.map((change, index) => rowFor(change, index, ctx));
+}
+
+/** Days a proposal's changes may touch from its `weekStart` (Claude and the rules engine use 14). */
+export const PROPOSAL_SPAN_DAYS = 14;
+/** Extra days loaded before the first date: a change may move a session from last week (a missed one). */
+const SPAN_LOOKBACK_DAYS = 7;
+
+function changeDates(change: PlanChange): ISODate[] {
+  if (change.op === 'add') return [change.workout.date];
+  if (change.op === 'move') return [change.toDate];
+  if (change.op === 'update' && change.patch.date) return [change.patch.date];
+  return [];
+}
+
+/**
+ * Dates to load to review a proposal: at least the 14 days from its
+ * `weekStart`, widened to every date its changes name, plus a week before so
+ * the sessions they move (often in an earlier week) are found.
+ */
+export function proposalSpan(proposal: Pick<PlanProposal, 'weekStart' | 'changes'>): DateRange {
+  const dates = proposal.changes.flatMap(changeDates).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+  const first = dates.reduce((min, d) => (d < min ? d : min), proposal.weekStart);
+  const last = dates.reduce((max, d) => (d > max ? d : max), addDays(proposal.weekStart, PROPOSAL_SPAN_DAYS - 1));
+  return { from: addDays(first, -SPAN_LOOKBACK_DAYS), to: last };
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+/**
+ * Whether a change of a partially applied proposal is already reflected in
+ * the athlete's workouts (so a retry only offers the rest). Deletes count as
+ * done when the session is gone; moves when it sits on the new day/time;
+ * updates when every patched field already has its value; adds when a planned
+ * session with the same day, sport, title and duration exists.
+ */
+export function isChangeApplied(change: PlanChange, workouts: readonly Workout[]): boolean {
+  if (change.op === 'add') {
+    const w = change.workout;
+    return workouts.some(
+      (x) => x.date === w.date && x.sport === w.sport && x.title.trim() === w.title.trim() && x.durationMin === Math.round(w.durationMin),
+    );
+  }
+  const target = workouts.find((w) => w.id === change.workoutId);
+  if (change.op === 'delete') return !target;
+  if (!target) return false;
+  if (change.op === 'move') {
+    return target.date === change.toDate && (change.toStartTime === undefined || target.startTime === change.toStartTime);
+  }
+  return Object.entries(change.patch).every(([key, value]) => {
+    if (value === undefined || key === 'source') return true;
+    if (key === 'title' && typeof value === 'string') return target.title === value.trim();
+    if (key === 'coaching') return sameValue(target.coaching, value === null ? null : normalizeCoaching(value as WorkoutCoaching));
+    if (key === 'durationMin' && typeof value === 'number') return target.durationMin === Math.round(value);
+    return sameValue(target[key as keyof Workout], value);
+  });
+}
+
+/**
+ * Status to store after applying the selected `indexes`, or null when the
+ * apply RPC already left it right: a retry that applies everything still
+ * missing closes a partially applied proposal; anything left out (or
+ * failing) keeps it partially applied so it can be retried.
+ */
+export function statusAfterApply(input: {
+  status: ProposalStatus;
+  alreadyApplied: readonly boolean[];
+  indexes: readonly number[];
+  applied: number;
+  failedCount: number;
+}): ProposalStatus | null {
+  if (input.applied === 0) return null;
+  const missing = input.alreadyApplied.flatMap((done, i) => (done ? [] : [i]));
+  const complete = input.failedCount === 0 && missing.every((i) => input.indexes.includes(i));
+  if (complete) return input.status === 'partially_applied' ? 'applied' : null;
+  return 'partially_applied';
 }
 
 /** Indexes (into the original list) of the selected changes. */
@@ -275,6 +388,8 @@ export function previewTotals(input: {
     userId: input.userId,
     now: new Date().toISOString(),
     newId: () => `preview-${(seq += 1)}`,
+    // The server refuses dates in the past: the preview predicts it.
+    today: input.today,
   });
   return {
     before: totals(input.workouts, input.weekStart, input.today),

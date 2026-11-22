@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+
+import { resetDisclosureState } from '@/ui/disclosureState';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import WorkoutDetailScreen from '@/app/workout/[id]';
@@ -90,6 +92,7 @@ function series(overrides: Partial<Workout> = {}): Workout {
 }
 
 beforeEach(() => {
+  resetDisclosureState();
   jest.clearAllMocks();
   mockRouter.canGoBack.mockReturnValue(true);
   mockAuth = { session: { userId: ME, email: null }, isLoading: false };
@@ -155,9 +158,10 @@ describe('workout detail · the coach’s prescription', () => {
     expect(screen.getByText('Estructura')).toBeTruthy();
     expect(screen.getByLabelText("3×8' Series. Zona Z4. 162–168 ppm, 4:27–4:44 /km, RPE 7–8. Fuerte pero controlado.")).toBeTruthy();
     expect(screen.getByLabelText(/^15' Calentamiento\. Zona Z1\. 128–143 ppm/)).toBeTruthy();
+    expect(screen.getByText('Si no es tu día')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: /^Si no es tu día/ }));
     expect(screen.getByText('Lo has hecho bien si…')).toBeTruthy();
     expect(screen.getByText('Terminas la última serie con una más en las piernas')).toBeTruthy();
-    expect(screen.getByText('Si no es tu día')).toBeTruthy();
     expect(screen.getByText("Rodaje suave de 40'")).toBeTruthy();
     expect(screen.queryByLabelText(HR_HINT_TEXT)).toBeNull();
   });
@@ -168,6 +172,7 @@ describe('workout detail · the coach’s prescription', () => {
     mockEasierPatch.mockReturnValue(EASIER);
     await render(<WorkoutDetailScreen />);
     expect(mockEasierPatch).toHaveBeenCalledWith(workout, mockThresholds);
+    await fireEvent.press(screen.getByRole('button', { name: /^Si no es tu día/ }));
     await fireEvent.press(screen.getByRole('button', { name: 'Hacer la versión suave' }));
     expect(mockActions.easier).toHaveBeenCalledWith(workout, EASIER);
   });
@@ -233,6 +238,6 @@ describe('workout detail · completed', () => {
       screen.getByLabelText('Tu coach. Umbral bien llevado. FC media dentro de lo previsto. Mañana, rodaje suave para asimilarlo.'),
     ).toBeTruthy();
     expect(screen.queryByText('Si no es tu día')).toBeNull();
-    expect(screen.getByText('Lo has hecho bien si…')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Lo has hecho bien si…/ })).toBeTruthy();
   });
 });

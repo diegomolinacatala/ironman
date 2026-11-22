@@ -245,6 +245,7 @@ function randomInput(seed: number): PlannerInput {
     level: pick(r, ['beginner', 'intermediate', 'advanced'] as const),
     sports: pick(r, [['swim', 'bike', 'run'], ['swim', 'bike', 'run', 'strength'], ['run', 'strength'], ['bike', 'run']] as const).slice(),
     availability: {
+      mode: 'manual',
       weeklyHoursTarget: 3 + Math.floor(r() * 13),
       restDay: r() < 0.8 ? (Math.floor(r() * 7) as 0) : null,
       longSessionDays: r() < 0.9 ? [5, 6] : [6],

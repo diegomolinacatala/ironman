@@ -70,7 +70,7 @@ function RootNavigator() {
         <Stack.Screen name="notifications" options={{ ...header, title: 'Avisos' }} />
 
         <Stack.Screen name="settings/profile" options={{ ...header, title: 'Perfil' }} />
-        <Stack.Screen name="settings/availability" options={{ ...header, title: 'Disponibilidad' }} />
+        <Stack.Screen name="settings/availability" options={{ ...header, title: 'Tus horarios' }} />
         <Stack.Screen name="settings/notifications" options={{ ...header, title: 'Notificaciones' }} />
         <Stack.Screen name="settings/voice" options={{ ...header, title: 'Voz del coach' }} />
         <Stack.Screen name="settings/integrations" options={{ ...header, title: 'Conexiones' }} />

@@ -617,6 +617,20 @@ The product contract is `docs/V2.md`; this section lists what changed in the arc
   `coach`, `briefing` and `meal` functions use **Cloudflare Workers AI** through `cloudflare/ai` (see V2 §3,
   *AI provider*; the worker also serves `POST /v1/speech`, neural text-to-speech for the coach voice). `_shared/ai/provider.ts` picks Workers AI → Claude (optional) → none; the Workers port
   (`_shared/platform/workers-ai.ts`) implements the same `ClaudePort`. Consent copy names Cloudflare.
+- **Coach chat reliability (2026-11-22):** chat uses the `concise` context; the model sees short workout ids
+  (`w1`, `w2`… — `_shared/coach/short-ids.ts`, mapped back to UUIDs, unknown ids loosely matched by
+  title/sport/date) and answers a short change shape (10 keys, structure + prescription in one nullable
+  `prescription`; a missing prescription of a new session is filled from the athlete's zones,
+  `coach/defaults.ts`). A message asking to change the plan (`coach/intent.ts`: "mueve…", "quita…",
+  "hoy no puedo", "tengo pádel el jueves"…) makes changes mandatory and turns thinking on (effort
+  `medium`). Each Workers call has its own timeout (`timeoutMs`); ONE repair re-prompt runs when the
+  answer is cut, not JSON, every change was dropped or a requested change is missing; a reply never
+  claims changes that are not in the proposal. The worker falls back to the reasoning text when
+  thinking leaves `content` empty. App: a failed job's notice says why (`failureNotice`); the rules
+  fallback understands the same edit intents (`src/data/demo/coachEdits.ts` → move / delete / easy
+  update / `replanMissed` / `replanForEvent`); the history sent to the coach summarises each turn's
+  proposal and whether it was applied, discarded or is pending; today's conversation is kept on the
+  device (`features/talk/talkStorage.ts`, last 20 turns, cleared by "Nueva conversación").
 - **New tables/columns:** `briefings` (select-own, server writes), `daily_metrics.sleep_*` (stages,
   start/end), `coach_jobs.extras` (`memory`, `lifeEventId`). Coach memory lines are appended to
   `profiles.coach_notes`; an imprevisto the coach detects is inserted into `life_events`.

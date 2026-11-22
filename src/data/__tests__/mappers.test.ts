@@ -64,6 +64,7 @@ const profile: Profile = {
   level: 'intermediate',
   thresholds: { ftpW: 245, lthr: 172 },
   availability: {
+    mode: 'manual',
     weeklyHoursTarget: 10,
     restDay: 0,
     longSessionDays: [5, 6],
@@ -296,10 +297,14 @@ describe('row narrowing', () => {
 
   it('defaults availability and drops invalid windows/steps', () => {
     expect(parseAvailability(null)).toEqual(DEFAULT_AVAILABILITY);
-    const parsed = parseAvailability({ weeklyHoursTarget: '9', restDay: null, windows: [{ weekday: 9, start: '07:00', end: '08:00' }, { weekday: 2, start: '07:00:00', end: '08:00' }] });
+    const parsed = parseAvailability({ mode: 'manual', weeklyHoursTarget: '9', restDay: null, windows: [{ weekday: 9, start: '07:00', end: '08:00' }, { weekday: 2, start: '07:00:00', end: '08:00' }] });
     expect(parsed.weeklyHoursTarget).toBe(9);
     expect(parsed.restDay).toBeNull();
     expect(parsed.windows).toEqual([{ weekday: 2, start: '07:00', end: '08:00' }]);
+    // No mode (stored before it existed) = automatic: no fixed rest day and no windows, the calendar decides.
+    const legacy = parseAvailability({ weeklyHoursTarget: 8, restDay: 0, windows: [{ weekday: 2, start: '07:00', end: '08:00' }], poolDays: [1] });
+    expect(legacy).toEqual({ mode: 'auto', weeklyHoursTarget: 8, restDay: null, longSessionDays: [5, 6], windows: [], poolDays: [1] });
+    expect(DEFAULT_AVAILABILITY.mode).toBe('auto');
     expect(parseSteps([{ kind: 'nope' }, { kind: 'warmup', durationMin: 10 }])).toEqual([{ kind: 'warmup', durationMin: 10 }]);
   });
 

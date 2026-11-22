@@ -1,8 +1,9 @@
 /**
- * Pure helpers for the weekly availability editor (onboarding step 3 and
- * settings/availability). No React imports: unit-tested.
+ * Pure helpers for settings/availability: the automatic/manual switch and the
+ * manual editor ("Ajustes avanzados"). No React imports: unit-tested.
  */
-import type { Availability, ISOTime, TrainingWindow, Weekday } from '@/domain/types';
+import { planningAvailability } from '@/domain/availability';
+import type { Availability, AvailabilityMode, ISOTime, TrainingWindow, Weekday } from '@/domain/types';
 
 export const WEEKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 
@@ -25,9 +26,11 @@ export const MIN_WEEKLY_HOURS = 2;
 export const MAX_WEEKLY_HOURS = 25;
 export const WEEKLY_HOURS_STEP = 0.5;
 
+/** Automatic by default: the calendar decides; hours, rest day and windows only matter in manual mode. */
 export const DEFAULT_AVAILABILITY: Availability = {
+  mode: 'auto',
   weeklyHoursTarget: 8,
-  restDay: 0,
+  restDay: null,
   longSessionDays: [5, 6],
   windows: [],
   poolDays: [],
@@ -100,6 +103,7 @@ export function formatHours(hours: number): string {
 /** Normalises a possibly partial availability coming from the backend. */
 export function normalizeAvailability(value: Partial<Availability> | null | undefined): Availability {
   return {
+    mode: value?.mode === 'manual' ? 'manual' : 'auto',
     weeklyHoursTarget: value?.weeklyHoursTarget ?? DEFAULT_AVAILABILITY.weeklyHoursTarget,
     restDay: value?.restDay === undefined ? DEFAULT_AVAILABILITY.restDay : value.restDay,
     longSessionDays: value?.longSessionDays ?? DEFAULT_AVAILABILITY.longSessionDays,
@@ -115,4 +119,22 @@ export function setRestDay(value: Availability, restDay: Weekday | null): Availa
     restDay,
     longSessionDays: restDay === null ? value.longSessionDays : value.longSessionDays.filter((d) => d !== restDay),
   };
+}
+
+/** Manual hours within the editor's range, in half hours. */
+export function clampWeeklyHours(hours: number): number {
+  if (!Number.isFinite(hours)) return DEFAULT_AVAILABILITY.weeklyHoursTarget;
+  const rounded = Math.round(hours / WEEKLY_HOURS_STEP) * WEEKLY_HOURS_STEP;
+  return Math.min(MAX_WEEKLY_HOURS, Math.max(MIN_WEEKLY_HOURS, rounded));
+}
+
+/**
+ * Switches the mode. To manual, the hours start from what automatic would aim
+ * for (`suggestedHours`) so nothing drops by surprise; to automatic, no fixed
+ * rest day and no windows (the calendar decides).
+ */
+export function setAvailabilityMode(value: Availability, mode: AvailabilityMode, suggestedHours?: number | null): Availability {
+  if (mode === 'auto') return planningAvailability({ ...value, mode: 'auto' });
+  const hours = typeof suggestedHours === 'number' ? clampWeeklyHours(suggestedHours) : value.weeklyHoursTarget;
+  return { ...value, mode: 'manual', weeklyHoursTarget: hours };
 }

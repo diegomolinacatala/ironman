@@ -1,5 +1,5 @@
 /** Pure helpers for the v2 Hoy screen: greeting, date line, meals, session structure and refresh source. Unit-tested. */
-import { formatDayLong } from '@/domain/dates';
+import { diffDays, formatDayLong, formatDuration } from '@/domain/dates';
 import type { ISODate, NutritionLog, WatchBrand, Workout } from '@/domain/types';
 import { stepLabel } from '@/features/workouts/steps';
 
@@ -116,4 +116,36 @@ export interface RefreshSyncInput {
 export function refreshSyncFor({ watchBrand, garminConnected, healthReady }: RefreshSyncInput): RefreshSync {
   if (watchBrand === 'coros') return healthReady ? 'health' : null;
   return garminConnected ? 'garmin' : null;
+}
+
+// ---------------------------------------------------------------------------
+// One-line summaries of the folded sections (Hoy keeps them closed by default)
+// ---------------------------------------------------------------------------
+
+/** "520 kcal · 1 comida", or a nudge when nothing is logged yet. */
+export function mealsSummary(meals: readonly NutritionLog[]): string {
+  if (meals.length === 0) return 'Haz una foto y te calculo kcal e hidratos';
+  const totals = mealTotals(meals);
+  const count = meals.length === 1 ? '1 comida' : `${meals.length} comidas`;
+  return totals.kcal != null ? `${formatThousands(totals.kcal)} kcal · ${count}` : count;
+}
+
+/** "Descanso", "Bici larga Z2 · 2h 30'" or "2 sesiones · 2h 10'". */
+export function tomorrowSummary(workouts: readonly Workout[]): string {
+  const training = workouts.filter((w) => w.sport !== 'rest');
+  if (training.length === 0) return 'Descanso';
+  const minutes = training.reduce((sum, w) => sum + (w.durationMin ?? 0), 0);
+  if (training.length === 1) return `${training[0]?.title ?? 'Entreno'} · ${formatDuration(minutes)}`;
+  return `${training.length} sesiones · ${formatDuration(minutes)}`;
+}
+
+/** "Faltan 168 días para Triatlón de Valencia" (null without a race). */
+export function raceCountdownLine(race: { name: string; date: ISODate } | null, today: ISODate): string | null {
+  if (!race) return null;
+  // "Triatlón de Valencia · Media distancia" → "Triatlón de Valencia": one calm line.
+  const name = race.name.split(' · ')[0]?.trim() || race.name;
+  const days = Math.max(0, diffDays(race.date, today));
+  if (days === 0) return `Hoy es ${name}`;
+  if (days === 1) return `Mañana es ${name}`;
+  return `Faltan ${days} días para ${name}`;
 }

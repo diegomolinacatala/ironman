@@ -7,7 +7,8 @@ import type { RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { timeRangeLabel, workoutA11yLabel } from '@/features/workouts/format';
 import { IntensityTag } from '@/features/workouts/IntensityTag';
 import { JuntosTag, KeyTag } from '@/features/workouts/Tags';
-import { Button, Card, Icon, IconButton, SportBadge, Text, radius, space, useTheme } from '@/ui';
+import { Button, Card, Icon, IconButton, SportBadge, Text, haptics, radius, space, useTheme } from '@/ui';
+import { useDisclosureOpen } from '@/ui/disclosureState';
 
 import { structureSummary } from './todayModel';
 
@@ -61,6 +62,29 @@ function TargetWell({ target, feel }: { target: string; feel: string }) {
   );
 }
 
+/** "Objetivo y estructura" fold: the card stays short until the athlete wants the details. */
+function DetailsToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      onPress={() => {
+        haptics.tap();
+        onToggle();
+      }}
+      hitSlop={8}
+      style={({ pressed }) => [styles.toggle, pressed && { opacity: 0.6 }]}>
+      <Text variant="callout" color="accentInk">
+        {open ? 'Ocultar detalles' : 'Objetivo, ritmos y estructura'}
+      </Text>
+      <View style={open ? styles.flip : undefined}>
+        <Icon name="chevronDown" size={12} color={colors.accentInk} />
+      </View>
+    </Pressable>
+  );
+}
+
 /**
  * Today's next session — the one primary action on Hoy ("Hecho"). Raised card with the sport
  * rail; time, duration, the coach's objective, the target line, how it should feel and the
@@ -83,6 +107,8 @@ export function TodaySession({
   const target = targetSummary(workout, thresholds, { raceDistance });
   const feel = target ? sessionFeel(workout, thresholds, { raceDistance }) : '';
   const structure = structureSummary(workout);
+  const [detailsOpen, setDetailsOpen] = useDisclosureOpen('today.sessionDetails', false);
+  const hasDetails = Boolean(lead || target || structure);
   const a11y = [`Tu entreno de hoy: ${workoutA11yLabel(workout, { partnerName })}`, inCalendar ? 'en tu calendario' : '', lead ?? '', target ?? '']
     .filter(Boolean)
     .join('. ');
@@ -108,24 +134,25 @@ export function TodaySession({
         <Text variant="heading" numberOfLines={2}>
           {workout.title}
         </Text>
-        {lead ? (
-          <Text variant="callout" numberOfLines={2}>
-            {lead}
-          </Text>
-        ) : null}
-        {target ? <TargetWell target={target} feel={feel} /> : null}
-        {structure ? (
-          <Text variant="caption" color="textMuted" numberOfLines={2}>
-            {structure}
-          </Text>
-        ) : null}
-        <View style={styles.tags}>
-          <IntensityTag intensity={workout.intensity} />
-          {workout.isKey ? <KeyTag /> : null}
-          {partnerName ? <JuntosTag name={partnerName} /> : null}
-          {inCalendar ? <CalendarBadge /> : null}
-        </View>
       </Pressable>
+      {hasDetails ? <DetailsToggle open={detailsOpen} onToggle={() => setDetailsOpen(!detailsOpen)} /> : null}
+      {detailsOpen && hasDetails ? (
+        <View style={styles.body}>
+          {lead ? <Text variant="callout">{lead}</Text> : null}
+          {target ? <TargetWell target={target} feel={feel} /> : null}
+          {structure ? (
+            <Text variant="caption" color="textMuted">
+              {structure}
+            </Text>
+          ) : null}
+          <View style={styles.tags}>
+            <IntensityTag intensity={workout.intensity} />
+            {workout.isKey ? <KeyTag /> : null}
+            {partnerName ? <JuntosTag name={partnerName} /> : null}
+            {inCalendar ? <CalendarBadge /> : null}
+          </View>
+        </View>
+      ) : null}
       <View style={styles.actions}>
         <Button label="Hecho" icon="check" onPress={onComplete} disabled={busy} style={styles.flex} />
         <IconButton
@@ -142,7 +169,9 @@ export function TodaySession({
 }
 
 const styles = StyleSheet.create({
-  card: { gap: space.lg },
+  card: { gap: space.md },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs, alignSelf: 'flex-start', minHeight: 32 },
+  flip: { transform: [{ rotate: '180deg' }] },
   body: { gap: space.sm },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   flex: { flex: 1 },

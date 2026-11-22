@@ -37,7 +37,8 @@ export interface SeasonInputs {
   today: ISODate;
   races: readonly Race[];
   level?: string | null;
-  weeklyHoursTarget: number;
+  /** Manual weekly hours; null = automatic availability (level × race distance). */
+  weeklyHoursTarget: number | null;
   weekPlans: readonly WeekPlan[];
   /** Weeks without a target race (default 8). */
   horizonWeeks?: number;
@@ -49,7 +50,7 @@ export function seasonOf(input: SeasonInputs): SeasonOverview {
     today: input.today,
     races: input.races,
     level: athleteLevel(input.level),
-    weeklyHoursTarget: input.weeklyHoursTarget > 0 ? input.weeklyHoursTarget : 0,
+    weeklyHoursTarget: input.weeklyHoursTarget === null ? null : input.weeklyHoursTarget > 0 ? input.weeklyHoursTarget : 0,
     weekPlans: input.weekPlans,
     horizonWeeks: input.horizonWeeks,
   });

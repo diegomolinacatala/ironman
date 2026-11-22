@@ -202,7 +202,8 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
     },
     async listBusyBlocks(userId, fromIso, toIso) {
       const rows = rowsOf(
-        await db.from('busy_blocks').select('id,starts_at,ends_at,title').eq('user_id', userId).gte('starts_at', fromIso).lt('starts_at', toIso).order('starts_at').limit(500),
+        // Overlap, not "starts inside": a block that began before the range still occupies it.
+        await db.from('busy_blocks').select('id,starts_at,ends_at,title').eq('user_id', userId).lt('starts_at', toIso).gt('ends_at', fromIso).order('starts_at').limit(500),
         'busy blocks',
       );
       return rows.map(mapBusyBlock);
@@ -247,7 +248,8 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
             week_start: draft.weekStart,
             summary: draft.summary.slice(0, 4000),
             changes: draft.changes,
-            status: 'pending',
+            // 'applied' (apply_now) is not notified by the insert trigger (20261122000400).
+            status: draft.status ?? 'pending',
             model: draft.model,
           })
           .select('id')
@@ -255,6 +257,9 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
         'insert proposal',
       );
       return String(asRow(data).id);
+    },
+    async setProposalStatus(userId, proposalId, status) {
+      unwrap(await db.from('plan_proposals').update({ status }).eq('id', proposalId).eq('user_id', userId), 'proposal status');
     },
     async applyPlanChanges(userId, changes, proposalId) {
       const data = asRow(

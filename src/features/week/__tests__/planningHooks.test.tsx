@@ -45,6 +45,7 @@ jest.mock('@/data/queries', () => {
     useJointSessions: () => ok([]),
     useRaces: () => ok(mockRaces),
     useProfile: () => ok(mockProfile),
+    useWeekPlans: () => ok([]),
   };
 });
 

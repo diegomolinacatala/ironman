@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { ActionSheetIOS } from 'react-native';
 
 import WeekScreen from '@/app/(tabs)/week';
 import { addDays, startOfWeek, todayISO } from '@/domain/dates';
@@ -79,9 +80,7 @@ describe('Semana', () => {
     expect(screen.getByText('Semana en blanco')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Planificar semana' }));
     expect(mockPlan).toHaveBeenCalledWith(startOfWeek(todayISO()), mockData);
-    // AI coach off by default (EXPO_PUBLIC_AI_COACH): the button is the plain rules coach.
-    await fireEvent.press(screen.getByRole('button', { name: 'Coach IA' }));
-    expect(mockRouter.push).toHaveBeenCalledWith(`/coach?mode=plan_week&weekStart=${startOfWeek(todayISO())}`);
+    expect(screen.getByRole('button', { name: 'Añadir' })).toBeTruthy();
   });
 
   test('lists sessions and imprevistos per day with totals', async () => {
@@ -95,6 +94,8 @@ describe('Semana', () => {
     });
     await render(<WeekScreen />);
     expect(screen.getByText('Bici Z2')).toBeTruthy();
+    expect(screen.queryByText('Horas hechas / plan')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: /^Resumen de la semana/ }));
     expect(screen.getByText('Horas hechas / plan')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Pádel con el curro' }));
     expect(mockRouter.push).toHaveBeenCalledWith(`/event/edit?id=e-today&date=${today}`);
@@ -104,16 +105,22 @@ describe('Semana', () => {
     const today = todayISO();
     mockData = data({ workouts: [makeWorkout({ id: 'w-1', date: today })], summary: { ...emptySummary, sessions: 1 } });
     await render(<WeekScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Añadir imprevisto' }));
+    let pick = 'Imprevisto (pádel, viaje, lesión…)';
+    const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation((options, callback) => {
+      callback((options.options as string[]).indexOf(pick));
+    });
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir' }));
     expect(mockRouter.push).toHaveBeenCalledWith(`/event/edit?date=${today}`);
-    await fireEvent.press(screen.getByRole('button', { name: 'Añadir entreno' }));
+    pick = 'Entreno';
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir' }));
     expect(mockRouter.push).toHaveBeenCalledWith(`/workout/edit?date=${today}`);
+    sheet.mockRestore();
   });
 
   test('empty week still offers adding an imprevisto', async () => {
     mockData = data();
     await render(<WeekScreen />);
-    expect(screen.getByRole('button', { name: 'Añadir imprevisto' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Añadir' })).toBeTruthy();
   });
 
   test('today is highlighted and headed in sentence case', async () => {
@@ -142,6 +149,21 @@ describe('Semana', () => {
     expect(screen.getByText('Ajustada')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: /Ajustada/ }));
     expect(mockRouter.setParams).toHaveBeenCalledWith({ view: 'general' });
+  });
+
+  test('days are folded to one line except today', async () => {
+    const today = todayISO();
+    const monday = startOfWeek(today);
+    const other = monday === today ? addDays(monday, 1) : monday;
+    mockData = data({
+      workouts: [makeWorkout({ id: 'w-o', date: other, title: 'Natación técnica', durationMin: 45 })],
+      summary: { ...emptySummary, sessions: 1 },
+    });
+    await render(<WeekScreen />);
+    // Folded day: the title is in the summary line, not in a card.
+    expect(screen.queryByRole('button', { name: /^Natación técnica/ })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: /Natación técnica\. 45'/ }));
+    expect(screen.getAllByText(/Natación técnica/).length).toBeGreaterThan(0);
   });
 
   test('week switcher updates the ?week param', async () => {

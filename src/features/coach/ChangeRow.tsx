@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon, SportBadge, Tag, Text, fonts, haptics, radius, readableTextOn, space, useTheme, type IconName, type Theme } from '@/ui';
@@ -27,6 +27,8 @@ export interface ChangeRowProps {
   error?: string | null;
   /** Read-only after applying: this change was left out. */
   skipped?: boolean;
+  /** Partially applied proposal: this change is already in the plan. */
+  applied?: boolean;
 }
 
 function Checkbox({ checked }: { checked: boolean }) {
@@ -42,18 +44,60 @@ function Checkbox({ checked }: { checked: boolean }) {
   );
 }
 
-function BeforeAfter({ before, after }: { before: string | null; after: string | null }) {
+/** Warnings that matter at a glance (a quedada involves someone else); the rest go under "Ver detalles". */
+function isUrgentWarning(warning: string): boolean {
+  return warning.startsWith('Quedada');
+}
+
+function hasDetails(row: DiffRow): boolean {
+  return row.details.length > 0 || row.session !== null || row.warnings.some((w) => !isUrgentWarning(w));
+}
+
+/** "Ver detalles": changed notes / structure / sport, what the session asks, its steps and secondary warnings. */
+function RowDetails({ row }: { row: DiffRow }) {
   const { colors } = useTheme();
-  if (!before && !after) return null;
+  const [open, setOpen] = useState(false);
+  if (!hasDetails(row)) return null;
+  const steps = row.session?.steps ?? [];
+  const extra = row.warnings.filter((w) => !isUrgentWarning(w));
   return (
-    <View style={styles.diffLine}>
-      {before ? (
-        <Text variant="caption" color="textMuted" style={styles.strike}>
-          {before}
+    <View style={styles.details}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={open ? 'Ocultar detalles' : `Ver detalles de «${row.title}»`}
+        hitSlop={{ top: 6, bottom: 6 }}
+        onPress={() => {
+          haptics.tap();
+          setOpen((value) => !value);
+        }}
+        style={({ pressed }) => [styles.toggle, pressed && { opacity: 0.7 }]}>
+        <Text variant="caption" color="accentInk" style={styles.opLabel}>
+          {open ? 'Ocultar detalles' : 'Ver detalles'}
         </Text>
+        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={10} color={colors.accentInk} />
+      </Pressable>
+      {open ? (
+        <View style={styles.detailsBody}>
+          {row.details.map((f) => (
+            <View key={f.label} style={styles.diffLine}>
+              <Text variant="caption" color="textMuted">{`${f.label}:`}</Text>
+              <Text variant="caption" color="textMuted" style={styles.strike}>
+                {f.before}
+              </Text>
+              <Icon name="chevronRight" size={10} color={colors.textFaint} />
+              <Text variant="caption">{f.after}</Text>
+            </View>
+          ))}
+          {row.session ? <SessionSummary session={row.session} /> : null}
+          {steps.length > 0 ? <SessionSteps lines={steps} initiallyOpen /> : null}
+          {extra.map((w) => (
+            <Text key={w} variant="caption" color="textMuted">
+              {w}
+            </Text>
+          ))}
+        </View>
       ) : null}
-      {before && after ? <Icon name="chevronRight" size={10} color={colors.textFaint} /> : null}
-      {after ? <Text variant="caption">{after}</Text> : null}
     </View>
   );
 }
@@ -76,7 +120,7 @@ function SessionSummary({ session }: { session: SessionPreview }) {
   );
 }
 
-function RowBody({ row, error, skipped }: { row: DiffRow; error?: string | null; skipped: boolean }) {
+function RowBody({ row, error, skipped, applied }: { row: DiffRow; error?: string | null; skipped: boolean; applied: boolean }) {
   const { colors } = useTheme();
   return (
     <View style={styles.body}>
@@ -85,23 +129,13 @@ function RowBody({ row, error, skipped }: { row: DiffRow; error?: string | null;
           {row.opLabel}
         </Text>
         {skipped ? <Tag label="No aplicado" color={colors.textMuted} tone="outline" /> : null}
+        {applied ? <Tag label="Ya aplicado" color={colors.success} tone="outline" /> : null}
       </View>
       <Text variant="bodyStrong" numberOfLines={2}>
         {row.title}
       </Text>
-      <BeforeAfter before={row.before} after={row.after} />
-      {row.fields.map((f) => (
-        <View key={f.label} style={styles.diffLine}>
-          <Text variant="caption" color="textMuted">{`${f.label}:`}</Text>
-          <Text variant="caption" color="textMuted" style={styles.strike}>
-            {f.before}
-          </Text>
-          <Icon name="chevronRight" size={10} color={colors.textFaint} />
-          <Text variant="caption">{f.after}</Text>
-        </View>
-      ))}
-      {row.session ? <SessionSummary session={row.session} /> : null}
-      {row.warnings.map((w) => (
+      {row.summary ? <Text variant="caption">{row.summary}</Text> : null}
+      {row.warnings.filter(isUrgentWarning).map((w) => (
         <View key={w} style={styles.noteLine}>
           <Icon name="warning" size={12} color={colors.warning} />
           <Text variant="caption" style={styles.flex}>
@@ -135,11 +169,17 @@ function sentences(parts: readonly (string | null | undefined)[]): string {
 }
 
 /** Spoken summary of a row (avoids raw ISO dates of describeChange). */
-export function rowLabel(row: DiffRow, skipped: boolean): string {
-  const move = row.before && row.after ? `De ${row.before} a ${row.after}` : row.after;
-  const fields = row.fields.map((f) => `${f.label}: de ${f.before} a ${f.after}`);
-  const session = row.session ? [row.session.objective, row.session.target ? `Intensidad: ${row.session.target}` : null] : [];
-  return sentences([`${row.opLabel} «${row.title}»`, skipped ? 'No aplicado' : null, move, ...fields, ...session, row.reason, ...row.warnings]);
+export function rowLabel(row: DiffRow, skipped: boolean, applied = false): string {
+  // Same calm content as the row: the summary line reads "→" as "a"; details stay behind "Ver detalles".
+  const summary = row.summary ? row.summary.replace(/ → /g, ' a ') : null;
+  return sentences([
+    `${row.opLabel} «${row.title}»`,
+    skipped ? 'No aplicado' : null,
+    applied ? 'Ya aplicado' : null,
+    summary,
+    row.reason,
+    ...row.warnings.filter(isUrgentWarning),
+  ]);
 }
 
 /** Sport badge with the coloured operation badge, or a tinted operation tile when there's no sport. */
@@ -197,24 +237,24 @@ function RowMain({ label, checked, onToggle, children }: RowMainProps) {
 }
 
 /**
- * One change of a proposal as a diff row with an optional checkbox. Added or
- * rewritten sessions show what they ask (objective + main target) and an
- * expandable list of steps, kept outside the checkbox so it stays reachable.
+ * One change of a proposal as a calm diff row with an optional checkbox: op,
+ * title, one summary line (only what changed among day/time, duration and
+ * intensity) and the reason. Notes, structure, targets and coaching wait
+ * under "Ver detalles", kept outside the checkbox so they stay reachable.
  */
-export function ChangeRow({ row, checked, onToggle, error, skipped = false }: ChangeRowProps) {
+export function ChangeRow({ row, checked, onToggle, error, skipped = false, applied = false }: ChangeRowProps) {
   const { colors } = useTheme();
-  const faded = checked === false || skipped ? { opacity: 0.55 } : null;
-  const steps = row.session?.steps ?? [];
+  const faded = checked === false || skipped || applied ? { opacity: 0.55 } : null;
   return (
     <View style={[styles.row, { borderColor: colors.border }, faded]}>
-      <RowMain label={rowLabel(row, skipped)} checked={checked} onToggle={onToggle}>
+      <RowMain label={rowLabel(row, skipped, applied)} checked={checked} onToggle={onToggle}>
         <OpGlyph row={row} />
-        <RowBody row={row} error={error} skipped={skipped} />
+        <RowBody row={row} error={error} skipped={skipped} applied={applied} />
         {checked !== undefined ? <Checkbox checked={checked} /> : null}
       </RowMain>
-      {steps.length > 0 ? (
+      {hasDetails(row) ? (
         <View style={styles.steps}>
-          <SessionSteps lines={steps} />
+          <RowDetails row={row} />
         </View>
       ) : null}
     </View>
@@ -248,6 +288,9 @@ const styles = StyleSheet.create({
   opPlain: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   opLabel: { fontFamily: fonts.bodySemibold },
   noteLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  details: { gap: space.xs },
+  detailsBody: { gap: space.sm },
+  toggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 32, alignSelf: 'flex-start' },
   flex: { flex: 1 },
   body: { flex: 1, gap: 4 },
   titleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.xs },

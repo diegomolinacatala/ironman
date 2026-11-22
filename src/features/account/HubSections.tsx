@@ -15,7 +15,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
       <LinkRows
         items={[
           { icon: 'flag', title: race.title, subtitle: race.subtitle, href: '/races', brand: true },
-          { icon: 'clock', title: 'Disponibilidad', subtitle: availabilitySubtitle(profile.availability), href: '/settings/availability' },
+          { icon: 'clock', title: 'Tus horarios', subtitle: availabilitySubtitle(profile.availability), href: '/settings/availability' },
           { icon: 'profile', title: 'Perfil deportivo', subtitle: sportsProfileSubtitle(profile), href: '/settings/profile' },
         ]}
       />
@@ -23,7 +23,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
   );
 }
 
-/** Preferencias: light / dark / automatic and the notification settings. */
+/** Preferencias: light / dark / automatic, notifications and privacy (one group, not three). */
 export function PreferencesGroup() {
   return (
     <SettingsGroup title="Preferencias">
@@ -37,17 +37,9 @@ export function PreferencesGroup() {
             subtitle: 'Antes de cada entreno, check-in y amigos',
             href: '/settings/notifications',
           },
+          { icon: 'lock', title: 'Privacidad y datos', subtitle: 'Qué datos usamos, para qué y quién los ve', href: '/privacy' },
         ]}
       />
-    </SettingsGroup>
-  );
-}
-
-/** Privacidad: what we use, who sees it (and the Coach IA permission). */
-export function PrivacyGroup() {
-  return (
-    <SettingsGroup title="Privacidad">
-      <LinkRows items={[{ icon: 'lock', title: 'Privacidad y datos', subtitle: 'Qué datos usamos, para qué y quién los ve', href: '/privacy' }]} />
     </SettingsGroup>
   );
 }

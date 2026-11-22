@@ -4,10 +4,15 @@ import { StyleSheet, View } from 'react-native';
 import { formatDayLabel, formatDayLong, formatDayMedium } from '@/domain/dates';
 import { lifeEventLabel } from '@/domain/labels';
 import type { ISODate, LifeEvent, RaceDistance, Thresholds, Workout } from '@/domain/types';
-import { Chip, Icon, IconButton, Text, iconSize, radius, space, useTheme } from '@/ui';
+import { useState } from 'react';
+import { Pressable } from 'react-native';
+
+import { Chip, Icon, IconButton, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
 import { lifeEventIcon } from '@/features/events/kinds';
 import { WorkoutCard } from '@/features/workouts/WorkoutCard';
+
+import { dayDurationLabel, dayOpenByDefault, daySessionsLine, dayState, type DayState } from './daySummary';
 
 export interface DaySectionProps {
   date: ISODate;
@@ -32,7 +37,8 @@ export function dayHeading(date: ISODate, today: ISODate): string {
 }
 
 /**
- * One day of the week list: header, busy summary, imprevistos and sessions.
+ * One day of the week list, folded to a single line (titles, time, done mark) except today;
+ * open it for the busy summary, imprevistos and session cards.
  * Today sits on a soft brand panel (`accentSoft`) so it is easy to find without shouting.
  */
 export function DaySection({
@@ -49,10 +55,24 @@ export function DaySection({
   const { colors } = useTheme();
   const isToday = date === today;
   const isPast = date < today;
+  const [open, setOpen] = useState(() => dayOpenByDefault(date, today));
+  const state = dayState(workouts, date, today);
   return (
     <View style={[styles.root, isToday && [styles.today, { backgroundColor: colors.accentSoft }]]} testID={isToday ? 'day-today' : undefined}>
-      <DayHeader date={date} today={today} busyText={busyText} isToday={isToday} isPast={isPast} />
-      {events.length > 0 ? (
+      <DayHeader
+        date={date}
+        today={today}
+        busyText={open ? busyText : null}
+        isToday={isToday}
+        isPast={isPast}
+        open={open}
+        summary={open ? null : daySessionsLine(workouts, isPast)}
+        duration={dayDurationLabel(workouts)}
+        state={state}
+        eventCount={events.length}
+        onToggle={() => setOpen(!open)}
+      />
+      {!open ? null : events.length > 0 ? (
         <View style={styles.events}>
           {events.map((e) => (
             <Chip
@@ -64,7 +84,7 @@ export function DaySection({
           ))}
         </View>
       ) : null}
-      {workouts.length > 0 ? (
+      {!open ? null : workouts.length > 0 ? (
         <View style={styles.cards}>
           {workouts.map((w) => (
             <WorkoutCard
@@ -97,16 +117,55 @@ interface DayHeaderProps {
   busyText: string | null;
   isToday: boolean;
   isPast: boolean;
+  open: boolean;
+  /** Session titles, shown while the day is folded. */
+  summary: string | null;
+  duration: string | null;
+  state: DayState;
+  eventCount: number;
+  onToggle: () => void;
 }
 
-function DayHeader({ date, today, busyText, isToday, isPast }: DayHeaderProps) {
+function StateMark({ state }: { state: DayState }) {
   const { colors } = useTheme();
+  if (state === 'done') return <Icon name="checkCircle" size={16} color={colors.success} />;
+  if (state === 'missed') return <Icon name="warning" size={14} color={colors.warning} />;
+  return null;
+}
+
+function DayHeader({ date, today, busyText, isToday, isPast, open, summary, duration, state, eventCount, onToggle }: DayHeaderProps) {
+  const { colors } = useTheme();
+  const label = `${isToday ? 'Hoy, ' : ''}${formatDayLong(date)}${summary ? `. ${summary}` : ''}${duration ? `. ${duration}` : ''}`;
   return (
     <View style={styles.header}>
-      <View style={styles.headerText} accessible accessibilityRole="header" accessibilityLabel={`${isToday ? 'Hoy, ' : ''}${formatDayLong(date)}`}>
-        <Text variant="heading" color={isToday ? 'onAccentSoft' : isPast ? 'textMuted' : 'text'}>
-          {dayHeading(date, today)}
-        </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={label}
+        onPress={() => {
+          haptics.tap();
+          onToggle();
+        }}
+        style={({ pressed }) => [styles.headerText, pressed && styles.pressed]}>
+        <View style={styles.titleRow}>
+          <Text variant="heading" color={isToday ? 'onAccentSoft' : isPast ? 'textMuted' : 'text'} style={styles.flex} numberOfLines={1}>
+            {dayHeading(date, today)}
+          </Text>
+          <StateMark state={state} />
+          {duration ? (
+            <Text variant="caption" color="textMuted" style={styles.tabular}>
+              {duration}
+            </Text>
+          ) : null}
+          <View style={open ? styles.flip : undefined}>
+            <Icon name="chevronDown" size={12} color={colors.textFaint} />
+          </View>
+        </View>
+        {summary ? (
+          <Text variant="caption" color="textMuted" numberOfLines={1}>
+            {eventCount > 0 ? `Imprevisto · ${summary}` : summary}
+          </Text>
+        ) : null}
         {busyText ? (
           <View style={styles.busy}>
             <Icon name="clock" size={12} color={colors.textMuted} />
@@ -115,19 +174,25 @@ function DayHeader({ date, today, busyText, isToday, isPast }: DayHeaderProps) {
             </Text>
           </View>
         ) : null}
-      </View>
-      <IconButton icon="add" accessibilityLabel={`Añadir entreno el ${formatDayLong(date)}`} onPress={() => router.push(`/workout/edit?date=${date}`)} size={36} />
+      </Pressable>
+      {open ? (
+        <IconButton icon="add" accessibilityLabel={`Añadir entreno el ${formatDayLong(date)}`} onPress={() => router.push(`/workout/edit?date=${date}`)} size={36} />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { gap: space.sm },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  pressed: { opacity: 0.6 },
+  flip: { transform: [{ rotate: '180deg' }] },
+  tabular: { fontVariant: ['tabular-nums'] },
   today: { borderRadius: radius.lg, padding: space.md, marginHorizontal: -space.xs },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: iconSize.lg + space.lg },
   headerText: { flex: 1, gap: 2 },
   busy: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  flex: { flexShrink: 1 },
+  flex: { flex: 1, flexShrink: 1 },
   events: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   cards: { gap: space.sm },
   empty: {

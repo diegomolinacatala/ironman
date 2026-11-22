@@ -5,7 +5,7 @@
  * "before → after". The Supabase repository applies the same semantics
  * server-side in the `apply_plan_changes` RPC.
  */
-import type { ApplyResult, ISODateTime, PlanChange, UUID, Workout, WorkoutCoaching, WorkoutDraft } from './types';
+import type { ApplyResult, ISODate, ISODateTime, PlanChange, UUID, Workout, WorkoutCoaching, WorkoutDraft } from './types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -22,6 +22,22 @@ export interface ApplyContext {
   now: ISODateTime;
   /** Id factory for added workouts (inject for determinism in tests). */
   newId: () => UUID;
+  /**
+   * The athlete's local today. When given, adds, moves and date updates into
+   * the past fail like on the server ("La fecha ya ha pasado").
+   */
+  today?: ISODate;
+}
+
+/** Same message as the server (`20261122000400_plan_reliability.sql`). */
+export const PAST_DATE_ERROR = 'La fecha ya ha pasado';
+
+/** Destination date of a change (add, move, update with a date), if any. */
+function destinationDate(change: PlanChange): string | undefined {
+  if (change.op === 'add') return change.workout.date;
+  if (change.op === 'move') return change.toDate;
+  if (change.op === 'update') return change.patch.date;
+  return undefined;
 }
 
 export function validateDraft(draft: Partial<WorkoutDraft>, partial: boolean): string | null {
@@ -194,6 +210,14 @@ export function withCoachingPatch(workout: Workout, coaching: WorkoutCoaching | 
   return coaching === null ? rest : { ...rest, coaching: normalizeCoaching(coaching) };
 }
 
+/** applyOne, then (like the server, after validation) no destination in the past when `today` is known. */
+function applyChecked(workouts: readonly Workout[], change: PlanChange, ctx: ApplyContext): { workouts: Workout[]; error: string | null } {
+  const result = applyOne(workouts, change, ctx);
+  const to = destinationDate(change);
+  if (!result.error && ctx.today && to && to < ctx.today) return { workouts: [...workouts], error: PAST_DATE_ERROR };
+  return result;
+}
+
 /**
  * Applies changes in order. A failing change is skipped (reported in `failed`)
  * and does not abort the rest — mirrors the server RPC semantics.
@@ -207,7 +231,7 @@ export function applyPlanChanges(
   const failed: ApplyResult['failed'] = [];
   let applied = 0;
   changes.forEach((change, index) => {
-    const result = applyOne(current, change, ctx);
+    const result = applyChecked(current, change, ctx);
     current = result.workouts;
     if (result.error) failed.push({ index, error: result.error });
     else applied += 1;

@@ -8,6 +8,7 @@
  * - JSON Schema → strict `json_schema` (nullable as `type: [x, 'null']`, every
  *   property required, no additional properties, no `format`);
  * - effort low → `enable_thinking: false`, medium → true; maxTokens → max_completion_tokens;
+ * - each call has its own timeout (`timeoutMs`, default 90 s) on top of the caller's signal;
  * - the answer text is cleaned (```fences, <think> blocks, prose around the JSON)
  *   so the existing JSON parsers work; finishReason 'max_tokens' → stopReason 'max_tokens'.
  * No npm imports and no Deno globals: `fetch` is injected (tests use a fake).
@@ -29,6 +30,8 @@ export interface WorkersAiConfig {
   secret: string;
   model: string;
   fetch: FetchFn;
+  /** Per-call budget when the request gives none (default WORKERS_CALL_TIMEOUT_MS). */
+  timeoutMs?: number;
 }
 
 type Obj = Record<string, unknown>;
@@ -138,11 +141,17 @@ export function cleanModelJson(raw: string): string {
     const value: unknown = JSON.parse(text);
     return typeof value === 'string' && parses(value.trim()) ? value.trim() : text;
   }
-  const start = text.indexOf('{');
+  // Reasoning text (thinking on, empty content) may carry braces before the answer:
+  // try each '{' up to the last '}' and keep the first span that parses.
   const end = text.lastIndexOf('}');
-  const inner = start >= 0 && end > start ? text.slice(start, end + 1) : '';
-  return inner && parses(inner) ? inner : text;
+  for (let start = text.indexOf('{'), tries = 0; start >= 0 && start < end && tries < MAX_JSON_STARTS; start = text.indexOf('{', start + 1), tries += 1) {
+    const inner = text.slice(start, end + 1);
+    if (parses(inner)) return inner;
+  }
+  return text;
 }
+
+const MAX_JSON_STARTS = 40;
 
 /** Worker HTTP error → Spanish CoachAiError (same codes the Claude adapter uses). */
 export function workersError(status: number, body: unknown): CoachAiError {
@@ -169,10 +178,45 @@ function toResponse(data: unknown, fallbackModel: string): ClaudeResponse {
   };
 }
 
-function mapFailure(error: unknown, signal: AbortSignal | undefined): CoachAiError {
-  if (signal?.aborted || isAbortLike(error)) return timeoutError();
+/** Per-call budget when the caller gives none (briefing, meal). */
+export const WORKERS_CALL_TIMEOUT_MS = 90_000;
+
+export const WORKER_TIMEOUT_MESSAGE = 'La IA gratuita ha tardado demasiado en contestar. Inténtalo de nuevo en un momento.';
+
+function mapFailure(error: unknown, signal: AbortSignal | undefined, timedOut: boolean): CoachAiError {
+  // The caller's deadline wins: the job has already fallen back.
+  if (signal?.aborted) return timeoutError();
+  if (timedOut) return new CoachAiError('timeout', WORKER_TIMEOUT_MESSAGE);
+  if (isAbortLike(error)) return timeoutError();
   if (error instanceof CoachAiError) return error;
   return new CoachAiError('network', 'No hemos podido conectar con la IA. Revisa tu conexión e inténtalo de nuevo.');
+}
+
+interface CallSignal {
+  signal: AbortSignal;
+  timedOut: () => boolean;
+  dispose: () => void;
+}
+
+/** The caller's signal plus this call's own timeout (whichever fires first aborts the fetch). */
+export function callSignal(parent: AbortSignal | undefined, timeoutMs: number): CallSignal {
+  const controller = new AbortController();
+  let fired = false;
+  const timer = setTimeout(() => {
+    fired = true;
+    controller.abort(new DOMException('worker call timed out', 'TimeoutError'));
+  }, Math.max(1, timeoutMs));
+  const onAbort = (): void => controller.abort(parent?.reason);
+  if (parent?.aborted) controller.abort(parent.reason);
+  else parent?.addEventListener('abort', onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    timedOut: () => fired,
+    dispose: () => {
+      clearTimeout(timer);
+      parent?.removeEventListener('abort', onAbort);
+    },
+  };
 }
 
 /** Header the worker rate-limits by: an opaque per-user key (never the raw user id). */
@@ -191,19 +235,22 @@ export function createWorkersAiPort(config: WorkersAiConfig): ClaudePort {
   const endpoint = `${config.url.replace(/\/+$/, '')}/v1/chat`;
   return {
     async generate(req: ClaudeRequest): Promise<ClaudeResponse> {
+      const call = callSignal(req.signal, req.timeoutMs ?? config.timeoutMs ?? WORKERS_CALL_TIMEOUT_MS);
       try {
         const client: Record<string, string> = req.userId ? { [CLIENT_HEADER]: await clientKey(config.secret, req.userId) } : {};
         const res = await config.fetch(endpoint, {
           method: 'POST',
           headers: { authorization: `Bearer ${config.secret}`, 'content-type': 'application/json', ...client },
           body: JSON.stringify(chatBody(req, config.model)),
-          signal: req.signal,
+          signal: call.signal,
         });
         const data: unknown = await res.json().catch(() => null);
         if (!res.ok) throw workersError(res.status, data);
         return toResponse(data, config.model);
       } catch (error) {
-        throw mapFailure(error, req.signal);
+        throw mapFailure(error, req.signal, call.timedOut());
+      } finally {
+        call.dispose();
       }
     },
   };

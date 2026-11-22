@@ -82,6 +82,26 @@ Rules:
   `accentSoft` + `onAccentSoft`; sports: `sport.tint` + `sport.base`).
 - Icons: SF Symbols via `<Icon>` only (no emoji as icons). Sizes 16 / 20 / 24 (`iconSize`).
 
+## 4b. Calm by default: folds (2026-11-22 redesign)
+
+The athlete found the app overwhelming: everything was open at once. Rule since then: **each tab
+shows only what needs an answer now; everything else is a fold** (`Disclosure` in `src/ui`,
+Apple Settings / Spotify style).
+
+- `Disclosure` = header row (icon tile, title, one-line `summary`, chevron) + content on demand.
+  `variant="card"` (surface + hairline) for blocks inside a list of cards (Hoy); `"plain"` for
+  screen sections (Juntos, Progreso). A closed fold must still say what is inside (`summary`).
+- `storageKey` remembers open/closed per device (`rti.disclosure.v1`); use `<tab>.<section>`.
+- Never nest a bordered card in a fold: components take an `embedded` / `hideHeader` prop.
+- Hoy: header (+ race countdown line) · quick-action pills · banners · today's session (details
+  folded behind "Objetivo, ritmos y estructura") · folds: Informe, Mañana, Comidas, Juntos hoy.
+- Plan: segmented · week switcher · fold "Resumen de la semana" · one tool row (Planificar
+  semana + Añadir) · days folded to one line (titles, time, done mark) except today.
+- Juntos: requests, actions and quedadas open; per-friend compare, races and feed folded.
+- Progreso: "Tu forma" open; volume, recovery, nutrition and races folded.
+- Tú: no inline pickers in the hub (watch brand lives in Conexiones); one Preferencias group.
+- Coach chat: messenger composer (mic · text · send), no voice/keyboard mode switch.
+
 ## 5. Motion and feedback
 
 - 150–240 ms, ease-out in / faster out; spring for press. Press feedback: `surfacePressed` or
@@ -94,9 +114,9 @@ Rules:
 
 Five tabs (`src/app/(tabs)`), each a top-level destination with its own large title:
 
-1. **Hoy** — what matters today: banners (invites, proposals), morning report, today's
-   session(s), quick actions (check-in, imprevisto, comida), meals, tomorrow, today's quedadas.
-2. **Plan** — the week: switcher, phase, totals, planning tools, 7 days.
+1. **Hoy** — what matters today: quick actions, banners (invites, proposals), today's
+   session(s); folded: morning report, tomorrow, meals, today's quedadas (§4b).
+2. **Plan** — the week: switcher, folded summary (phase + totals), one tool row, 7 folded days.
 3. **Juntos** — friends: actionable first (requests, upcoming + open quedadas), then the
    per-friend compare (Huecos, Oportunidades, volume), shared races, feed. Bell → Avisos inbox.
 4. **Progreso** — form (PMC), volume & compliance, recovery, nutrition, races.

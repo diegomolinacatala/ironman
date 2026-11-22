@@ -24,7 +24,9 @@ export function makeProfile(overrides: Partial<Profile> = {}): Profile {
     sports: ['swim', 'bike', 'run', 'strength'],
     level: 'intermediate',
     thresholds: {},
+    // Manual availability: the rule tests pin hours, rest day and windows (automatic mode has its own tests).
     availability: {
+      mode: 'manual',
       weeklyHoursTarget: 9,
       restDay: 0,
       longSessionDays: [5, 6],

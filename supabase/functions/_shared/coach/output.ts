@@ -1,13 +1,15 @@
 /**
- * Structured output of the AI coach: a flat, all-required-but-nullable change
- * shape (structured outputs need every property listed and no numeric bounds),
- * converted to camelCase `PlanChange` and re-validated with the strict schema.
- * v2 adds `memory` (facts to remember), `life_event` (imprevisto to log) and
- * `quedada` (joint session suggested with a friend); v4 adds each session's
- * structure and prescription (`steps`, `objective`, `keys`, `success`,
- * `planB`) and `week_plans` (Plan → General suggestions). Each extra is
- * validated on its own so a bad one never discards the reply, and a bad step or
- * text never discards its change (coach/prescription.ts).
+ * Structured output of the AI coach. The model answers a SHORT change shape
+ * (10 keys; the session's structure and prescription grouped in one nullable
+ * `prescription` object, so a move or delete is just op + id + date + nulls),
+ * every property required-but-nullable as structured outputs need. It is
+ * read leniently into the internal flat change (legacy flat keys from older
+ * answers still accepted), converted to camelCase `PlanChange` and
+ * re-validated with the strict schema. v2 adds `memory`, `life_event` and
+ * `quedada`; v4 adds `week_plans`. Each extra is validated on its own so a bad
+ * one never discards the reply, and a bad step or text never discards its
+ * change (coach/prescription.ts). Workout ids are the context's short ids
+ * (w1, w2…), mapped back to UUIDs by coach/short-ids.ts before conversion.
  */
 import { planChangeSchema } from '../planning/changes.ts';
 import { array, boolean, enumOf, intEnum, integer, nullable, number, object, string, toStructuredOutputSchema } from '../schema.ts';
@@ -28,36 +30,63 @@ const flatStepSchema = object({
   leg: nullable(enumOf(['bike', 'run'] as const)),
 });
 
-const flatChangeShape = {
+/** Session structure + coach's prescription of an add (or of an update that changes the structure). */
+const prescriptionSchema = object({
+  steps: nullable(array(flatStepSchema, { description: 'Pasos de la sesión, o null.' })),
+  objective: nullable(string({ description: 'Para qué sirve (≤ 200), o null.' })),
+  keys: nullable(array(string(), { description: 'Hasta 4 claves con cifras (≤ 160 cada una), o null.' })),
+  success: nullable(string({ description: 'Lo has hecho bien si… (≤ 200), o null.' })),
+  planB: nullable(string({ description: 'Si no es tu día… (≤ 200), o null.' })),
+});
+
+/** What the model writes per change (short on purpose: fewer tokens, fewer mistakes). */
+const modelChangeShape = {
   op: enumOf(['add', 'update', 'move', 'delete'] as const),
-  workoutId: nullable(string({ description: 'Id del entreno (update/move/delete) o null (add).' })),
+  workoutId: nullable(string({ description: 'Id corto del contexto (w1, w2…) en update/move/delete; null en add.' })),
   reason: string({ description: 'Motivo en una frase.' }),
-  date: nullable(string({ format: 'date', description: 'YYYY-MM-DD (add: fecha; move: nueva fecha; update: nueva fecha o null).' })),
+  date: nullable(string({ format: 'date', description: 'YYYY-MM-DD (add: fecha; move: nueva fecha; update: nueva fecha o null; delete: null).' })),
   startTime: nullable(string({ description: 'HH:mm o null.' })),
   sport: nullable(enumOf(SPORTS)),
   title: nullable(string()),
-  description: nullable(string()),
   durationMin: nullable(integer()),
-  distanceM: nullable(integer()),
   intensity: nullable(enumOf(INTENSITIES)),
+  prescription: nullable(prescriptionSchema),
+};
+
+/** Internal flat change (what the converters read): the model shape with the prescription spread out. */
+const flatChangeShape = {
+  op: modelChangeShape.op,
+  workoutId: modelChangeShape.workoutId,
+  reason: modelChangeShape.reason,
+  date: modelChangeShape.date,
+  startTime: modelChangeShape.startTime,
+  sport: modelChangeShape.sport,
+  title: modelChangeShape.title,
+  description: nullable(string()),
+  durationMin: modelChangeShape.durationMin,
+  distanceM: nullable(integer()),
+  intensity: modelChangeShape.intensity,
   isKey: nullable(boolean()),
-  steps: nullable(array(flatStepSchema, { description: 'Estructura de la sesión, o null.' })),
-  objective: nullable(string({ description: 'Para qué sirve la sesión (≤ 200), o null.' })),
-  keys: nullable(array(string(), { description: 'Hasta 4 claves (≤ 160 cada una), o null.' })),
-  success: nullable(string({ description: 'Lo has hecho bien si… (≤ 200), o null.' })),
-  planB: nullable(string({ description: 'Si no es tu día… (≤ 200), o null.' })),
+  steps: nullable(array(flatStepSchema)),
+  objective: nullable(string()),
+  keys: nullable(array(string())),
+  success: nullable(string()),
+  planB: nullable(string()),
 };
 
 const flatChange = object(flatChangeShape);
-/** Same shape, but extra keys from weaker models are ignored instead of rejecting the change. */
+const modelChange = object(modelChangeShape);
+/** Extra keys from weaker models are ignored instead of rejecting the change. */
 const lenientFlatChange = object(flatChangeShape, undefined, { stripUnknown: true });
 
-/** Defaults for the nullable fields some open models leave out. */
+/** Defaults for the fields the model leaves out (all of them nullable, except reason). */
 const CHANGE_DEFAULTS: Record<string, unknown> = Object.fromEntries(
   Object.keys(flatChangeShape)
     .filter((k) => k !== 'op')
     .map((k) => [k, k === 'reason' ? '' : null]),
 );
+
+const PRESCRIPTION_KEYS = ['steps', 'objective', 'keys', 'success', 'planB'] as const;
 
 /** Imprevisto the coach wants to log (validated later against today's date). */
 export const lifeEventOutputSchema = object({
@@ -108,7 +137,7 @@ function deferred<T>(schema: Schema<T>): Schema<unknown> {
 export const coachOutputSchema = object({
   reply: string({ min: 1, description: 'Respuesta al atleta en español, 2-4 frases (se lee en voz alta).' }),
   summary: string({ description: 'Resumen de una línea de la propuesta.' }),
-  changes: array(flatChange),
+  changes: array(modelChange),
   memory: array(string(), { description: '0-3 hechos o preferencias duraderas del atleta (≤ 140 caracteres cada uno).' }),
   life_event: deferred(nullable(lifeEventOutputSchema)),
   quedada: deferred(nullable(quedadaOutputSchema)),
@@ -190,9 +219,20 @@ export function toPlanChanges(flat: readonly FlatChange[]): ConvertedChanges {
   return { changes, rejected };
 }
 
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** `prescription: {steps, objective…}` spread to the top level (flat legacy keys win only when the object lacks them). */
+function spreadPrescription(item: Obj): Obj {
+  const { prescription, ...rest } = item;
+  if (!isObj(prescription)) return rest;
+  const inner = Object.fromEntries(PRESCRIPTION_KEYS.filter((k) => prescription[k] !== undefined && prescription[k] !== null).map((k) => [k, prescription[k]]));
+  return { ...rest, ...inner };
+}
+
 function parseChange(item: unknown): ReturnType<typeof lenientFlatChange.parse> {
-  if (typeof item !== 'object' || item === null || Array.isArray(item)) return lenientFlatChange.parse(item, '');
-  return lenientFlatChange.parse(sanitizeChange({ ...CHANGE_DEFAULTS, ...(item as Record<string, unknown>) }), '');
+  if (!isObj(item)) return lenientFlatChange.parse(item, '');
+  return lenientFlatChange.parse(sanitizeChange({ ...CHANGE_DEFAULTS, ...spreadPrescription(item) }), '');
 }
 
 function parseChanges(raw: unknown): { changes: FlatChange[]; malformed: number } {

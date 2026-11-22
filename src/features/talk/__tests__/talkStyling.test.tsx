@@ -4,7 +4,7 @@
  * text pair we introduced reads in both light and dark.
  */
 import { describe, expect, jest, test } from '@jest/globals';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StyleSheet, type ViewStyle } from 'react-native';
 
 import type { QuedadaSuggestion } from '@/domain/types';
@@ -13,7 +13,6 @@ import type { DiffRow } from '@/features/coach/proposalDiff';
 import { contrastRatio } from '@/ui';
 import { makeTheme } from '@/ui/theme';
 
-import { MicButton } from '../MicButton';
 import { QuedadaSuggestionCard } from '../QuedadaSuggestionCard';
 import { UserBubble } from '../TurnView';
 
@@ -40,6 +39,8 @@ const row: DiffRow = {
   missing: false,
   description: 'Quitar Rodaje suave',
   session: null,
+  summary: "mar 24 · Carrera · 40' · Fondo Z2",
+  details: [],
 };
 
 const quedada: QuedadaSuggestion = {
@@ -75,23 +76,6 @@ describe('contrast of the voice-coach pairs', () => {
   });
 });
 
-describe('MicButton', () => {
-  test('idle and listening use the accent fill; quiet steps down to the surface', async () => {
-    const { rerender } = await render(<MicButton state="idle" level={0} onPress={jest.fn()} />);
-    expect(styleOf(screen.getByRole('button')).backgroundColor).toBe(light.accent);
-
-    await rerender(<MicButton state="listening" level={0.5} onPress={jest.fn()} quiet />);
-    const listening = styleOf(screen.getByRole('button'));
-    expect(listening.backgroundColor).toBe(light.accent);
-    expect(listening.transform).toEqual([{ scale: 0.94 }]);
-
-    await rerender(<MicButton state="idle" level={0} onPress={jest.fn()} quiet />);
-    const quiet = styleOf(screen.getByRole('button'));
-    expect(quiet.backgroundColor).toBe(light.surface);
-    expect(quiet.borderColor).toBe(light.borderStrong);
-  });
-});
-
 describe('bubbles and cards', () => {
   test('the user bubble is the soft brand tint', async () => {
     await render(<UserBubble text="me duele el tobillo" channel="text" />);
@@ -117,9 +101,12 @@ describe('ChangeRow', () => {
     expect(opColor('update', dark)).toBe(dark.info);
   });
 
-  test('a removal shows its danger-tinted glyph, the warning as text and the accent checkbox', async () => {
+  test('a removal shows its danger-tinted glyph, one summary line, the accent checkbox; secondary warnings wait under "Ver detalles"', async () => {
     await render(<ChangeRow row={row} checked onToggle={jest.fn()} />);
     expect(styleOf(screen.getByTestId('change-op-glyph')).backgroundColor).toBe(`${light.danger}1F`);
+    expect(screen.getByText("mar 24 · Carrera · 40' · Fondo Z2")).toBeTruthy();
+    expect(screen.queryByText('Es tu sesión clave')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalles de «Rodaje suave»' }));
     expect(screen.getByText('Es tu sesión clave')).toBeTruthy();
     expect(screen.getByRole('checkbox', { checked: true })).toBeTruthy();
   });

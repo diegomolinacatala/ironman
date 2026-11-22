@@ -12,7 +12,7 @@ import type { AthleteLevel, ISODate, Race, WeekPlan } from '../types.ts';
 import type { Subphase } from './domain/constants.ts';
 import { phaseFor as domainPhaseFor } from './domain/periodization.ts';
 import type { Phase } from './domain/periodization.ts';
-import { applyWeekPlan, buildSeason, canOverride } from './domain/season.ts';
+import { applyWeekPlan, buildSeason, canOverride, weeklyHoursFor } from './domain/season.ts';
 import type { SeasonOverview, SeasonWeek, SeasonWeekKind } from './domain/season.ts';
 
 export { nextRace } from './domain/periodization.ts';
@@ -39,7 +39,7 @@ export interface PhaseInfo {
   weekKind: SeasonWeekKind;
   /** "Carga", "Más volumen", "Vuelta a la carga", "Descarga", "Semana libre", "Pico", "Afinamiento", "Carrera"… */
   weekLabel: string;
-  /** Target training minutes of the week (multiple of 5), null without a weekly hours target. */
+  /** Target training minutes of the week (multiple of 5), null with manual availability at 0 h. */
   targetMinutes: number | null;
   /** The week has a week-level plan (set in Plan → General by the athlete, the coach or Claude). */
   adjusted: boolean;
@@ -52,7 +52,10 @@ export interface PhaseInfo {
 export interface PhaseOptions {
   /** `profile.level`; unknown values use the default 3:1 cadence. */
   level?: string | null;
-  /** The athlete's normal weekly hours (week plans in minutes and targetMinutes need it). */
+  /**
+   * The athlete's manual weekly hours (`manualWeeklyHours(profile.availability)`);
+   * null/absent = automatic availability: the hours for the level and the target race distance.
+   */
   weeklyHoursTarget?: number | null;
   /** Week-level plans ("Plan → General"). */
   weekPlans?: readonly WeekPlan[];
@@ -80,8 +83,9 @@ export function athleteLevel(level: string | null | undefined): AthleteLevel | u
   return LEVELS.find((l) => l === level);
 }
 
-function hoursOf(value: number | null | undefined): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+/** Manual hours (≥ 0), or null for automatic availability. */
+function manualOf(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function raceRef(race: Race | null): RaceRef | null {
@@ -92,7 +96,7 @@ function raceRef(race: Race | null): RaceRef | null {
 function seasonWeekOf(monday: ISODate, races: readonly Race[], opts: PhaseOptions): SeasonWeek | null {
   const known = opts.season?.weeks.find((w) => w.weekStart === monday);
   if (known) return known;
-  const input = { races, level: athleteLevel(opts.level), weeklyHoursTarget: hoursOf(opts.weeklyHoursTarget), weekPlans: opts.weekPlans ?? [] };
+  const input = { races, level: athleteLevel(opts.level), weeklyHoursTarget: manualOf(opts.weeklyHoursTarget), weekPlans: opts.weekPlans ?? [] };
   const current = opts.today ? startOfWeek(opts.today) : monday;
   const ahead = diffDays(monday, current) / 7;
   if (ahead > 0 && ahead < MAX_SEASON_WEEKS) {
@@ -111,7 +115,7 @@ export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptio
   const monday = startOfWeek(date);
   const raw = domainPhaseFor(date, races, { level: athleteLevel(opts.level) });
   const plan = canOverride(raw) ? ((opts.weekPlans ?? []).find((p) => p.weekStart === monday) ?? null) : null;
-  const hours = hoursOf(opts.weeklyHoursTarget);
+  const hours = weeklyHoursFor(manualOf(opts.weeklyHoursTarget), athleteLevel(opts.level), raw.targetRace?.distance ?? null);
   const info = applyWeekPlan(raw, plan, hours);
   const week = seasonWeekOf(monday, races, opts);
   return {

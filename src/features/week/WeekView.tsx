@@ -6,7 +6,9 @@ import type { ISODate, Workout } from '@/domain/types';
 import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { partnerNameFor } from '@/features/workouts/draft';
 import { errorMessage } from '@/lib/logger';
-import { EmptyState, ErrorNotice, Loading, Screen, space } from '@/ui';
+import { Disclosure, EmptyState, ErrorNotice, Loading, Screen, space } from '@/ui';
+
+import { weekSummaryLine } from './daySummary';
 
 import { DaySection } from './DaySection';
 import { PhaseLine } from './PhaseLine';
@@ -33,7 +35,7 @@ export interface WeekViewProps {
   weekParam: unknown;
 }
 
-/** Plan → Semana: switcher, phase, totals, planning tools and the 7 days. */
+/** Plan → Semana: switcher, folded week summary, one row of tools and the 7 days (folded but today). */
 export function WeekView({ weekParam }: WeekViewProps) {
   const currentWeekStart = startOfWeek(todayISO());
   const weekStart = startOfWeek(parseWeekParam(weekParam, currentWeekStart));
@@ -62,22 +64,26 @@ export function WeekView({ weekParam }: WeekViewProps) {
       contentStyle={bottomPadding != null ? { paddingBottom: bottomPadding } : undefined}>
       <PlanViewSwitch value="week" />
       <WeekSwitcher weekStart={weekStart} currentWeekStart={currentWeekStart} onChange={(week) => router.setParams({ week })} />
-      <PhaseLine info={data.phase} plan={data.weekPlan} onPress={openGeneral} />
       {data.isLoading ? <Loading label="Cargando la semana" /> : null}
       {data.error ? <ErrorNotice message={errorMessage(data.error)} onRetry={() => void data.refresh()} /> : null}
       {isEmpty ? (
         <EmptyState
           icon="week"
           title="Semana en blanco"
-          message="Genera una propuesta con tu disponibilidad y tu fase, o planifícala hablando con el coach."
+          message="Genera una propuesta que encaje en los huecos de tu calendario, o pídesela a tu coach."
           action={<View style={styles.emptyActions}>{toolbar}</View>}
         />
       ) : null}
       {ready && !isEmpty ? (
         <>
-          <WeekTotals summary={data.summary} targetHours={data.targetHours} />
+          <Disclosure title="Resumen de la semana" summary={weekSummaryLine(data.summary)} icon="progress" storageKey="plan.summary">
+            <PhaseLine info={data.phase} plan={data.weekPlan} onPress={openGeneral} />
+            <WeekTotals summary={data.summary} targetHours={data.targetHours} embedded />
+          </Disclosure>
           {toolbar}
         </>
+      ) : isEmpty ? (
+        <PhaseLine info={data.phase} plan={data.weekPlan} onPress={openGeneral} />
       ) : null}
       {ready ? <WeekDays days={days} data={data} onLongPressWorkout={menu.open} /> : null}
       {menu.element}
@@ -108,6 +114,6 @@ function WeekDays({ days, data, onLongPressWorkout }: { days: ISODate[]; data: W
 }
 
 const styles = StyleSheet.create({
-  days: { gap: space.xl },
+  days: { gap: space.lg },
   emptyActions: { alignSelf: 'stretch', gap: space.sm, marginTop: space.sm },
 });

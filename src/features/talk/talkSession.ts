@@ -1,12 +1,15 @@
 /**
- * Voice-coach session (pure): the turns of this visit, the request in flight,
- * the composer (voice or keyboard) and what happened to each proposal.
+ * Voice-coach session (pure): the turns of today's conversation, the request
+ * in flight, the composer and what happened to each proposal.
  *
- * Nothing is persisted: a new visit starts a new conversation. A cancelled or
+ * The day's turns are kept on the device (`talkStorage`, restored with
+ * `hydrate`); "Nueva conversación" (`reset`) clears them. A cancelled or
  * superseded request is ignored when its answer arrives (matched by turn id).
+ * The history sent to the coach includes, per turn, a compact summary of the
+ * changes it proposed and whether they were applied, discarded or are pending.
  */
 import { startOfWeek } from '@/domain/dates';
-import type { CoachMessage, CoachRequest, CoachResponse, Friend, ISODate, PlanProposal } from '@/domain/types';
+import type { CoachMessage, CoachRequest, CoachResponse, Friend, ISODate, PlanChange, PlanProposal } from '@/domain/types';
 import { MAX_MESSAGE_LENGTH, requestFromParams, type CoachRouteParams, type PreparedRequest } from '@/features/coach/requests';
 
 import { friendIdsForConversation } from './friendMentions';
@@ -61,10 +64,22 @@ export type TalkAction =
   | { type: 'cancel' }
   | { type: 'resolved'; turnId: string; resolution: ProposalResolution }
   | { type: 'clear_notice' }
-  | { type: 'reset' };
+  | { type: 'reset' }
+  /** Today's turns restored from the device (older than any turn of this visit). */
+  | { type: 'hydrate'; turns: TalkTurn[] };
 
-export function initialTalkState(voiceAvailable: boolean): TalkState {
-  return { turns: [], pending: null, failed: null, error: null, inputMode: voiceAvailable ? 'voice' : 'text', draft: '', notice: null };
+/**
+ * `inputMode` is kept for compatibility: the composer is one field with a mic
+ * button now, so it always starts as 'text'.
+ */
+export function initialTalkState(_voiceAvailable: boolean = false): TalkState {
+  return { turns: [], pending: null, failed: null, error: null, inputMode: 'text', draft: '', notice: null };
+}
+
+function hydrate(state: TalkState, stored: readonly TalkTurn[]): TalkState {
+  const known = new Set(state.turns.map((t) => t.id));
+  const restored = stored.filter((t) => !known.has(t.id));
+  return restored.length === 0 ? state : { ...state, turns: [...restored, ...state.turns] };
 }
 
 export function clampMessage(text: string): string {
@@ -121,14 +136,70 @@ export function talkReducer(state: TalkState, action: TalkAction): TalkState {
       return { ...state, notice: null };
     case 'reset':
       return { ...initialTalkState(false), inputMode: state.inputMode };
+    case 'hydrate':
+      return hydrate(state, action.turns);
   }
+}
+
+/** Longest proposal summary added to a history message (the server accepts 4000 per message). */
+export const MAX_PROPOSAL_NOTE = 700;
+const MAX_HISTORY_CONTENT = 4000;
+
+/** One change in a few words; workout ids stay as they are (the server shows them as w1, w2…). */
+function changeLine(c: PlanChange): string {
+  switch (c.op) {
+    case 'add':
+      return `añadir «${c.workout.title}» el ${c.workout.date} (${c.workout.sport}, ${c.workout.durationMin}')`;
+    case 'move':
+      return `mover ${c.workoutId} al ${c.toDate}${c.toStartTime ? ` a las ${c.toStartTime}` : ''}`;
+    case 'update': {
+      const parts = [
+        c.patch.title ? `«${c.patch.title}»` : '',
+        c.patch.date ? `el ${c.patch.date}` : '',
+        c.patch.durationMin !== undefined ? `${c.patch.durationMin}'` : '',
+        c.patch.intensity ? c.patch.intensity : '',
+      ].filter(Boolean);
+      return `cambiar ${c.workoutId}${parts.length ? ` (${parts.join(', ')})` : ''}`;
+    }
+    case 'delete':
+      return `quitar ${c.workoutId}`;
+  }
+}
+
+/** What happened to the turn's proposal, in the coach's words. */
+function proposalState(turn: Pick<TalkTurn, 'resolution'>, proposal: PlanProposal): string {
+  const r = turn.resolution;
+  if (r?.kind === 'applied') return r.failed > 0 ? `aplicada en parte (${r.applied} de ${r.applied + r.failed})` : 'aplicada';
+  if (r?.kind === 'discarded') return 'descartada por el atleta';
+  if (r?.kind === 'reviewed') return 'revisada por el atleta en la pantalla de propuesta';
+  if (proposal.status === 'applied') return 'aplicada';
+  if (proposal.status === 'partially_applied') return 'aplicada en parte';
+  if (proposal.status === 'discarded') return 'descartada por el atleta';
+  return 'pendiente: el atleta aún no la ha aceptado';
+}
+
+/** "[Propuesta aplicada: 1) mover … al 2026-10-29; 2) quitar …]", or null without changes. */
+export function proposalNote(turn: Pick<TalkTurn, 'response' | 'resolution'>): string | null {
+  const proposal = turn.response.proposal;
+  if (!proposal || proposal.changes.length === 0) return null;
+  const lines = proposal.changes.map((c, i) => `${i + 1}) ${changeLine(c)}`).join('; ');
+  const note = `[Propuesta ${proposalState(turn, proposal)}: ${lines}]`;
+  return note.length <= MAX_PROPOSAL_NOTE ? note : `${note.slice(0, MAX_PROPOSAL_NOTE - 2)}…]`;
+}
+
+/** The coach's message in the history: its reply plus what it proposed and what became of it. */
+function assistantContent(turn: TalkTurn): string {
+  const note = proposalNote(turn);
+  const reply = turn.response.reply.trim();
+  const content = note ? (reply ? `${reply}\n\n${note}` : note) : reply;
+  return content.slice(0, MAX_HISTORY_CONTENT);
 }
 
 /** Previous turns as `CoachRequest.history` (newest `max` messages). */
 export function coachHistory(turns: readonly TalkTurn[], max: number = MAX_HISTORY_MESSAGES): CoachMessage[] {
   const messages = turns.flatMap((t): CoachMessage[] => [
-    { role: 'user', content: t.text },
-    { role: 'assistant', content: t.response.reply },
+    { role: 'user', content: t.text.slice(0, MAX_HISTORY_CONTENT) },
+    { role: 'assistant', content: assistantContent(t) },
   ]);
   return messages.filter((m) => m.content.trim().length > 0).slice(-max);
 }
@@ -208,8 +279,9 @@ export function thinkingLine(elapsedMs: number, lines: readonly string[] = THINK
   return lines[Math.floor(Math.max(0, elapsedMs) / THINKING_ROTATE_MS) % lines.length] ?? 'Pensando…';
 }
 
+/** Plan changes the coach (AI or rules engine) turns into a proposal. */
 export const EXAMPLE_PROMPTS: readonly string[] = [
-  'Me he torcido el tobillo',
-  'Mañana no puedo entrenar por la tarde',
-  'Prefiero nadar por la mañana',
+  'Mueve el rodaje de mañana al jueves',
+  'Hoy no puedo entrenar',
+  'Tengo pádel el jueves por la tarde',
 ];

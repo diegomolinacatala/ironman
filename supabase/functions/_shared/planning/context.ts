@@ -12,7 +12,8 @@ import { athleteView } from './athlete-view.ts';
 import { lifeEventLabel, raceDistanceLabel } from './labels.ts';
 import { weeklyLoadHistory, weekTotals } from './load.ts';
 import type { WeeklyLoad, WeekTotals } from './load.ts';
-import { phaseFor } from './phase.ts';
+import { manualWeeklyHours, weeklyHoursFor } from './domain/season.ts';
+import { athleteLevel, phaseFor } from './phase.ts';
 import type { PhaseInfo } from './phase.ts';
 import { seasonOf, seasonView } from './season-view.ts';
 import type { SeasonView } from './season-view.ts';
@@ -205,6 +206,7 @@ const NOTES = [
   'season es el plan general (Plan → General): fixed=true no admite ajuste; adjusted=true ya tiene uno. Para planificar semanas por encima usa set_week_plans, no entrenos sueltos.',
   'Las quedadas (jointSessionId / partners) son compromisos con otra persona: muévelas solo si es imprescindible y explica por qué.',
   'Las sesiones isKey=true son las clave de la semana: protégelas y ajusta antes las accesorias.',
+  'athlete.availability.mode=auto (lo normal): no hay horas ni día de descanso fijados; entrena todo lo que permita el tiempo libre de busy hasta phase.targetMinutes, con hora en cada sesión. mode=manual: respeta sus horas, descanso y franjas.',
   'Las métricas del reloj (Garmin o COROS) guardadas aquí pueden ir con retraso respecto a sus conectores.',
   'Ante dolor, lesión o enfermedad: prioriza la seguridad y recomienda consultar a un profesional sanitario.',
 ];
@@ -226,10 +228,16 @@ export async function buildPlanningContext(reader: PlanningReader, opts: Context
   const weekEnd = addDays(raw.weekStart, 6);
   const eventsFrom = addDays(raw.weekStart < raw.today ? raw.weekStart : raw.today, -7);
   const nextStart = addDays(raw.weekStart, 7);
-  const hours = raw.profile.availability.weeklyHoursTarget;
+  // null = automatic availability: the hours come from the level and the race distance (like the app).
+  const hours = manualWeeklyHours(raw.profile.availability);
   const season = seasonOf({ today: raw.today, races: raw.races, level: raw.profile.level, weeklyHoursTarget: hours, weekPlans: raw.weekPlans });
   const raceDistance = season.targetRace?.distance ?? null;
   const view = viewContext(raw, opts.detail, raceDistance);
+  const phase = phaseFor(raw.weekStart, raw.races, { level: raw.profile.level, weeklyHoursTarget: hours, weekPlans: raw.weekPlans, today: raw.today, season });
+  const availabilityPlan = {
+    normalWeekHours: weeklyHoursFor(hours, athleteLevel(raw.profile.level), phase.targetRace?.distance ?? null),
+    weekTargetMinutes: phase.targetMinutes,
+  };
   return {
     generatedAt: opts.now.toISOString(),
     timezone: raw.tz,
@@ -238,8 +246,8 @@ export async function buildPlanningContext(reader: PlanningReader, opts: Context
     weekStart: raw.weekStart,
     weekEnd,
     units: UNITS,
-    athlete: athleteView(raw.profile, raceDistance),
-    phase: phaseFor(raw.weekStart, raw.races, { level: raw.profile.level, weeklyHoursTarget: hours, weekPlans: raw.weekPlans, today: raw.today, season }),
+    athlete: athleteView(raw.profile, raceDistance, availabilityPlan),
+    phase,
     season: seasonView(season, SEASON_ROWS[opts.detail]),
     races: raw.races.filter((r) => r.date >= addDays(raw.today, -14)).map((r) => raceView(r, raw.today)),
     week: weekBlock(raw, view, raw.weekStart, weekEnd),

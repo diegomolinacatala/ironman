@@ -1,6 +1,6 @@
 /** Pure helpers for the Semana screen (unit-tested). */
 import { phaseFor, type PhaseInfo } from '@/domain/periodization';
-import { applyWeekPlan, canOverride } from '@/domain/season';
+import { applyWeekPlan, canOverride, manualWeeklyHours, weeklyHoursFor } from '@/domain/season';
 import type { BusyBlock, ISODate, LifeEvent, Profile, Race, WeekPlan, Workout } from '@/domain/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -112,7 +112,7 @@ export interface WeekPhase {
   phase: PhaseInfo | null;
   /** The override that applies to this week (prep/base/build weeks without a race), else null. */
   plan: WeekPlan | null;
-  /** Weekly hours × the adjusted factor, rounded like Plan → General; null without a profile. */
+  /** Weekly hours (manual or automatic) × the adjusted factor, rounded like Plan → General; null without a profile. */
   targetHours: number | null;
 }
 
@@ -123,11 +123,12 @@ export function weekPhaseOf(
   profile: Pick<Profile, 'level' | 'availability'> | null,
   plans: readonly WeekPlan[] | undefined,
 ): WeekPhase {
-  const weekly = profile?.availability.weeklyHoursTarget ?? null;
-  if (!races) return { phase: null, plan: null, targetHours: weekly };
+  const manual = profile ? manualWeeklyHours(profile.availability) : null;
+  if (!races) return { phase: null, plan: null, targetHours: manual };
   const raw = phaseFor(weekStart, races, { level: profile?.level });
   const stored = plans?.find((p) => p.weekStart === weekStart) ?? null;
   const plan = stored && canOverride(raw) ? stored : null;
+  const weekly = profile ? weeklyHoursFor(manual, profile.level, raw.targetRace?.distance ?? null) : null;
   const phase = applyWeekPlan(raw, plan, weekly ?? 0);
   const targetHours = weekly === null ? null : Math.max(0, Math.round((weekly * 60 * phase.volumeFactor) / 5) * 5) / 60;
   return { phase, plan, targetHours };

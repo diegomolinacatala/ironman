@@ -135,6 +135,7 @@ jest.mock('@/data/queries', () => {
     useUpdateProfile: () => mutation(mockUpdateProfile),
     useUsernameAvailable: () => ({ data: true, isFetching: false, isError: false }),
     useWorkouts: () => ({ data: [], isLoading: false, isError: false }),
+    useRaces: () => ({ data: [], isLoading: false, isError: false }),
     useTokens: () => ({ data: mockState.tokens, isLoading: false, isError: false, refetch: jest.fn() }),
     useCreateToken: () => mutation(mockCreateToken),
     useRevokeToken: () => mutation(mockRevokeToken),
@@ -413,6 +414,20 @@ describe('Notificaciones', () => {
 });
 
 describe('Disponibilidad', () => {
+  test('automatic by default: no editor; turning it off shows the advanced settings and saves manual', async () => {
+    await render(<AvailabilitySettingsScreen />);
+    expect(screen.getByText('Automático (recomendado)')).toBeTruthy();
+    expect(screen.queryByText('Ajustes avanzados')).toBeNull();
+    expect(screen.queryByText('Horas por semana')).toBeNull();
+    await fireEvent(screen.getByLabelText('Automático (recomendado)'), 'valueChange', false);
+    expect(screen.getByText('Ajustes avanzados')).toBeTruthy();
+    expect(screen.getByText('Horas por semana')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar disponibilidad' }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    // No race: the manual hours start from the automatic ones (intermediate, 9 h).
+    expect(mockUpdateProfile.mock.calls[0]?.[0]).toMatchObject({ availability: { mode: 'manual', weeklyHoursTarget: 9 } });
+  });
+
   test('a save error is shown next to the pinned button', async () => {
     mockUpdateProfile.mockRejectedValueOnce(new Error('Sin conexión'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);

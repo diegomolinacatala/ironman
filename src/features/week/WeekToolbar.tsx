@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import type { ISODate } from '@/domain/types';
-import { coachButtonLabel } from '@/features/coach/aiCoachFlag';
+import { useActionSheet } from '@/features/workouts/actionSheet';
 import { Button, space } from '@/ui';
 
 export interface WeekToolbarProps {
@@ -14,55 +14,43 @@ export interface WeekToolbarProps {
 }
 
 /**
- * Planning tools for the week: one primary action ("Planificar semana", offline rules engine),
- * the coach as secondary, and quick links to add a session or an imprevisto by hand.
+ * Planning tools for the week, kept to one row: the primary "Planificar semana" (offline rules
+ * engine, fills the free calendar time) and "Añadir" (entreno or imprevisto). Talking to the
+ * coach lives in the coach bar, always at hand.
  */
-export function WeekToolbar({ weekStart, defaultDate, onPlan, planning }: WeekToolbarProps) {
+export function WeekToolbar({ weekStart: _weekStart, defaultDate, onPlan, planning }: WeekToolbarProps) {
+  const sheet = useActionSheet();
   return (
-    <View style={styles.root}>
-      <View style={styles.row}>
-        <Button
-          label="Planificar semana"
-          icon="sparkles"
-          onPress={onPlan}
-          loading={planning}
-          style={styles.flex}
-          accessibilityHint="Propone sesiones para los huecos libres según tu disponibilidad y fase"
-        />
-        <Button
-          label={coachButtonLabel()}
-          icon="coach"
-          variant="secondary"
-          onPress={() => router.push(`/coach?mode=plan_week&weekStart=${weekStart}`)}
-          style={styles.flex}
-          accessibilityHint="Abre el coach para planificar la semana conversando"
-        />
-      </View>
-      <View style={styles.row}>
-        <Button
-          label="Añadir entreno"
-          icon="add"
-          variant="ghost"
-          size="sm"
-          onPress={() => router.push(`/workout/edit?date=${defaultDate}`)}
-          style={styles.flex}
-        />
-        <Button
-          label="Añadir imprevisto"
-          icon="eventAdd"
-          variant="ghost"
-          size="sm"
-          onPress={() => router.push(`/event/edit?date=${defaultDate}`)}
-          style={styles.flex}
-          accessibilityHint="Pádel, viaje, lesión… y reorganiza la semana"
-        />
-      </View>
+    <View style={styles.row}>
+      <Button
+        label="Planificar semana"
+        icon="sparkles"
+        onPress={onPlan}
+        loading={planning}
+        style={styles.flex}
+        accessibilityHint="Propone sesiones en los huecos libres de tu calendario según tu fase"
+      />
+      <Button
+        label="Añadir"
+        icon="add"
+        variant="secondary"
+        onPress={() =>
+          sheet.open({
+            title: 'Añadir a tu semana',
+            actions: [
+              { label: 'Entreno', icon: 'add', onPress: () => router.push(`/workout/edit?date=${defaultDate}`) },
+              { label: 'Imprevisto (pádel, viaje, lesión…)', icon: 'eventAdd', onPress: () => router.push(`/event/edit?date=${defaultDate}`) },
+            ],
+          })
+        }
+        accessibilityHint="Añade un entreno o un imprevisto y reorganiza la semana"
+      />
+      {sheet.element}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { gap: space.xs },
   row: { flexDirection: 'row', gap: space.sm },
   flex: { flex: 1, paddingHorizontal: space.md },
 });

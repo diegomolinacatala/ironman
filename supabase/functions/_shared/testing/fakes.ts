@@ -41,6 +41,7 @@ export function profile(overrides: Partial<Profile> = {}): Profile {
     level: 'intermediate',
     thresholds: { ftpW: 250, lthr: 170, runThresholdPaceSecPerKm: 270, swimCssSecPer100m: 100 },
     availability: {
+      mode: 'manual',
       weeklyHoursTarget: 9,
       restDay: 0,
       longSessionDays: [5, 6],
@@ -93,7 +94,7 @@ export interface FakeState {
   joint: JointSession[];
   friends: Map<UUID, FriendSummary[]>;
   friendWeeks: Map<UUID, FriendWeekItem[]>;
-  proposals: (ProposalDraft & { id: UUID; userId: UUID })[];
+  proposals: (ProposalDraft & { id: UUID; userId: UUID; status?: string })[];
   applied: { userId: UUID; changes: PlanChange[]; proposalId: UUID }[];
   metricUpserts: { userId: UUID; source: ServerMetricsSource; rows: MetricsUpsert[] }[];
   weekPlans: (WeekPlan & { userId: UUID })[];
@@ -160,7 +161,8 @@ export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): P
     listWorkouts: async (userId, from, to) => state.workouts.filter((w) => w.userId === userId && inRange(w.date, from, to)),
     listRaces: async (userId) => state.races.filter((r) => r.userId === userId),
     listLifeEvents: async (userId, from, to) => state.events.filter((e) => e.userId === userId && e.startDate <= to && e.endDate >= from),
-    listBusyBlocks: async (userId, fromIso, toIso) => state.busy.filter((b) => b.userId === userId && b.start >= fromIso && b.start < toIso),
+    // Overlap, like the real store: a block that began before the range still occupies it.
+    listBusyBlocks: async (userId, fromIso, toIso) => state.busy.filter((b) => b.userId === userId && b.start < toIso && b.end > fromIso),
     listCheckins: async (userId, from, to) => state.checkins.filter((c) => c.userId === userId && inRange(c.date, from, to)),
     listMetrics: async (userId, from, to) => state.metrics.filter((m) => m.userId === userId && inRange(m.date, from, to)),
     listNutrition: async (userId, from, to) => state.nutrition.filter((n) => n.userId === userId && inRange(n.date, from, to)),
@@ -170,12 +172,16 @@ export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): P
     getFriendWeek: async (_viewer, friendId, from, to) => (state.friendWeeks.get(friendId) ?? []).filter((i) => inRange(i.date, from, to)),
     insertProposal: async (userId, draft) => {
       const id = uuid();
-      state.proposals.push({ ...draft, id, userId });
+      state.proposals.push({ ...draft, id, userId, status: draft.status ?? 'pending' });
       return id;
     },
     applyPlanChanges: async (userId, changes, proposalId) => {
       state.applied.push({ userId, changes, proposalId });
       return applyResult ?? { applied: changes.length, failed: [] };
+    },
+    setProposalStatus: async (userId, proposalId, status) => {
+      const idx = state.proposals.findIndex((p) => p.id === proposalId && p.userId === userId);
+      if (idx !== -1) state.proposals[idx] = { ...state.proposals[idx], status };
     },
     insertLifeEvent: async (userId, e) => {
       const created = { ...e, id: uuid(), userId };

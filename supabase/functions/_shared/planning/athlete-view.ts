@@ -23,8 +23,34 @@ export interface ZonesView {
 
 const dayNames = (days: readonly number[]): string[] => days.map((d) => WEEKDAYS_ES[d] ?? String(d));
 
-function availabilityView(a: Availability): Record<string, unknown> {
+/** This week's volume as the app plans it (passed by the planning context). */
+export interface AvailabilityPlan {
+  /** Hours of a normal load week (manual, or automatic for level × race distance). */
+  normalWeekHours: number;
+  /** This week's target minutes (phase.targetMinutes), null when unknown. */
+  weekTargetMinutes: number | null;
+}
+
+const AUTO_HOW =
+  'Automática: el atleta no fija horas, día de descanso ni franjas y quiere entrenar lo máximo posible con cabeza. ' +
+  'Llena el tiempo libre de su calendario (busy) hasta weekTargetMinutes, respeta la rampa de carga y al menos un día de descanso o suave, ' +
+  'y pon hora a cada sesión en un hueco libre (mañana antes de lo ocupado o tarde después; las largas, por la mañana del finde).';
+
+function availabilityView(a: Availability, plan?: AvailabilityPlan): Record<string, unknown> {
+  const volume = plan ? { normalWeekHours: plan.normalWeekHours, weekTargetMinutes: plan.weekTargetMinutes } : {};
+  if (a.mode !== 'manual') {
+    return {
+      mode: 'auto',
+      how: AUTO_HOW,
+      ...volume,
+      restDay: null,
+      longSessionDays: dayNames(a.longSessionDays),
+      poolDays: a.poolDays.length ? dayNames(a.poolDays) : 'cualquier día',
+    };
+  }
   return {
+    mode: 'manual',
+    ...volume,
     weeklyHoursTarget: a.weeklyHoursTarget,
     restDay: a.restDay == null ? null : WEEKDAYS_ES[a.restDay],
     longSessionDays: dayNames(a.longSessionDays),
@@ -54,7 +80,7 @@ export function watchBrandOf(p: Pick<Profile, 'watchBrand'>): WatchBrand {
   return p.watchBrand ?? 'garmin';
 }
 
-export function athleteView(p: Profile, raceDistance: RaceDistance | null): Record<string, unknown> {
+export function athleteView(p: Profile, raceDistance: RaceDistance | null, plan?: AvailabilityPlan): Record<string, unknown> {
   return {
     name: p.displayName,
     username: p.username,
@@ -63,7 +89,7 @@ export function athleteView(p: Profile, raceDistance: RaceDistance | null): Reco
     thresholds: p.thresholds,
     zones: zonesView(p.thresholds, raceDistance),
     watchBrand: watchBrandOf(p),
-    availability: availabilityView(p.availability),
+    availability: availabilityView(p.availability, plan),
     coachNotes: p.coachNotes,
   };
 }

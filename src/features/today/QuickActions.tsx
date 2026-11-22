@@ -1,6 +1,6 @@
 /**
  * Hoy · quick actions under the header: check-in, "imprevisto" (new life event) and, when the
- * coach bar isn't shown inline on Hoy, a meal photo. Equal tiles, icon + short label.
+ * coach bar isn't shown inline on Hoy, a meal photo. One quiet row of pills, icon + short label.
  */
 import { router, type Href } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -11,7 +11,6 @@ export const CHECKIN_ROUTE = '/checkin';
 export const NEW_EVENT_ROUTE = '/event/edit';
 export const MEAL_ROUTE = '/meal';
 
-const TILE_ICON = 36;
 
 interface QuickAction {
   key: string;
@@ -33,8 +32,7 @@ export function quickActions({ checkinDone, showMeal }: QuickActionsProps): Quic
 
 function ActionTile({ action }: { action: QuickAction }) {
   const { colors } = useTheme();
-  const iconBg = action.done ? colors.surfaceAlt : colors.accentSoft;
-  const iconFg = action.done ? colors.success : colors.onAccentSoft;
+  const iconFg = action.done ? colors.success : colors.accentInk;
   return (
     <Pressable
       accessibilityRole="button"
@@ -51,10 +49,8 @@ function ActionTile({ action }: { action: QuickAction }) {
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
       ]}>
-      <View style={[styles.icon, { backgroundColor: iconBg }]}>
-        <Icon name={action.icon} size={iconSize.md} color={iconFg} />
-      </View>
-      <Text variant="caption" color={action.done ? 'textMuted' : 'text'} align="center" numberOfLines={2}>
+      <Icon name={action.icon} size={iconSize.sm} color={iconFg} />
+      <Text variant="caption" color={action.done ? 'textMuted' : 'text'} numberOfLines={1} style={styles.label}>
         {action.label}
       </Text>
     </Pressable>
@@ -80,16 +76,17 @@ export function QuickActions(props: QuickActionsProps) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.sm },
+  label: { fontSize: 14, flexShrink: 1 },
   tile: {
     flex: 1,
     flexBasis: 0,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: space.xs,
-    minHeight: 76,
-    paddingVertical: space.md,
+    minHeight: 44,
     paddingHorizontal: space.xs,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  icon: { width: TILE_ICON, height: TILE_ICON, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

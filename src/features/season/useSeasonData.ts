@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import { todayISO } from '@/domain/dates';
-import { buildSeason, type SeasonOverview, type SeasonWeek } from '@/domain/season';
+import { buildSeason, manualWeeklyHours, type SeasonOverview, type SeasonWeek } from '@/domain/season';
 import { seasonWeekDetail } from '@/domain/seasonSessions';
 import type { ISODate, Profile, Race } from '@/domain/types';
 import { useProfile, useRaces, useWeekPlans, useWorkouts } from '@/data/queries';
@@ -61,7 +61,7 @@ export function useSeasonData(): SeasonData {
       today,
       races: raceList,
       level: athlete.level,
-      weeklyHoursTarget: athlete.availability.weeklyHoursTarget,
+      weeklyHoursTarget: manualWeeklyHours(athlete.availability),
       weekPlans: weekPlans.data ?? [],
     });
   }, [today, raceList, athlete, weekPlans.data]);
@@ -73,7 +73,7 @@ export function useSeasonData(): SeasonData {
 
   const sessions = useMemo(() => sessionsByWeek(workouts.data ?? []), [workouts.data]);
   const adjustContext = useMemo<AdjustContext | null>(
-    () => (athlete && raceList ? { races: raceList, level: athlete.level, weeklyHoursTarget: athlete.availability.weeklyHoursTarget } : null),
+    () => (athlete && raceList ? { races: raceList, level: athlete.level, weeklyHoursTarget: manualWeeklyHours(athlete.availability) } : null),
     [athlete, raceList],
   );
 

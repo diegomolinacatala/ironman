@@ -111,7 +111,7 @@ function DeniedCard() {
       <View style={styles.block}>
         <Text variant="heading">Sin acceso al calendario</Text>
         <Text variant="callout" color="textMuted">
-          Puedes darlo en Ajustes › Road to Ironman › Calendarios. Mientras, el plan usa solo tu disponibilidad.
+          Puedes darlo en Ajustes › Road to Ironman › Calendarios. Mientras, el plan no sabe cuándo estás ocupado: mueve tú los entrenos que no te cuadren.
         </Text>
         <Button label="Abrir Ajustes" icon="settings" variant="secondary" onPress={() => void Linking.openSettings()} />
       </View>

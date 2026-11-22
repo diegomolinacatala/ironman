@@ -153,8 +153,15 @@ export class StoreRejectedError extends Error {
   }
 }
 
+/** A proposal to store: pending (the user reviews it, notified) or already applied (apply_now, not notified). */
+export type ProposalInsert = ProposalDraft & { status?: 'pending' | 'applied' };
+
+export type StoredProposalStatus = 'pending' | 'applied' | 'partially_applied' | 'discarded';
+
 export interface PlanningWriter {
-  insertProposal(userId: UUID, draft: ProposalDraft): Promise<UUID>;
+  insertProposal(userId: UUID, draft: ProposalInsert): Promise<UUID>;
+  /** Sets the status of one of the user's proposals (e.g. after an apply_now that partly failed). */
+  setProposalStatus(userId: UUID, proposalId: UUID, status: StoredProposalStatus): Promise<void>;
   applyPlanChanges(userId: UUID, changes: PlanChange[], proposalId: UUID): Promise<ApplyChangesResult>;
   insertLifeEvent(userId: UUID, event: LifeEventInsert): Promise<LifeEvent>;
   upsertMetrics(userId: UUID, source: ServerMetricsSource, rows: MetricsUpsert[]): Promise<number>;

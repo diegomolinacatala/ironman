@@ -44,9 +44,11 @@ import {
   type JsonRecord,
 } from './narrow';
 
+/** Automatic availability (the default): the calendar decides; hours/rest day only matter in manual mode. */
 export const DEFAULT_AVAILABILITY: Availability = {
+  mode: 'auto',
   weeklyHoursTarget: 8,
-  restDay: 0,
+  restDay: null,
   longSessionDays: [5, 6],
   windows: [],
   poolDays: [],
@@ -148,18 +150,27 @@ function parseWindow(value: unknown): TrainingWindow | null {
   return { weekday: value.weekday, start, end };
 }
 
+/**
+ * Profiles stored before the mode existed (no `mode`) are automatic. Automatic
+ * availability has no fixed rest day and no windows (the calendar decides), so
+ * every reader — planner, re-planner, Huecos, the coach — sees the same thing.
+ */
 export function parseAvailability(value: unknown): Availability {
   if (!isRecord(value)) return DEFAULT_AVAILABILITY;
-  const restDay = value.restDay === null ? null : isWeekday(value.restDay) ? value.restDay : DEFAULT_AVAILABILITY.restDay;
+  const manual = value.mode === 'manual';
+  const restDay = value.restDay === null ? null : isWeekday(value.restDay) ? value.restDay : 0;
   return {
+    mode: manual ? 'manual' : 'auto',
     weeklyHoursTarget: asNumber(value.weeklyHoursTarget) ?? DEFAULT_AVAILABILITY.weeklyHoursTarget,
-    restDay,
+    restDay: manual ? restDay : null,
     longSessionDays: Array.isArray(value.longSessionDays)
       ? weekdays(value.longSessionDays)
       : DEFAULT_AVAILABILITY.longSessionDays,
-    windows: asArray(value.windows)
-      .map(parseWindow)
-      .filter((w): w is TrainingWindow => w !== null),
+    windows: manual
+      ? asArray(value.windows)
+          .map(parseWindow)
+          .filter((w): w is TrainingWindow => w !== null)
+      : [],
     poolDays: weekdays(value.poolDays),
   };
 }
