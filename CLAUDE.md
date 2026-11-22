@@ -1,5 +1,7 @@
 # Road to Ironman — notes for coding agents
 
+Al empezar, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota pertinente. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Es la memoria compartida de los dos socios, Claude Code y Codex.
+
 - Read `docs/V2.md`, `docs/V4.md`, `docs/ARCHITECTURE.md` and `docs/DESIGN.md` (design system + navigation: 5 tabs Hoy · Plan · Juntos · Progreso · Tú, navy "calm endurance" brand, Inter, light/dark/automatic) first: they are the contract (domain types, repository, query hooks, routes, RPCs, edge functions, MCP tools).
 - Expo SDK 58 changed many APIs: follow `AGENTS.md` (read versioned docs, use `npx expo install`).
 - UI copy is Spanish (Spain); code is English. Use `src/ui` primitives and `src/data/queries.ts` hooks only.

@@ -1,0 +1,16 @@
+# Integraciones
+
+| Servicio | Entrada y salida | Punto de diagnóstico |
+| --- | --- | --- |
+| Apple Salud | Lee entrenos y métricas con permiso del usuario. COROS también puede alimentar Salud a través de su app. | `src/integrations/health`, adaptadores HealthKit y pruebas de importación/mapping. Probar permisos y sincronización en iPhone. |
+| Garmin | La Personal API se usa para conectar, sincronizar y desconectar. Las credenciales personales se gestionan en servidor. | Edge Function `garmin` y adaptadores de parseo, credenciales y sync. Comprobar procedencia y correspondencia con la sesión planificada. |
+| COROS | Guía para Salud, Claude con el conector del deportista y copia manual. El plan puede expresarse en formato orientado al dispositivo. | Pantalla `settings/coros`, `docs/SETUP.md` §8b y herramientas MCP de planificación. Verificar capacidades vigentes del proveedor antes de prometer exportación. |
+| Calendario | Lee ocupación del teléfono para planificar. Puede reflejar entrenamientos en un calendario y ofrecer un feed ICS por suscripción. | Separar permiso de lectura, sincronización de eventos del plan y secreto revocable de ICS. Ver `src/integrations/calendar` y función `ics`. |
+| Voz, imagen e IA | Dictado y síntesis para el coach e informe. Cámara/galería para estimar comidas. Worker para chat y voz según configuración. | `src/integrations/speech`, `camera`, `cloudflare/ai/src`. Revisar consentimiento, disponibilidad del proveedor y alternativas locales. |
+| Widgets | Hoy, próxima sesión, carrera e informe de la mañana reflejan información de la app. | `src/integrations/widgets`. Pasar las propiedades por `toPropertyList`. Evitar valores nulos al cruzar al widget nativo. |
+| Notificaciones | Recordatorios locales e invitaciones o novedades remotas mediante APNs. | Planificación local, registro de token, rutas al pulsar y función `push-dispatch`. Una alerta visible y una fila de notificación representan etapas distintas. |
+| Apple y cuenta | Acceso con Apple, además del correo. El borrado contempla revocar la autorización Apple. | `src/data/repository.ts`, migraciones de cuenta y función `apple-revoke`. |
+
+**Al volver al primer plano o salir.** `src/integrations/AppEffects.tsx` y los hooks de `effects` coordinan sincronización, reflejo del plan, registro push, respuesta a notificaciones y limpieza al salir de la sesión. Revisarlos cuando widgets, avisos o calendario conserven datos antiguos.
+
+**Servicios del entrenador.** `coach` tramita la petición del atleta, `briefing` prepara el informe, `meal` recibe texto o imagen, `speech` sintetiza audio y `mcp` sirve al cliente externo del deportista. El selector de IA prioriza el Worker configurado, contempla Anthropic si existe su clave y devuelve ausencia de proveedor si faltan ambos. La política de producto recogida en Claude exige consultar al propietario antes de incorporar coste. La configuración efectiva de producción requiere comprobación aparte.

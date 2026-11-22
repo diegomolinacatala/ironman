@@ -1,5 +1,9 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
+## Memoria compartida del proyecto
+
+Al empezar una sesión, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota del área afectada. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Deja decisiones, cambios, comprobaciones y pendientes para los dos socios, Codex y Claude Code.
+
 ## Expo has changed — do not trust your training data
 
 Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:

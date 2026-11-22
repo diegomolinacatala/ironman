@@ -1,0 +1,4 @@
+# Cada ordenador conserva sus ventanas, caché y preferencias.
+.obsidian/*
+!.obsidian/app.json
+.trash/
