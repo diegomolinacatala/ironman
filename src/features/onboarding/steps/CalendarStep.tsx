@@ -19,7 +19,7 @@ import { StepLayout, type StepAction, type StepNav } from '../StepLayout';
 /**
  * Step 5 (optional, iPhone only): we read busy time from the athlete's
  * calendars and write the workouts into our own calendar with an alarm.
- * Denied → explain Ajustes, may continue.
+ * «Continuar» always shows the iOS prompt (App Review 5.1.1(iv)); denied → explain Ajustes, may continue.
  */
 export function CalendarStep({ nav }: { nav: StepNav }) {
   const calendar = useCalendarIntegration();
@@ -58,16 +58,16 @@ export function CalendarStep({ nav }: { nav: StepNav }) {
       nav.next();
     }, 'No hemos podido preparar tu calendario. Puedes seguir y activarlo luego en Tú.');
 
+  // App Review 5.1.1(iv): before the iOS prompt the only way forward is a neutral «Continuar»
+  // that always shows it (no «Permitir», no «Ahora no»); declining happens in the iOS sheet.
   const primary: StepAction =
     permission === 'undetermined'
-      ? { label: 'Permitir acceso al calendario', icon: 'calendarCheck', onPress: () => void allow(), loading: busy }
+      ? { label: 'Continuar', iconRight: 'arrowRight', onPress: () => void allow(), loading: busy }
       : permission === 'denied'
         ? { label: 'Continuar sin calendario', iconRight: 'arrowRight', onPress: nav.next }
         : { label: 'Continuar', iconRight: 'arrowRight', onPress: () => void finish(), loading: busy };
-  const secondary: StepAction | null = permission === 'undetermined' ? { label: 'Ahora no', onPress: nav.next, disabled: busy } : null;
-
   return (
-    <StepLayout nav={nav} busy={busy} primary={primary} secondary={secondary}>
+    <StepLayout nav={nav} busy={busy} primary={primary}>
       <Appear index={1} style={styles.block}>
         <EventPreview alarmMinutes={training.alarmMinutes} />
         <StatusLine icon="eye" text="Leemos cuándo estás ocupado, nunca los títulos de tus eventos." />

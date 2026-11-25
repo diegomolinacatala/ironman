@@ -58,8 +58,9 @@ export function MorningStep({ nav, profile }: { nav: StepNav; profile: Profile }
     <StepLayout
       nav={nav}
       busy={saving}
-      primary={{ label: 'Activar mi informe', icon: 'bell', onPress: () => void activate(), loading: saving }}
-      secondary={{ label: 'Ahora no', onPress: nav.next, disabled: saving }}>
+      // App Review 5.1.1(iv): «Continuar» always leads to the notification prompt; no «Ahora no» before it.
+      // The report can be turned off later in Tú.
+      primary={{ label: 'Continuar', iconRight: 'arrowRight', onPress: () => void activate(), loading: saving }}>
       <Appear index={1} style={styles.block}>
         <TimeField label="¿A qué hora te despiertas?" value={time} optional={false} onChange={(next) => setTime(next ?? DEFAULT_MORNING_TIME)} />
         <NotificationPreview time={time} />

@@ -89,7 +89,7 @@ export function CalendarCard() {
         />
       ) : (
         <Button
-          label="Dar acceso al calendario"
+          label="Conectar calendario"
           variant="secondary"
           icon="week"
           loading={calendar.busy}

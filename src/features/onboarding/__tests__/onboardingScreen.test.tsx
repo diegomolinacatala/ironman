@@ -69,6 +69,7 @@ const mockUpdateProfile = jest.fn(async (patch: Partial<Profile>) => {
   if (mockState.profile) mockProfileStore.set({ ...mockState.profile, ...patch });
   return mockState.profile;
 });
+const mockCalendarRequest = jest.fn();
 const mockConnectGarmin = jest.fn(async (_vars: { apiKey: string; expiresAt: string | null }) => ({}));
 const mockCreateToken = jest.fn(async (_vars: { scope: string; label: string }) => {
   mockTokenStore.set([...mockTokenStore.tokens, NEW_TOKEN]);
@@ -169,16 +170,23 @@ jest.mock('@/data/queries', () => {
 jest.mock('@/integrations/hooks', () => ({
   FIRST_HEALTH_IMPORT_DAYS: 28,
   useNotificationPermission: () => ({ status: 'granted', request: async () => true }),
-  useCalendarIntegration: () => ({
-    permission: 'undetermined',
-    calendars: [],
-    selectedIds: [],
-    lastSync: null,
-    busy: false,
-    request: async () => undefined,
-    setSelected: async () => undefined,
-    syncNow: async () => undefined,
-  }),
+  useCalendarIntegration: () => {
+    // The iOS sheet answers «No permitir»: the step then offers «Continuar sin calendario».
+    const [permission, setPermission] = jest.requireActual<typeof import('react')>('react').useState('undetermined');
+    return {
+      permission,
+      calendars: [],
+      selectedIds: [],
+      lastSync: null,
+      busy: false,
+      request: async () => {
+        mockCalendarRequest();
+        setPermission('denied');
+      },
+      setSelected: async () => undefined,
+      syncNow: async () => undefined,
+    };
+  },
   useHealthIntegration: () => ({ ...mockHealth }),
 }));
 jest.mock('@/integrations/calendar', () => ({ getCalendarPermission: async () => 'granted' }));
@@ -312,9 +320,14 @@ describe('v2 onboarding', () => {
 
     // 5 · Calendario and 6 · Informe (optional)
     expect(await screen.findByText('Tu plan, en tu calendario')).toBeTruthy();
-    await press('Ahora no');
+    // App Review 5.1.1(iv): no «Permitir» / «Ahora no» before the iOS prompt, «Continuar» always shows it.
+    expect(screen.queryByRole('button', { name: 'Ahora no' })).toBeNull();
+    await press('Continuar');
+    await waitFor(() => expect(mockCalendarRequest).toHaveBeenCalledTimes(1));
+    await press('Continuar sin calendario');
     expect(await screen.findByText('Tu informe de cada mañana')).toBeTruthy();
-    await press('Activar mi informe');
+    expect(screen.queryByRole('button', { name: 'Ahora no' })).toBeNull();
+    await press('Continuar');
     await waitFor(() =>
       expect(mockUpdateProfile).toHaveBeenCalledWith({
         notificationPrefs: expect.objectContaining({ morningSummary: true, morningTime: '07:00' }),
@@ -460,6 +473,8 @@ describe('Tu reloj › COROS', () => {
     expect(screen.getByText(/Perfil › Ajustes › Apps de terceros › Sincronización de datos › Apple Health/)).toBeTruthy();
     expect(screen.getByText(/La VFC, la recuperación y la carga de COROS llegan a través de tu Claude/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Continuar' })).toBeNull();
+    // App Review 5.1.1(iv): the Apple Salud primer never lets you put off its iOS prompt.
+    expect(screen.queryByText('Seguir sin reloj')).toBeNull();
 
     await press('Conectar Apple Salud');
     await waitFor(() => expect(mockHealth.connect).toHaveBeenCalledWith({ days: 28 }));

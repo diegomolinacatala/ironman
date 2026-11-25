@@ -18,7 +18,7 @@ const REQUIRED_STRINGS = [
   'NSHealthShareUsageDescription',
   'NSHealthUpdateUsageDescription',
 ];
-const REQUIRED_BACKGROUND_MODES = ['remote-notification', 'audio'];
+const REQUIRED_BACKGROUND_MODES = ['remote-notification'];
 
 /** Pure check, exported for reuse: returns the list of problems (empty = OK). */
 export function plistProblems(infoPlist) {

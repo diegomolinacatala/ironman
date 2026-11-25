@@ -68,6 +68,33 @@ https://diegomolinacatala.github.io/ironman/privacy/ · normas https://diegomoli
 
 Apple tarda de 1 a 3 días. Si la rechaza, copia el mensaje del *Centro de resoluciones* y se arregla.
 
+### Rechazo del 22-11-2026 (build 19): qué se cambió y qué falta
+
+| Guideline | Qué pedía Apple | Arreglo |
+| --- | --- | --- |
+| 5.1.1(iv) | Antes del permiso del calendario había un botón «Permitir» y un «Ahora no». | Paso *Calendario*: un único «Continuar» que siempre abre el aviso de iOS. Lo mismo en *Informe* (avisos) y en la guía de COROS (Apple Salud). En Tú, «Activar avisos» / «Conectar calendario». |
+| 2.5.4 | `audio` en `UIBackgroundModes` sin audio persistente. | Quitado de `app.config.ts` (el informe hablado solo suena con la app abierta). |
+| 2.1 | Vídeo con un iPhone real y el «hardware» (el reloj). | Notas aclaran que no hay emparejamiento. **Falta grabar el vídeo** (abajo). |
+
+**Vídeo (2-3 min, grabado con otro móvil para que se vean a la vez el iPhone y el reloj):**
+
+1. iPhone y reloj Garmin en plano. Abre Road to Ironman (build nueva) e inicia sesión.
+2. Onboarding › *Tu reloj* › Garmin: «Abrir Garmin Connect», copiar la clave personal, pegarla, «Garmin conectado».
+3. Di o rotula: *no hay emparejamiento Bluetooth; los datos llegan desde Garmin Connect*.
+4. Termina una actividad corta en el reloj (o enseña una reciente), sincroniza con Garmin Connect y muestra en
+   la app que la sesión aparece hecha (Hoy / Progreso) con su FC.
+5. (Opcional) COROS: «Conectar Apple Salud» y el aviso de iOS.
+
+Súbelo a YouTube como **oculto** (no privado), pon el enlace en `review.demoVideoUrl` de
+`store/listing.json` (o en el secreto `ASC_DEMO_VIDEO_URL`), lanza una build nueva, ejecuta el
+workflow con *submit* y responde en el Centro de resoluciones:
+
+> Hello, thank you for the review. We have addressed all three issues in build 20:
+> 5.1.1(iv): the screen before the calendar (and every other) permission request now has a single "Continuar" (Continue) button that always shows the system prompt; there is no "Permitir" or "Ahora no" before it.
+> 2.5.4: the "audio" value has been removed from UIBackgroundModes.
+> 2.1: Road to Ironman does not pair with any hardware (no Bluetooth or accessories). A watch is optional: Garmin data arrives from Garmin's cloud with the user's Garmin Connect personal key, and COROS data through Apple Health. The demo video is linked in the App Review Information notes: <ENLACE>. Without a watch, tap «Seguir sin reloj» on the watch step.
+> Thank you!
+
 ---
 
 ## Notas

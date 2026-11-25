@@ -36,8 +36,11 @@ export function CorosStep({ nav, isDemo, onSkip, onSimulatedDone, picker, title 
   const coros = useCorosConnect({ isDemo });
   const busy = coros.phase === 'connecting';
   const unavailable = coros.phase === 'unavailable';
-  // Always offered (App Review 2.1: someone without a watch must never be stuck here).
-  const canSkip = !busy && !coros.done && !unavailable;
+  // App Review 2.1: someone without a watch must never be stuck here (the brand picker stays
+  // on screen and Garmin offers it). Hidden only while the Apple Salud primer is up, because
+  // 5.1.1(iv) forbids delaying a permission request from its own explanation; it comes back
+  // right after the iOS sheet, whatever the answer (or after a failure).
+  const canSkip = !busy && !coros.done && !unavailable && (coros.phase !== 'intro' || coros.failed);
 
   const skip = async () => {
     if (await confirmSkipWatch()) onSkip();

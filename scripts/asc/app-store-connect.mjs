@@ -7,7 +7,8 @@
  * labels and the EU trader (DSA) declaration.
  *
  * Env: ASC_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID; ASC_REVIEW_CODE (review account code, from
- * scripts/review-account.mjs); ASC_CONTACT_PHONE (review contact, e.g. +34 600 000 000).
+ * scripts/review-account.mjs); ASC_CONTACT_PHONE (review contact, e.g. +34 600 000 000);
+ * ASC_DEMO_VIDEO_URL (optional, overrides review.demoVideoUrl: the App Review 2.1 video).
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -176,8 +177,14 @@ async function setAvailability(appId) {
 async function setReviewDetail(versionId) {
   const code = process.env.ASC_REVIEW_CODE ?? '';
   const phone = process.env.ASC_CONTACT_PHONE ?? '';
+  // App Review 2.1 asked for a video of the app with a real watch: its link goes first in the notes.
+  const { demoVideoUrl = '', notes = '', ...review } = listing.review;
+  const video = process.env.ASC_DEMO_VIDEO_URL || demoVideoUrl;
   const attributes = {
-    ...listing.review,
+    ...review,
+    notes: video ? `Vídeo de demostración / Demo video (iPhone + reloj): ${video}
+
+${notes}` : notes,
     demoAccountRequired: true,
     ...(code ? { demoAccountPassword: code } : {}),
     ...(phone ? { contactPhone: phone } : {}),
@@ -190,7 +197,7 @@ async function setReviewDetail(versionId) {
       data: { type: 'appStoreReviewDetails', attributes, relationships: { appStoreVersion: rel('appStoreVersions', versionId) } },
     });
   }
-  const missing = [code ? null : 'ASC_REVIEW_CODE', phone ? null : 'ASC_CONTACT_PHONE'].filter(Boolean);
+  const missing = [code ? null : 'ASC_REVIEW_CODE', phone ? null : 'ASC_CONTACT_PHONE', video ? null : 'el vídeo de demostración (review.demoVideoUrl o ASC_DEMO_VIDEO_URL)'].filter(Boolean);
   if (missing.length) throw new Error(`guardado, pero faltan los secretos ${missing.join(' y ')}`);
 }
 

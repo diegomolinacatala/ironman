@@ -37,8 +37,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     appleTeamId: process.env.APPLE_TEAM_ID,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
-      // 'audio': the morning briefing keeps playing when the screen locks.
-      UIBackgroundModes: ['remote-notification', 'audio'],
+      // No 'audio': App Review (2.5.4) rejects it without a persistent-audio feature; the spoken
+      // briefing only plays in the foreground (neuralSpeech: shouldPlayInBackground false).
+      UIBackgroundModes: ['remote-notification'],
       CFBundleDevelopmentRegion: 'es',
     },
   },

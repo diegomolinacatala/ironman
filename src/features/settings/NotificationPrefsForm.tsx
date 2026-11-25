@@ -74,7 +74,7 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
           title="Permiso del iPhone"
           description="Sin permiso no podemos avisarte, aunque actives las opciones de abajo."
           state={Platform.OS === 'web' ? 'unavailable' : toPermissionState(permission.status)}
-          actionLabel="Permitir avisos"
+          actionLabel="Activar avisos"
           onRequest={() => permission.request()}
         />
       </Card>
