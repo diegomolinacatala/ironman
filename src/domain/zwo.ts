@@ -55,9 +55,10 @@ export function toZwo(workout: Workout, thresholds: Thresholds | null): string |
     const repeat = Math.max(1, Math.round(step.repeat ?? 1));
     const next = steps[i + 1];
     if (step.kind === 'warmup') {
-      blocks.push(`<Warmup Duration="${duration}" PowerLow="${fraction(Math.min(power.low, 0.5))}" PowerHigh="${fraction(power.high)}"/>`);
+      // A warm-up ramps up to the bottom of Z2 even when its zone is Z1, like a coach would set it in ERG.
+      blocks.push(`<Warmup Duration="${duration}" PowerLow="${fraction(Math.min(power.low, 0.5))}" PowerHigh="${fraction(Math.max(power.high, 0.65))}"/>`);
     } else if (step.kind === 'cooldown') {
-      blocks.push(`<Cooldown Duration="${duration}" PowerLow="${fraction(power.high)}" PowerHigh="${fraction(Math.min(power.low, 0.45))}"/>`);
+      blocks.push(`<Cooldown Duration="${duration}" PowerLow="${fraction(Math.max(power.high, 0.6))}" PowerHigh="${fraction(Math.min(power.low, 0.45))}"/>`);
     } else if (step.kind === 'work' && repeat > 1 && next && (next.kind === 'recovery' || next.kind === 'rest') && Math.round(next.repeat ?? 1) === repeat) {
       const off = powerOf(next, workout, thresholds) ?? { low: 0.45, high: 0.55 };
       blocks.push(

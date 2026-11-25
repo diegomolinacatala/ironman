@@ -53,7 +53,10 @@ export function FuelingHint({ workout, defaultOpen = false }: FuelingHintProps) 
         <View style={styles.body}>
           <FuelLine label="Antes" text={hint.before} />
           {schedule ? <FuelLine label="Tomas" text={fuelingScheduleText(schedule)} /> : null}
-          {hint.during ? <FuelLine label="Durante" text={hint.during} /> : null}
+          {/* With a schedule the generic g/h text repeats it; it still adds sodium and race practice on long or race-pace days. */}
+          {hint.during && (!schedule || (hint.carbsPerHour ?? 0) >= 75 || workout.intensity === 'race') ? (
+            <FuelLine label="Durante" text={hint.during} />
+          ) : null}
           <FuelLine label="Después" text={hint.after} />
           <Text variant="caption" color="textMuted">
             Pautas generales, no consejo médico.
