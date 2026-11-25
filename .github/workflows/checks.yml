@@ -1,0 +1,41 @@
+name: Checks
+
+# Todas las comprobaciones en cada pull request hacia main (y al llegar a main), en Linux:
+# tipos, Jest, base de datos (PGlite: RLS y RPC), Edge Functions y el worker de IA.
+# El workflow de iOS solo pasa tipos y Jest antes de compilar; este cubre el resto
+# antes de fusionar, sin generar ninguna build.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tipos, Jest, base de datos y funciones
+        run: npm run test:all
+
+      - name: Worker de IA
+        run: node --test "cloudflare/ai/src/**/*.test.mts"

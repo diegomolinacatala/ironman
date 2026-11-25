@@ -110,11 +110,54 @@ function useSignedIn(): boolean {
   return Boolean(useAuth().session);
 }
 
-/** Subscribes to repository realtime changes and invalidates affected queries. */
+/** Realtime bursts (a Garmin sync writes N workouts) are gathered this long before refetching. */
+export const REALTIME_BATCH_MS = 300;
+
+/** Root query keys of a set of topics, each once. */
+export function rootsOf(topics: Iterable<ChangeTopic>): string[] {
+  return [...new Set([...topics].flatMap((topic) => TOPIC_KEYS[topic]))];
+}
+
+/**
+ * Collects change topics and flushes their roots once per window: N events on
+ * `workouts` and one on `joint_sessions` refetch each affected query once, not N + 7 times.
+ */
+export function createInvalidationBatcher(flush: (roots: string[]) => void, delayMs = REALTIME_BATCH_MS) {
+  let pending = new Set<ChangeTopic>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return {
+    push(topic: ChangeTopic) {
+      pending.add(topic);
+      if (timer) return;
+      timer = setTimeout(() => {
+        const topics = pending;
+        pending = new Set();
+        timer = null;
+        flush(rootsOf(topics));
+      }, delayMs);
+    },
+    cancel() {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      pending = new Set();
+    },
+  };
+}
+
+/** Subscribes to repository realtime changes and invalidates affected queries (batched). */
 export function useRealtimeInvalidation(): void {
   const repo = useRepository();
-  const invalidate = useInvalidate();
-  useEffect(() => repo.subscribe((topic) => void invalidate([topic])), [repo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const client = useQueryClient();
+  useEffect(() => {
+    const batcher = createInvalidationBatcher((roots) => {
+      for (const root of roots) void client.invalidateQueries({ queryKey: [root] as QueryKey });
+    });
+    const unsubscribe = repo.subscribe((topic) => batcher.push(topic));
+    return () => {
+      unsubscribe();
+      batcher.cancel();
+    };
+  }, [repo, client]);
 }
 
 // ---------------------------------------------------------------------------
