@@ -97,6 +97,11 @@ export function PmcCard({ series }: { series: PmcSeries }) {
       <Legend palette={palette} />
       <View style={[styles.reading, { backgroundColor: theme.colors.surfaceAlt }]}>
         <Text variant="callout">{reading.text}</Text>
+        {series.balance?.warning ? (
+          <Text variant="callout" accessibilityRole="alert">
+            {series.balance.warning}
+          </Text>
+        ) : null}
       </View>
       {series.seeded ? (
         <Text variant="caption" color="textMuted">
@@ -122,5 +127,5 @@ const styles = StyleSheet.create({
   swatchDashed: { width: 14, height: 0, borderTopWidth: 2, borderStyle: 'dashed' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: space.xs },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  reading: { borderRadius: radius.md, padding: space.md },
+  reading: { borderRadius: radius.md, padding: space.md, gap: space.sm },
 });

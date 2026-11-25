@@ -6,11 +6,13 @@ import {
   INTENSITY_IF,
   isUnplanned,
   lifeEventLoad,
+  loadBalance,
   rpeLoad,
   weeklyLoadForRamp,
   weekSummary,
   workoutLoad,
 } from '../load';
+import { addDays } from '../dates';
 import { makeEvent, makeWorkout } from './fixtures';
 
 describe('estimateTss', () => {
@@ -205,5 +207,42 @@ describe('activities logged by Claude without a plan (ENG-9)', () => {
     expect(isUnplanned(planned)).toBe(false);
     expect(complianceOf(planned, '2026-10-25')).toBe('done');
     expect(isUnplanned({ ...logged, completed: { durationMin: 60 } })).toBe(false);
+  });
+});
+
+describe('loadBalance (acute:chronic and monotony)', () => {
+  const TODAY = '2026-11-25';
+  function series(perDay: (daysAgo: number) => number): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (let i = 0; i < 28; i += 1) out[addDays(TODAY, -i)] = perDay(i);
+    return out;
+  }
+
+  test('a steady month with easy, hard and rest days: nothing to say', () => {
+    const b = loadBalance(series((i) => (i % 7 === 3 ? 0 : i % 2 === 0 ? 30 : 80)), TODAY);
+    expect(b.acwr).toBeGreaterThan(0.8);
+    expect(b.acwr).toBeLessThan(1.2);
+    expect(b.warning).toBeNull();
+  });
+
+  test('a big jump this week is an alert; a moderate one a warning', () => {
+    const big = loadBalance(series((i) => (i < 7 ? (i % 2 ? 140 : 40) : i % 2 ? 60 : 20)), TODAY);
+    expect(big.acwr).toBeGreaterThan(1.5);
+    expect(big.warning).toMatch(/salto grande/);
+    const moderate = loadBalance(series((i) => (i < 7 ? (i % 2 ? 130 : 30) : i % 2 ? 70 : 25)), TODAY);
+    expect(moderate.acwr).toBeGreaterThan(1.3);
+    expect(moderate.acwr).toBeLessThanOrEqual(1.5);
+    expect(moderate.warning).toMatch(/vigila el sueño/);
+  });
+
+  test('every day the same load, no rest: monotony', () => {
+    const b = loadBalance(series((i) => (i < 7 ? 60 + (i % 2) : 60)), TODAY);
+    expect(b.monotony).toBeGreaterThan(2);
+    expect(b.warning).toMatch(/sin un día de verdad suave o de descanso/);
+  });
+
+  test('too little history: no ratios, no warning', () => {
+    const b = loadBalance(series((i) => (i < 3 ? 80 : 0)), TODAY);
+    expect(b).toEqual({ acwr: null, monotony: null, warning: null });
   });
 });

@@ -14,6 +14,7 @@ import { CompletedPanel } from '@/features/workouts/detail/CompletedPanel';
 import { DetailActions } from '@/features/workouts/detail/DetailActions';
 import { JointInfo } from '@/features/workouts/detail/JointInfo';
 import { PlanSections } from '@/features/workouts/detail/PlanSections';
+import { SimilarSessionsNote } from '@/features/workouts/detail/SimilarSessionsNote';
 import { WorkoutHeader } from '@/features/workouts/detail/WorkoutSummary';
 import { partnerNames } from '@/features/workouts/draft';
 import { FuelingHint } from '@/features/workouts/FuelingHint';
@@ -85,6 +86,7 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
       <WorkoutHeader workout={workout} partnerName={partnerName} />
       <CompletedPanel workout={workout} compliance={compliance} thresholds={athlete.thresholds} raceDistance={athlete.raceDistance} />
       <CoachVerdict verdict={workoutVerdict(workout, athlete.thresholds, athlete.raceDistance)} />
+      {workout.status === 'completed' ? <SimilarSessionsNote workout={workout} /> : null}
       <PlanSections
         workout={workout}
         athlete={athlete}

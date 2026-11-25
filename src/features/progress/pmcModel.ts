@@ -5,7 +5,7 @@
  * ATL → "Fatiga", TSB → "Frescura", TSS → "Carga".
  */
 import { addDays, daysInRange, diffDays, minDate, startOfWeek } from '@/domain/dates';
-import { computePmc, dailyLoads } from '@/domain/load';
+import { computePmc, dailyLoads, loadBalance, type LoadBalance } from '@/domain/load';
 import type { DateRange, ISODate, LifeEvent, Workout } from '@/domain/types';
 
 import { formatInt, formatSigned, spokenInt } from './format';
@@ -50,6 +50,8 @@ export interface PmcSeries {
   firstIndex: number;
   /** True when the start was estimated because there is little history. */
   seeded: boolean;
+  /** Acute:chronic ratio and monotony up to today, with a warning when one is off. */
+  balance?: LoadBalance;
 }
 
 /** Zero days before the first load that mean "new here", not "on a break". */
@@ -112,6 +114,8 @@ export function buildPmcSeries(input: {
     hasData: pastLoad > 0 || (latest?.ctl ?? 0) >= 1,
     firstIndex,
     seeded: cold !== null,
+    // Done load only: planned sessions after today must not raise the warning.
+    balance: loadBalance(loads, input.today),
   };
 }
 

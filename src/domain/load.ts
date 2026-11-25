@@ -15,7 +15,7 @@ import {
   RUN_SESSION_IF,
   SWIM_SESSION_IF,
 } from './constants';
-import { daysInRange, isDateInRange, weekRange } from './dates';
+import { addDays, daysInRange, isDateInRange, weekRange } from './dates';
 import type { DateRange, Intensity, ISODate, LifeEvent, Sport, Workout } from './types';
 
 /** Reference whole-session IF by intensity (bike/power convention). */
@@ -178,6 +178,51 @@ export function computePmc(
     atl += (load - atl) * K_ATL;
     return { date, load: round1(load), ctl: round1(ctl), atl: round1(atl), tsb: round1(tsb) };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Load balance: acute:chronic ratio and monotony (ported from camino-703)
+// ---------------------------------------------------------------------------
+
+/** Ratio of the last 7 days to the 28-day weekly average: above these, a warning / an alert. */
+const ACWR_WARN = 1.3;
+const ACWR_ALERT = 1.5;
+/** Mean / SD of the last 7 days' load: above this every day weighs the same (Foster). */
+const MONOTONY_WARN = 2;
+/** Below this daily average of the 28 days the ratios are noise (first weeks, a break). */
+const MIN_CHRONIC_DAILY = 15;
+
+export interface LoadBalance {
+  /** Last 7 days ÷ (last 28 days ÷ 4); null without enough history. */
+  acwr: number | null;
+  /** Mean ÷ SD of the last 7 days; null when flat at zero or too little load. */
+  monotony: number | null;
+  /** One Spanish sentence when something deserves attention, else null. */
+  warning: string | null;
+}
+
+/** Load balance up to `today` (inclusive) from completed daily loads. */
+export function loadBalance(loads: Readonly<Record<ISODate, number>>, today: ISODate): LoadBalance {
+  const days = (n: number) => daysInRange({ from: addDays(today, -(n - 1)), to: today }).map((d) => Math.max(0, loads[d] ?? 0));
+  const week = days(7);
+  const month = days(28);
+  const chronicWeekly = month.reduce((s, v) => s + v, 0) / 4;
+  const acute = week.reduce((s, v) => s + v, 0);
+  const enough = chronicWeekly / 7 >= MIN_CHRONIC_DAILY;
+  const acwr = enough ? Math.round((acute / chronicWeekly) * 100) / 100 : null;
+  const mean = acute / 7;
+  const sd = Math.sqrt(week.reduce((s, v) => s + (v - mean) ** 2, 0) / 7);
+  const monotony = enough && sd > 0 ? Math.round((mean / sd) * 10) / 10 : null;
+  const more = acwr !== null ? Math.round((acwr - 1) * 100) : 0;
+  let warning: string | null = null;
+  if (acwr !== null && acwr > ACWR_ALERT) {
+    warning = `Esta semana llevas un ${more} % más carga que tu media del último mes: es un salto grande; mete un día suave antes de la próxima sesión dura.`;
+  } else if (acwr !== null && acwr > ACWR_WARN) {
+    warning = `Esta semana llevas un ${more} % más carga que tu media del último mes: vigila el sueño y las sensaciones.`;
+  } else if (monotony !== null && monotony > MONOTONY_WARN) {
+    warning = 'Llevas una semana sin un día de verdad suave o de descanso: mete al menos uno para asimilar.';
+  }
+  return { acwr, monotony, warning };
 }
 
 /** Weekly load that raises CTL by `ramp` points in 7 days from `ctl` (§4.1). */

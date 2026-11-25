@@ -29,6 +29,7 @@ const mockVerdict = jest.fn((_w: Workout, _t: Thresholds | null, _r: unknown): C
 let mockAuth = { session: { userId: ME, email: null } as { userId: string; email: string | null } | null, isLoading: false };
 let mockWorkout: { data: Workout | null | undefined; isLoading: boolean } = { data: undefined, isLoading: false };
 let mockThresholds: Thresholds | null = null;
+let mockHistory: Workout[] = [];
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -54,6 +55,7 @@ jest.mock('@/data/queries', () => ({
   useProfile: () => ({ data: { thresholds: mockThresholds } }),
   useRaces: () => ({ data: [] }),
   useCompleteWorkout: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }),
+  useWorkouts: () => ({ data: mockHistory }),
 }));
 jest.mock('@/features/workouts/useWorkoutActions', () => ({ useWorkoutActions: () => mockActions }));
 // The coach's rules (domain/planB, domain/review) are unit-tested on their own: the screen only wires them.
@@ -239,5 +241,17 @@ describe('workout detail · completed', () => {
     ).toBeTruthy();
     expect(screen.queryByText('Si no es tu día')).toBeNull();
     expect(screen.getByRole('button', { name: /^Lo has hecho bien si…/ })).toBeTruthy();
+  });
+});
+
+describe('workout detail · against similar sessions', () => {
+  test('a completed run says how it compares with the similar ones', async () => {
+    const easy = (id: string, date: string, km: number, hr: number): Workout =>
+      series({ id, date, intensity: 'endurance', title: 'Rodaje', status: 'completed', completed: { durationMin: 55, distanceM: km * 1000, avgHr: hr } });
+    mockHistory = [easy('h1', '2026-10-10', 9, 150), easy('h2', '2026-10-14', 9, 151), easy('h3', '2026-10-18', 9.2, 150)];
+    mockWorkout = { data: easy('today', '2026-10-25', 10, 148), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.getByText(/^Eficiencia un \d+ % mejor que la media de tus 3 carreras parecidas/)).toBeTruthy();
+    mockHistory = [];
   });
 });
