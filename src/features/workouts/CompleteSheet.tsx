@@ -38,7 +38,15 @@ export function CompleteSheet({ workout, visible, onClose, onDone, raceDistance 
   const [feel, setFeel] = useState<Score5 | null>(workout.completed?.feel ?? null);
   const [notes, setNotes] = useState('');
   const unit = distanceUnit(workout.sport);
-  const plannedRpe = workout.sport === 'rest' ? null : formatRpe(sessionRpe(workout, { raceDistance }));
+  const plannedRange = workout.sport === 'rest' ? null : sessionRpe(workout, { raceDistance });
+  const plannedRpe = plannedRange ? formatRpe(plannedRange) : null;
+
+  /** "Tal como estaba previsto": planned duration and distance and the middle of the planned RPE, in one tap. */
+  const fillAsPlanned = () => {
+    setDurationMin(workout.durationMin);
+    setDistance(formatDistanceInput(workout.distanceM, workout.sport));
+    if (plannedRange) setRpe(asPlannedRpe(plannedRange.min, plannedRange.max));
+  };
 
   const submit = async () => {
     const distanceM = parseDistanceInput(distance, workout.sport);
@@ -68,9 +76,16 @@ export function CompleteSheet({ workout, visible, onClose, onDone, raceDistance 
       overline={workout.title}
       title="¿Qué tal ha ido?"
       footer={
-        <Button label="Guardar como hecho" icon="check" onPress={() => void submit()} loading={complete.isPending} fullWidth size="lg" />
+        <View style={styles.footer}>
+          {complete.error ? <ErrorNotice message={errorMessage(complete.error)} /> : null}
+          <Button label="Guardar como hecho" icon="check" onPress={() => void submit()} loading={complete.isPending} fullWidth size="lg" />
+        </View>
       }>
-      {complete.error ? <ErrorNotice message={errorMessage(complete.error)} /> : null}
+      {workout.sport !== 'rest' ? (
+        <View style={styles.quick}>
+          <Chip label="Tal como estaba previsto" icon="check" onPress={fillAsPlanned} />
+        </View>
+      ) : null}
       <Stepper
         label={`Duración real · plan ${formatDuration(workout.durationMin)}`}
         value={durationMin}
@@ -144,7 +159,15 @@ export function FeelPicker({ value, onChange }: { value: Score5 | null; onChange
   );
 }
 
+/** Middle of the planned RPE range, rounded down (an honest "as planned"), as a 1-10 pick. */
+export function asPlannedRpe(min: number, max: number): Rpe {
+  const mid = Math.floor((min + max) / 2);
+  return Math.min(10, Math.max(1, mid)) as Rpe;
+}
+
 const styles = StyleSheet.create({
+  footer: { gap: space.sm },
+  quick: { flexDirection: 'row' },
   block: { gap: space.sm },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space.sm, flexWrap: 'wrap' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },

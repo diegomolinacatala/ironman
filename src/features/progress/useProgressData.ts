@@ -50,7 +50,8 @@ export function useProgressData(today: ISODate): ProgressData {
   const race = nextRace(raceList, today);
   const phase = raceList.length > 0 ? phaseFor(today, raceList) : null;
 
-  const firstError = workouts.error ?? events.error ?? metrics.error ?? races.error;
+  // A failed meals query must not read as "Nada apuntado hoy".
+  const firstError = workouts.error ?? events.error ?? metrics.error ?? races.error ?? meals.error;
   return {
     pmc,
     volume,
@@ -58,7 +59,8 @@ export function useProgressData(today: ISODate): ProgressData {
     race,
     phase,
     nutrition,
-    isLoading: workouts.isLoading || races.isLoading,
+    // Metrics too: otherwise Recuperación shows "sin datos" before they arrive.
+    isLoading: workouts.isLoading || races.isLoading || metrics.isLoading,
     error: firstError ? errorMessage(firstError, 'No se ha podido cargar tu progreso.') : null,
     isRefetching: workouts.isRefetching || metrics.isRefetching,
     refetch: () => {

@@ -9,7 +9,9 @@ import type { CoachRouteParams, PreparedRequest } from '@/features/coach/request
 import { ListeningCard, ThinkingCard } from '@/features/talk/LiveCards';
 import { TalkDock } from '@/features/talk/TalkDock';
 import { TalkGreeting } from '@/features/talk/TalkGreeting';
-import { openProposal } from '@/features/talk/talkSession';
+import { examplePrompts, openProposal } from '@/features/talk/talkSession';
+import { addDays, todayISO } from '@/domain/dates';
+import { useWorkouts } from '@/data/queries';
 import { TurnView, UserBubble } from '@/features/talk/TurnView';
 import { useProposalDecision } from '@/features/talk/useProposalDecision';
 import { useAutoClear, useReviewedElsewhere, useRoutePrefill, useTalkAnnouncements, useVoiceTake } from '@/features/talk/useTalkEffects';
@@ -45,6 +47,9 @@ export default function TalkScreen() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const live = isLive(voice.state);
   const sending = state.pending !== null;
+  const today = todayISO();
+  const days = useWorkouts({ from: today, to: addDays(today, 1) });
+  const examples = examplePrompts(days.data ?? [], today);
 
   useRoutePrefill(params, (prefill) => (prefill.kind === 'draft' ? session.prefill(prefill.text) : setPrepared(prefill.prepared)));
   const take = useVoiceTake(voice, (text) => {
@@ -105,7 +110,9 @@ export default function TalkScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
-          {!hasConversation ? <TalkGreeting showExamples={!live && !prepared} onPick={session.prefill} /> : null}
+          {!hasConversation ? (
+            <TalkGreeting showExamples={!live && !prepared} examples={examples} onPick={(text) => session.send(text, 'text')} />
+          ) : null}
           {prepared ? (
             <PreparedRequestCard
               prepared={prepared}

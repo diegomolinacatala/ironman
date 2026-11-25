@@ -156,11 +156,24 @@ describe('Talk — idle', () => {
     expect(screen.queryByRole('button', { name: 'Nueva conversación' })).toBeNull();
   });
 
-  test('an example prefills the keyboard composer without sending', async () => {
+  test('an example is sent as it is: one tap, no typing', async () => {
+    mockState.consentAt = '2026-10-01T10:00:00.000Z';
     await render(<TalkScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: EXAMPLE_PROMPTS[2] ?? '' }));
-    expect(screen.getByLabelText('Mensaje para tu coach').props.value).toBe(EXAMPLE_PROMPTS[2]);
-    expect(mockCoach).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: EXAMPLE_PROMPTS[1] ?? '' }));
+    await waitFor(() => expect(mockCoach).toHaveBeenCalledTimes(1));
+    expect(mockCoach.mock.calls[0]?.[0].message).toBe(EXAMPLE_PROMPTS[1]);
+  });
+
+  test("examples come from today's and tomorrow's sessions", async () => {
+    const today = todayISO();
+    mockWorkouts.splice(0, mockWorkouts.length, makeWorkout({ id: 't1', date: today, title: 'Rodaje' }));
+    try {
+      await render(<TalkScreen />);
+      expect(screen.getByRole('button', { name: 'Hoy no puedo entrenar' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Cambia lo de hoy por algo suave' })).toBeTruthy();
+    } finally {
+      mockWorkouts.splice(0, mockWorkouts.length, makeWorkout({ id: 'w1', title: 'Rodaje suave' }), makeWorkout({ id: 'w2', title: 'Series' }));
+    }
   });
 
   test('without speech recognition it starts on the keyboard', async () => {

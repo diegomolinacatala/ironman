@@ -23,6 +23,7 @@ import { CompleteSheet } from '@/features/workouts/CompleteSheet';
 import { MoveSheet } from '@/features/workouts/MoveSheet';
 import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
 import { formatDayShort } from '@/domain/dates';
+import { useBriefing } from '@/data/queries';
 import { todayQuedadas } from '@/features/today/TodaySocialCard';
 import { Disclosure, Screen, space, useTheme } from '@/ui';
 
@@ -44,6 +45,8 @@ export default function TodayScreen() {
   const { colors } = useTheme();
   const quedadas = todayQuedadas(data.myId ?? null, today, data.jointSessions, new Date());
   const countdown = data.racesReady ? raceCountdownLine(data.race, today) : null;
+  // The closed fold says what the report says ("Dormiste 7 h 20' · Hoy rodaje suave 50'").
+  const briefingHeadline = useBriefing(today).data?.headline ?? null;
 
   const openMore = (workout: Workout) =>
     sheet.open(
@@ -82,7 +85,7 @@ export default function TodayScreen() {
       <Appear index={3} style={styles.folds}>
         <Disclosure
           title="Informe de hoy"
-          summary="Cómo has dormido y qué toca"
+          summary={briefingHeadline ?? 'Cómo has dormido y qué toca'}
           icon="sunrise"
           iconTint={colors.accentSoft}
           iconColor={colors.onAccentSoft}

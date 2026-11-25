@@ -59,7 +59,10 @@ jest.mock('@/integrations/calendar/trainingCalendar', () => ({
   useTrainingCalendar: () => ({ enabled: mockCalendarEnabled, syncedWorkoutIds: ['h'] }),
 }));
 jest.mock('@/integrations/camera/mealPhoto', () => ({ mealPhotoUri: () => null }));
-jest.mock('@/data/queries', () => ({ useCompleteWorkout: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }) }));
+jest.mock('@/data/queries', () => ({
+  useCompleteWorkout: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }),
+  useBriefing: () => ({ data: null }),
+}));
 jest.mock('@/features/today/TodaySocialCard', () => ({ TodaySocialCard: () => null, todayQuedadas: () => [] }));
 jest.mock('@/features/accessory/CoachAccessory', () => ({ CoachAccessory: () => null }));
 jest.mock('@/features/accessory/coachActions', () => ({

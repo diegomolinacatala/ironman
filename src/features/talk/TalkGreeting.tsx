@@ -8,11 +8,13 @@ import { EXAMPLE_PROMPTS } from './talkSession';
 export interface TalkGreetingProps {
   /** Hide the examples while the mic is live. */
   showExamples: boolean;
+  /** Examples from the athlete's days (`examplePrompts`); default: the generic ones. */
+  examples?: readonly string[];
   onPick: (text: string) => void;
 }
 
-/** Empty conversation: one question, three examples that prefill the composer. */
-export function TalkGreeting({ showExamples, onPick }: TalkGreetingProps) {
+/** Empty conversation: one question and up to three examples; a tap sends one. */
+export function TalkGreeting({ showExamples, examples = EXAMPLE_PROMPTS, onPick }: TalkGreetingProps) {
   const { colors } = useTheme();
   return (
     <View style={styles.root}>
@@ -35,7 +37,7 @@ export function TalkGreeting({ showExamples, onPick }: TalkGreetingProps) {
             Por ejemplo
           </Text>
           <View style={styles.chips}>
-            {EXAMPLE_PROMPTS.map((prompt) => (
+            {examples.map((prompt) => (
               <Chip key={prompt} label={prompt} onPress={() => onPick(prompt)} />
             ))}
           </View>

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import type { CompletedData, Workout } from '@/domain/types';
 
-import { CompleteSheet } from '../CompleteSheet';
+import { CompleteSheet, asPlannedRpe } from '../CompleteSheet';
 import { makeWorkout } from './fixtures';
 
 const mockComplete = jest.fn(
@@ -48,6 +48,22 @@ describe('CompleteSheet', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar como hecho' }));
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
     expect(mockComplete.mock.calls[0]?.[0].data).not.toHaveProperty('feel');
+  });
+
+  test('"Tal como estaba previsto" fills duration and the planned RPE in one tap', async () => {
+    const done = makeWorkout({ status: 'completed', durationMin: 45, completed: { durationMin: 30 } });
+    await render(<CompleteSheet workout={done} visible onClose={() => undefined} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Tal como estaba previsto' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar como hecho' }));
+    await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+    // Planned RPE 3–4 → 3: "as planned" never claims more effort than planned.
+    expect(mockComplete.mock.calls[0]?.[0].data).toMatchObject({ durationMin: 45, rpe: 3 });
+  });
+
+  test('asPlannedRpe takes the lower middle of the planned range', () => {
+    expect(asPlannedRpe(7, 8)).toBe(7);
+    expect(asPlannedRpe(6, 6)).toBe(6);
+    expect(asPlannedRpe(0, 1)).toBe(1);
   });
 
   test('a previously saved feel is preselected', async () => {

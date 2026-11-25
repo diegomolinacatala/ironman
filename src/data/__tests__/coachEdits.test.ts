@@ -4,6 +4,7 @@ import { makeProfile, makeWorkout } from '@/domain/__tests__/fixtures';
 
 import { chatEdit, dayRefs, sportIn, type EditContext } from '../demo/coachEdits';
 import { runRulesCoach, type RulesCoachRepo } from '../demo/rulesCoach';
+import { EXAMPLE_PROMPTS, examplePrompts } from '@/features/talk/talkSession';
 
 // 2026-10-27 is a Tuesday: the editable window is Tue 27 → Mon 2.
 const TODAY = '2026-10-27';
@@ -119,5 +120,21 @@ describe('runRulesCoach with a chat edit', () => {
     expect(response.reply).toMatch(/^La IA gratuita ha llegado a su límite de hoy\.\n\nPaso «Rodaje Z2»/);
     expect(response.reply).toMatch(/Te he preparado 1 cambio/);
     expect(r.created).toHaveLength(1);
+  });
+});
+
+describe('contextual coach examples are understood by the rules coach', () => {
+  test('each example built from the week yields a concrete change', () => {
+    const week = WORKOUTS.filter((w) => w.id !== 'wed-swim');
+    const examples = examplePrompts(week, TODAY);
+    expect(examples).toEqual(['Hoy no puedo entrenar', 'Cambia lo de hoy por algo suave', 'Pasa la sesión de mañana a pasado mañana']);
+    expect(ops(chatEdit(examples[0]!, ctx(week))?.changes ?? [])).toEqual(['delete:tue-run']);
+    const easy = chatEdit(examples[1]!, ctx(week))?.changes[0];
+    expect(easy?.op === 'update' ? easy.workoutId : null).toBe('tue-run');
+    expect(ops(chatEdit(examples[2]!, ctx(week))?.changes ?? [])).toEqual(['move:wed-bike:2026-10-29']);
+  });
+
+  test('nothing planned today or tomorrow: the generic examples', () => {
+    expect(examplePrompts([], TODAY)).toEqual([...EXAMPLE_PROMPTS]);
   });
 });

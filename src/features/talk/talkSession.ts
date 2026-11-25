@@ -8,8 +8,8 @@
  * The history sent to the coach includes, per turn, a compact summary of the
  * changes it proposed and whether they were applied, discarded or are pending.
  */
-import { startOfWeek } from '@/domain/dates';
-import type { CoachMessage, CoachRequest, CoachResponse, Friend, ISODate, PlanChange, PlanProposal } from '@/domain/types';
+import { addDays, startOfWeek } from '@/domain/dates';
+import type { CoachMessage, CoachRequest, CoachResponse, Friend, ISODate, PlanChange, PlanProposal, Workout } from '@/domain/types';
 import { MAX_MESSAGE_LENGTH, requestFromParams, type CoachRouteParams, type PreparedRequest } from '@/features/coach/requests';
 
 import { friendIdsForConversation } from './friendMentions';
@@ -280,6 +280,20 @@ export function thinkingLine(elapsedMs: number, lines: readonly string[] = THINK
 }
 
 /** Plan changes the coach (AI or rules engine) turns into a proposal. */
+/**
+ * Examples built from the athlete's real days, so a tap can send them as they are:
+ * today's pending session → skip it or make it easy; tomorrow's → move it; otherwise
+ * the generic examples. Phrased the way the rules coach understands them too.
+ */
+export function examplePrompts(workouts: readonly Workout[], today: ISODate): string[] {
+  const pending = (date: ISODate) => workouts.some((w) => w.date === date && w.status === 'planned' && w.sport !== 'rest');
+  const out: string[] = [];
+  if (pending(today)) out.push('Hoy no puedo entrenar', 'Cambia lo de hoy por algo suave');
+  if (pending(addDays(today, 1))) out.push('Pasa la sesión de mañana a pasado mañana');
+  for (const generic of EXAMPLE_PROMPTS) if (out.length < 3 && !out.includes(generic)) out.push(generic);
+  return out.slice(0, 3);
+}
+
 export const EXAMPLE_PROMPTS: readonly string[] = [
   'Mueve el rodaje de mañana al jueves',
   'Hoy no puedo entrenar',
