@@ -59,6 +59,76 @@ function afterText(input: FuelingInput, band: Band): string {
   return band === 'low' ? 'Comida normal con algo de proteína.' : 'Comida normal.';
 }
 
+// ---------------------------------------------------------------------------
+// Feeding schedule: the g/h band turned into "when to eat what"
+// ---------------------------------------------------------------------------
+
+/** Carbs in one standard gel; the schedule counts in these units. */
+export const DEFAULT_SERVING_G = 25;
+/** First intake: the stomach tolerates food earlier on the bike than running. */
+const FIRST_INTAKE_MIN: Partial<Record<Sport, number>> = { bike: 20, brick: 20, other: 20, run: 30, swim: 30 };
+/** No intake in the last minutes: it would not be absorbed before finishing. */
+const LAST_INTAKE_MARGIN_MIN = 15;
+/** Closer intakes are hard to follow and to stomach: carry the rest in the bottle. */
+const MIN_GAP_MIN = 15;
+const FLUID_ML_PER_HOUR = 500;
+
+export interface FuelingSchedule {
+  /** Minutes from the start, rounded to 5, ascending. */
+  minutes: number[];
+  gramsPerServing: number;
+  totalCarbsG: number;
+  /** Carbs the intakes leave out (drink them as sports drink), 0 when they cover it all. */
+  drinkCarbsG: number;
+  fluidMl: number;
+}
+
+function roundTo5(n: number): number {
+  return Math.round(n / 5) * 5;
+}
+
+/**
+ * Concrete intakes for a session: total carbs from the band, split into servings
+ * (gels of `gramsPerServing` by default), spread between the first intake and
+ * 15 min before the end, never closer than 15 min. Null when water is enough.
+ */
+export function fuelingSchedule(w: FuelingInput, gramsPerServing = DEFAULT_SERVING_G): FuelingSchedule | null {
+  if (w.sport === 'rest' || w.sport === 'strength' || w.sport === 'mobility' || w.durationMin <= 0) return null;
+  const carbsPerHour = CARBS_BY_BAND[bandFor(w)];
+  if (carbsPerHour === 0 || gramsPerServing <= 0) return null;
+  const totalCarbsG = Math.round((carbsPerHour * w.durationMin) / 60);
+  const first = FIRST_INTAKE_MIN[w.sport] ?? 20;
+  const last = Math.max(first, roundTo5(w.durationMin - LAST_INTAKE_MARGIN_MIN));
+  const wanted = Math.max(1, Math.round(totalCarbsG / gramsPerServing));
+  const fits = Math.floor((last - first) / MIN_GAP_MIN) + 1;
+  const count = Math.min(wanted, fits);
+  const minutes =
+    count === 1 ? [first] : Array.from({ length: count }, (_, i) => roundTo5(first + ((last - first) * i) / (count - 1)));
+  return {
+    minutes,
+    gramsPerServing,
+    totalCarbsG,
+    drinkCarbsG: Math.max(0, totalCarbsG - count * gramsPerServing),
+    fluidMl: Math.round((FLUID_ML_PER_HOUR * w.durationMin) / 60 / 100) * 100,
+  };
+}
+
+function minutesList(minutes: readonly number[]): string {
+  const parts = minutes.map(String);
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}`;
+}
+
+/** "3 geles de 25 g: min 20, 45 y 70." (+ drink and fluid), Spanish. */
+export function fuelingScheduleText(s: FuelingSchedule): string {
+  const n = s.minutes.length;
+  const what = n === 1 ? `1 gel de ${s.gramsPerServing} g` : `${n} geles de ${s.gramsPerServing} g`;
+  const when = n === 1 ? `en el min ${s.minutes[0]}` : `min ${minutesList(s.minutes)}`;
+  const drink = s.drinkCarbsG >= 10 ? ` Los otros ${s.drinkCarbsG} g, en bebida isotónica.` : '';
+  const liters = (s.fluidMl / 1000).toFixed(s.fluidMl % 1000 === 0 ? 0 : 1).replace('.', ',');
+  return `${what}: ${when}.${drink} Bebe alrededor de ${liters} l en total.`;
+}
+
 export function fuelingHint(w: FuelingInput): FuelingHint {
   if (w.sport === 'rest' || w.durationMin <= 0) {
     return { before: 'Día de descanso: come normal y variado.', during: null, after: 'Hidrátate a lo largo del día.', carbsPerHour: null };

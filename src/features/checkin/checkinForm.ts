@@ -14,10 +14,25 @@ export interface CheckinFormState {
 
 export const DEFAULT_SLEEP_HOURS = 7.5;
 
-export function checkinToForm(date: ISODate, existing: DailyCheckin | null, sleepHoursHint: number | null): CheckinFormState {
+/** Watch sleep score (0-100) → the 1-5 sleep quality row, so it starts answered. */
+export function sleepQualityFromScore(score: number | null | undefined): Score5 | null {
+  if (typeof score !== 'number' || !Number.isFinite(score) || score <= 0) return null;
+  if (score >= 90) return 5;
+  if (score >= 75) return 4;
+  if (score >= 60) return 3;
+  if (score >= 40) return 2;
+  return 1;
+}
+
+export function checkinToForm(
+  date: ISODate,
+  existing: DailyCheckin | null,
+  sleepHoursHint: number | null,
+  sleepScoreHint: number | null = null,
+): CheckinFormState {
   return {
     date,
-    sleepQuality: existing?.sleepQuality ?? null,
+    sleepQuality: existing?.sleepQuality ?? sleepQualityFromScore(sleepScoreHint),
     sleepHours: existing?.sleepHours ?? roundHalf(sleepHoursHint ?? DEFAULT_SLEEP_HOURS),
     fatigue: existing?.fatigue ?? null,
     soreness: existing?.soreness ?? null,
@@ -25,6 +40,27 @@ export function checkinToForm(date: ISODate, existing: DailyCheckin | null, slee
     motivation: existing?.motivation ?? null,
     notes: existing?.notes ?? '',
   };
+}
+
+const SCORE_KEYS = ['sleepQuality', 'fatigue', 'soreness', 'stress', 'motivation'] as const;
+type ScoreKey = (typeof SCORE_KEYS)[number];
+/** "Todo normal": the middle of every scale. */
+export const NORMAL_SCORES: Record<ScoreKey, Score5> = { sleepQuality: 3, fatigue: 3, soreness: 3, stress: 3, motivation: 3 };
+
+export function unansweredCount(state: CheckinFormState): number {
+  return SCORE_KEYS.filter((k) => state[k] == null).length;
+}
+
+/**
+ * One-tap answers: fills only the rows still empty (what the watch or the athlete already
+ * set stays), from "Todo normal" or from yesterday's check-in.
+ */
+export function fillUnanswered(state: CheckinFormState, source: Record<ScoreKey, Score5> | DailyCheckin): CheckinFormState {
+  const next = { ...state };
+  for (const k of SCORE_KEYS) {
+    if (next[k] == null) next[k] = source[k];
+  }
+  return next;
 }
 
 export function roundHalf(hours: number): number {

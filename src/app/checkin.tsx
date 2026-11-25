@@ -14,7 +14,8 @@ export default function CheckinScreen() {
   const params = useLocalSearchParams<{ date?: string }>();
   const today = todayISO();
   const date = typeof params.date === 'string' && DATE_RE.test(params.date) ? params.date : today;
-  const checkins = useCheckins({ from: date, to: date });
+  // Yesterday too: "Como ayer" answers the form in one tap.
+  const checkins = useCheckins({ from: addDays(date, -1), to: date });
   const metrics = useMetrics({ from: addDays(date, -(WELLNESS_DAYS - 1)), to: date });
 
   // Wait for metrics too: the form seeds "Horas de sueño" from the watch only once, on mount.
@@ -34,9 +35,20 @@ export default function CheckinScreen() {
     );
   }
   const existing = (checkins.data ?? []).find((c) => c.date === date) ?? null;
+  const previous = (checkins.data ?? []).find((c) => c.date === addDays(date, -1)) ?? null;
   const allMetrics = metrics.data ?? [];
   const todayMetrics = allMetrics.find((m) => m.date === date) ?? null;
-  const initial = checkinToForm(date, existing, todayMetrics?.sleepHours ?? null);
+  const initial = checkinToForm(date, existing, todayMetrics?.sleepHours ?? null, todayMetrics?.sleepScore ?? null);
   // Keyed by date only: saving refetches the day and `existing` appears, which must not remount the editor.
-  return <CheckinEditor key={date} initial={initial} date={date} today={today} metrics={allMetrics} todayMetrics={todayMetrics} />;
+  return (
+    <CheckinEditor
+      key={date}
+      initial={initial}
+      date={date}
+      today={today}
+      metrics={allMetrics}
+      todayMetrics={todayMetrics}
+      previous={previous}
+    />
+  );
 }

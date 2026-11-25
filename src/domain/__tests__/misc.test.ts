@@ -1,5 +1,5 @@
 import { FUELING_DISCLAIMER } from '../constants';
-import { fuelingHint } from '../fueling';
+import { fuelingHint, fuelingSchedule, fuelingScheduleText } from '../fueling';
 import { lifeEventHardPoints, longPoints, workoutHardPoints } from '../hardness';
 import { matchActivity } from '../matching';
 import { buildSession, hardMinutes, SESSION_CATALOG, specHardPoints, specToDraft, type SessionCode } from '../sessions';
@@ -32,6 +32,43 @@ describe('fuelingHint (§12.1)', () => {
     expect(fuelingHint({ sport: 'rest', durationMin: 0, intensity: 'recovery' }).during).toBeNull();
     expect(fuelingHint({ sport: 'strength', durationMin: 45, intensity: 'tempo' }).carbsPerHour).toBeNull();
     expect(FUELING_DISCLAIMER).toMatch(/dietista/);
+  });
+});
+
+describe('fuelingSchedule', () => {
+  test('water-only sessions and strength have no schedule', () => {
+    expect(fuelingSchedule({ sport: 'run', durationMin: 50, intensity: 'endurance' })).toBeNull();
+    expect(fuelingSchedule({ sport: 'strength', durationMin: 90, intensity: 'endurance' })).toBeNull();
+    expect(fuelingSchedule({ sport: 'rest', durationMin: 0, intensity: 'recovery' })).toBeNull();
+  });
+
+  test('a 2 h endurance ride: 90 g in gels from min 20 to 15 min before the end', () => {
+    const s = fuelingSchedule({ sport: 'bike', durationMin: 120, intensity: 'endurance' });
+    expect(s).not.toBeNull();
+    expect(s?.totalCarbsG).toBe(90);
+    expect(s?.minutes).toEqual([20, 50, 75, 105]);
+    expect(s?.fluidMl).toBe(1000);
+    expect(s?.drinkCarbsG).toBe(0);
+  });
+
+  test('runs start later; one gel for a 75 min easy run', () => {
+    const s = fuelingSchedule({ sport: 'run', durationMin: 75, intensity: 'endurance' });
+    expect(s?.minutes).toEqual([30]);
+    expect(fuelingScheduleText(s!)).toBe('1 gel de 25 g: en el min 30. Bebe alrededor de 0,6 l en total.');
+  });
+
+  test('intakes never closer than 15 min: the rest goes in the bottle', () => {
+    const s = fuelingSchedule({ sport: 'bike', durationMin: 300, intensity: 'endurance' }, 10)!;
+    expect(s.minutes.length).toBeLessThan(Math.round(s.totalCarbsG / 10));
+    for (let i = 1; i < s.minutes.length; i += 1) expect(s.minutes[i]! - s.minutes[i - 1]!).toBeGreaterThanOrEqual(15);
+    expect(s.minutes.length * s.gramsPerServing + s.drinkCarbsG).toBe(s.totalCarbsG);
+    expect(fuelingScheduleText(s)).toMatch(/en bebida isotónica/);
+  });
+
+  test('custom serving size and readable text', () => {
+    const s = fuelingSchedule({ sport: 'bike', durationMin: 120, intensity: 'endurance' }, 45)!;
+    expect(s.minutes).toEqual([20, 105]);
+    expect(fuelingScheduleText(s)).toBe('2 geles de 45 g: min 20 y 105. Bebe alrededor de 1 l en total.');
   });
 });
 

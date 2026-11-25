@@ -157,6 +157,36 @@ describe('first check-in of the day', () => {
     expect(screen.queryByText('Sin conexión')).toBeNull();
   });
 
+  test('"Todo normal" answers the check-in in two taps', async () => {
+    await render(<CheckinScreen />, { wrapper: Providers });
+    await screen.findByRole('button', { name: 'Guardar check-in' });
+    expect(screen.queryByRole('button', { name: 'Como ayer' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Todo normal' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    await waitFor(() => expect(repo.upsertCheckin).toHaveBeenCalledTimes(1));
+    expect(repo.upsertCheckin.mock.calls[0]?.[0]).toMatchObject({ sleepQuality: 3, fatigue: 3, soreness: 3, stress: 3, motivation: 3 });
+  });
+
+  test('"Como ayer" copies yesterday and the watch sleep score answers sleep quality', async () => {
+    repo = makeRepo({ metrics: [metricsRow({ sleepScore: 91 })] });
+    repo.listCheckins.mockResolvedValue([
+      { userId: 'me', date: '2026-10-24', sleepQuality: 2, sleepHours: 6, fatigue: 4, soreness: 2, stress: 1, motivation: 5, notes: 'x' },
+    ]);
+    await render(<CheckinScreen />, { wrapper: Providers });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Como ayer' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    await waitFor(() => expect(repo.upsertCheckin).toHaveBeenCalledTimes(1));
+    expect(repo.upsertCheckin.mock.calls[0]?.[0]).toMatchObject({
+      date: DATE,
+      sleepQuality: 5,
+      fatigue: 4,
+      soreness: 2,
+      stress: 1,
+      motivation: 5,
+      notes: null,
+    });
+  });
+
   test('a failed save is shown above the button', async () => {
     repo.upsertCheckin.mockRejectedValueOnce(new Error('Sin conexión'));
     await render(<CheckinScreen />, { wrapper: Providers });

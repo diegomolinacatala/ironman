@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { fuelingHint } from '@/domain/fueling';
+import { fuelingHint, fuelingSchedule, fuelingScheduleText } from '@/domain/fueling';
 import type { Workout } from '@/domain/types';
 import { Card, Icon, Text, fonts, haptics, iconSize, space, useTheme } from '@/ui';
 
@@ -18,8 +18,14 @@ export interface FuelingHintProps {
 export function FuelingHint({ workout, defaultOpen = false }: FuelingHintProps) {
   const { colors } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
-  const hint = fuelingHint({ sport: workout.sport, durationMin: workout.durationMin, intensity: workout.intensity });
-  const headline = hint.carbsPerHour ? `${hint.carbsPerHour} g/h de hidratos durante` : 'Qué comer antes y después';
+  const input = { sport: workout.sport, durationMin: workout.durationMin, intensity: workout.intensity };
+  const hint = fuelingHint(input);
+  const schedule = fuelingSchedule(input);
+  const headline = schedule
+    ? `${schedule.minutes.length === 1 ? '1 gel' : `${schedule.minutes.length} geles`} · ${hint.carbsPerHour} g/h`
+    : hint.carbsPerHour
+      ? `${hint.carbsPerHour} g/h de hidratos durante`
+      : 'Qué comer antes y después';
 
   return (
     <Card variant="tinted" tint={colors.surfaceAlt} padding="md">
@@ -46,6 +52,7 @@ export function FuelingHint({ workout, defaultOpen = false }: FuelingHintProps) 
       {open ? (
         <View style={styles.body}>
           <FuelLine label="Antes" text={hint.before} />
+          {schedule ? <FuelLine label="Tomas" text={fuelingScheduleText(schedule)} /> : null}
           {hint.during ? <FuelLine label="Durante" text={hint.during} /> : null}
           <FuelLine label="Después" text={hint.after} />
           <Text variant="caption" color="textMuted">

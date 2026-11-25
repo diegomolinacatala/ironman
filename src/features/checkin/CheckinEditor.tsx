@@ -4,16 +4,23 @@ import { StyleSheet, View } from 'react-native';
 
 import { formatDayLabel } from '@/domain/dates';
 import { computeReadiness, type Readiness } from '@/domain/readiness';
-import type { DailyMetrics, ISODate } from '@/domain/types';
+import type { DailyCheckin, DailyMetrics, ISODate } from '@/domain/types';
 import { checkinDraftSchema, firstError } from '@/domain/validation';
 import { useUpsertCheckin } from '@/data/queries';
 import { FormFooter } from '@/features/workouts/FormFooter';
 import { FormScreen } from '@/features/workouts/FormScreen';
 import { ModalCancel } from '@/features/workouts/ModalClose';
 import { errorMessage, logger } from '@/lib/logger';
-import { Button, ScorePicker, Screen, Stepper, Text, TextField, haptics, space } from '@/ui';
+import { Button, Chip, ScorePicker, Screen, Stepper, Text, TextField, haptics, space } from '@/ui';
 
-import { formToCheckinDraft, sleepHoursLabel, type CheckinFormState } from './checkinForm';
+import {
+  NORMAL_SCORES,
+  fillUnanswered,
+  formToCheckinDraft,
+  sleepHoursLabel,
+  unansweredCount,
+  type CheckinFormState,
+} from './checkinForm';
 import { CheckinResult } from './CheckinResult';
 import { MetricsToday } from './MetricsToday';
 import { useTodayPlan } from './useTodayPlan';
@@ -26,6 +33,8 @@ export interface CheckinEditorProps {
   today: ISODate;
   metrics: DailyMetrics[];
   todayMetrics: DailyMetrics | null;
+  /** Yesterday's check-in, for "Como ayer". */
+  previous?: DailyCheckin | null;
 }
 
 /**
@@ -33,7 +42,7 @@ export interface CheckinEditorProps {
  * refetch that follows a save (which turns "new" into "edit") cannot remount
  * it and drop the result.
  */
-export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: CheckinEditorProps) {
+export function CheckinEditor({ initial, date, today, metrics, todayMetrics, previous = null }: CheckinEditorProps) {
   const [state, setState] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Readiness | null>(null);
@@ -87,8 +96,30 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
         options={{ title: date === today ? '¿Cómo estás hoy?' : `Check-in · ${formatDayLabel(date, today)}`, headerLeft: () => <ModalCancel /> }}
       />
       <Text variant="callout" color="textMuted">
-        30 segundos. Con esto y tus datos del reloj ajustamos la carga del día.
+        Si estás como siempre, un toque basta. Cambia solo lo que sea distinto.
       </Text>
+      {unansweredCount(state) > 0 ? (
+        <View style={styles.quick} accessibilityRole="toolbar">
+          <Chip
+            label="Todo normal"
+            icon="check"
+            onPress={() => {
+              setError(null);
+              setState((prev) => fillUnanswered(prev, NORMAL_SCORES));
+            }}
+          />
+          {previous ? (
+            <Chip
+              label="Como ayer"
+              icon="undo"
+              onPress={() => {
+                setError(null);
+                setState((prev) => fillUnanswered(prev, previous));
+              }}
+            />
+          ) : null}
+        </View>
+      ) : null}
       <MetricsToday metrics={todayMetrics} />
       <CheckinFields state={state} set={set} />
     </FormScreen>
@@ -141,4 +172,5 @@ function CheckinFields({ state, set }: CheckinFieldsProps) {
 
 const styles = StyleSheet.create({
   block: { gap: space.xl },
+  quick: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
 });
