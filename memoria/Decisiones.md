@@ -9,6 +9,7 @@
 | Evolución del coach | La decisión histórica de octubre de desactivar IA quedó superada en v2 por el coach integrado, con reglas de respaldo. v4 añade prescripción, revisión posterior, plan general y COROS. | `docs/V2.md`, `docs/V4.md`, selector real de proveedor. |
 | Distribución | Generación nativa y firma en un Mac de GitHub Actions. El equipo puede desarrollar en Windows y validar en iPhone. | Workflow iOS y `scripts/ios`. |
 | Interfaz tranquila · 22 de noviembre | Cada pestaña muestra solo lo que pide respuesta ahora; lo demás va en pliegues con resumen (`Disclosure`). Motivo: el propietario se sentía abrumado. | `docs/DESIGN.md` §4b. |
+| Informe por excepción · 25 de noviembre | El informe hablado no tiene mínimo de palabras ni relleno (tope de 180). La VFC, la batería y el pulso solo se leen si se salen de lo normal; el resto queda en pantalla. Motivo: menos peso y la misma información útil. Sustituye al rango de 110-200 palabras. | `src/domain/briefingScript.ts`, `supabase/functions/_shared/briefing/prompt.ts`. |
 | Memoria de equipo · 22 de noviembre | Los socios y ambos asistentes comparten notas Markdown versionadas con el proyecto. Cada tarea termina actualizando la bóveda. | [[Cómo trabajamos]], instrucciones raíz para Codex y Claude. |
 
 Al cambiar una decisión, registrar fecha, motivo y decisión sustituida. Las ideas en [[Ideas de experiencia]] quedan abiertas hasta que el equipo las pruebe y acuerde el cambio.

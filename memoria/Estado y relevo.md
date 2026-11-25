@@ -14,6 +14,7 @@
 
 ## Últimas sesiones
 
+- [[2026-11-25-auditoria-y-mejoras]] · Auditoría completa (`docs/AUDITORIA-2026-11-25.md`) y 11 commits en `david/auditoria-y-mejoras`. Incluyen bugs del motor, menos fricción, informe por excepción e ideas de camino-703. Falta revisión, PR y despliegue (Claude Code).
 - [[2026-11-25-alta-de-david]] · David entra como desarrollador: ya tiene acceso al repo; falta comprobar TestFlight (Claude Code).
 - [[2026-11-22-rechazo-app-review-build-19]] · Arreglos del rechazo 5.1.1(iv), 2.5.4 y 2.1. Falta el vídeo con el reloj (Claude Code).
 - [[2026-11-22-rediseno-coach-disponibilidad]] · Rediseño con pliegues, coach y replanificación fiables, disponibilidad automática (Claude Code).

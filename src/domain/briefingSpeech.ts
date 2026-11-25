@@ -140,7 +140,7 @@ export function distanceWords(meters: number, inMeters = false): string {
   return halves % 2 === 1 ? `${base} y medio` : base;
 }
 
-/** Number of words of a text (for the 110–200 word script budget). */
+/** Number of words of a text (for the script budget: at most 180 words). */
 export function wordCount(text: string): number {
   const trimmed = text.trim();
   return trimmed === '' ? 0 : trimmed.split(/\s+/).length;
