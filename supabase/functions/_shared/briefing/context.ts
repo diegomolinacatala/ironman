@@ -166,7 +166,7 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
     athlete: { name: firstName(data.profile.displayName), coachNotes: data.profile.coachNotes },
     sleep,
     sleepView: sleepForPrompt(sleep, data.tz),
-    recovery: wellnessSignals(data.metrics.filter((m) => m.date <= date), data.checkins),
+    recovery: wellnessSignals(data.metrics, data.checkins, date),
     todayWorkouts: sessionsOn(data.workouts, date).map((w) => todaySession(w, view)),
     tomorrowWorkouts: sessionsOn(data.workouts, addDays(date, 1)).map((w) => tomorrowSession(w, view)),
     yesterday: yesterdayView(data, date, view),

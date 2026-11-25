@@ -165,3 +165,41 @@ describe('phaseFor (backwards from the A race)', () => {
     expect(['build', 'peak', 'taper', 'base']).toContain(between.phase);
   });
 });
+
+describe('phase is the same every day of a week', () => {
+  const sprintA = makeRace({ id: 'sa', date: '2026-11-15', distance: 'sprint', priority: 'A' });
+  const halfLater = makeRace({ id: 'hl', date: '2027-05-30', distance: 'half', priority: 'A', createdAt: '2026-10-01T00:00:00' });
+
+  test('the week after an A race is transition from Monday to Sunday', () => {
+    const days = ['2026-11-16', '2026-11-18', '2026-11-20', '2026-11-22'].map((d) => phaseFor(d, [sprintA, halfLater]));
+    expect(new Set(days.map((p) => p.phase)).size).toBe(1);
+    expect(new Set(days.map((p) => p.volumeFactor)).size).toBe(1);
+    expect(days[0]?.phase).toBe('transition');
+  });
+
+  test('race week stays race week after the race day; daysToRace keeps counting from the day', () => {
+    const wednesday = makeRace({ id: 'w', date: '2027-04-21', distance: 'olympic', priority: 'A' });
+    expect(phaseFor('2027-04-19', [wednesday]).phase).toBe('race_week');
+    expect(phaseFor('2027-04-24', [wednesday]).phase).toBe('race_week');
+    expect(phaseFor('2027-04-19', [wednesday]).daysToRace).toBe(2);
+  });
+});
+
+describe('maintenance cycle across New Year (2026 has 53 ISO weeks)', () => {
+  function recoveryWeeks(from: string, weeks: number, opts = {}): boolean[] {
+    return Array.from({ length: weeks }, (_, i) => phaseFor(addDays(from, i * 7), [], opts).isRecoveryWeek);
+  }
+
+  test('3:1 keeps exactly three load weeks between descargas', () => {
+    const flags = recoveryWeeks('2026-11-02', 16);
+    const idx = flags.flatMap((r, i) => (r ? [i] : []));
+    expect(idx.length).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < idx.length; i += 1) expect(idx[i]! - idx[i - 1]!).toBe(4);
+  });
+
+  test('2:1 keeps exactly two load weeks between descargas', () => {
+    const flags = recoveryWeeks('2026-11-02', 15, { level: 'beginner' });
+    const idx = flags.flatMap((r, i) => (r ? [i] : []));
+    for (let i = 1; i < idx.length; i += 1) expect(idx[i]! - idx[i - 1]!).toBe(3);
+  });
+});

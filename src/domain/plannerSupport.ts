@@ -72,16 +72,37 @@ export interface RampInput {
   lifeStress: boolean;
 }
 
-/** §4.2 ramp control expressed in weekly minutes; null when there is no history. */
+/** Week-on-week volume growth over the biggest recent week (the 10-15 % rule the AI coach also follows). */
+const VOLUME_GROWTH = 1.15;
+const VOLUME_GROWTH_BEGINNER = 1.1;
+const VOLUME_GROWTH_STRESS = 1.05;
+/** At very low volumes a percentage is too tight: always allow this many extra minutes. */
+const VOLUME_GROWTH_MIN_EXTRA = 15;
+/** Weeks (most recent) whose peak the volume cap grows from. */
+const VOLUME_PEAK_WEEKS = 3;
+
+/**
+ * §4.2 ramp control expressed in weekly minutes; null when there is no history.
+ * Two caps, the tighter wins: the CTL ramp (points of fitness per week) and plain
+ * volume growth over the biggest of the last 3 weeks. From a low CTL the CTL ramp
+ * alone allowed almost doubling the week (300' → ~600').
+ * `recentWeeklyMinutes` is oldest first.
+ */
 export function rampCapMinutes(input: RampInput): number | null {
   const weeks = (input.recentWeeklyMinutes ?? []).filter((m) => Number.isFinite(m) && m >= 0);
   if (weeks.length < 2 || weeks.every((m) => m === 0)) return null;
+  const careful = input.level === 'beginner' || input.lifeStress;
   const avgMin = weeks.reduce((s, m) => s + m, 0) / weeks.length;
   const ctl = ((avgMin / 60) * GENERIC_TSS_PER_HOUR) / 7;
   const row = RAMP_TABLE.find((r) => ctl <= r.maxCtl) ?? RAMP_TABLE[RAMP_TABLE.length - 1];
-  const base = input.level === 'beginner' || input.lifeStress ? (row?.low ?? 3) : (row?.moderate ?? 6);
+  const base = careful ? (row?.low ?? 3) : (row?.moderate ?? 6);
   const ramp = Math.max(1, Math.min(RAMP_HARD_CAP, base - (input.lifeStress ? RAMP_LIFE_STRESS_PENALTY : 0)));
-  return Math.round((weeklyLoadForRamp(ctl, ramp) / GENERIC_TSS_PER_HOUR) * 60);
+  const ctlCap = Math.round((weeklyLoadForRamp(ctl, ramp) / GENERIC_TSS_PER_HOUR) * 60);
+  const peak = Math.max(...weeks.slice(-VOLUME_PEAK_WEEKS));
+  if (peak <= 0) return ctlCap;
+  const growth = input.lifeStress ? VOLUME_GROWTH_STRESS : input.level === 'beginner' ? VOLUME_GROWTH_BEGINNER : VOLUME_GROWTH;
+  const volumeCap = Math.round(Math.max(peak * growth, peak + VOLUME_GROWTH_MIN_EXTRA));
+  return Math.min(ctlCap, volumeCap);
 }
 
 function roleOf(spec: SessionSpec): 'quality' | 'long' | 'easy' {

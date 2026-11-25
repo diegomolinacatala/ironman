@@ -161,6 +161,23 @@ test('wellness signals compare the latest day with the recent baseline', () => {
   assert.equal(merged[0].restingHr, 50);
 });
 
+test('wellness signals ignore a check-in or a sync older than yesterday', () => {
+  const base = { source: 'garmin' as const, sleepScore: null, bodyBattery: null, trainingReadiness: null, vo2max: null, steps: null, stressAvg: null, trainingStatus: null };
+  const tired = { userId: 'me', date: '2026-10-17', sleepQuality: 2, sleepHours: 6, fatigue: 5, soreness: 4, stress: 4, motivation: 2, notes: null } as const;
+  const shortNight = [{ ...base, date: '2026-10-18', hrvMs: 50, restingHr: 50, sleepHours: 4.5 }];
+  // Without `today` (old callers) the newest rows count, whatever their age.
+  assert.equal(wellnessSignals([], [tired]).level, 'red');
+  // Five days later they no longer describe the athlete.
+  const later = wellnessSignals(shortNight, [tired], '2026-10-22');
+  assert.equal(later.level, 'unknown');
+  assert.deepEqual(later.signals, []);
+  // Yesterday's still count, labelled as such.
+  const nextDay = wellnessSignals(shortNight, [{ ...tired, date: '2026-10-18' }], '2026-10-19');
+  assert.equal(nextDay.level, 'red');
+  assert.ok(nextDay.signals.some((x) => x === 'Durmió 4,5 h (ayer)'));
+  assert.ok(nextDay.signals.some((x) => x === 'Estrés 4/5 (ayer)'));
+});
+
 test('device export builds Garmin-like workouts with the app zones as targets', () => {
   const thresholds = { ftpW: 250, lthr: 170, runThresholdPaceSecPerKm: 270 };
   const bike = toGarminWorkouts(workout({ sport: 'bike', intensity: 'threshold', durationMin: 60 }), thresholds);

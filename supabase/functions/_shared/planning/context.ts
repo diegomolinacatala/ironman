@@ -194,7 +194,7 @@ function wellnessBlock(raw: RawContext, detail: Detail): PlanningContext['wellne
   const since = addDays(raw.today, -(days - 1));
   const metrics = mergeMetricsByDate(raw.metrics).filter((m) => m.date >= since);
   return {
-    readiness: wellnessSignals(raw.metrics, raw.checkins),
+    readiness: wellnessSignals(raw.metrics, raw.checkins, raw.today),
     checkins: raw.checkins.filter((c) => c.date >= since).map((c) => ({ ...c })),
     metrics: metrics.map((m) => ({ ...m })),
   };

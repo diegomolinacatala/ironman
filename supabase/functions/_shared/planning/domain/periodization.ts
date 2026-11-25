@@ -26,7 +26,7 @@ import {
   type DistanceKind,
   type Subphase,
 } from './constants.ts';
-import { addDays, diffDays, isISODate, isoWeekNumber, startOfWeek, weekRange } from './dates.ts';
+import { addDays, diffDays, isISODate, startOfWeek, weekRange } from './dates.ts';
 import { loadWeeks, type RecoveryCadence } from './recoveryLayout.ts';
 import type { AthleteLevel, ISODate, Race, RaceDistance, TrainableSport } from './types.ts';
 
@@ -209,15 +209,27 @@ function maintenanceFactor(target: Race | null, cadence: RecoveryCadence, cycle:
 }
 
 /**
+ * Monday whose week has index 0. Chosen so the index equals the ISO week number
+ * all through 2026 (the cycle in use when it replaced `isoWeekNumber`), and it
+ * keeps counting across New Year: ISO numbers restart at 1 after week 52 or 53,
+ * which ran 4 load weeks in a row (3:1) or two descargas 2 weeks apart (2:1).
+ */
+const MAINTENANCE_ANCHOR: ISODate = '2025-12-22';
+
+function continuousWeekIndex(date: ISODate): number {
+  return Math.round(diffDays(startOfWeek(date), MAINTENANCE_ANCHOR) / 7);
+}
+
+/**
  * Maintenance load/recovery cycle. Before a planned macrocycle it is counted
  * back from the plan start (`weeksBeforePlan` = 0 is the week right before it),
  * which is always a recovery week, so the cadence never runs on across the
- * boundary; otherwise it follows the ISO week number (counted backwards, so
+ * boundary; otherwise it follows a continuous week index (counted backwards, so
  * the load weeks after each descarga build up 0.95 → 1.00 → 1.05 like a plan).
  */
 function maintenanceCycle(date: ISODate, cadence: RecoveryCadence, weeksBeforePlan: number | null): CycleInfo {
   const cycle = cadence === '3:1' ? 4 : 3;
-  if (weeksBeforePlan === null) return cycleAt(cycle - 2 - isoWeekNumber(date), cadence);
+  if (weeksBeforePlan === null) return cycleAt(cycle - 2 - continuousWeekIndex(date), cadence);
   return cycleAt(weeksBeforePlan + cycle - 1, cadence);
 }
 
@@ -294,13 +306,18 @@ function postRaceInfo(state: { race: Race; kind: 'transition' | 'recovery' }, ta
   };
 }
 
-/** Training phase, volume factor and focus for the week containing `date`. */
+/**
+ * Training phase, volume factor and focus for the week containing `date`.
+ * Everything but `daysToRace` is evaluated on the week's Monday, so every day of
+ * a week gets the same phase as the planner, which plans from Monday (Hoy, the
+ * briefing and the replanner pass today's date).
+ */
 export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptions = {}): PhaseInfo {
   const sorted = sortRaces(races);
   const cadence = cadenceFor(opts);
-  const target = nextRace(sorted, date);
   const weekStart = startOfWeek(date);
-  const recent = recentRaceState(sorted, date);
+  const target = nextRace(sorted, weekStart);
+  const recent = recentRaceState(sorted, weekStart);
   const k = target ? Math.round(diffDays(startOfWeek(target.date), weekStart) / 7) : null;
   if (recent && (k === null || k > 1)) return postRaceInfo(recent, target, date, cadence);
   if (!target || k === null) return maintenanceInfo(date, null, cadence, []);

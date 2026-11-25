@@ -40,6 +40,18 @@ describe('rampCapMinutes', () => {
     expect(beginner).toBeGreaterThan(stressed);
     expect(normal).toBeGreaterThan(310);
   });
+
+  test('volume never grows more than 15 % over the biggest of the last 3 weeks', () => {
+    // From a low CTL the CTL ramp alone allowed ~600' after four 300' weeks.
+    expect(rampCapMinutes({ recentWeeklyMinutes: [300, 300, 300, 300], level: 'intermediate', lifeStress: false })).toBe(345);
+    expect(rampCapMinutes({ recentWeeklyMinutes: [0, 0, 300, 300], level: 'intermediate', lifeStress: false })).toBeLessThanOrEqual(345);
+    expect(rampCapMinutes({ recentWeeklyMinutes: [300, 300, 300, 300], level: 'beginner', lifeStress: false })).toBe(330);
+    expect(rampCapMinutes({ recentWeeklyMinutes: [300, 300, 300, 300], level: 'intermediate', lifeStress: true })).toBe(315);
+  });
+
+  test('very low volumes may still add 15 minutes', () => {
+    expect(rampCapMinutes({ recentWeeklyMinutes: [60, 60, 60, 60], level: 'beginner', lifeStress: false })).toBe(75);
+  });
 });
 
 describe('consumeExisting and trimToBudget', () => {

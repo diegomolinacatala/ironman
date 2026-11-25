@@ -41,20 +41,42 @@ export function mergeMetricsByDate(rows: readonly DailyMetrics[]): DailyMetrics[
   return [...byDate.values()];
 }
 
-export function wellnessSignals(metrics: readonly DailyMetrics[], checkins: readonly DailyCheckin[]): WellnessSignals {
-  const merged = mergeMetricsByDate(metrics);
-  const latest = merged[merged.length - 1] ?? null;
-  const lastCheckin = [...checkins].sort((a, b) => a.date.localeCompare(b.date)).pop() ?? null;
+/** The day before `date` (ISO, UTC arithmetic on a calendar date). */
+function dayBefore(date: ISODate): ISODate {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * With `today`, only today's or yesterday's metrics and check-in describe the
+ * athlete now: an older row (a 5/5 fatigue five days ago, the last sync a week
+ * ago) no longer turns today red. Yesterday's values are labelled "(ayer)".
+ */
+export function wellnessSignals(
+  metrics: readonly DailyMetrics[],
+  checkins: readonly DailyCheckin[],
+  today?: ISODate,
+): WellnessSignals {
+  const fresh = (date: ISODate) => !today || (date <= today && date >= dayBefore(today));
+  const merged = mergeMetricsByDate(today ? metrics.filter((m) => m.date <= today) : metrics);
+  const newest = merged[merged.length - 1] ?? null;
+  const latest = newest && fresh(newest.date) ? newest : null;
+  const sortedCheckins = [...checkins].filter((c) => !today || c.date <= today).sort((a, b) => a.date.localeCompare(b.date));
+  const newestCheckin = sortedCheckins[sortedCheckins.length - 1] ?? null;
+  const lastCheckin = newestCheckin && fresh(newestCheckin.date) ? newestCheckin : null;
+  const yesterdayNote = (date: ISODate) => (today && date < today ? ' (ayer)' : '');
   const signals: string[] = [];
   let amber = 0;
   let red = 0;
   if (latest) {
+    const note = yesterdayNote(latest.date);
     const baseline = merged.slice(0, -1);
     const hrvMean = mean(numbers(baseline, (m) => m.hrvMs));
     if (latest.hrvMs != null && hrvMean) {
       const pct = Math.round(((latest.hrvMs - hrvMean) / hrvMean) * 100);
       if (pct <= -10) {
-        signals.push(`VFC ${latest.hrvMs} ms, ${Math.abs(pct)} % por debajo de su media reciente`);
+        signals.push(`VFC ${latest.hrvMs} ms, ${Math.abs(pct)} % por debajo de su media reciente${note}`);
         amber += 1;
       }
     }
@@ -62,26 +84,26 @@ export function wellnessSignals(metrics: readonly DailyMetrics[], checkins: read
     if (latest.restingHr != null && rhrMean) {
       const delta = Math.round(latest.restingHr - rhrMean);
       if (delta >= 8) red += 1;
-      if (delta >= 5) signals.push(`FC en reposo +${delta} lpm sobre su media`);
+      if (delta >= 5) signals.push(`FC en reposo +${delta} lpm sobre su media${note}`);
       if (delta >= 5 && delta < 8) amber += 1;
     }
     if (latest.sleepHours != null && latest.sleepHours < 6) {
-      signals.push(`Durmió ${latest.sleepHours.toFixed(1).replace('.', ',')} h`);
+      signals.push(`Durmió ${latest.sleepHours.toFixed(1).replace('.', ',')} h${note}`);
       amber += 1;
     }
     if (latest.trainingReadiness != null && latest.trainingReadiness < 50) {
-      signals.push(`Disposición para entrenar del reloj ${latest.trainingReadiness}/100`);
+      signals.push(`Disposición para entrenar del reloj ${latest.trainingReadiness}/100${note}`);
       if (latest.trainingReadiness < 25) red += 1;
       else amber += 1;
     }
-    if (latest.bodyBattery != null && latest.bodyBattery < 30) signals.push(`Body Battery bajo (${latest.bodyBattery})`);
+    if (latest.bodyBattery != null && latest.bodyBattery < 30) signals.push(`Body Battery bajo (${latest.bodyBattery})${note}`);
   }
   if (lastCheckin) {
     if (lastCheckin.fatigue >= 5) red += 1;
     else if (lastCheckin.fatigue >= 4 || lastCheckin.soreness >= 4) amber += 1;
     if (lastCheckin.fatigue >= 4) signals.push(`Fatiga subjetiva ${lastCheckin.fatigue}/5 (${lastCheckin.date})`);
-    if (lastCheckin.soreness >= 4) signals.push(`Agujetas/dolor muscular ${lastCheckin.soreness}/5`);
-    if (lastCheckin.stress >= 4) signals.push(`Estrés ${lastCheckin.stress}/5`);
+    if (lastCheckin.soreness >= 4) signals.push(`Agujetas/dolor muscular ${lastCheckin.soreness}/5${yesterdayNote(lastCheckin.date)}`);
+    if (lastCheckin.stress >= 4) signals.push(`Estrés ${lastCheckin.stress}/5${yesterdayNote(lastCheckin.date)}`);
   }
   const level = !latest && !lastCheckin ? 'unknown' : red > 0 ? 'red' : amber >= 2 ? 'amber' : 'green';
   return { latestDate: latest?.date ?? lastCheckin?.date ?? null, signals, level };
