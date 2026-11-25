@@ -30,6 +30,7 @@ import { useNotificationRouting } from './effects/useNotificationRouting';
 import { usePlanMirrors } from './effects/usePlanMirrors';
 import { usePushRegistration } from './effects/usePushRegistration';
 import { useSignedOutCleanup } from './effects/useSignedOutCleanup';
+import { useTimezoneSync } from './effects/useTimezoneSync';
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -79,6 +80,7 @@ export function AppEffects(): null {
   useGarminForegroundSync(signedInAndOnboarded && isGarminWatch(profile), repo, userId);
   usePlanMirrors(ready, { workouts, races, jointSessions, profile, briefing, userId, today, tick });
   useSignedOutCleanup(isLoading, userId);
+  useTimezoneSync(signedInAndOnboarded, profile);
 
   return null;
 }
