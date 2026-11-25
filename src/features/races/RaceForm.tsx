@@ -4,11 +4,11 @@ import { StyleSheet, View } from 'react-native';
 import type { ISODate, Race, RaceDraft, RacePriority } from '@/domain/types';
 import { FormFooter } from '@/features/workouts/FormFooter';
 import { FormScreen } from '@/features/workouts/FormScreen';
-import { Button, Segmented, Text, TextField, fonts, space } from '@/ui';
+import { Button, Disclosure, Segmented, Text, TextField, fonts, space } from '@/ui';
 
 import { DistancePicker } from './DistancePicker';
 import { RaceDateField } from './RaceDateField';
-import { initialRaceForm, validateRaceForm, type RaceFormState } from './raceFormModel';
+import { defaultRaceName, initialRaceForm, validateRaceForm, type RaceFormState } from './raceFormModel';
 import { PRIORITIES, PRIORITY_INFO } from './raceModel';
 
 export interface RaceFormProps {
@@ -19,11 +19,14 @@ export interface RaceFormProps {
   error: string | null;
   onSave: (draft: RaceDraft) => void;
   onDelete?: () => void;
+  /** No race yet: this one defaults to A (the season goal). */
+  isFirstRace?: boolean;
 }
 
 /** Create / edit race form (modal body). */
-export function RaceForm({ race, today, saving, deleting, error, onSave, onDelete }: RaceFormProps) {
-  const [form, setForm] = useState<RaceFormState>(() => initialRaceForm(race, today));
+export function RaceForm({ race, today, saving, deleting, error, onSave, onDelete, isFirstRace = false }: RaceFormProps) {
+  const [form, setForm] = useState<RaceFormState>(() => initialRaceForm(race, today, isFirstRace));
+  const hasDetails = Boolean(form.location || form.goal || form.notes);
   const [validation, setValidation] = useState<string | null>(null);
   const set = <K extends keyof RaceFormState>(key: K, value: RaceFormState[K]) => {
     setValidation(null);
@@ -61,7 +64,7 @@ export function RaceForm({ race, today, saving, deleting, error, onSave, onDelet
         label="Nombre"
         value={form.name}
         onChangeText={(v) => set('name', v)}
-        placeholder="Triatlón de Valencia"
+        placeholder={`Opcional: ${defaultRaceName(form.distance, form.date)}`}
         accessibilityLabel="Nombre de la carrera"
         maxLength={80}
         returnKeyType="next"
@@ -82,31 +85,39 @@ export function RaceForm({ race, today, saving, deleting, error, onSave, onDelet
           {PRIORITY_INFO[form.priority].help}
         </Text>
       </View>
-      <TextField
-        label="Lugar"
-        value={form.location}
-        onChangeText={(v) => set('location', v)}
-        placeholder="Valencia"
-        accessibilityLabel="Lugar"
-        maxLength={80}
-      />
-      <TextField
-        label="Objetivo"
-        value={form.goal}
-        onChangeText={(v) => set('goal', v)}
-        placeholder="Terminar sonriendo, sub 5h…"
-        accessibilityLabel="Objetivo"
-        maxLength={120}
-      />
-      <TextField
-        label="Notas"
-        value={form.notes}
-        onChangeText={(v) => set('notes', v)}
-        placeholder="Inscripción, logística, cosas a tener en cuenta…"
-        accessibilityLabel="Notas"
-        multiline
-        maxLength={1000}
-      />
+      <Disclosure
+        variant="plain"
+        title="Más detalles"
+        summary={hasDetails ? [form.location, form.goal].filter(Boolean).join(' · ') || 'Con notas' : 'Lugar, objetivo y notas (opcional)'}
+        defaultOpen={hasDetails}>
+        <View style={styles.details}>
+          <TextField
+            label="Lugar"
+            value={form.location}
+            onChangeText={(v) => set('location', v)}
+            placeholder="Valencia"
+            accessibilityLabel="Lugar"
+            maxLength={80}
+          />
+          <TextField
+            label="Objetivo"
+            value={form.goal}
+            onChangeText={(v) => set('goal', v)}
+            placeholder="Terminar sonriendo, sub 5h…"
+            accessibilityLabel="Objetivo"
+            maxLength={120}
+          />
+          <TextField
+            label="Notas"
+            value={form.notes}
+            onChangeText={(v) => set('notes', v)}
+            placeholder="Inscripción, logística, cosas a tener en cuenta…"
+            accessibilityLabel="Notas"
+            multiline
+            maxLength={1000}
+          />
+        </View>
+      </Disclosure>
       {onDelete ? (
         <Button label="Eliminar carrera" icon="trash" variant="danger" loading={deleting} disabled={saving} onPress={onDelete} />
       ) : null}
@@ -118,4 +129,5 @@ const styles = StyleSheet.create({
   content: { gap: space.xl },
   field: { gap: space.xs },
   label: { fontFamily: fonts.bodySemibold },
+  details: { gap: space.xl },
 });

@@ -127,6 +127,7 @@ export default function RaceEditScreen() {
         error={error}
         onSave={(draft) => void save(draft)}
         onDelete={race ? () => void destroy() : undefined}
+        isFirstRace={!race && races.data !== undefined && races.data.length === 0}
       />
     </>
   );

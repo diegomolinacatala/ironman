@@ -5,7 +5,6 @@ import { formatDayLabel, formatTime, todayISO } from '@/domain/dates';
 import type { LifeEvent } from '@/domain/types';
 import { Button, Card, Icon, Text, iconSize, radius, space, useTheme } from '@/ui';
 
-import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { closeModal } from '@/features/workouts/ModalClose';
 
 import { lifeEventIcon } from './kinds';
@@ -49,7 +48,7 @@ export function ReplanPanel({ event }: { event: LifeEvent }) {
         ¿Reorganizamos tu semana?
       </Text>
       <Text variant="callout" color="textMuted">
-        Te propondremos cambios que podrás aceptar uno a uno. Las quedadas y las sesiones clave se respetan.
+        Verás los cambios antes de aplicarlos. Tus quedadas no se tocan.
       </Text>
       {replan.message ? (
         <Card variant="tinted" padding="md">
@@ -57,17 +56,17 @@ export function ReplanPanel({ event }: { event: LifeEvent }) {
         </Card>
       ) : null}
       <Button
-        label="Reorganizar (reglas)"
+        label="Reorganizar mi semana"
         icon="sparkles"
         size="lg"
         fullWidth
         onPress={() => void replan.run()}
         loading={replan.busy}
         disabled={!replan.ready}
-        accessibilityHint="Propuesta instantánea con el motor de reglas, sin conexión"
+        accessibilityHint="Propuesta al momento, también sin conexión"
       />
       <Button
-        label={isAiCoachEnabled() ? 'Pedir al coach IA' : 'Pedir al coach'}
+        label="Hablarlo con el coach"
         icon="coach"
         variant="secondary"
         size="lg"

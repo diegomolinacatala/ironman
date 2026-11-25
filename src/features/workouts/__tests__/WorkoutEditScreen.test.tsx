@@ -93,7 +93,7 @@ describe('workout editor', () => {
     mockParams = { id: 'w1' };
     mockWorkout = makeWorkout({ id: 'w1', tss: 50, durationMin: 45 });
     await render(<WorkoutEditScreen />);
-    await fireEvent.press(screen.getAllByRole('button', { name: 'Sumar' })[0]!);
+    await fireEvent.press(screen.getAllByRole('button', { name: /^Sumar/ })[0]!);
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
     expect(mockUpdate.mock.calls[0]?.[0]).toMatchObject({ id: 'w1', patch: { durationMin: 50, tss: null } });
@@ -113,7 +113,7 @@ describe('workout editor', () => {
     mockParams = { id: 'w1' };
     mockWorkout = makeWorkout({ id: 'w1', durationMin: 45, coaching: COACHING });
     await render(<WorkoutEditScreen />);
-    await fireEvent.press(screen.getAllByRole('button', { name: 'Sumar' })[0]!);
+    await fireEvent.press(screen.getAllByRole('button', { name: /^Sumar/ })[0]!);
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar cambios' }));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
     expect(mockUpdate.mock.calls[0]?.[0].patch).not.toHaveProperty('coaching');

@@ -47,9 +47,9 @@ describe('Ha surgido algo', () => {
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
     expect(mockCreate.mock.calls[0]?.[0]).toMatchObject({ kind: 'padel', startDate: '2026-10-28', endDate: '2026-10-28', durationMin: 90 });
     expect(await screen.findByText('¿Reorganizamos tu semana?')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Reorganizar (reglas)' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Reorganizar mi semana' }));
     expect(mockRun).toHaveBeenCalledTimes(1);
-    await fireEvent.press(screen.getByRole('button', { name: 'Pedir al coach IA' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Hablarlo con el coach' }));
     expect(mockRouter.replace).toHaveBeenCalledWith('/coach?mode=replan&lifeEventId=new-1');
   });
 

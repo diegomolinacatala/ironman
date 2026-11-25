@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 
 import type { Race } from '@/domain/types';
 
-import { changesSeason, initialRaceForm, toRaceDraft, validateRaceForm } from '../raceFormModel';
+import { changesSeason, defaultRaceName, initialRaceForm, toRaceDraft, validateRaceForm } from '../raceFormModel';
 import { PHASE_TIMELINE, PRIORITY_INFO, countdown, phaseName, splitRaces, timelineIndex } from '../raceModel';
 
 const TODAY = '2026-10-25';
@@ -77,11 +77,21 @@ describe('raceFormModel', () => {
     });
   });
 
+  test('the first race defaults to A (the season goal)', () => {
+    expect(initialRaceForm(null, TODAY, true).priority).toBe('A');
+    expect(initialRaceForm(null, TODAY, false).priority).toBe('B');
+  });
+
+  test('an empty name becomes "<distance> de <mes>"', () => {
+    const base = initialRaceForm(null, TODAY);
+    expect(defaultRaceName('olympic', '2027-03-14')).toBe('Olímpico de marzo');
+    const noName = validateRaceForm({ ...base, name: '   ' });
+    expect(noName.ok).toBe(true);
+    if (noName.ok) expect(noName.draft.name).toBe('Olímpico de enero');
+  });
+
   test('validation returns Spanish errors', () => {
     const base = initialRaceForm(null, TODAY);
-    const noName = validateRaceForm(base);
-    expect(noName.ok).toBe(false);
-    if (!noName.ok) expect(noName.error).toContain('nombre');
     const badDate = validateRaceForm({ ...base, name: 'Sprint', date: '2027-13-45' });
     expect(badDate.ok).toBe(false);
     const ok = validateRaceForm({ ...base, name: 'Sprint de Gandía' });

@@ -3,6 +3,7 @@
  */
 import { addDays } from '@/domain/dates';
 import type { ISODate, Race, RaceDistance, RaceDraft, RacePriority } from '@/domain/types';
+import { raceDistanceLabel } from '@/domain/labels';
 import { firstError, raceDraftSchema } from '@/domain/validation';
 
 export interface RaceFormState {
@@ -18,13 +19,17 @@ export interface RaceFormState {
 /** Default date for a new race: ~3 months out. */
 const DEFAULT_LEAD_DAYS = 90;
 
-export function initialRaceForm(race: Race | null, today: ISODate): RaceFormState {
+/**
+ * `isFirstRace`: the athlete has no race yet, so this one is the season goal (A).
+ * Afterwards a new race defaults to B.
+ */
+export function initialRaceForm(race: Race | null, today: ISODate, isFirstRace = false): RaceFormState {
   if (!race) {
     return {
       name: '',
       date: addDays(today, DEFAULT_LEAD_DAYS),
       distance: 'olympic',
-      priority: 'B',
+      priority: isFirstRace ? 'A' : 'B',
       location: '',
       goal: '',
       notes: '',
@@ -46,9 +51,18 @@ function orNull(value: string): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/** Name when the athlete leaves it empty: "Olímpico de marzo". */
+export function defaultRaceName(distance: RaceDistance, date: ISODate): string {
+  const month = MONTHS[Number(date.slice(5, 7)) - 1];
+  const label = raceDistanceLabel(distance);
+  return month ? `${label} de ${month}` : label;
+}
+
 export function toRaceDraft(state: RaceFormState): RaceDraft {
   return {
-    name: state.name.trim(),
+    name: state.name.trim() || defaultRaceName(state.distance, state.date.trim()),
     date: state.date.trim(),
     distance: state.distance,
     priority: state.priority,

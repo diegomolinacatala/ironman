@@ -5,7 +5,7 @@ import { Alert, type AlertButton } from 'react-native';
 import RaceEditScreen from '@/app/races/edit';
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismissTo: jest.fn(), canGoBack: jest.fn(() => true) };
-const mockCreate = jest.fn(async () => ({ id: 'r1' }));
+const mockCreate = jest.fn(async (_draft: Record<string, unknown>) => ({ id: 'r1' }));
 let mockParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
@@ -56,11 +56,21 @@ describe('races/edit', () => {
     expect(mockRouter.back).toHaveBeenCalledTimes(1);
   });
 
-  test('validation errors sit in the footer, above the button', async () => {
+  test('the first race: A by default, optional details folded, the name filled in', async () => {
+    mockParams = { from: 'plan' };
+    await render(<RaceEditScreen />);
+    expect(screen.queryByLabelText('Lugar')).toBeNull();
+    expect(screen.getByText('Lugar, objetivo y notas (opcional)')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate.mock.calls[0]?.[0]).toMatchObject({ priority: 'A', name: expect.stringMatching(/^Olímpico de \p{L}+$/u) });
+  });
+
+  test('save errors sit in the footer, above the button', async () => {
+    mockCreate.mockRejectedValueOnce(new Error('Sin conexión'));
     await render(<RaceEditScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
-    expect(within(screen.getByTestId('form-footer')).getByText(/nombre/)).toBeTruthy();
-    expect(mockCreate).not.toHaveBeenCalled();
+    expect(await within(screen.getByTestId('form-footer')).findByText('Sin conexión')).toBeTruthy();
   });
 
   test('a race added from Plan → General goes straight back there', async () => {

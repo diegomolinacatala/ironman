@@ -88,7 +88,7 @@ export function Segmented<T extends string>({ options, value, onChange, accessib
             accessibilityRole="tab"
             accessibilityLabel={option.label}
             accessibilityState={{ selected }}
-            hitSlop={{ top: 4, bottom: 4 }}
+            hitSlop={{ top: 5, bottom: 5 }}
             onPress={() => {
               haptics.tap();
               onChange(option.value);
@@ -132,13 +132,13 @@ export function Stepper({ value, onChange, step = 5, min = 0, max = 1000, format
     <View style={styles.field}>
       {label ? <FieldLabel>{label}</FieldLabel> : null}
       <View style={[styles.stepper, { backgroundColor: colors.surface, borderColor: colors.borderStrong }]}>
-        <Pressable accessibilityLabel="Restar" accessibilityRole="button" onPress={() => set(value - step)} hitSlop={4} style={styles.stepBtn}>
+        <Pressable accessibilityLabel={label ? `Restar: ${label}` : 'Restar'} accessibilityRole="button" onPress={() => set(value - step)} hitSlop={4} style={styles.stepBtn}>
           <Icon name="chevronLeft" size={18} color={colors.text} />
         </Pressable>
         <Text variant="metricSmall" accessibilityLiveRegion="polite">
           {format ? format(value) : String(value)}
         </Text>
-        <Pressable accessibilityLabel="Sumar" accessibilityRole="button" onPress={() => set(value + step)} hitSlop={4} style={styles.stepBtn}>
+        <Pressable accessibilityLabel={label ? `Sumar: ${label}` : 'Sumar'} accessibilityRole="button" onPress={() => set(value + step)} hitSlop={4} style={styles.stepBtn}>
           <Icon name="chevronRight" size={18} color={colors.text} />
         </Pressable>
       </View>
@@ -163,16 +163,16 @@ export function ScorePicker({ label, value, onChange, ends, inverted = false }: 
   return (
     <View style={styles.field}>
       <FieldLabel>{label}</FieldLabel>
-      <View style={styles.scoreRow}>
+      <View style={styles.scoreRow} accessibilityRole="radiogroup" accessibilityLabel={label}>
         {([1, 2, 3, 4, 5] as const).map((n) => {
           const selected = value === n;
           const tone = scale[inverted ? 5 - n : n - 1];
           return (
             <Pressable
               key={n}
-              accessibilityRole="button"
+              accessibilityRole="radio"
               accessibilityLabel={`${label}: ${n} de 5`}
-              accessibilityState={{ selected }}
+              accessibilityState={{ selected, checked: selected }}
               onPress={() => {
                 haptics.tap();
                 onChange(n);
