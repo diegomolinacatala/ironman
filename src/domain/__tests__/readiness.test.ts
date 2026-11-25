@@ -1,5 +1,5 @@
 import { addDays } from '../dates';
-import { computeReadiness } from '../readiness';
+import { YESTERDAY_DATA_NOTE, computeReadiness } from '../readiness';
 import type { DailyMetrics } from '../types';
 import { makeCheckin, makeMetrics } from './fixtures';
 
@@ -91,6 +91,29 @@ describe('computeReadiness', () => {
   test('prefers Garmin over other sources on the same day', () => {
     const metrics = [makeMetrics(TODAY, { source: 'healthkit', trainingReadiness: 10 }), makeMetrics(TODAY, { source: 'garmin', trainingReadiness: 80 })];
     expect(computeReadiness({ today: TODAY, checkin: null, metrics }).level).toBe('green');
+  });
+});
+
+describe('watch not synced yet today', () => {
+  test("yesterday's metrics stand in, said in the factors", () => {
+    const yesterday = addDays(TODAY, -1);
+    const metrics = history(20).map((m) => (m.date === yesterday ? { ...m, restingHr: 58 } : m));
+    const r = computeReadiness({ today: TODAY, checkin: null, metrics });
+    expect(r.level).toBe('red');
+    expect(r.factors).toContain(YESTERDAY_DATA_NOTE);
+  });
+
+  test("yesterday's sleep is not read as last night's", () => {
+    const yesterday = addDays(TODAY, -1);
+    const metrics = history(20).map((m) => (m.date === yesterday ? { ...m, sleepHours: 4 } : m));
+    const r = computeReadiness({ today: TODAY, checkin: null, metrics });
+    expect(r.factors.join(' ')).not.toMatch(/Has dormido/);
+    expect(r.level).toBe('green');
+  });
+
+  test('older data still means unknown', () => {
+    const r = computeReadiness({ today: TODAY, checkin: null, metrics: [makeMetrics(addDays(TODAY, -3))] });
+    expect(r.level).toBe('unknown');
   });
 });
 

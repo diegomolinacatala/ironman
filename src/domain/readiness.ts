@@ -195,15 +195,31 @@ const RECOMMENDATIONS: Record<ReadinessLevel | 'note', string> = {
 };
 
 /** Combined readiness for `today`. */
+const METRIC_KEYS: readonly MetricKey[] = ['hrvMs', 'restingHr', 'sleepHours', 'sleepScore', 'trainingReadiness', 'bodyBattery', 'stressAvg'];
+export const YESTERDAY_DATA_NOTE = 'Datos del reloj de ayer: aún no ha sincronizado los de hoy';
+
+function hasMetricsOn(metrics: readonly DailyMetrics[], date: ISODate): boolean {
+  return METRIC_KEYS.some((k) => metricOn(metrics, date, k) !== null);
+}
+
+/**
+ * Combined readiness for `today`. When the watch has not synced today yet,
+ * yesterday's metrics stand in (said in the factors) instead of "unknown".
+ */
 export function computeReadiness(input: ReadinessInput): Readiness {
   const { today, metrics } = input;
   const checkin = input.checkin && input.checkin.date === today ? input.checkin : null;
+  const yesterday = addDays(today, -1);
+  const useYesterday = !hasMetricsOn(metrics, today) && hasMetricsOn(metrics, yesterday);
+  const metricsDay = useYesterday ? yesterday : today;
   const signals = [
-    garminSignals(metrics, today),
-    hrvSignals(metrics, today),
-    restingHrSignals(metrics, today),
+    garminSignals(metrics, metricsDay),
+    hrvSignals(metrics, metricsDay),
+    restingHrSignals(metrics, metricsDay),
+    // Sleep is always last night's: yesterday's row describes the night before.
     sleepSignals(metrics, today, checkin),
     checkinSignals(checkin),
+    useYesterday ? { ...EMPTY, notes: [YESTERDAY_DATA_NOTE] } : EMPTY,
   ].reduce(merge, EMPTY);
   if (!signals.hasData) return { score: null, level: 'unknown', factors: [], recommendation: RECOMMENDATIONS.unknown };
 

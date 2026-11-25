@@ -1,6 +1,6 @@
 /**
  * The spoken part of the local morning briefing: today's plan read as a
- * 110–200 word Spanish (Spain, tú) script for text-to-speech, with every
+ * Spanish (Spain, tú) script of at most 180 words for text-to-speech, with every
  * number, time and unit written out: the key session as a coach says it
  * (main set, target, sensation, success criterion: `briefingCoach.ts`), plus
  * one short sentence per quedada of the day and for the pending invitations
@@ -18,8 +18,8 @@ import type { Intensity, ISODate, Race, SleepSnapshot, SleepVerdict, Sport, Watc
 
 export { lowerFirst } from './briefingCoach';
 
-const SCRIPT_MIN_WORDS = 110;
-const SCRIPT_MAX_WORDS = 200;
+/** Upper bound only: about a minute of speech. Short days make short briefings. */
+const SCRIPT_MAX_WORDS = 180;
 const DEMANDING_TSS = 90;
 /** Sessions read one by one; the rest are summarised ("y dos más"). */
 const SPOKEN_SESSIONS_MAX = 3;
@@ -171,30 +171,33 @@ function verdictSentence(s: SleepSnapshot, verdict: SleepVerdict): Sentence | nu
   return { text: `En conjunto, ${VERDICT_SPOKEN[verdict]}.` };
 }
 
+/**
+ * Said only when it tells something: away from the athlete's baseline. A value in
+ * line with the baseline (or without one to compare) is on screen, not read aloud.
+ */
 function hrvSentence(s: SleepSnapshot): Sentence | null {
   if (!isNum(s.hrvMs)) return null;
-  const value = `Tu variabilidad cardiaca está en ${countWords(s.hrvMs, 'milisegundo', 'milisegundos', 'masculine')}`;
   const ratio = hrvRatio(s);
-  if (ratio === null || !isNum(s.hrvBaselineMs)) return { text: `${value}.` };
-  const relation = ratio < HRV_LOW_RATIO ? 'por debajo de' : ratio > HRV_HIGH_RATIO ? 'por encima de' : 'en línea con';
+  if (ratio === null || !isNum(s.hrvBaselineMs) || (ratio >= HRV_LOW_RATIO && ratio <= HRV_HIGH_RATIO)) return null;
+  const value = `Tu variabilidad cardiaca está en ${countWords(s.hrvMs, 'milisegundo', 'milisegundos', 'masculine')}`;
+  const relation = ratio < HRV_LOW_RATIO ? 'por debajo de' : 'por encima de';
   return { text: `${value}, ${relation} tu media de ${numberToWords(Math.round(s.hrvBaselineMs))}.` };
 }
 
+/** Body battery below this is worth saying; a normal morning is not news. */
+const LOW_BODY_BATTERY = 40;
+
+/**
+ * Last night by exception: hours and verdict always, HRV and body battery only
+ * when out of the ordinary. Sleep stages and resting HR stay on screen.
+ */
 function sleepSentences(s: SleepSnapshot | null, verdict: SleepVerdict, hasAnyMetrics: boolean, brand?: WatchBrand | null): Sentence[] {
   if (!s) return [{ text: hasAnyMetrics ? noSleepYetText(brand) : noWatchText(brand) }];
-  const stages =
-    isNum(s.deepMin) && isNum(s.remMin)
-      ? { text: `Has tenido ${durationWords(s.deepMin)} de sueño profundo y ${durationWords(s.remMin)} de sueño REM.`, drop: 2 }
+  const battery =
+    isNum(s.bodyBattery) && s.bodyBattery < LOW_BODY_BATTERY
+      ? { text: `Empiezas el día con la batería corporal baja, al ${numberToWords(Math.round(s.bodyBattery))} por ciento.`, drop: 3 }
       : null;
-  const pulse = isNum(s.restingHr)
-    ? { text: `Tu pulso en reposo es de ${countWords(s.restingHr, 'pulsación', 'pulsaciones', 'feminine')} por minuto.`, drop: 4 }
-    : null;
-  const battery = isNum(s.bodyBattery)
-    ? { text: `Empiezas el día con la batería corporal al ${numberToWords(Math.round(s.bodyBattery))} por ciento.`, drop: 3 }
-    : null;
-  return [hoursSentence(s), verdictSentence(s, verdict), stages, hrvSentence(s), pulse, battery].filter(
-    (x): x is Sentence => x !== null,
-  );
+  return [hoursSentence(s), verdictSentence(s, verdict), hrvSentence(s), battery].filter((x): x is Sentence => x !== null);
 }
 
 function todaySentences(plan: DayPlan, race: Race | null, speech: SpeechContext): Sentence[] {
@@ -274,29 +277,21 @@ const CLOSING: Record<DayPlan['kind'], string> = {
   train: '¡Vamos a por ello!',
 };
 
-/** General advice added (in order) when a script with data is shorter than the budget. */
-const PADDING: readonly string[] = [
-  'Si algo cambia a lo largo del día, cuéntaselo a tu coach y ajustamos el plan juntos, sin dramas.',
-  'Bebe agua durante el día y no te saltes comidas: tu cuerpo necesita energía para asimilar lo que entrenas.',
-  'Y recuerda: la constancia gana a la intensidad. Un día normal bien hecho vale más que un día heroico.',
-];
-
 function words(list: readonly Sentence[]): number {
   return wordCount(list.map((s) => s.text).join(' '));
 }
 
-/** Joins sentences, dropping optional details (highest `drop` first) while over the word budget. */
-function fitScript(sentences: readonly Sentence[], hasData: boolean): string {
+/**
+ * Joins sentences, dropping optional details (highest `drop` first) while over the
+ * word budget. A quiet day makes a short briefing: no generic advice to fill time.
+ */
+function fitScript(sentences: readonly Sentence[]): string {
   let kept = [...sentences];
   while (words(kept) > SCRIPT_MAX_WORDS) {
     const highest = Math.max(0, ...kept.map((s) => s.drop ?? 0));
     if (highest === 0) break;
     const index = kept.findIndex((s) => s.drop === highest);
     kept = [...kept.slice(0, index), ...kept.slice(index + 1)];
-  }
-  const padding = hasData ? PADDING : [];
-  for (let i = 0; i < padding.length && words(kept) < SCRIPT_MIN_WORDS; i += 1) {
-    kept = [...kept.slice(0, -1), { text: padding[i] ?? '' }, ...kept.slice(-1)];
   }
   return kept.map((s) => s.text).join(' ');
 }
@@ -334,5 +329,5 @@ export function composeScript(input: ScriptInput): string {
     ...[raceSentence(race, date, input.daysToRace)].filter((s): s is Sentence => s !== null),
     { text: CLOSING[plan.kind] },
   ];
-  return fitScript(sentences, input.snapshot !== null);
+  return fitScript(sentences);
 }

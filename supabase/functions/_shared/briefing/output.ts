@@ -13,8 +13,8 @@ export const HEADLINE_MAX = 90;
 export const SUMMARY_MAX = 300;
 export const FOCUS_MAX = 200;
 export const SCRIPT_MAX_CHARS = 4000;
-/** Accepted script length (the prompt asks for 110–200 words). */
-export const SCRIPT_MIN_WORDS = 40;
+/** Accepted script length (the prompt asks for at most 180 words; a quiet day may be short). */
+export const SCRIPT_MIN_WORDS = 20;
 export const SCRIPT_MAX_WORDS = 450;
 
 const outputSchema = object(
@@ -22,7 +22,7 @@ const outputSchema = object(
     headline: string({ min: 1, description: 'Titular de máximo 90 caracteres.' }),
     sleep_verdict: enumOf(SLEEP_VERDICTS),
     sleep_summary: string({ description: 'Una frase sobre la noche.' }),
-    script: string({ min: 1, description: 'Guion para leer en voz alta, 110-200 palabras.' }),
+    script: string({ min: 1, description: 'Guion para leer en voz alta, como mucho 180 palabras y sin relleno.' }),
     focus: string({ description: 'El foco del día: la cifra y el criterio de la sesión clave, o un consejo accionable.' }),
   },
   undefined,

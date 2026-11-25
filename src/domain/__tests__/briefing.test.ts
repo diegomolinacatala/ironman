@@ -147,10 +147,12 @@ describe('composeBriefing with full data', () => {
     expect(briefing.sleep?.hrvBaselineMs).toBe(68);
   });
 
-  it('writes a 110–200 word script for speech, without digits or abbreviations', () => {
+  it('writes a short script for speech (≤ 180 words, no filler), without digits or abbreviations', () => {
     const words = wordCount(briefing.script);
-    expect(words).toBeGreaterThanOrEqual(110);
-    expect(words).toBeLessThanOrEqual(200);
+    expect(words).toBeLessThanOrEqual(180);
+    expect(briefing.script).not.toMatch(/constancia gana|Bebe agua durante el día/);
+    // HRV in line with the baseline, a normal pulse and battery and the sleep stages stay on screen.
+    expect(briefing.script).not.toMatch(/variabilidad|pulso en reposo|batería|sueño profundo/);
     expect(briefing.script).not.toMatch(/\d|'|\bkm\b|\bh\b|\bZ\d/);
     expect(briefing.script).toContain('Buenos días, Diego. Hoy es martes veintisiete de octubre.');
     expect(briefing.script).toContain('siete horas y veinte minutos');
@@ -258,12 +260,12 @@ describe('composeBriefing on special days', () => {
     expect(wordCount(b.script)).toBeLessThanOrEqual(200);
   });
 
-  it('drops optional sentences to stay within 200 words and pads short scripts', () => {
+  it('stays within 180 words and does not pad short scripts', () => {
     const many = Array.from({ length: 6 }, (_, i) =>
       makeWorkout({ date: TODAY, title: 'Sesión de técnica con muchos ejercicios distintos', durationMin: 40 + i, startTime: `${String(i + 6).padStart(2, '0')}:15` }),
     );
     const long = composeBriefing(input({ todayWorkouts: many }));
-    expect(wordCount(long.script)).toBeLessThanOrEqual(200);
+    expect(wordCount(long.script)).toBeLessThanOrEqual(180);
     expect(long.script).toContain('y tres más.');
     expect(long.script).not.toContain('pulso en reposo');
 
@@ -271,7 +273,13 @@ describe('composeBriefing on special days', () => {
       input({ metrics: [makeMetrics(TODAY, { sleepScore: null, sleepHours: null, hrvMs: null, bodyBattery: null })], race: null }),
     );
     expect(sparse.sleepSummary).toBe('Tu recuperación: pulso en reposo 50.');
-    expect(wordCount(sparse.script)).toBeGreaterThanOrEqual(110);
+    expect(wordCount(sparse.script)).toBeLessThan(80);
+  });
+
+  it('reads HRV and body battery aloud only when they are out of the ordinary', () => {
+    const low = composeBriefing(input({ metrics: week({ hrvMs: 45, bodyBattery: 25 }) }));
+    expect(low.script).toMatch(/variabilidad cardiaca está en cuarenta y cinco milisegundos, por debajo de tu media/);
+    expect(low.script).toContain('batería corporal baja, al veinticinco por ciento');
   });
 
   it('truncates long headlines to 90 characters', () => {
