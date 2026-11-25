@@ -1,8 +1,10 @@
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import type { Workout } from '@/domain/types';
-import { Button, Card, Divider, ListRow, space } from '@/ui';
+import type { Thresholds, Workout } from '@/domain/types';
+import { toZwo, zwoFileName } from '@/domain/zwo';
+import { shareZwo } from '@/integrations/zwift/shareZwo';
+import { Button, Card, Divider, ListRow, haptics, space } from '@/ui';
 
 import { leaveTo } from '../ModalClose';
 import type { WorkoutActions } from '../useWorkoutActions';
@@ -12,15 +14,18 @@ export interface DetailActionsProps {
   actions: WorkoutActions;
   onComplete: () => void;
   onMove: () => void;
+  /** For the Zwift export (power as a fraction of FTP). */
+  thresholds?: Thresholds | null;
 }
 
 /** Divider inset that lines up with `ListRow` text (padding 4 + icon tile 32 + gap 12). */
 const LIST_ICON_INSET = 48;
 
 /** Primary actions (Hecho / Saltar / Mover or Reabrir) + secondary list. */
-export function DetailActions({ workout, actions, onComplete, onMove }: DetailActionsProps) {
+export function DetailActions({ workout, actions, onComplete, onMove, thresholds = null }: DetailActionsProps) {
   const isPlanned = workout.status === 'planned';
   const isRest = workout.sport === 'rest';
+  const zwo = isPlanned ? toZwo(workout, thresholds) : null;
   return (
     <View style={styles.root}>
       {isPlanned && !isRest ? (
@@ -54,6 +59,20 @@ export function DetailActions({ workout, actions, onComplete, onMove }: DetailAc
             });
           }}
         />
+        {zwo ? (
+          <>
+            <Divider inset={LIST_ICON_INSET} />
+            <ListRow
+              title="Exportar a Zwift"
+              subtitle="Archivo .zwo con tus vatios"
+              icon="share"
+              onPress={() => {
+                haptics.tap();
+                void shareZwo(zwoFileName(workout.title), zwo);
+              }}
+            />
+          </>
+        ) : null}
         {isPlanned && !isRest && !workout.jointSessionId ? (
           <>
             <Divider inset={LIST_ICON_INSET} />

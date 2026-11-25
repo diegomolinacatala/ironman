@@ -96,7 +96,13 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
       />
       {workout.jointSessionId ? <JointInfo sessionId={workout.jointSessionId} myId={myId} /> : null}
       {workout.sport !== 'rest' && workout.durationMin >= 45 ? <FuelingHint workout={workout} /> : null}
-      <DetailActions workout={workout} actions={actions} onComplete={() => setCompleting(true)} onMove={() => setMoving(true)} />
+      <DetailActions
+        workout={workout}
+        actions={actions}
+        thresholds={athlete.thresholds}
+        onComplete={() => setCompleting(true)}
+        onMove={() => setMoving(true)}
+      />
       {completing ? (
         <CompleteSheet key={workout.id} workout={workout} raceDistance={athlete.raceDistance} visible onClose={() => setCompleting(false)} />
       ) : null}
