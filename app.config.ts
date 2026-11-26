@@ -109,7 +109,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         // upload (ITMS-90683) without this key. iOS never shows it: the app never asks to write.
         NSHealthUpdateUsageDescription:
           'Road to Ironman solo lee tus datos de Salud; no guarda nada en ella.',
-        background: false,
+        // HealthKit background delivery (entitlement com.apple.developer.healthkit.background-delivery):
+        // in "Tu informe de hoy" wake mode, iOS may wake the app when the watch writes last night's
+        // sleep, so the briefing arrives minutes after waking up (src/integrations/health/sleepWatch.ts).
+        background: true,
       },
     ],
     [

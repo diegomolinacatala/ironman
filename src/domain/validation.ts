@@ -261,6 +261,10 @@ export const thresholdsSchema = z.object({
   restingHr: z.number().int().min(25).max(120, { error: 'FC en reposo no válida' }).optional(),
 });
 
+const wakeWindowSchema = z
+  .object({ from: isoTimeSchema, to: isoTimeSchema })
+  .refine((w) => w.from < w.to, { error: 'La hora de inicio debe ser anterior a la de fin' });
+
 export const notificationPrefsSchema = z.object({
   workoutReminders: z.boolean(),
   reminderMinutesBefore: z.number().int().min(0).max(24 * 60),
@@ -270,6 +274,9 @@ export const notificationPrefsSchema = z.object({
   eveningTime: isoTimeSchema,
   weeklyPlanReminder: z.boolean(),
   social: z.boolean(),
+  morningMode: z.enum(['fixed', 'wake'], { error: 'Elige cuándo te llega el informe' }).optional(),
+  wakeDelayMin: z.union([z.literal(5), z.literal(10), z.literal(15), z.literal(30)], { error: 'Elige 5, 10, 15 o 30 minutos' }).optional(),
+  wakeWindow: wakeWindowSchema.nullable().optional(),
 });
 
 export const profilePatchSchema = z

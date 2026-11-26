@@ -363,6 +363,7 @@ username `u` + 8 hex chars and display_name from email local part / `raw_user_me
 | `delete_my_account()` | `void` | Deletes `auth.users` row of caller (cascades). |
 | `is_username_available(p_username text)` | `boolean` | Own username counts as available. |
 | `get_joint_session(p_session_id uuid)` | `jsonb` (camelCase `JointSession` or null) | Participants' names are not readable via RLS. v3: friends of the organizer also get an open quedada (only participants they are friends with). Feed event `joint_completed` ("entrenasteis juntos") is posted once every accepted participant completed their linked workout. |
+| `claim_wake_briefing(p_date date, p_sleep_end timestamptz, p_due_at timestamptz)` | `boolean` | Wake-up briefing, Apple Salud path (§17): takes today's (profile time zone) briefing for this device before it schedules its own local notification; false when not in wake mode or the day is settled. `p_date` = today, wake-up within 18 h, due ≤ 1 h after it (else `validation`). Repo `claimWakeBriefing` (optional, absent in demo). |
 
 `list_friends` / `svc_list_friends` also return `visibility` (the friend's sharing level, only for accepted friendships).
 
@@ -428,6 +429,7 @@ your `verify_jwt` needs in your report (expected: coach/garmin = true … see be
 | `mcp` | path token, `verify_jwt=false` | `POST /mcp/u/<secret>` Streamable HTTP, stateless JSON responses, dual-era (2025-03-26…2025-11-25 with `initialize`, and 2026-07-28 `_meta`/`server/discover`), GET/DELETE → 405. Resolve user via `svc_resolve_token(sha256(secret),'mcp')`. Never log the path. |
 | `ics` | path token, `verify_jwt=false` | `GET /ics/<secret>.ics` → `text/calendar` (VTIMEZONE Europe/Madrid), workouts −14..+56 days + confirmed quedadas; all-day events when no start time. |
 | `push-dispatch` | secret key (`verify_jwt=false`, check `apikey` == secret) | Sends unsent `notifications` (last 24 h) straight to APNs (see §13), respects `notification_prefs.social` for social types, marks `pushed_at`/`push_error`, deletes tokens Apple rejects. |
+| `morning` | secret key (`verify_jwt=false`), pg_cron every 5 min via `private.morning_wake_tick()` | Wake-up briefing sweep (§17): `POST {action:'sweep'}` → `{ candidates, sent, fallbacks, checked, waiting, late, failed, skipped }`. |
 | `apple-revoke` | `verify_jwt=false`, user JWT verified in code | `POST {authorizationCode}` → exchanges it at Apple and revokes the token (SIWA account deletion); `503 apple_not_configured` without `APPLE_*` secrets. |
 | `speech` | `verify_jwt=false`, user JWT verified in code | `POST {text, voice?}` → `200 {audio (base64), mime, model, tier}`: consent, `svc_reserve_speech` (per-user chars in 24 h + per-user premium share + global premium and basic budgets per UTC day), then the worker's `POST /v1/speech` (15 s). `503 ai_unavailable` on any worker problem (the app keeps the iPhone voice). Contract in V2 §3 and `supabase/functions/README.md`. Never logs the text. |
 | `garmin` | `verify_jwt=false`; user JWT verified in code for `connect/disconnect/sync`; secret key for `sync_all` (pg_cron) | Garmin **Personal API** (`docs/research/04` §3.2): exchange key → JWT, pull dailies/sleep/HRV/body battery/activities, upsert `daily_metrics (source 'garmin')`, match activities to planned workouts (complete them) or insert completed unplanned workouts (`source 'garmin'`, `external_id 'garmin:<id>'`). Key encrypted AES-GCM with `GARMIN_KEY_SECRET` (env). Defensive parsing; never log keys. |
@@ -692,3 +694,44 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   device-neutral (Garmin JSON + provider-neutral steps Claude can push to the COROS calendar).
 - **Deploy order:** `supabase db push` (`20261109000100_coach_v4.sql`, then `20261109000900_week_plans_platform.sql`)
   before deploying the edge functions or shipping the app.
+
+## 17. Race plan, finish-time prediction and the wake-up briefing (2026-11-26)
+
+- **Plan de carrera** (Carreras, under the next A race; highlighted and open from 21 days before):
+  `domain/raceDay.ts` (documented coaching tables: bike × FTP sprint 0.90–0.95, olympic 0.85–0.90, half
+  0.75–0.82, full 0.65–0.75; run off the bike = threshold pace × open-race factor × fade; leg distances),
+  `domain/racePlan.ts` (swim pace per 100 m + feel, bike watts in three blocks with an uphill ceiling and an HR
+  cap without FTP, run in three parts with HR guidance, fueling g/h + fluids + sodium + intakes by minute via
+  `fueling.intakeSchedule`, T1/T2 checklist; missing thresholds degrade to HR, then RPE/feel, and `missing`
+  says what to add), `domain/racePlanCopy.ts` (Spanish copy). UI: `features/races/RacePlanSection.tsx`.
+- **Previsión** (`domain/racePrediction.ts` + `domain/bikeSpeed.ts`): per-leg and total range (optimistic –
+  conservative). Swim = CSS + race offset + 3–6 s/100 m open water, course up to 3 % longer (level CSS when
+  missing, flagged); bike = flat-course physics P·η = Crr·m·g·v + ½ρ·CdA·v³ (CdA by level 0.36/0.32/0.28, Crr
+  0.005, 80 kg, ρ 1.20, η 0.975) on the plan's power band, slow end +4 % for turns/aid stations/wind, or, without
+  FTP, the median speed of recent rides at race heart rate; run = plan pace band, slow end + tough-day fade;
+  typical transitions; total = sum of the legs. Hidden (with a hint) without FTP/rides or threshold pace. The
+  plan's fueling is timed with the predicted leg minutes.
+- **Informe al despertar** (optional; `notification_prefs.morningMode = 'wake'`, `wakeDelayMin` 5/10/15/30,
+  optional `wakeWindow`; fixed time stays the default). Shared pure module `domain/wakeWindow.ts`, mirrored
+  to the server: usual window from the last 21 nights (earliest − 30 min, latest + 60 min, weekday/weekend
+  apart when each has enough nights, trimmed with ≥ 7), the athlete's own window wins, default = the 2 h before
+  the fixed time; `decideWake` → wait / check / send at wake-up + delay / fallback at
+  max(window end, fixed time), held up to 3 h while a night is known to go on, never more than 3 h late.
+  - *Server path (real):* migration `20261126000300_wake_notification.sql` — `briefing_notices` (user, local
+    day; `watching → push | device | skipped`; select-own RLS), notification type `morning_briefing` (inserted
+    already read), RPCs `svc_wake_candidates`, `svc_record_wake_check`, `svc_send_morning_briefing`,
+    `svc_skip_morning_briefing`, `claim_wake_briefing`. `20261126000301_wake_notification_platform.sql` adds the
+    cron job `rti-morning-wake` (every 5 min, `private.morning_wake_tick()` calls the `morning` function only
+    while someone in wake mode is in an unsettled morning). The sweep (`_shared/morning/*`) sends through the
+    existing notifications → push-dispatch path; Garmin users get a light pull of today's sleep at most every
+    10 min inside their window (`_shared/garmin/sleep-pull.ts`, 2 Personal API calls).
+  - *Device path (best effort):* Apple Salud only reaches the server when the app syncs. The HealthKit config
+    plugin now has `background: true` (background-delivery entitlement); `integrations/health/sleepWatch.ts`
+    registers a sleep observer (`configureBackgroundTypes`) so iOS may wake the app when a watch app writes the
+    night; `useWakeBriefing` → `health/wakeBriefing.ts` reads the main sleep (`sleepWindowsByDate`: naps do not
+    move the wake-up), claims the day and schedules a local `wake_briefing` notification at wake-up + delay
+    (outside the rolling window, cancelled on sign-out). Wake mode with a backend drops the local fixed-time
+    briefing (`ScheduleInput.serverWake`); demo keeps it. HealthKit drafts now carry `sleepStart`/`sleepEnd`.
+  - *Deploy order:* `supabase db push` (000300, then 000301) → `functions deploy morning` → once
+    `select private.schedule_platform_jobs();` → app build (new entitlement). Needs `APNS_*`; Garmin pulls need
+    `GARMIN_KEY_SECRET`.

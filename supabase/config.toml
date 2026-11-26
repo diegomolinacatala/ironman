@@ -136,6 +136,11 @@ verify_jwt = false
 [functions.push-dispatch]
 verify_jwt = false
 
+# "Tu informe de hoy" when you wake up: pg_cron every 5 min (private.morning_wake_tick) with the
+# secret key in the `apikey` header, like push-dispatch.
+[functions.morning]
+verify_jwt = false
+
 # Called by the app with the user's JWT.
 [functions.coach]
 verify_jwt = true

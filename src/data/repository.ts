@@ -62,6 +62,7 @@ import type {
   WorkoutPatch,
   CompletedData,
   ISODate,
+  ISODateTime,
 } from '@/domain/types';
 
 export type RepositoryMode = 'supabase' | 'demo';
@@ -254,6 +255,13 @@ export interface Repository {
   listNotifications(limit?: number): Promise<AppNotification[]>;
   markNotificationsRead(ids: UUID[] | 'all'): Promise<void>;
   registerPushToken(token: string, platform: 'ios' | 'android' | 'web'): Promise<void>;
+  /**
+   * Wake-up briefing, Apple Salud path: takes today's "Tu informe de hoy" (local date `date`) for
+   * this device, which then schedules its own local notification at `dueAt`, so the server never
+   * pushes a second one. False when the day is already settled (pushed, claimed, skipped) or the
+   * athlete is not in wake mode. Optional: absent in demo mode (no server to coordinate with).
+   */
+  claimWakeBriefing?(input: { date: ISODate; sleepEnd: ISODateTime; dueAt: ISODateTime }): Promise<boolean>;
 
   // Proposals & coach --------------------------------------------------------
   listProposals(status?: ProposalStatus): Promise<PlanProposal[]>;

@@ -175,6 +175,22 @@ export function parseAvailability(value: unknown): Availability {
   };
 }
 
+const WAKE_DELAYS: readonly number[] = [5, 10, 15, 30];
+
+/** Wake-up briefing settings, only the ones present and valid (absent = fixed time, 15', learned window). */
+function parseWakePrefs(record: JsonRecord): Pick<NotificationPrefs, 'morningMode' | 'wakeDelayMin' | 'wakeWindow'> {
+  const mode = oneOf(record.morningMode, ['fixed', 'wake'] as const);
+  const delay = asNumber(record.wakeDelayMin);
+  const window = isRecord(record.wakeWindow) ? record.wakeWindow : null;
+  const from = window ? timeFromDb(window.from) : null;
+  const to = window ? timeFromDb(window.to) : null;
+  return compact({
+    morningMode: mode ?? undefined,
+    wakeDelayMin: delay !== null && WAKE_DELAYS.includes(delay) ? delay : undefined,
+    wakeWindow: from && to && from < to ? { from, to } : record.wakeWindow === null ? null : undefined,
+  });
+}
+
 export function parseNotificationPrefs(value: unknown): NotificationPrefs {
   const record: JsonRecord = isRecord(value) ? value : {};
   const d = DEFAULT_NOTIFICATION_PREFS;
@@ -187,6 +203,7 @@ export function parseNotificationPrefs(value: unknown): NotificationPrefs {
     eveningTime: timeFromDb(record.eveningTime) ?? d.eveningTime,
     weeklyPlanReminder: asBoolean(record.weeklyPlanReminder) ?? d.weeklyPlanReminder,
     social: asBoolean(record.social) ?? d.social,
+    ...parseWakePrefs(record),
   };
 }
 

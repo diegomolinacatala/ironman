@@ -10,12 +10,22 @@ import { DEFAULT_MORNING_TIME } from '../onboarding/onboardingModel';
 /** The iOS compact time picker reports every wheel step: wait for the athlete to settle. */
 export const MORNING_TIME_DEBOUNCE_MS = 600;
 
-export type MorningPrefs = Pick<NotificationPrefs, 'morningSummary' | 'morningTime'>;
+export type MorningPrefs = Pick<NotificationPrefs, 'morningSummary' | 'morningTime' | 'morningMode' | 'wakeDelayMin' | 'wakeWindow'>;
 
+/** The wake-mode settings this section changes (mode and delay; the window is edited in Notificaciones). */
+export type WakePatch = Partial<Pick<NotificationPrefs, 'morningMode' | 'wakeDelayMin' | 'wakeWindow'>>;
+
+/**
+ * What this section owns. Not the wake-up window: it is edited in Notificaciones, and carrying
+ * a stale copy here would overwrite it on the next save.
+ */
 function morningOf(profile: Profile): MorningPrefs {
+  const p = profile.notificationPrefs;
   return {
-    morningSummary: profile.notificationPrefs.morningSummary,
-    morningTime: profile.notificationPrefs.morningTime || DEFAULT_MORNING_TIME,
+    morningSummary: p.morningSummary,
+    morningTime: p.morningTime || DEFAULT_MORNING_TIME,
+    ...(p.morningMode ? { morningMode: p.morningMode } : {}),
+    ...(p.wakeDelayMin !== undefined ? { wakeDelayMin: p.wakeDelayMin } : {}),
   };
 }
 
@@ -24,6 +34,8 @@ export interface MorningPrefsState {
   error: string | null;
   setEnabled: (on: boolean) => Promise<void>;
   setTime: (time: ISOTime) => void;
+  /** Mode ('fixed' | 'wake') and delay: saved at once. */
+  setWake: (patch: WakePatch) => Promise<void>;
 }
 
 /**
@@ -42,7 +54,7 @@ export function useMorningPrefs(profile: Profile): MorningPrefsState {
   const inFlight = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { morningSummary, morningTime } = profile.notificationPrefs;
+  const { morningSummary, morningTime, morningMode, wakeDelayMin } = profile.notificationPrefs;
 
   // Follow changes made elsewhere (Notificaciones screen, another device) while nothing is pending here.
   useEffect(() => {
@@ -50,7 +62,7 @@ export function useMorningPrefs(profile: Profile): MorningPrefsState {
     const next = morningOf(profileRef.current);
     wanted.current = next;
     setPrefs(next);
-  }, [morningSummary, morningTime]);
+  }, [morningSummary, morningTime, morningMode, wakeDelayMin]);
 
   const save = useCallback((): Promise<void> => {
     inFlight.current += 1;
@@ -107,5 +119,6 @@ export function useMorningPrefs(profile: Profile): MorningPrefsState {
     error,
     setEnabled: (on) => change({ morningSummary: on }, false),
     setTime: (time) => void change({ morningTime: time }, true),
+    setWake: (patch) => change(patch, false),
   };
 }

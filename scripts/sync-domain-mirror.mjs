@@ -20,8 +20,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = join(ROOT, 'src', 'domain');
 export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planning', 'domain');
 
-/** Modules copied whole (their imports must stay inside this list, `dates` or `types`). */
-const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription'];
+/**
+ * Modules copied whole (their imports must stay inside this list, `dates` or `types`).
+ * `wakeWindow`: the usual wake-up window and the wake-up briefing decision (app settings + `morning` sweep).
+ */
+const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'wakeWindow'];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
 const DATE_DECLS = [

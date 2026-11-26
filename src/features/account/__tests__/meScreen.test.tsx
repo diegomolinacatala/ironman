@@ -250,6 +250,27 @@ describe('Tú', () => {
     );
   });
 
+  test('«Al despertar» and its delay save right away; the window lives in Notificaciones', async () => {
+    await render(<MeScreen />);
+    await fireEvent(screen.getByLabelText('Informe de cada mañana'), 'valueChange', true);
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    await fireEvent.press(screen.getByRole('tab', { name: 'Al despertar' }));
+    await waitFor(() =>
+      expect(mockUpdateProfile).toHaveBeenLastCalledWith({
+        notificationPrefs: expect.objectContaining({ morningSummary: true, morningMode: 'wake', workoutReminders: true }),
+      }),
+    );
+    expect(screen.queryByLabelText('Hora del informe')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: '30 min' }));
+    await waitFor(() =>
+      expect(mockUpdateProfile).toHaveBeenLastCalledWith({
+        notificationPrefs: expect.objectContaining({ morningMode: 'wake', wakeDelayMin: 30 }),
+      }),
+    );
+    await fireEvent.press(screen.getByRole('button', { name: 'Tu franja de despertar' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/notifications');
+  });
+
   test('time changes are debounced and saves run one after another without reverting the toggle', async () => {
     jest.useFakeTimers();
     let release: () => void = () => undefined;

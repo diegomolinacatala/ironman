@@ -14,7 +14,8 @@ type InboxMethods = Pick<
   | 'getProposal'
   | 'createProposal'
   | 'setProposalStatus'
->;
+> &
+  Required<Pick<Repository, 'claimWakeBriefing'>>;
 
 const PROPOSALS_LIMIT = 50;
 
@@ -46,6 +47,15 @@ export function inboxApi(ctx: SupabaseCtx): InboxMethods {
   async function registerPushToken(token: string, platform: 'ios' | 'android' | 'web'): Promise<void> {
     if (!token) throw new RepositoryError('validation', 'Token de notificaciones vacío.');
     await runVoid('registerPushToken', client.rpc('register_push_token', { p_token: token, p_platform: platform }));
+  }
+
+  /** claim_wake_briefing (20261126000300_wake_notification.sql): true when this device takes today's briefing. */
+  async function claimWakeBriefing(input: { date: string; sleepEnd: string; dueAt: string }): Promise<boolean> {
+    const data = await run<unknown>(
+      'claimWakeBriefing',
+      client.rpc('claim_wake_briefing', { p_date: input.date, p_sleep_end: input.sleepEnd, p_due_at: input.dueAt }),
+    );
+    return data === true;
   }
 
   async function listProposals(status?: ProposalStatus): Promise<PlanProposal[]> {
@@ -88,6 +98,7 @@ export function inboxApi(ctx: SupabaseCtx): InboxMethods {
     listNotifications,
     markNotificationsRead,
     registerPushToken,
+    claimWakeBriefing,
     listProposals,
     getProposal,
     createProposal,

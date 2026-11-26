@@ -13,6 +13,7 @@ const mockClearWidgets = jest.fn(() => undefined);
 const mockRegister = jest.fn(async (_repo: unknown) => 'deadbeef03');
 const mockClearMeals = jest.fn(async () => undefined);
 const mockClearCalendar = jest.fn(async (_userId: string | null) => undefined);
+const mockStopSleepWatch = jest.fn(async () => undefined);
 
 jest.mock('../notifications', () => ({
   cancelLocalNotifications: () => mockCancel(),
@@ -23,6 +24,7 @@ jest.mock('../camera/mealPhoto', () => ({ clearMealPhotos: () => mockClearMeals(
 jest.mock('../calendar/trainingCalendarSync', () => ({
   clearTrainingCalendarData: (userId: string | null) => mockClearCalendar(userId),
 }));
+jest.mock('../health/sleepWatch', () => ({ stopSleepWatch: () => mockStopSleepWatch() }));
 
 const repo = {} as never;
 
@@ -61,6 +63,8 @@ describe('useSignedOutCleanup', () => {
     expect(mockClearWidgets).toHaveBeenCalledTimes(1);
     expect(mockClearMeals).toHaveBeenCalledTimes(1);
     expect(mockClearCalendar).toHaveBeenCalledWith('user-ana');
+    // No more background wakes from Apple Salud for the wake-up briefing of an account that left.
+    expect(mockStopSleepWatch).toHaveBeenCalledTimes(1);
   });
 });
 

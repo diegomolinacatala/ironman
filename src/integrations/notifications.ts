@@ -13,7 +13,13 @@ import type { ISODate, Profile, RaceDistance, Workout } from '@/domain/types';
 import { logger } from '@/lib/logger';
 import { StorageKeys, writeJson } from '@/lib/storage';
 
-import { buildSchedule, isLocalNotificationKind, type NotificationSpec } from './notifications/schedule';
+import {
+  buildSchedule,
+  isLocalNotificationKind,
+  isOwnNotificationKind,
+  wakeBriefingSpec,
+  type NotificationSpec,
+} from './notifications/schedule';
 import { createSerialQueue } from './notifications/serial';
 
 export type PermissionState = 'granted' | 'denied' | 'undetermined';
@@ -143,9 +149,11 @@ function toRequest(spec: NotificationSpec): Notifications.NotificationRequestInp
   };
 }
 
-async function cancelOurScheduled(): Promise<void> {
+/** The rolling window's notifications; with `includeWake`, also the wake-up briefing (sign-out). */
+async function cancelOurScheduled(includeWake = false): Promise<void> {
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  const ours = scheduled.filter((r) => isLocalNotificationKind(r.content.data?.kind));
+  const isOurs = includeWake ? isOwnNotificationKind : isLocalNotificationKind;
+  const ours = scheduled.filter((r) => isOurs(r.content.data?.kind));
   await Promise.all(ours.map((r) => Notifications.cancelScheduledNotificationAsync(r.identifier)));
 }
 
@@ -162,6 +170,8 @@ export async function rescheduleLocalNotifications(input: {
   jointPartners?: Readonly<Record<string, string>>;
   /** Distance of the target race: what race-pace targets mean in the reminder body. */
   raceDistance?: RaceDistance | null;
+  /** The server sends the briefing in wake mode (backend configured): no fixed-time one here. */
+  serverWake?: boolean;
 }): Promise<number> {
   if (!isNative) return 0;
   return localQueue.run(async (isCurrent) => {
@@ -176,6 +186,7 @@ export async function rescheduleLocalNotifications(input: {
       jointPartners: input.jointPartners,
       thresholds: input.profile.thresholds ?? null,
       raceDistance: input.raceDistance ?? null,
+      serverWake: input.serverWake,
     });
     const results = await Promise.allSettled(specs.map((spec) => Notifications.scheduleNotificationAsync(toRequest(spec))));
     const failed = results.filter((r) => r.status === 'rejected');
@@ -192,9 +203,27 @@ export async function rescheduleLocalNotifications(input: {
 export async function cancelLocalNotifications(): Promise<void> {
   if (!isNative) return;
   await localQueue.run(async () => {
-    const results = await Promise.allSettled([cancelOurScheduled(), Notifications.dismissAllNotificationsAsync()]);
+    const results = await Promise.allSettled([cancelOurScheduled(true), Notifications.dismissAllNotificationsAsync()]);
     results.forEach((r) => {
       if (r.status === 'rejected') logger.warn('notifications: sign-out cleanup failed', r.reason);
     });
   });
+}
+
+/**
+ * Wake mode, Apple Salud path: "Tu informe de hoy" at `fireAt` (replaces today's if any; a
+ * moment already past fires in a few seconds). False without permission or on failure.
+ */
+export async function scheduleWakeBriefing(date: ISODate, fireAt: Date): Promise<boolean> {
+  if (!isNative) return false;
+  try {
+    if ((await getNotificationPermission()) !== 'granted') return false;
+    const soon = new Date(Date.now() + 5_000);
+    const spec = wakeBriefingSpec(date, fireAt.getTime() > soon.getTime() ? fireAt : soon);
+    await Notifications.scheduleNotificationAsync(toRequest(spec));
+    return true;
+  } catch (error) {
+    logger.warn('notifications: wake briefing could not be scheduled', error);
+    return false;
+  }
 }

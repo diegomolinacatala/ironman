@@ -4,6 +4,7 @@
  */
 import type { Repository } from '@/data/repository';
 
+import type { SleepWindow } from './health/mapping';
 import { emptyHealthResult, type HealthSyncResult } from './health/result';
 
 export { getHealthLastSync, isHealthEnabled, setHealthEnabled } from './health/state';
@@ -19,4 +20,8 @@ export async function requestHealthPermissions(): Promise<boolean> {
 
 export async function syncHealth(_repo: Repository, _opts?: { days?: number }): Promise<HealthSyncResult> {
   return emptyHealthResult();
+}
+
+export async function readLastNight(_repo: Repository, _now?: Date): Promise<SleepWindow | null> {
+  return null;
 }

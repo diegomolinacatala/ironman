@@ -112,6 +112,7 @@ const TYPE_ICON: Record<NotificationType, IconName> = {
   joint_updated: 'edit',
   joint_comment: 'send',
   joint_open: 'calendarPlus',
+  morning_briefing: 'sunrise',
 };
 
 export function notificationIcon(type: NotificationType): IconName {

@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { Linking, Platform, StyleSheet, View } from 'react-native';
 
 import type { ISOTime, Profile } from '@/domain/types';
@@ -5,16 +6,19 @@ import { TimeField } from '@/features/workouts/DateField';
 import { useNotificationPermission } from '@/integrations/hooks';
 import { Button, ErrorNotice, Icon, Text, iconSize, space, useTheme } from '@/ui';
 
+import { MorningModeFields } from '../settings/MorningModeFields';
 import { SwitchRow } from '../settings/SwitchRow';
+import { morningSubtitle } from '../settings/wakeModel';
 import { useMorningPrefs } from './useMorningPrefs';
 
 /**
- * Morning report on/off + time, as a row of the "Tu coach" group: optimistic, time
- * debounced, saves serialized (see `useMorningPrefs`).
+ * Morning report on/off, «Aviso del informe» (fixed time or when you wake up, with the
+ * delay) and the time, as a row of the "Tu coach" group: optimistic, time debounced, saves
+ * serialized (see `useMorningPrefs`). The usual wake-up window lives in Notificaciones.
  */
 export function MorningSection({ profile }: { profile: Profile }) {
   const notifications = useNotificationPermission();
-  const { prefs, error, setEnabled, setTime } = useMorningPrefs(profile);
+  const { prefs, error, setEnabled, setTime, setWake } = useMorningPrefs(profile);
   const denied = Platform.OS !== 'web' && notifications.status === 'denied';
 
   const toggle = async (on: boolean) => {
@@ -27,17 +31,33 @@ export function MorningSection({ profile }: { profile: Profile }) {
       <SwitchRow
         icon="sunrise"
         title="Informe de cada mañana"
-        subtitle={prefs.morningSummary ? `Cada día a las ${prefs.morningTime}: cómo has dormido y qué toca.` : 'Cómo has dormido y qué toca hoy, en un aviso.'}
+        subtitle={prefs.morningSummary ? morningSubtitle(prefs) : 'Cómo has dormido y qué toca hoy, en un aviso.'}
         value={prefs.morningSummary}
         onChange={(on) => void toggle(on)}>
-        <TimeField
-          label="Hora del informe"
-          value={prefs.morningTime}
-          optional={false}
-          onChange={(time: ISOTime | null) => {
-            if (time && time !== prefs.morningTime) setTime(time);
-          }}
+        <MorningModeFields
+          prefs={prefs}
+          onChange={(patch) => void setWake(patch)}
+          timeControl={
+            <TimeField
+              label="Hora del informe"
+              value={prefs.morningTime}
+              optional={false}
+              onChange={(time: ISOTime | null) => {
+                if (time && time !== prefs.morningTime) setTime(time);
+              }}
+            />
+          }
         />
+        {prefs.morningMode === 'wake' ? (
+          <Button
+            label="Tu franja de despertar"
+            variant="ghost"
+            size="sm"
+            icon="clock"
+            onPress={() => router.push('/settings/notifications')}
+            accessibilityHint="Abre Notificaciones: tu franja habitual y cuándo llega si el reloj no dice nada"
+          />
+        ) : null}
       </SwitchRow>
       {denied && prefs.morningSummary ? <DeniedNotice /> : null}
       {error ? (

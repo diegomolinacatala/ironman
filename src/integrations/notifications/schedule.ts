@@ -15,6 +15,13 @@ import { atLocal, parseTimeMinutes } from '../time';
 export const LOCAL_NOTIFICATION_KINDS = ['workout_reminder', 'morning_summary', 'evening_checkin', 'weekly_plan'] as const;
 export type LocalNotificationKind = (typeof LOCAL_NOTIFICATION_KINDS)[number];
 
+/**
+ * "Tu informe de hoy" the app schedules itself in wake mode after reading the wake-up from
+ * Apple Salud (integrations/health/wakeBriefing.ts). Not rebuilt by `buildSchedule`, so the
+ * rolling reschedule leaves it alone; sign-out cancels it with the rest.
+ */
+export const WAKE_BRIEFING_KIND = 'wake_briefing';
+
 /** iOS category identifiers (no ':' or '-' allowed). */
 export type NotificationCategoryId = 'workout' | 'summary' | 'checkin' | 'weekly';
 
@@ -25,7 +32,7 @@ export type NotificationTriggerSpec =
 export interface NotificationSpec {
   /** Stable identifier: rescheduling replaces instead of duplicating. */
   id: string;
-  kind: LocalNotificationKind;
+  kind: LocalNotificationKind | typeof WAKE_BRIEFING_KIND;
   title: string;
   body: string;
   /** Expo Router path opened on tap. */
@@ -48,6 +55,11 @@ export interface ScheduleInput {
   thresholds?: Thresholds | null;
   /** Target race distance (what "ritmo de carrera" means). */
   raceDistance?: RaceDistance | null;
+  /**
+   * The server sends "Tu informe de hoy" in wake mode (backend configured): no local
+   * fixed-time briefing then. Without a server (demo) the fixed time is kept in any mode.
+   */
+  serverWake?: boolean;
 }
 
 /** What a workout reminder needs besides the workout. */
@@ -75,6 +87,16 @@ const MAX_LEAD_MIN = 24 * 60;
 
 export function isLocalNotificationKind(value: unknown): value is LocalNotificationKind {
   return typeof value === 'string' && (LOCAL_NOTIFICATION_KINDS as readonly string[]).includes(value);
+}
+
+/** Any notification this app schedules (the rolling window and the wake-up briefing). */
+export function isOwnNotificationKind(value: unknown): boolean {
+  return isLocalNotificationKind(value) || value === WAKE_BRIEFING_KIND;
+}
+
+/** True when "Tu informe de hoy" comes from the server (wake mode with a backend), not at the fixed time. */
+export function briefingByServer(prefs: NotificationPrefs, serverWake: boolean | undefined): boolean {
+  return prefs.morningMode === 'wake' && serverWake === true;
 }
 
 function sessionsOn(workouts: readonly Workout[], date: ISODate): Workout[] {
@@ -173,6 +195,20 @@ function morningSummary(date: ISODate, minutes: number, now: Date): Notification
   };
 }
 
+/** The same "Tu informe de hoy", scheduled by the app at wake-up + delay (wake mode, Apple Salud). */
+export function wakeBriefingSpec(date: ISODate, fireAt: Date): NotificationSpec {
+  return {
+    id: `rti.wake.${date}`,
+    kind: WAKE_BRIEFING_KIND,
+    title: 'Tu informe de hoy',
+    body: 'Toca para escuchar cómo has dormido y qué te toca hoy',
+    url: MORNING_BRIEFING_URL,
+    categoryId: 'summary',
+    threadId: 'rti.summary',
+    trigger: { type: 'date', date: fireAt },
+  };
+}
+
 function eveningCheckin(minutes: number): NotificationSpec {
   return {
     id: 'rti.checkin.daily',
@@ -236,7 +272,9 @@ export function buildSchedule(input: ScheduleInput): NotificationSpec[] {
   const reminders = prefs.workoutReminders
     ? days.flatMap((date) => sessionsOn(workouts, date).map((w) => workoutReminder(w, ctx)))
     : [];
-  const summaries = prefs.morningSummary ? days.map((date) => morningSummary(date, morningMin, now)) : [];
+  // Wake mode: the server pushes the briefing after the wake-up (or at the fallback time).
+  const fixedSummaries = prefs.morningSummary && !briefingByServer(prefs, input.serverWake);
+  const summaries = fixedSummaries ? days.map((date) => morningSummary(date, morningMin, now)) : [];
   const repeating = prefs.eveningCheckin ? [eveningCheckin(eveningMin)] : [];
   const weekly = prefs.weeklyPlanReminder ? weeklyPlanReminders(input.today, now, WEEKLY_REMINDERS) : [];
 

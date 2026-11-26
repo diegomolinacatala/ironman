@@ -8,7 +8,9 @@
  * - on mount / foreground: Garmin sync when its last sync is older than an hour
  *   (server-side, so also on web), only when the athlete's watch is Garmin (or not chosen),
  * - keeps local notifications, widgets (incl. today's briefing headline) and the
- *   "Road to Ironman" device calendar in sync with the plan.
+ *   "Road to Ironman" device calendar in sync with the plan,
+ * - wake mode of "Tu informe de hoy" with Apple Salud: watches last night's sleep (also in
+ *   the background) to notify at wake-up + delay (`useWakeBriefing`).
  * Widget deep links (roadtoironman://workout/<id>, roadtoironman://today) are handled by
  * Expo Router itself. Whenever there is no session (sign-out, deletion, revoked
  * session at launch) it clears local notifications and widgets.
@@ -31,6 +33,7 @@ import { usePlanMirrors } from './effects/usePlanMirrors';
 import { usePushRegistration } from './effects/usePushRegistration';
 import { useSignedOutCleanup } from './effects/useSignedOutCleanup';
 import { useTimezoneSync } from './effects/useTimezoneSync';
+import { useWakeBriefing } from './effects/useWakeBriefing';
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -43,7 +46,7 @@ function mirrorRange(today: ISODate): DateRange {
 
 export function AppEffects(): null {
   const repo = useRepository();
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, mode } = useAuth();
   const userId = session?.userId ?? null;
   const profile = useProfile().data ?? null;
   const signedInAndOnboarded = Boolean(userId && profile?.onboardedAt);
@@ -78,7 +81,10 @@ export function AppEffects(): null {
   useNotificationRouting(ready);
   useForegroundSync(ready, repo, userId, onActive);
   useGarminForegroundSync(signedInAndOnboarded && isGarminWatch(profile), repo, userId);
-  usePlanMirrors(ready, { workouts, races, jointSessions, profile, briefing, userId, today, tick });
+  // Wake mode needs the server (push + one briefing a day); demo keeps the fixed-time one.
+  const serverWake = mode !== 'demo';
+  usePlanMirrors(ready, { workouts, races, jointSessions, profile, briefing, userId, today, tick, serverWake });
+  useWakeBriefing(ready, repo, userId, profile?.notificationPrefs ?? null);
   useSignedOutCleanup(isLoading, userId);
   useTimezoneSync(signedInAndOnboarded, profile);
 
