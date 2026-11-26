@@ -16,8 +16,8 @@ import {
   EMPTY_TRANSCRIPT,
   normaliseVolume,
   transcriptText,
-  VOICE_CONTEXTUAL_STRINGS,
   VOICE_MESSAGES,
+  voiceVocabulary,
   voiceErrorMessage,
   type TranscriptState,
 } from './transcript';
@@ -45,6 +45,7 @@ export interface VoiceInput {
 }
 
 export const MAX_TAKE_MS = 90_000;
+const NO_PHRASES: readonly string[] = [];
 const VOLUME_INTERVAL_MS = 100;
 
 function isRecognitionAvailable(): boolean {
@@ -56,7 +57,7 @@ function isRecognitionAvailable(): boolean {
   }
 }
 
-function startRecognition(): void {
+function startRecognition(phrases: readonly string[]): void {
   ExpoSpeechRecognitionModule.start({
     lang: 'es-ES',
     interimResults: true,
@@ -65,7 +66,7 @@ function startRecognition(): void {
     requiresOnDeviceRecognition: true,
     maxAlternatives: 1,
     iosTaskHint: 'dictation',
-    contextualStrings: [...VOICE_CONTEXTUAL_STRINGS],
+    contextualStrings: voiceVocabulary(phrases),
     volumeChangeEventOptions: { enabled: true, intervalMillis: VOLUME_INTERVAL_MS },
   });
 }
@@ -126,7 +127,15 @@ function useRecognitionListeners(refs: TakeRefs, set: TakeSetters): void {
   });
 }
 
-export function useVoiceInput(): VoiceInput {
+/**
+ * `phrases`: the athlete's own words for the recogniser (friends' names…), on top of the
+ * triathlon vocabulary. Read when a take starts, so it may change between renders.
+ */
+export function useVoiceInput(phrases: readonly string[] = NO_PHRASES): VoiceInput {
+  const phrasesRef = useRef(phrases);
+  useEffect(() => {
+    phrasesRef.current = phrases;
+  }, [phrases]);
   const [available] = useState(isRecognitionAvailable);
   const [state, setState] = useState<VoiceState>(available ? 'idle' : 'unavailable');
   const [take, setTake] = useState<TranscriptState>(EMPTY_TRANSCRIPT);
@@ -218,7 +227,7 @@ export function useVoiceInput(): VoiceInput {
       discarding.current = false;
       active.current = true;
       clearTimer();
-      startRecognition();
+      startRecognition(phrasesRef.current);
       timer.current = setTimeout(stop, MAX_TAKE_MS);
     } catch (err) {
       logger.warn('voice: could not start', err);

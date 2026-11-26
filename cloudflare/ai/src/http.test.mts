@@ -69,7 +69,7 @@ function fake(opts: FakeOptions = {}): Fake {
   };
 }
 
-const body = { model: '@cf/nvidia/nemotron-3-120b-a12b', messages: [{ role: 'user', content: 'hola' }], max_completion_tokens: 100 };
+const body = { model: '@cf/qwen/qwen3.8-27b', messages: [{ role: 'user', content: 'hola' }], max_completion_tokens: 100 };
 
 const post = (payload: unknown, token: string | null = SECRET, path = '/v1/chat', extra: Record<string, string> = {}): Request =>
   new Request(`https://ironman-ai.example.workers.dev${path}`, {
@@ -88,8 +88,8 @@ test('POST /v1/chat answers { text, finishReason, usage, model }', async () => {
   const f = fake();
   const res = await handleRequest(post(body), f.deps);
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { text: '{"ok":true}', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5 }, model: '@cf/nvidia/nemotron-3-120b-a12b' });
-  assert.equal(f.calls[0].model, '@cf/nvidia/nemotron-3-120b-a12b');
+  assert.deepEqual(await res.json(), { text: '{"ok":true}', finishReason: 'stop', usage: { inputTokens: 10, outputTokens: 5 }, model: '@cf/qwen/qwen3.8-27b' });
+  assert.equal(f.calls[0].model, '@cf/qwen/qwen3.8-27b');
   assert.deepEqual(f.calls[0].input.chat_template_kwargs, { enable_thinking: false });
   assert.equal(f.calls[0].input.max_completion_tokens, 100);
 });
@@ -170,6 +170,30 @@ test('503 { error: "quota" } when the free daily allocation is used up; 502 for 
   assert.equal(((await failed.json()) as { error: string }).error, 'model_error');
   assert.ok(broken.logs.some((l) => l.includes('5007')), 'logged for observability');
   assert.ok(broken.logs.every((l) => !l.includes(SECRET)));
+});
+
+test('a retired model is retried once on the fallback, which is logged and reported in `model`', async () => {
+  const f = fake({
+    run: (model) => {
+      if (model === '@cf/qwen/qwen3.8-27b') throw new Error('AiError: Model has been deprecated: @cf/qwen/qwen3.8-27b was deprecated (5028)');
+      return { choices: [{ message: { content: '{"ok":true}' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5 } };
+    },
+  });
+  const res = await handleRequest(post(body), f.deps);
+  assert.equal(res.status, 200);
+  assert.equal(((await res.json()) as { model: string }).model, '@cf/openai/gpt-oss-120b');
+  assert.deepEqual(f.calls.map((c) => c.model), ['@cf/qwen/qwen3.8-27b', '@cf/openai/gpt-oss-120b']);
+  assert.equal(f.calls[1].input.reasoning_effort, 'low');
+  assert.ok(f.logs.some((l) => l.includes('using fallback')));
+});
+
+test('timeouts and quota errors are not retried on the fallback', async () => {
+  const timeout = fake({ error: new Error('AiError: Request timeout (3046)') });
+  assert.equal((await handleRequest(post(body), timeout.deps)).status, 502);
+  assert.equal(timeout.calls.length, 1);
+  const quota = fake({ error: new Error('4006: daily free allocation used up') });
+  assert.equal((await handleRequest(post(body), quota.deps)).status, 503);
+  assert.equal(quota.calls.length, 1);
 });
 
 // ---------- POST /v1/speech ----------

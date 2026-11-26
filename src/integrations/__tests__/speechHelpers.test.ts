@@ -5,7 +5,9 @@ import {
   EMPTY_TRANSCRIPT,
   normaliseVolume,
   transcriptText,
+  MAX_CONTEXTUAL_STRINGS,
   VOICE_CONTEXTUAL_STRINGS,
+  voiceVocabulary,
   voiceErrorMessage,
   type TranscriptState,
 } from '../speech/transcript';
@@ -74,6 +76,16 @@ describe('dictation transcript', () => {
 
   test('triathlon vocabulary biases recognition', () => {
     expect(VOICE_CONTEXTUAL_STRINGS).toEqual(expect.arrayContaining(['rodaje', 'tirada larga', 'zona dos', 'VFC', 'FTP', 'pádel']));
+  });
+
+  test('vocabulary puts the athlete names first, deduplicates and stays under the cap', () => {
+    const vocabulary = voiceVocabulary(['Nico', 'nico', '  ', 'Rodaje']);
+    expect(vocabulary[0]).toBe('Nico');
+    expect(vocabulary.filter((p) => p.toLowerCase() === 'nico')).toHaveLength(1);
+    expect(vocabulary.filter((p) => p.toLowerCase() === 'rodaje')).toHaveLength(1);
+    expect(vocabulary).toEqual(expect.arrayContaining(['ritmo de media', 'brick', 'FTP']));
+    expect(VOICE_CONTEXTUAL_STRINGS.length).toBeLessThanOrEqual(MAX_CONTEXTUAL_STRINGS);
+    expect(voiceVocabulary(Array.from({ length: 200 }, (_, i) => `Amigo ${i}`))).toHaveLength(MAX_CONTEXTUAL_STRINGS);
   });
 
   test('errors become Spanish messages; aborts and silence after speech stay quiet', () => {

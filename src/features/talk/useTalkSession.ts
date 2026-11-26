@@ -14,6 +14,7 @@ import type { CoachResponse } from '@/domain/types';
 import type { PreparedRequest } from '@/features/coach/requests';
 import { useConsentGate, type ConsentGate } from '@/features/coach/useConsentGate';
 import { splitFriends } from '@/features/social/friendModel';
+import { normalizeDictation } from '@/integrations/speech/dictation';
 import { errorMessage, logger } from '@/lib/logger';
 import { haptics } from '@/ui';
 
@@ -116,7 +117,9 @@ export function useTalkSession(voiceAvailable: boolean): TalkSession {
     state,
     gate,
     send: (text, channel) => {
-      const prepared = talkRequest(text, channel, latest.current.turns, todayISO(), acceptedFriends);
+      // Dictation writes "dos por cuatro kilómetros a cuatro veinticinco": the coach gets "2×4 km a 4:25 /km".
+      const clean = channel === 'voice' ? normalizeDictation(text) : text;
+      const prepared = talkRequest(clean, channel, latest.current.turns, todayISO(), acceptedFriends);
       if (prepared.text.length > 0) gate.submit(prepared);
     },
     sendPrepared: (prepared, onSent) => gate.submit(prepared, onSent),

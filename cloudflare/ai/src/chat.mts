@@ -6,13 +6,34 @@
  */
 import type { Result } from './types.mts';
 
-/** Only models of the Workers Free plan (GLM-5.3 and DeepSeek V4.1 answer 5035 "not available"). */
+/**
+ * Only models of the Workers Free plan (GLM-5.3, DeepSeek V4.1 Flash and Inkling 2 answer 403 "not
+ * available on the Workers Free plan"; Nemotron 3 was deprecated on 2026-11-20). Live test with the
+ * coach prompt on 2026-11-26: Qwen 3.8 27B ~7 s with thinking off (95-120 s with it on), gpt-oss-120b
+ * ~10 s at low reasoning effort, Gemma 4 ~15 s.
+ */
 export const MODELS = [
+  '@cf/qwen/qwen3.8-27b',
+  '@cf/openai/gpt-oss-120b',
   '@cf/google/gemma-4-26b-a4b-it',
-  '@cf/nvidia/nemotron-3-120b-a12b',
   '@cf/meta/llama-4-scout-17b-16e-instruct',
 ] as const;
 export type Model = (typeof MODELS)[number];
+
+/**
+ * Retired models callers may still send (an old Edge Function deploy or AI_MODEL secret): served
+ * by their replacement instead of failing.
+ */
+export const RETIRED_MODELS: Readonly<Record<string, Model>> = {
+  '@cf/nvidia/nemotron-3-120b-a12b': '@cf/qwen/qwen3.8-27b',
+};
+
+/** Tried once when the requested model is gone (deprecated, removed or off the free plan). */
+export const FALLBACK_TEXT_MODEL: Model = '@cf/openai/gpt-oss-120b';
+export const FALLBACK_VISION_MODEL: Model = '@cf/meta/llama-4-scout-17b-16e-instruct';
+
+/** Thinking makes these models far too slow for a phone (Qwen 3.8 timed out at 120 s): always off. */
+const NO_THINKING_MODELS: ReadonlySet<string> = new Set(['@cf/qwen/qwen3.8-27b']);
 
 export const MAX_BODY_BYTES = 3 * 1024 * 1024;
 export const MAX_MESSAGES = 40;
@@ -113,7 +134,8 @@ function optionalNumber(v: unknown, name: string, min: number, max: number, inte
 /** Validates the body of POST /v1/chat (unknown top-level keys are ignored). */
 export function parseChatRequest(body: unknown): Result<ChatRequest> {
   if (!isObj(body)) return fail('body: must be a JSON object');
-  if (typeof body.model !== 'string' || !(MODELS as readonly string[]).includes(body.model)) {
+  const model = typeof body.model === 'string' ? (RETIRED_MODELS[body.model] ?? body.model) : null;
+  if (model === null || !(MODELS as readonly string[]).includes(model)) {
     return fail(`model: one of ${MODELS.join(', ')}`);
   }
   if (!Array.isArray(body.messages) || body.messages.length === 0 || body.messages.length > MAX_MESSAGES) {
@@ -135,7 +157,7 @@ export function parseChatRequest(body: unknown): Result<ChatRequest> {
   return {
     ok: true,
     value: {
-      model: body.model as Model,
+      model: model as Model,
       messages,
       ...(format.value ? { response_format: format.value } : {}),
       ...(maxTokens.value !== undefined ? { max_completion_tokens: maxTokens.value } : {}),
@@ -158,12 +180,34 @@ export function modelInput(req: ChatRequest): Record<string, unknown> {
       ...(req.max_completion_tokens !== undefined ? { max_tokens: req.max_completion_tokens } : {}),
     };
   }
+  const thinking = req.enable_thinking && !NO_THINKING_MODELS.has(req.model);
   return {
     ...base,
     ...(req.response_format ? { response_format: req.response_format } : {}),
     ...(req.max_completion_tokens !== undefined ? { max_completion_tokens: req.max_completion_tokens } : {}),
-    chat_template_kwargs: { enable_thinking: req.enable_thinking },
+    chat_template_kwargs: { enable_thinking: thinking },
+    // gpt-oss always reasons; `low` keeps it near 10 s.
+    ...(req.model === '@cf/openai/gpt-oss-120b' ? { reasoning_effort: thinking ? 'medium' : 'low' } : {}),
   };
+}
+
+const hasImages = (req: ChatRequest): boolean =>
+  req.messages.some((m) => Array.isArray(m.content) && m.content.some((p) => p.type === 'image_url'));
+
+/** The model to try when `req.model` is gone, or null when there is nothing else to try. */
+export function fallbackModel(req: ChatRequest): Model | null {
+  const fallback = hasImages(req) ? FALLBACK_VISION_MODEL : FALLBACK_TEXT_MODEL;
+  return fallback === req.model ? null : fallback;
+}
+
+/**
+ * Workers AI error when the model itself is gone: deprecated (5028), off the free plan (403 /
+ * 5035) or unknown. Never quota or timeouts: retrying those on another model would not help.
+ */
+export function isModelUnavailable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const code = isObj(error) ? error.code : undefined;
+  return code === 5028 || code === 5035 || /\b(5028|5035)\b|model has been deprecated|not available on the Workers Free plan|no such model|model not found/i.test(message);
 }
 
 function textOf(content: unknown): string {

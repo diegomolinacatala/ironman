@@ -95,3 +95,15 @@ export function friendIdsForConversation(
   }
   return [];
 }
+
+/** Most friends whose names are sent to the speech recogniser. */
+export const MAX_FRIEND_PHRASES = 15;
+
+/** Names the recogniser should expect (first name and full display name of accepted friends). */
+export function friendPhrases(friends: readonly Friend[] | undefined): string[] {
+  const names = (friends ?? [])
+    .filter((f) => f.status === 'accepted')
+    .slice(0, MAX_FRIEND_PHRASES)
+    .flatMap((f) => [firstName(f.profile.displayName), f.profile.displayName]);
+  return [...new Set(names.map((n) => n.trim()).filter((n) => n.length >= MIN_NAME_LENGTH))];
+}

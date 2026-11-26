@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 
 import type { Friend } from '@/domain/types';
 
-import { MAX_FRIEND_IDS, friendIdsForConversation, friendIdsMentioned } from '../friendMentions';
+import { MAX_FRIEND_IDS, friendIdsForConversation, friendIdsMentioned, friendPhrases } from '../friendMentions';
 
 function friend(id: string, displayName: string, username: string, status: Friend['status'] = 'accepted'): Friend {
   return {
@@ -75,5 +75,13 @@ describe('friendIdsForConversation', () => {
   test('only looks back a couple of messages', () => {
     expect(friendIdsForConversation('¿y el domingo?', ['con David', 'me duele', 'otra cosa'], FRIENDS)).toEqual([]);
     expect(friendIdsForConversation('hola', [], FRIENDS)).toEqual([]);
+  });
+});
+
+describe('friendPhrases', () => {
+  test('first and full names of accepted friends only, without duplicates', () => {
+    const friends = [friend('1', 'Nico Pérez', 'nico'), friend('2', 'Darius', 'darius'), friend('3', 'Laura Gil', 'laura', 'pending')];
+    expect(friendPhrases(friends)).toEqual(['Nico', 'Nico Pérez', 'Darius']);
+    expect(friendPhrases(undefined)).toEqual([]);
   });
 });
