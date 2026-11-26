@@ -1,5 +1,5 @@
 /**
- * Progreso — form (PMC, open) and folded sections: volume & compliance, recovery, nutrition,
+ * Progreso — a threshold suggestion when there is one, form (PMC, open) and folded sections: volume & compliance, recovery, nutrition,
  * races. Each one opens on demand and is remembered on the device.
  */
 import { router } from 'expo-router';
@@ -16,6 +16,7 @@ import { useProgressData } from '@/features/progress/useProgressData';
 import { VolumeCard } from '@/features/progress/VolumeCard';
 import { RaceCountdownCard } from '@/features/races/RaceCountdownCard';
 import { phaseName } from '@/features/races/raceModel';
+import { ThresholdSuggestions } from '@/features/thresholds/ThresholdSuggestions';
 import { Button, Disclosure, ErrorNotice, Loading, Screen, space } from '@/ui';
 
 export default function ProgressScreen() {
@@ -35,6 +36,8 @@ export default function ProgressScreen() {
       contentStyle={[styles.content, bottomPadding != null ? { paddingBottom: bottomPadding } : null]}>
       {data.error ? <ErrorNotice message={data.error} onRetry={data.refetch} /> : null}
       {data.isLoading ? <Loading label="Calculando tu forma…" /> : null}
+      {/* "¿Actualizo tu umbral?" when the last 8 weeks say it moved (never applied without «Actualizar»). */}
+      <ThresholdSuggestions today={today} />
 
       {data.pmc ? (
         <Disclosure variant="plain" title="Tu forma" summary={formFoldSummary(data.pmc)} defaultOpen storageKey="progress.form">
