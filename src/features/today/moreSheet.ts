@@ -3,6 +3,7 @@ import type { Workout, WorkoutPatch } from '@/domain/types';
 import type { ActionSheetConfig, SheetAction } from '@/features/workouts/actionSheet';
 
 export interface MoreSheetHandlers {
+  onComplete: () => void;
   onEasier: (patch: WorkoutPatch) => void;
   onMove: () => void;
   onSkip: () => void;
@@ -15,6 +16,7 @@ export function moreSheetConfig(workout: Pick<Workout, 'title'>, easier: Workout
     title: workout.title,
     ...(easier ? { message: 'Si hoy no te ves, cámbialo por una versión más suave.' } : {}),
     actions: [
+      { label: 'Registrar como hecho', icon: 'check', onPress: handlers.onComplete },
       ...planB,
       { label: 'Mover a otro día', icon: 'move', onPress: handlers.onMove },
       { label: 'Saltar', icon: 'skip', onPress: handlers.onSkip },

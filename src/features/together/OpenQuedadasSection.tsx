@@ -4,15 +4,15 @@
  */
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useJoinJointSession, useOpenJointSessions } from '@/data/queries';
 import { addDays, formatDayLabel, formatDuration } from '@/domain/dates';
 import { sportLabel } from '@/domain/labels';
-import type { ISODate, JointSession, UUID } from '@/domain/types';
+import type { ISODate, JointSession } from '@/domain/types';
 import { firstName } from '@/features/social/friendModel';
 import { errorMessage, logger } from '@/lib/logger';
-import { Button, Card, ErrorNotice, SectionHeader, SportBadge, Text, haptics, space } from '@/ui';
+import { Button, Card, Disclosure, ErrorNotice, SportBadge, Text, haptics, space } from '@/ui';
 
 const WINDOW_DAYS = 14;
 
@@ -45,8 +45,12 @@ function OpenQuedadaCard({ session, today }: { session: JointSession; today: ISO
     }
   };
   return (
-    <Card padding="md" onPress={() => router.push(`/joint/${encodeURIComponent(session.id)}`)}>
-      <View style={styles.row}>
+    <Card padding="md" style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${session.title}. ${openQuedadaLine(session, today)}. Ver quedada`}
+        onPress={() => router.push(`/joint/${encodeURIComponent(session.id)}`)}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
         <SportBadge sport={session.sport} size={40} />
         <View style={styles.flex}>
           <Text variant="caption" color="textMuted">
@@ -57,29 +61,31 @@ function OpenQuedadaCard({ session, today }: { session: JointSession; today: ISO
             {openQuedadaLine(session, today)}
           </Text>
         </View>
-        <Button label="Me apunto" size="sm" icon="check" variant="secondary" onPress={() => void onJoin()} loading={join.isPending} />
-      </View>
+      </Pressable>
+      <Button label="Me apunto" icon="check" variant="secondary" onPress={() => void onJoin()} loading={join.isPending} />
       {error ? <ErrorNotice message={error} /> : null}
     </Card>
   );
 }
 
-export function OpenQuedadasSection({ today }: { today: ISODate; myId?: UUID | null }) {
+export function OpenQuedadasSection({ today }: { today: ISODate }) {
   const open = useOpenJointSessions(openRange(today));
   const sessions = open.data ?? [];
-  if (sessions.length === 0) return null;
+  if (open.error) return <ErrorNotice message={errorMessage(open.error, 'No se han podido cargar las quedadas abiertas.')} onRetry={() => void open.refetch()} />;
+  const first = sessions[0];
+  if (!first) return null;
   return (
-    <View style={styles.section}>
-      <SectionHeader title="Quedadas abiertas" />
+    <Disclosure title="Quedadas abiertas" icon="together" summary={`${sessions.length === 1 ? '1 disponible' : `${sessions.length} disponibles`} · ${first.title}`}>
       {sessions.map((s) => (
         <OpenQuedadaCard key={s.id} session={s} today={today} />
       ))}
-    </View>
+    </Disclosure>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { gap: space.sm },
-  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  card: { gap: space.md },
+  row: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  pressed: { opacity: 0.8 },
   flex: { flex: 1, gap: 2 },
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { Linking } from 'react-native';
 
 import TalkScreen from '@/app/talk';
 import { addDays, startOfWeek, todayISO } from '@/domain/dates';
@@ -147,7 +148,7 @@ async function sendTyped(text: string) {
 describe('Talk — idle', () => {
   test('greets with examples and one composer: mic, text and send', async () => {
     await render(<TalkScreen />);
-    expect(screen.getByText('¿Qué te cuentas?')).toBeTruthy();
+    expect(screen.getByText('¿Qué necesitas hoy?')).toBeTruthy();
     expect(screen.getByRole('button', { name: EXAMPLE_PROMPTS[0] ?? '' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Hablar con tu coach' })).toBeTruthy();
     expect(screen.getByLabelText('Mensaje para tu coach')).toBeTruthy();
@@ -156,12 +157,20 @@ describe('Talk — idle', () => {
     expect(screen.queryByRole('button', { name: 'Nueva conversación' })).toBeNull();
   });
 
-  test('an example is sent as it is: one tap, no typing', async () => {
-    mockState.consentAt = '2026-10-01T10:00:00.000Z';
+  test('offers to continue in the athlete’s own Claude', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     await render(<TalkScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: EXAMPLE_PROMPTS[1] ?? '' }));
-    await waitFor(() => expect(mockCoach).toHaveBeenCalledTimes(1));
-    expect(mockCoach.mock.calls[0]?.[0].message).toBe(EXAMPLE_PROMPTS[1]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Abrir en Claude' }));
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/claude\.ai\/new\?q=/));
+    open.mockRestore();
+  });
+
+  test('an example prefills the keyboard composer without sending', async () => {
+    await render(<TalkScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: EXAMPLE_PROMPTS[2] ?? '' }));
+    expect(screen.getByLabelText('Mensaje para tu coach').props.value).toBe(EXAMPLE_PROMPTS[2]);
+    expect(screen.queryByRole('button', { name: EXAMPLE_PROMPTS[0] ?? '' })).toBeNull();
+    expect(mockCoach).not.toHaveBeenCalled();
   });
 
   test("examples come from today's and tomorrow's sessions", async () => {
@@ -199,6 +208,17 @@ describe('Talk — idle', () => {
     await waitFor(() => expect(mockCoach).toHaveBeenCalledTimes(1));
     expect(mockCoach.mock.calls[0]?.[0]).toMatchObject({ mode: 'chat', message: 'me duele el tobillo', channel: 'voice' });
     expect(mockVoice.reset).toHaveBeenCalled();
+  });
+
+  test('a dictated take reaches the coach with paces and series cleaned up', async () => {
+    await render(<TalkScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Hablar con tu coach' }));
+    Object.assign(mockVoice, { state: 'listening', transcript: 'hago dos por cuatro kilómetros a cuatro veinticinco el kilómetro' });
+    await screen.rerender(<TalkScreen />);
+    Object.assign(mockVoice, { state: 'idle' });
+    await screen.rerender(<TalkScreen />);
+    await waitFor(() => expect(mockCoach).toHaveBeenCalledTimes(1));
+    expect(mockCoach.mock.calls[0]?.[0]).toMatchObject({ message: 'hago 2×4 km a 4:25 /km', channel: 'voice' });
   });
 
   test('a take that ends empty asks to try again', async () => {

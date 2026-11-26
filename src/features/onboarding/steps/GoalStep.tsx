@@ -8,7 +8,7 @@ import { TRAINABLE_SPORTS, type Profile, type Race } from '@/domain/types';
 import { DistancePicker } from '@/features/races/DistancePicker';
 import { RaceDateField } from '@/features/races/RaceDateField';
 import { errorMessage, logger } from '@/lib/logger';
-import { Card, Chip, ErrorNotice, Loading, Segmented, Text, TextField, haptics, space } from '@/ui';
+import { Chip, ErrorNotice, Loading, Segmented, Text, TextField, haptics, space } from '@/ui';
 
 import { Appear } from '../Appear';
 import {
@@ -27,22 +27,31 @@ type RaceMode = 'race' | 'none';
 export interface GoalStepProps {
   nav: StepNav;
   profile: Profile;
+  onCreatePlan: () => void;
+  onConnect: () => void;
 }
 
 /** Step 2: next race (or "Aún no tengo carrera") and sports; the weekly hours come from the calendar. */
-export function GoalStep({ nav, profile }: GoalStepProps) {
+export function GoalStep(props: GoalStepProps) {
   const races = useRaces();
   if (races.isLoading) {
     return (
-      <StepLayout nav={nav} primary={{ label: 'Siguiente', onPress: () => undefined, disabled: true }}>
+      <StepLayout nav={props.nav} primary={{ label: 'Crear mi plan', onPress: () => undefined, disabled: true }}>
         <Loading label="Buscando tu carrera" />
       </StepLayout>
     );
   }
-  return <GoalForm nav={nav} profile={profile} races={races.data ?? []} />;
+  if (races.error && !races.data) {
+    return (
+      <StepLayout nav={props.nav} primary={{ label: 'Reintentar', onPress: () => void races.refetch() }}>
+        <ErrorNotice message={errorMessage(races.error)} />
+      </StepLayout>
+    );
+  }
+  return <GoalForm {...props} races={races.data ?? []} />;
 }
 
-function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
+function GoalForm({ nav, profile, onCreatePlan, onConnect, races }: GoalStepProps & { races: Race[] }) {
   const today = todayISO();
   const updateProfile = useUpdateProfile();
   const createRace = useCreateRace();
@@ -53,7 +62,8 @@ function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
   const set = (patch: Partial<GoalInput>) => setGoal((prev) => ({ ...prev, ...patch }));
   const setRace = (patch: Partial<GoalInput['race']>) => setGoal((prev) => ({ ...prev, race: { ...prev.race, ...patch } }));
 
-  const onNext = async () => {
+  const onNext = async (afterSave: () => void) => {
+    if (saving) return;
     const problem = goalError(goal, today);
     if (problem) {
       haptics.warning();
@@ -69,7 +79,7 @@ function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
         if (goal.raceId) await updateRace.mutateAsync({ id: goal.raceId, patch: draft });
         else await createRace.mutateAsync(draft);
       }
-      nav.next();
+      afterSave();
     } catch (err) {
       logger.warn('onboarding: save goal failed', err);
       haptics.warning();
@@ -83,7 +93,8 @@ function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
     <StepLayout
       nav={nav}
       busy={saving}
-      primary={{ label: 'Siguiente', iconRight: 'arrowRight', onPress: () => void onNext(), loading: saving }}>
+      primary={{ label: 'Crear mi plan', iconRight: 'arrowRight', onPress: () => void onNext(onCreatePlan), loading: saving }}
+      secondary={{ label: 'Configurar conexiones primero', onPress: () => void onNext(onConnect), disabled: saving }}>
       <Appear index={1} style={styles.block}>
         <Segmented<RaceMode>
           accessibilityLabel="¿Tienes carrera?"
@@ -107,18 +118,9 @@ function GoalForm({ nav, profile, races }: GoalStepProps & { races: Race[] }) {
             <RaceDateField value={goal.race.date} onChange={(date) => setRace({ date })} />
             <DistancePicker value={goal.race.distance} onChange={(distance) => setRace({ distance })} />
           </View>
-        ) : (
-          <Card variant="tinted" padding="lg">
-            <Text variant="callout">Sin problema: trabajamos tu base y la añades cuando la tengas, en Tú › Tu objetivo.</Text>
-          </Card>
-        )}
+        ) : null}
       </Appear>
       <Appear index={2} style={styles.block}>
-        <Text variant="callout" color="textMuted">
-          Entrenaremos todo lo que tu calendario permita, con cabeza.
-        </Text>
-      </Appear>
-      <Appear index={3} style={styles.block}>
         <Text variant="heading" accessibilityRole="header">
           Qué entrenas
         </Text>

@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Chip, Icon, Text, radius, space, useTheme } from '@/ui';
+import { Button, Chip, Icon, Text, radius, space, useTheme } from '@/ui';
 
+import { openClaudeChat } from './claudeLink';
 import { FadeIn } from './motion';
 import { EXAMPLE_PROMPTS } from './talkSession';
 
@@ -23,24 +24,35 @@ export function TalkGreeting({ showExamples, examples = EXAMPLE_PROMPTS, onPick 
           <Icon name="coach" size={24} color={colors.onAccentSoft} />
         </View>
         <Text variant="display" accessibilityRole="header">
-          ¿Qué te cuentas?
+          ¿Qué necesitas hoy?
         </Text>
       </FadeIn>
       <FadeIn index={1}>
         <Text variant="body" color="textMuted">
-          Cuéntaselo como a tu entrenador: molestias, cambios de horario, lo que prefieres. Yo ajusto tu plan.
+          Cuéntame cómo te sientes o qué ha cambiado en tu semana.
         </Text>
       </FadeIn>
       {showExamples ? (
         <FadeIn index={2} style={styles.examples}>
-          <Text variant="caption" color="textMuted">
-            Por ejemplo
-          </Text>
           <View style={styles.chips}>
             {examples.map((prompt) => (
               <Chip key={prompt} label={prompt} onPress={() => onPick(prompt)} />
             ))}
           </View>
+        </FadeIn>
+      ) : null}
+      {showExamples ? (
+        <FadeIn index={3} style={styles.claude}>
+          <Text variant="caption" color="textMuted">
+            Para algo largo, como revisar la semana o planificar un bloque, háblalo con tu Claude: ve tu plan entero.
+          </Text>
+          <Button
+            label="Abrir en Claude"
+            variant="ghost"
+            size="sm"
+            accessibilityHint="Abre un chat nuevo en Claude con tu plan de Road to Ironman"
+            onPress={() => void openClaudeChat()}
+          />
         </FadeIn>
       ) : null}
     </View>
@@ -53,4 +65,5 @@ const styles = StyleSheet.create({
   mark: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   examples: { gap: space.sm, marginTop: space.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  claude: { gap: space.xs, marginTop: space.lg, alignItems: 'flex-start' },
 });

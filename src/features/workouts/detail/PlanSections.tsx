@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 
 import type { Workout } from '@/domain/types';
-import { Text } from '@/ui';
+import { Disclosure, Text } from '@/ui';
 
 import { needsHrHint } from '../targets';
 import type { AthleteTargets } from '../useAthleteTargets';
@@ -30,15 +30,25 @@ export function PlanSections({ workout, athlete, upcoming, onEase, busy }: PlanS
   const { thresholds, raceDistance } = athlete;
   const coaching = workout.coaching ?? null;
   const showHrHint = athlete.profileLoaded && needsHrHint(workout, thresholds);
+  const steps = workout.steps.length;
+  const hasGuide = workout.sport !== 'rest' || Boolean(workout.description || steps || coaching?.objective || coaching?.keys?.length);
   return (
     <>
-      <CoachingCard coaching={coaching} />
-      <WorkoutMetrics workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
-      {showHrHint ? <ThresholdsHint onPress={() => router.push('/settings/profile')} /> : null}
-      <FeelNote workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
-      {workout.description ? <Text variant="body">{workout.description}</Text> : null}
-      <StructureSection workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
-      <MyWhooshNote workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
+      {hasGuide ? (
+        <Disclosure title="Guía del entreno" icon="coach" summary={coaching?.objective?.trim() || (steps ? `${steps} ${steps === 1 ? 'bloque' : 'bloques'} de entrenamiento` : workout.description || 'Cómo debe sentirse')} storageKey="workout.guide">
+          <CoachingCard coaching={coaching} />
+          {workout.description ? <Text variant="body">{workout.description}</Text> : null}
+          <FeelNote workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
+          <StructureSection workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
+          <MyWhooshNote workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
+        </Disclosure>
+      ) : null}
+      {workout.sport !== 'rest' ? (
+        <Disclosure title="Objetivos y zonas" icon="target" summary="Intensidad, carga y referencias personales" storageKey="workout.targets">
+          <WorkoutMetrics workout={workout} thresholds={thresholds} raceDistance={raceDistance} />
+          {showHrHint ? <ThresholdsHint onPress={() => router.push('/settings/profile')} /> : null}
+        </Disclosure>
+      ) : null}
       <ClosingCard
         success={coaching?.success ?? null}
         showPlanB={upcoming && workout.sport !== 'rest'}

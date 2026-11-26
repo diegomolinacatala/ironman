@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { addDays } from '@/domain/dates';
-import type { DateRange, ISODate, UUID } from '@/domain/types';
+import { addDays, formatDayLabel } from '@/domain/dates';
+import type { DateRange, ISODate, JointSession, UUID } from '@/domain/types';
 import { useJointSessions } from '@/data/queries';
 import { errorMessage } from '@/lib/logger';
-import { ErrorNotice, Loading, SectionHeader, Text, fonts, space } from '@/ui';
+import { Button, Card, Disclosure, ErrorNotice, Loading, SectionHeader, Text, space, useTheme } from '@/ui';
 
 import { JointSessionRow } from './JointSessionRow';
 import { splitSessions } from './jointModel';
@@ -20,47 +20,61 @@ export function upcomingJointRange(today: ISODate): DateRange {
 export interface JointSessionsSectionProps {
   myId: UUID | null;
   today: ISODate;
-  /** Opens the form (no prefill) — shown in the empty state. */
+  /** Available once the athlete has an accepted friend. */
   onPropose?: () => void;
 }
 
-/** "Próximas quedadas": my pending invites first (with inline answers), then upcoming sessions. */
+/** Keep the next commitment in view, with a count for the rest. */
 export function JointSessionsSection({ myId, today, onPropose }: JointSessionsSectionProps) {
+  const { colors } = useTheme();
   const sessions = useJointSessions(upcomingJointRange(today));
   const { invites, upcoming } = splitSessions(sessions.data, myId, today);
-  const open = (id: UUID) => router.push(`/joint/${id}`);
+  const firstInvite = invites[0];
+  const next = upcoming[0];
+  const renderSession = (session: JointSession) => (
+    <JointSessionRow key={session.id} session={session} myId={myId} today={today} onPress={() => router.push(`/joint/${encodeURIComponent(session.id)}`)} />
+  );
+  if (sessions.isLoading) return <Loading label="Cargando quedadas" />;
 
+  if (!sessions.error && !firstInvite && !next) {
+    if (!onPropose) return null;
+    return (
+      <Card variant="tinted" tint={colors.accentSoft} padding="xl" style={styles.hero}>
+        <Text variant="title" color="onAccentSoft">Vuestra próxima quedada</Text>
+        <Text variant="callout" color="onAccentSoft">Elige un entreno y propón una hora a tus amigos.</Text>
+        <Button label="Proponer quedada" icon="calendarPlus" fullWidth onPress={onPropose} style={styles.propose} />
+      </Card>
+    );
+  }
   return (
     <View style={styles.section}>
-      <SectionHeader title="Próximas quedadas" action={onPropose ? { label: 'Proponer', onPress: onPropose } : undefined} />
-      {sessions.isLoading ? <Loading label="Cargando quedadas" /> : null}
       {sessions.error ? (
         <ErrorNotice
           message={errorMessage(sessions.error, 'No se han podido cargar las quedadas.')}
           onRetry={() => void sessions.refetch()}
         />
       ) : null}
-      {!sessions.isLoading && !sessions.error && invites.length + upcoming.length === 0 ? (
-        <Text variant="callout" color="textMuted">
-          Sin quedadas a la vista. Propón una o búscala en los huecos comunes con tus amigos.
-        </Text>
+      {firstInvite ? <SectionHeader title="Te han invitado" /> : null}
+      {firstInvite ? renderSession(firstInvite) : null}
+      {invites.length > 1 ? (
+        <Disclosure title={invites.length === 2 ? 'Otra invitación por responder' : `${invites.length - 1} invitaciones más por responder`} icon="mail">
+          {invites.slice(1).map(renderSession)}
+        </Disclosure>
       ) : null}
-      {invites.length > 0 ? (
-        <Text variant="caption" color="accentInk" accessibilityRole="header" style={styles.subhead}>
-          {invites.length === 1 ? 'Te han invitado' : `Te han invitado a ${invites.length}`}
-        </Text>
+      {next ? <SectionHeader title="Tu próxima quedada" /> : null}
+      {next ? renderSession(next) : null}
+      {upcoming.length > 1 ? (
+        <Disclosure title={upcoming.length === 2 ? 'Una quedada más' : `${upcoming.length - 1} quedadas más`} summary={formatDayLabel(upcoming[1]!.date, today)} icon="week">
+          {upcoming.slice(1).map(renderSession)}
+        </Disclosure>
       ) : null}
-      {invites.map((session) => (
-        <JointSessionRow key={session.id} session={session} myId={myId} today={today} onPress={() => open(session.id)} />
-      ))}
-      {upcoming.map((session) => (
-        <JointSessionRow key={session.id} session={session} myId={myId} today={today} onPress={() => open(session.id)} />
-      ))}
+      {onPropose ? <Button label="Proponer quedada" icon="calendarPlus" variant="secondary" onPress={onPropose} fullWidth /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   section: { gap: space.sm },
-  subhead: { fontFamily: fonts.bodySemibold },
+  hero: { gap: space.sm },
+  propose: { marginTop: space.sm },
 });

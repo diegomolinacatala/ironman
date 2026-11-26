@@ -1,6 +1,8 @@
 # Road to Ironman — notes for coding agents
 
-Al empezar, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota pertinente. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Es la memoria compartida de los dos socios, Claude Code y Codex.
+Al empezar, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota pertinente. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Es la memoria compartida del equipo (Diego, David, Nico y Darius, ver `memoria/Cómo trabajamos.md` › Equipo) y de sus asistentes, Claude Code y Codex.
+
+**Git workflow (since 2026-11-26, see `CONTRIBUTING.md`):** never commit or push to `main` (a ruleset blocks it). Work on a branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`), Conventional Commits, run `npm run test:all`, include the session note in `memoria/sesiones/`, open a PR with the template. The author squash-merges their own PR once the **Tests** check passes; no approval needed except for `.github/`, `scripts/asc/`, `scripts/ios/` (CODEOWNERS: Diego).
 
 - Read `docs/V2.md`, `docs/V4.md`, `docs/ARCHITECTURE.md` and `docs/DESIGN.md` (design system + navigation: 5 tabs Hoy · Plan · Juntos · Progreso · Tú, navy "calm endurance" brand, Inter, light/dark/automatic) first: they are the contract (domain types, repository, query hooks, routes, RPCs, edge functions, MCP tools).
 - Expo SDK 58 changed many APIs: follow `AGENTS.md` (read versioned docs, use `npx expo install`).

@@ -1,12 +1,13 @@
 import { useIntegrations, useTokens } from '@/data/queries';
+import { todayISO } from '@/domain/dates';
 import type { Profile } from '@/domain/types';
 import { useTrainingCalendar } from '@/integrations/calendar/trainingCalendar';
 import { errorMessage } from '@/lib/logger';
-import { Loading } from '@/ui';
+import { ErrorNotice, Loading } from '@/ui';
 
-import { useWatchBrand } from '../settings/useWatchBrand';
-import { ConnectionFeedback, ConnectionRow } from './ConnectionRow';
-import { calendarConnectionView, calendarFeedConnectionView, claudeConnectionView } from './connectionsModel';
+import { watchBrandOf } from '../settings/watchBrand';
+import { ConnectionRow } from './ConnectionRow';
+import { calendarConnectionView, calendarFeedConnectionView, claudeConnectionView, garminConnectionView } from './connectionsModel';
 import { GroupDivider, SettingsGroup } from './SettingsGroup';
 import { WatchConnectionRow } from './WatchConnectionRow';
 
@@ -18,31 +19,29 @@ export function ConnectionsSection({ profile }: { profile: Pick<Profile, 'watchB
   const integrations = useIntegrations();
   const tokens = useTokens();
   const calendar = useTrainingCalendar();
-  const watch = useWatchBrand(profile);
-
-  if (integrations.isLoading || tokens.isLoading) {
-    return (
-      <SettingsGroup title="Conexiones">
-        <Loading label="Comprobando tus conexiones" />
-      </SettingsGroup>
-    );
-  }
+  const brand = watchBrandOf(profile);
+  const garmin = brand === 'garmin' ? garminConnectionView(integrations.data?.find((i) => i.provider === 'garmin_personal'), todayISO()) : null;
+  const summary = garmin && (garmin.tone === 'warning' || garmin.tone === 'danger')
+    ? `Garmin · ${garmin.status}`
+    : 'Reloj, calendario y Claude';
 
   return (
-    <SettingsGroup title="Conexiones">
-      <WatchConnectionRow brand={watch.brand} integrations={integrations.data} />
+    <SettingsGroup title="Conexiones" summary={summary} icon="plug">
+      {integrations.isLoading ? <Loading label="Comprobando el reloj" /> : integrations.isError && brand === 'garmin' ? (
+        <ErrorNotice message={errorMessage(integrations.error)} onRetry={() => void integrations.refetch()} />
+      ) : <WatchConnectionRow brand={brand} integrations={integrations.data} />}
       <GroupDivider />
       <ConnectionRow icon="calendarCheck" title="Calendario" view={calendarConnectionView(calendar)} href="/settings/integrations" />
       <GroupDivider />
-      <ConnectionRow icon="sparkles" title="Claude" view={claudeConnectionView(tokens.data)} href="/settings/claude" />
-      <GroupDivider />
-      <ConnectionRow icon="link" title="Suscripción de calendario" view={calendarFeedConnectionView(tokens.data)} href="/settings/calendar-feed" />
-      <ConnectionFeedback
-        message={null}
-        error={null}
-        loadError={integrations.isError ? errorMessage(integrations.error) : null}
-        onRetry={() => void integrations.refetch()}
-      />
+      {tokens.isLoading ? <Loading label="Comprobando las conexiones" /> : tokens.isError ? (
+        <ErrorNotice message={errorMessage(tokens.error)} onRetry={() => void tokens.refetch()} />
+      ) : (
+        <>
+          <ConnectionRow icon="sparkles" title="Claude" view={claudeConnectionView(tokens.data)} href="/settings/claude" />
+          <GroupDivider />
+          <ConnectionRow icon="link" title="Suscripción de calendario" view={calendarFeedConnectionView(tokens.data)} href="/settings/calendar-feed" />
+        </>
+      )}
     </SettingsGroup>
   );
 }

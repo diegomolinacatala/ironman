@@ -21,6 +21,11 @@ module.exports = defineConfig([
     },
   },
   {
+    // Node scripts (CI, App Store Connect): process.env is the real environment, not Expo's inlined EXPO_PUBLIC_*.
+    files: ['scripts/**'],
+    rules: { 'expo/no-env-var-destructuring': 'off' },
+  },
+  {
     ignores: [
       '.claude/**',
       '.expo/**',

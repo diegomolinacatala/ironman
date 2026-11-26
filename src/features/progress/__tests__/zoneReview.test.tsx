@@ -49,6 +49,7 @@ function progressData(zoneTrend: ReviewTrend | null): ProgressData {
     volume: [],
     recovery: [],
     race: null,
+    racesLoaded: false,
     phase: null,
     zoneTrend,
     nutrition: null,

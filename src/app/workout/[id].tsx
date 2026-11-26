@@ -86,6 +86,7 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
     <Screen inSheet onRefresh={onRefresh} refreshing={refreshing}>
       <Stack.Screen options={{ title: sportLabel(workout.sport) }} />
       <WorkoutHeader workout={workout} partnerName={partnerName} />
+      <DetailActions workout={workout} actions={actions} onComplete={() => setCompleting(true)} onMove={() => setMoving(true)} />
       <OfflineNotice pendingKey={completeKey(workout.id)} />
       <CompletedPanel workout={workout} compliance={compliance} thresholds={athlete.thresholds} raceDistance={athlete.raceDistance} />
       <CoachVerdict verdict={workoutVerdict(workout, athlete.thresholds, athlete.raceDistance)} />
@@ -99,7 +100,6 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
       />
       {workout.jointSessionId ? <JointInfo sessionId={workout.jointSessionId} myId={myId} /> : null}
       {workout.sport !== 'rest' && workout.durationMin >= 45 ? <FuelingHint workout={workout} /> : null}
-      <DetailActions workout={workout} actions={actions} onComplete={() => setCompleting(true)} onMove={() => setMoving(true)} />
       {completing ? (
         <CompleteSheet key={workout.id} workout={workout} raceDistance={athlete.raceDistance} visible onClose={() => setCompleting(false)} />
       ) : null}

@@ -14,11 +14,6 @@ import { resetDisclosureState } from '@/ui/disclosureState';
 
 import type { TodayData } from '../useTodayData';
 
-/** Today's session keeps objective, targets and structure folded until asked. */
-async function openDetails(): Promise<void> {
-  await fireEvent.press(screen.getByRole('button', { name: /Objetivo, ritmos y estructura/ }));
-}
-
 /** The folded sections of Hoy (Informe, Mañana, Comidas…). */
 async function openFold(title: RegExp): Promise<void> {
   await fireEvent.press(screen.getByRole('button', { name: title }));
@@ -175,13 +170,11 @@ describe('Hoy · the weather of the outdoor session', () => {
     expect(screen.getByText('Datos del tiempo: MET Norway')).toBeTruthy();
   });
 
-  test('a dry forecast stays quiet, inside the details', async () => {
+  test('a dry forecast stays off the card (it lives in the session detail)', async () => {
     mockForecast = dayForecast(false);
     mockData = data({ todayWorkouts: [makeWorkout({ id: 'h', startTime: '18:00', durationMin: 60 })] });
     await render(<TodayScreen />);
-    expect(screen.queryByText(/Sin lluvia prevista/)).toBeNull();
-    await openDetails();
-    expect(screen.getByText('Sin lluvia prevista · 14 °C')).toBeTruthy();
+    expect(screen.queryByText(/Sin lluvia prevista|Lluvia/)).toBeNull();
   });
 
   test('indoor sessions and athletes without a forecast see nothing about the weather', async () => {
@@ -196,26 +189,17 @@ describe('Hoy · the weather of the outdoor session', () => {
   });
 });
 
-describe('Hoy · the coach in the session card', () => {
-  test('objective, target line and how it should feel, also when the session has steps', async () => {
+describe('Hoy · the session card', () => {
+  test('summary only: objective, targets and structure live behind "Ver entreno"', async () => {
     mockData = data({ todayWorkouts: [coachedSeries()], thresholds: { lthr: 170, runThresholdPaceSecPerKm: 270 } });
     await render(<TodayScreen />);
+    expect(screen.getByText('Tu próxima sesión')).toBeTruthy();
     expect(screen.queryByText('Subir tu umbral sin pasarte')).toBeNull();
-    await openDetails();
-    expect(screen.getByText('Subir tu umbral sin pasarte')).toBeTruthy();
-    expect(screen.getByText("3×8' Z4 · 162–168 ppm · 4:27–4:44 /km · RPE 7–8")).toBeTruthy();
-    expect(screen.getByText('Fuerte pero controlado')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^Tu entreno de hoy: .*Subir tu umbral sin pasarte\. 3×8' Z4 · 162–168 ppm/ })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver entreno' }));
+    expect(mockRouter.push).toHaveBeenCalledWith(`/workout/${coachedSeries().id}`);
   });
 
-  test('without thresholds the target line is the effort', async () => {
-    mockData = data({ todayWorkouts: [coachedSeries()] });
-    await render(<TodayScreen />);
-    await openDetails();
-    expect(screen.getByText("3×8' Z4 · RPE 7–8")).toBeTruthy();
-  });
-
-  test('"No es mi día" in more options applies the easier version', async () => {
+  test('"No es mi día" in the options applies the easier version', async () => {
     const hero = coachedSeries();
     const patch: WorkoutPatch = { title: 'Rodaje suave', durationMin: 40, intensity: 'endurance', steps: [] };
     mockEasierPatch.mockReturnValue(patch);
@@ -224,19 +208,19 @@ describe('Hoy · the coach in the session card', () => {
     });
     mockData = data({ todayWorkouts: [hero], thresholds: { lthr: 170 } });
     await render(<TodayScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Más opciones: no es mi día, mover o saltar' }));
-    expect(sheet.mock.calls[0]?.[0].options).toEqual(['No es mi día', 'Mover a otro día', 'Saltar', 'Cancelar']);
+    await fireEvent.press(screen.getByRole('button', { name: 'Opciones del entreno' }));
+    expect(sheet.mock.calls[0]?.[0].options).toEqual(['Registrar como hecho', 'No es mi día', 'Mover a otro día', 'Saltar', 'Cancelar']);
     expect(mockEasierPatch).toHaveBeenCalledWith(hero, { lthr: 170 });
     expect(mockActions.easier).toHaveBeenCalledWith(hero, patch);
     sheet.mockRestore();
   });
 
-  test('no easier version: more options only move or skip', async () => {
+  test('no easier version: register as done, move or skip', async () => {
     const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation(() => undefined);
     mockData = data({ todayWorkouts: [coachedSeries()] });
     await render(<TodayScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Más opciones: no es mi día, mover o saltar' }));
-    expect(sheet.mock.calls[0]?.[0].options).toEqual(['Mover a otro día', 'Saltar', 'Cancelar']);
+    await fireEvent.press(screen.getByRole('button', { name: 'Opciones del entreno' }));
+    expect(sheet.mock.calls[0]?.[0].options).toEqual(['Registrar como hecho', 'Mover a otro día', 'Saltar', 'Cancelar']);
     sheet.mockRestore();
   });
 });
@@ -281,7 +265,7 @@ describe('Hoy', () => {
     expect(screen.getByText('Domingo 25 de octubre')).toBeTruthy();
   });
 
-  test("today's session with structure, calendar badge and actions", async () => {
+  test("today's session with time, calendar badge, partner and bell", async () => {
     mockCalendarEnabled = true;
     const hero: Workout = makeWorkout({
       id: 'h',
@@ -294,19 +278,21 @@ describe('Hoy', () => {
     mockData = data({ todayWorkouts: [hero], jointSessions: [session], unread: 3 });
     await render(<TodayScreen />);
     expect(screen.getByText('Rodaje Z2')).toBeTruthy();
-    await openDetails();
-    expect(screen.getByText("10' Calentamiento")).toBeTruthy();
-    expect(screen.getByLabelText('Está en tu calendario')).toBeTruthy();
-    expect(screen.getByLabelText('Quedada con Álex')).toBeTruthy();
+    expect(screen.getByText('En tu calendario')).toBeTruthy();
+    expect(screen.getByText('Con Álex')).toBeTruthy();
     expect(screen.getByLabelText('Avisos, 3 sin leer')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: /^Tu entreno de hoy/ }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver entreno' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/workout/h');
-    expect(screen.queryByRole('button', { name: 'Ha surgido algo' })).toBeNull();
   });
 
-  test('rest day message', async () => {
+  test('a day with no sessions is a free day; a planned rest is a rest day', async () => {
     mockData = data();
     await render(<TodayScreen />);
+    expect(screen.getByText('Hoy tienes el día libre')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir entreno' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/workout/edit?date=2026-10-25');
+    mockData = data({ todayWorkouts: [makeWorkout({ id: 'r', sport: 'rest', title: 'Descanso', durationMin: 0, intensity: 'recovery' })] });
+    await screen.rerender(<TodayScreen />);
     expect(screen.getByText('Hoy toca descanso')).toBeTruthy();
   });
 
@@ -356,32 +342,23 @@ describe('Hoy', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  test('quick actions: check-in, imprevisto and comida', async () => {
+  test('quick actions: coach, sensaciones and imprevisto', async () => {
     mockData = data();
     await render(<TodayScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Hacer el check-in de hoy' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Hablar con mi coach' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/talk');
+    await fireEvent.press(screen.getByRole('button', { name: 'Registrar mis sensaciones de hoy' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/checkin');
     await fireEvent.press(screen.getByRole('button', { name: 'Apuntar un imprevisto' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/event/edit');
-    await fireEvent.press(screen.getByRole('button', { name: 'Apuntar una comida' }));
-    expect(mockRouter.push).toHaveBeenCalledWith('/meal');
   });
 
-  test("today's check-in already saved shows as done and still opens it", async () => {
+  test("today's check-in already saved still opens it to review", async () => {
     mockData = data({ checkinDone: true });
     await render(<TodayScreen />);
-    expect(screen.getByText('Check-in hecho')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Hacer el check-in de hoy' })).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'Check-in de hoy hecho. Revisar' }));
+    expect(screen.queryByRole('button', { name: 'Registrar mis sensaciones de hoy' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Revisar mis sensaciones de hoy' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/checkin');
-  });
-
-  test('no "Comida" tile when the coach bar (with its camera) is inline on Hoy', async () => {
-    mockInlineAccessory = true;
-    mockData = data();
-    await render(<TodayScreen />);
-    expect(screen.getByRole('button', { name: 'Hacer el check-in de hoy' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Apuntar una comida' })).toBeNull();
   });
 
   test('race countdown under the date opens the races list', async () => {

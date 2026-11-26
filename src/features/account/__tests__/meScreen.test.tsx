@@ -124,6 +124,10 @@ jest.mock('@/integrations/calendar/trainingCalendar', () => ({
   }),
 }));
 
+async function openCategory(title: string) {
+  await fireEvent.press(screen.getByRole('button', { name: new RegExp(`^${title}\\.`) }));
+}
+
 function confirmEverything(): void {
   jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons?: AlertButton[]) => {
     buttons?.[1]?.onPress?.();
@@ -153,6 +157,9 @@ describe('Tú', () => {
     expect(screen.getByText('Diego')).toBeTruthy();
     expect(screen.getByText('@diego')).toBeTruthy();
     expect(screen.getByText('Modo demo')).toBeTruthy();
+    expect(screen.queryByText('Borrar cuenta')).toBeNull();
+    expect(screen.queryByLabelText('Informe de cada mañana')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Conexiones\./ }).props.accessibilityState).toMatchObject({ expanded: false });
     // The big race countdown lives on Hoy now.
     expect(screen.queryByText('128 días')).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: /^Diego, @diego, modo demo. Editar perfil/ }));
@@ -164,6 +171,7 @@ describe('Tú', () => {
       { id: 'r1', userId: 'u1', name: 'Valencia', date: addDays(todayISO(), 128), distance: 'olympic', priority: 'A', location: null, goal: null, notes: null, createdAt: '' },
     ];
     await render(<MeScreen />);
+    await openCategory('Entrenamiento');
     expect(screen.getByText('Entrenamiento')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: /^Tu carrera\. Valencia · .* · faltan 128 días/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/races');
@@ -179,6 +187,7 @@ describe('Tú', () => {
     resetMyWhooshForTests();
     await AsyncStorage.removeItem(MYWHOOSH_STORAGE_KEY);
     await render(<MeScreen />);
+    await openCategory('Entrenamiento');
     expect(screen.getByText('En cada sesión de bici te diremos el entrenamiento gratuito de MyWhoosh más parecido')).toBeTruthy();
     const toggle = screen.getByLabelText('Entreno en rodillo con MyWhoosh');
     expect(toggle.props.value).toBe(false);
@@ -191,6 +200,7 @@ describe('Tú', () => {
 
   test('without a race the row asks to add one', async () => {
     await render(<MeScreen />);
+    await openCategory('Entrenamiento');
     await fireEvent.press(screen.getByRole('button', { name: /^Añade tu carrera/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/races');
   });
@@ -201,6 +211,7 @@ describe('Tú', () => {
     ];
     mockData.calendarEnabled = true;
     await render(<MeScreen />);
+    await openCategory('Conexiones');
     expect(screen.getByLabelText(/Garmin: Conectado. Sincronizado hace un momento/)).toBeTruthy();
     expect(screen.getByLabelText(/Calendario: Activado. Tus entrenos en tu calendario · aviso 30 min antes/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Sincronizar' }));
@@ -220,6 +231,7 @@ describe('Tú', () => {
     mockHealth.sources = ['COROS'];
     mockHealth.lastSync = new Date().toISOString();
     await render(<MeScreen />);
+    await openCategory('Conexiones');
     expect(screen.getByLabelText(/COROS: Conectado. Sincronizado hace un momento/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Sincronizar' }));
     await waitFor(() => expect(mockHealth.syncNow).toHaveBeenCalledWith({ days: 28 }));
@@ -232,6 +244,7 @@ describe('Tú', () => {
     mockHealth.enabled = true;
     mockHealth.syncNow.mockResolvedValueOnce({ metricsDays: 0, sleepNights: 0, activitiesFound: 0, workoutsCompleted: 0, activitiesImported: 0, sources: [] });
     await render(<MeScreen />);
+    await openCategory('Conexiones');
     expect(screen.getByLabelText(/^COROS: Esperando datos/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Comprobar' }));
     expect(await screen.findByText(/Aún no vemos datos de COROS: abre la app COROS/)).toBeTruthy();
@@ -242,6 +255,7 @@ describe('Tú', () => {
       { id: 'c', scope: 'ics', label: 'Calendario', prefix: 'rb', createdAt: '2026-10-01T00:00:00Z', lastUsedAt: null, revokedAt: null },
     ];
     await render(<MeScreen />);
+    await openCategory('Conexiones');
     await fireEvent.press(screen.getByLabelText(/^Suscripción de calendario: Activa/));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/calendar-feed');
   });
@@ -252,6 +266,7 @@ describe('Tú', () => {
       { id: 't', scope: 'mcp', label: 'Claude', prefix: 'rb', createdAt: '2026-10-01T00:00:00Z', lastUsedAt: '2026-10-26T10:00:00Z', revokedAt: null },
     ];
     await render(<MeScreen />);
+    await openCategory('Conexiones');
     expect(screen.getByLabelText(/Garmin: Clave caducada/)).toBeTruthy();
     expect(screen.getByLabelText(/Claude: Conectado/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Renovar' }));
@@ -260,6 +275,7 @@ describe('Tú', () => {
 
   test('the morning report toggle saves right away', async () => {
     await render(<MeScreen />);
+    await openCategory('Tu coach');
     await fireEvent(screen.getByLabelText('Informe de cada mañana'), 'valueChange', true);
     await waitFor(() =>
       expect(mockUpdateProfile).toHaveBeenCalledWith({
@@ -270,6 +286,7 @@ describe('Tú', () => {
 
   test('«Al despertar» and its delay save right away; the window lives in Notificaciones', async () => {
     await render(<MeScreen />);
+    await openCategory('Tu coach');
     await fireEvent(screen.getByLabelText('Informe de cada mañana'), 'valueChange', true);
     await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
     await fireEvent.press(screen.getByRole('tab', { name: 'Al despertar' }));
@@ -299,6 +316,7 @@ describe('Tú', () => {
         }),
     );
     await render(<MeScreen />);
+    await openCategory('Tu coach');
     await fireEvent(screen.getByLabelText('Informe de cada mañana'), 'valueChange', true);
     expect(mockUpdateProfile).toHaveBeenCalledTimes(1);
     for (const time of ['07:35', '07:40', '07:45']) await fireEvent.changeText(screen.getByLabelText('Hora del informe'), time);
@@ -321,6 +339,7 @@ describe('Tú', () => {
   test('what the coach knows: one line per fact, add / edit / delete', async () => {
     confirmEverything();
     await render(<MeScreen />);
+    await openCategory('Tu coach');
     // Collapsed: a count and the first fact, so it isn't the heaviest block of the screen.
     const header = screen.getByRole('button', { name: /^Lo que tu coach sabe de ti\. 2 cosas · Vegetariano/ });
     expect(screen.queryByLabelText('Algo que tu coach deba saber')).toBeNull();
@@ -345,6 +364,7 @@ describe('Tú', () => {
 
   test('a duplicate fact is not added twice', async () => {
     await render(<MeScreen />);
+    await openCategory('Tu coach');
     await fireEvent.press(screen.getByRole('button', { name: /^Lo que tu coach sabe de ti/ }));
     await fireEvent.changeText(screen.getByLabelText('Algo que tu coach deba saber'), 'vegetariano');
     await fireEvent.press(screen.getByRole('button', { name: 'Añadir' }));
@@ -360,6 +380,7 @@ describe('Tú', () => {
 
   test('Preferencias opens Notificaciones; Privacidad opens the privacy screen', async () => {
     await render(<MeScreen />);
+    await openCategory('Preferencias');
     await fireEvent.press(screen.getByRole('button', { name: /^Notificaciones/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/notifications');
     await fireEvent.press(screen.getByRole('button', { name: /^Privacidad/ }));
@@ -369,6 +390,7 @@ describe('Tú', () => {
   test('Apariencia switches between automatic, light and dark', async () => {
     resetAppearanceForTests();
     await render(<MeScreen />);
+    await openCategory('Preferencias');
     expect(screen.getByRole('tab', { name: 'Automático' }).props.accessibilityState).toMatchObject({ selected: true });
     expect(screen.getByText('Sigue el modo claro u oscuro de tu iPhone.')).toBeTruthy();
     await fireEvent.press(screen.getByRole('tab', { name: 'Oscuro' }));
@@ -383,6 +405,7 @@ describe('Tú', () => {
   test('sign out asks for confirmation and goes to sign-in', async () => {
     confirmEverything();
     await render(<MeScreen />);
+    await openCategory('Cuenta');
     await fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
     await waitFor(() => expect(mockAuth.signOut).toHaveBeenCalled());
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/sign-in'));
@@ -391,6 +414,7 @@ describe('Tú', () => {
   test('delete account needs two confirmations', async () => {
     confirmEverything();
     await render(<MeScreen />);
+    await openCategory('Cuenta');
     await fireEvent.press(screen.getByRole('button', { name: /Borrar cuenta/ }));
     await waitFor(() => expect(mockAuth.deleteAccount).toHaveBeenCalled());
     expect(Alert.alert).toHaveBeenCalledTimes(2);

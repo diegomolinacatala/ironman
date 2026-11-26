@@ -8,11 +8,13 @@
 import type { EnvReader } from '../secrets.ts';
 
 /**
- * Defaults chosen with live tests on the Workers Free plan (2026-10-27; GLM-5.3 and DeepSeek V4.1
- * are paid-plan only): Nemotron 3 writes the best Spanish JSON fast (~3 s, also used by Tasks);
- * Llama 4 Scout reads meal photos best (~3 s, right meal slot) — Gemma 4 was slower and less exact.
+ * Defaults chosen with live tests on the Workers Free plan. 2026-11-26 (Nemotron 3, the previous
+ * default, was deprecated on 2026-11-20 and every coach call failed): Qwen 3.8 27B answers the real
+ * coach prompt in ~7 s with valid JSON and the right figures (the worker keeps its thinking off: on,
+ * it took 95-120 s); the worker falls back to gpt-oss-120b (~10 s) if a model is retired again.
+ * 2026-10-27: Llama 4 Scout reads meal photos best (~3 s, right meal slot) — Gemma 4 was slower and less exact.
  */
-export const DEFAULT_WORKERS_MODEL = '@cf/nvidia/nemotron-3-120b-a12b';
+export const DEFAULT_WORKERS_MODEL = '@cf/qwen/qwen3.8-27b';
 export const DEFAULT_WORKERS_VISION_MODEL = '@cf/meta/llama-4-scout-17b-16e-instruct';
 /** The worker refuses shorter shared secrets (misconfigured), so they never select it here. */
 export const MIN_WORKER_SECRET_LENGTH = 32;

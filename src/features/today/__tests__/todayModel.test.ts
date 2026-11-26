@@ -126,11 +126,11 @@ describe('refreshSyncFor (pull-to-refresh)', () => {
 
 describe('folded sections of Hoy', () => {
   test('meals summary', () => {
-    expect(mealsSummary([])).toBe('Haz una foto y te calculo kcal e hidratos');
+    expect(mealsSummary([])).toBe('Añade una foto o registra tu comida');
   });
 
   test('tomorrow summary', () => {
-    expect(tomorrowSummary([])).toBe('Descanso');
+    expect(tomorrowSummary([])).toBe('Sin sesiones previstas');
   });
 
   test('race countdown keeps the race name short', () => {

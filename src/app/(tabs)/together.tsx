@@ -7,7 +7,6 @@
  * shared races, feed) so the screen stays calm.
  */
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/data/context';
@@ -27,29 +26,14 @@ import { OpenQuedadasSection } from '@/features/together/OpenQuedadasSection';
 import { SharedRacesCard } from '@/features/together/SharedRacesCard';
 import { TogetherPanel } from '@/features/together/TogetherPanel';
 import { errorMessage } from '@/lib/logger';
-import { Button, Disclosure, ErrorNotice, Loading, Screen, space } from '@/ui';
+import { Disclosure, ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
 
-function overlineFor(count: number): string {
-  if (count === 0) return 'Entrena en compañía';
+function overlineFor(count: number): string | undefined {
+  if (count === 0) return undefined;
   return count === 1 ? '1 amigo' : `${count} amigos`;
 }
 
 const goAdd = () => router.push('/friends/add');
-
-/** The screen's single primary action plus "Añadir amigo". */
-function QuickActions({ selected }: { selected: Friend | null }) {
-  return (
-    <View style={styles.actions}>
-      <Button
-        label="Proponer quedada"
-        icon="send"
-        onPress={() => openJointNew(selected ? { friendId: selected.profile.id } : {})}
-        style={styles.flex}
-      />
-      <Button label="Añadir amigo" icon="add" variant="secondary" onPress={goAdd} />
-    </View>
-  );
-}
 
 interface FriendBlockProps {
   friends: readonly Friend[];
@@ -57,32 +41,26 @@ interface FriendBlockProps {
   onSelect: (id: UUID) => void;
   myName: string;
   today: ISODate;
+  showComparison: boolean;
 }
 
 /** "Tú y Álex": pick a friend (when there are several), then compare, Huecos, Oportunidades. */
-function FriendBlock({ friends, selected, onSelect, myName, today }: FriendBlockProps) {
+function FriendBlock({ friends, selected, onSelect, myName, today, showComparison }: FriendBlockProps) {
   return (
-    <Disclosure
-      variant="plain"
-      title={`Tú y ${firstName(selected.profile.displayName)}`}
-      summary="Huecos comunes, oportunidades y volumen"
-      storageKey="together.compare">
+    <View style={styles.friends}>
+      <SectionHeader title="Tus amigos" action={{ label: 'Añadir amigo', onPress: goAdd }} />
       {friends.length > 1 ? <FriendSelector friends={friends} selectedId={selected.profile.id} onSelect={onSelect} /> : null}
-      <TogetherPanel friend={selected} myName={myName} today={today} />
-    </Disclosure>
+      <Disclosure
+        key={showComparison ? selected.profile.id : 'default'}
+        title={`Buscar un hueco con ${firstName(selected.profile.displayName)}`}
+        summary="Horarios y entrenos que os encajan"
+        icon="calendarBadge"
+        defaultOpen={showComparison}
+        storageKey={showComparison ? undefined : 'together.compare'}>
+        <TogetherPanel friend={selected} myName={myName} today={today} />
+      </Disclosure>
+    </View>
   );
-}
-
-/** Selected friend: `?friend=` deep link, else the last pick, else the first friend. */
-function useSelectedFriend(accepted: readonly Friend[]) {
-  const params = useLocalSearchParams<{ friend?: string }>();
-  const [picked, setPicked] = useState<UUID | null>(params.friend ?? null);
-  // A tab stays mounted: later deep links (`/together?friend=…`) must still change the selection.
-  useEffect(() => {
-    if (params.friend) setPicked(params.friend);
-  }, [params.friend]);
-  const selected = accepted.find((f) => f.profile.id === picked) ?? accepted[0] ?? null;
-  return { selected, setPicked };
 }
 
 export default function TogetherScreen() {
@@ -95,7 +73,10 @@ export default function TogetherScreen() {
   const notifications = useNotifications();
   const joint = useJointSessions(upcomingJointRange(today));
   const { accepted, incoming, outgoing } = splitFriends(friends.data);
-  const { selected, setPicked } = useSelectedFriend(accepted);
+  const { friend } = useLocalSearchParams<{ friend?: string }>();
+  const picked = accepted.find((f) => f.profile.id === friend);
+  const selected = picked ?? accepted[0];
+  const invitee = picked ?? (accepted.length === 1 ? selected : undefined);
   const bottomPadding = useTabBottomPadding();
   const hasFriends = accepted.length > 0;
 
@@ -128,21 +109,21 @@ export default function TogetherScreen() {
         <NoFriendsState username={profile.data?.username ?? null} pendingOutgoing={outgoing.length} onAdd={goAdd} />
       ) : null}
 
-      {hasFriends ? <QuickActions selected={selected} /> : null}
-      {hasFriends ? <JointSessionsSection myId={myId} today={today} /> : null}
-      {hasFriends ? <OpenQuedadasSection today={today} /> : null}
+      <JointSessionsSection myId={myId} today={today} onPropose={hasFriends ? () => openJointNew(invitee ? { friendId: invitee.profile.id } : {}) : undefined} />
       {selected ? (
         <FriendBlock
           friends={accepted}
           selected={selected}
-          onSelect={setPicked}
+          onSelect={(id) => router.setParams({ friend: id })}
+          showComparison={Boolean(picked)}
           myName={profile.data?.displayName ?? 'Yo'}
           today={today}
         />
       ) : null}
+      {hasFriends ? <OpenQuedadasSection today={today} /> : null}
       {hasFriends ? <SharedRacesCard today={today} folded /> : null}
       {hasFriends ? (
-        <Disclosure variant="plain" title="Actividad" summary="Lo último de tus amigos" storageKey="together.feed">
+        <Disclosure icon="pulse" title="Actividad" summary="Los últimos entrenos de tus amigos" storageKey="together.feed">
           <FeedSection myId={myId} today={today} hideHeader />
         </Disclosure>
       ) : null}
@@ -151,6 +132,5 @@ export default function TogetherScreen() {
 }
 
 const styles = StyleSheet.create({
-  actions: { flexDirection: 'row', gap: space.sm },
-  flex: { flex: 1 },
+  friends: { gap: space.md },
 });

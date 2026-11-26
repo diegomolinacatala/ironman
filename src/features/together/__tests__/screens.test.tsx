@@ -97,6 +97,9 @@ function makeRepo() {
       friend(),
       friend({ friendshipId: 'fs-marta', status: 'pending', direction: 'incoming' }, { id: 'u-marta', username: 'marta', displayName: 'Marta' }),
     ]),
+    listOpenJointSessions: jest.fn(async (): Promise<JointSession[]> => []),
+    listRaces: jest.fn(async () => []),
+    listFriendRaces: jest.fn(async () => []),
     listFeed: jest.fn(async () => [feedItem()]),
     toggleKudos: jest.fn(async () => undefined),
     listNotifications: jest.fn(async () => [notification({ data: { url: '/joint/j-invite' }, createdAt: new Date().toISOString() })]),
@@ -145,7 +148,7 @@ describe('Juntos', () => {
   test('shows friends, requests, quedada invites and the feed', async () => {
     await render(<TogetherScreen />, { wrapper: Providers });
     await fireEvent.press(await screen.findByRole('button', { name: /^Actividad/ }));
-    await fireEvent.press(await screen.findByRole('button', { name: /^Tú y Álex/ }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Buscar un hueco con Álex/ }));
     expect(await screen.findByText('Álex completó Rodaje Z2')).toBeTruthy();
     // v2: a stack screen; the title "Juntos" lives in the native header (root stack).
     expect(screen.getByText('1 amigo')).toBeTruthy();
@@ -156,7 +159,7 @@ describe('Juntos', () => {
 
   test('actionable blocks come first, each with a sentence-case header; the rest is folded', async () => {
     await render(<TogetherScreen />, { wrapper: Providers });
-    await fireEvent.press(await screen.findByRole('button', { name: /^Tú y Álex/ }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Buscar un hueco con Álex/ }));
     await fireEvent.press(await screen.findByRole('button', { name: /^Actividad/ }));
     await screen.findByText('Álex completó Rodaje Z2');
     await screen.findByText('Huecos comunes');
@@ -164,7 +167,7 @@ describe('Juntos', () => {
       const children = h.props.children as unknown;
       return Array.isArray(children) ? children.join('') : String(children);
     });
-    const order = ['Solicitud de amistad', 'Próximas quedadas', 'Huecos comunes'].map((title) => headers.indexOf(title));
+    const order = ['Solicitud de amistad', 'Te han invitado', 'Huecos comunes'].map((title) => headers.indexOf(title));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(headers.filter((h) => h.length > 3 && h === h.toUpperCase())).toEqual([]);

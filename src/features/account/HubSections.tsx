@@ -14,7 +14,7 @@ import { GroupDivider, LinkRows, SettingsGroup } from './SettingsGroup';
 export function TrainingGroup({ profile, races }: { profile: Profile; races: readonly Race[] | undefined }) {
   const race = raceRow(races, todayISO());
   return (
-    <SettingsGroup title="Entrenamiento">
+    <SettingsGroup title="Entrenamiento" icon="flag" summary="Carreras, horarios y perfil deportivo">
       <LinkRows
         items={[
           { icon: 'flag', title: race.title, subtitle: race.subtitle, href: '/races', brand: true },
@@ -33,7 +33,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
 /** Preferencias: light / dark / automatic, notifications and privacy (one group, not three). */
 export function PreferencesGroup() {
   return (
-    <SettingsGroup title="Preferencias">
+    <SettingsGroup title="Preferencias" icon="settings" summary="Apariencia, notificaciones y privacidad">
       <AppearancePicker />
       <GroupDivider />
       <LinkRows

@@ -112,7 +112,7 @@ const light = {
   borderStrong: '#C9C6BC',
   text: brand.ink,
   textMuted: '#555D6B',
-  textFaint: '#8A909B',
+  textFaint: '#606875',
   inverseBg: brand.ink,
   inverseText: brand.paper,
   /** Primary action fill (buttons, selected chips, active states). */
@@ -145,7 +145,7 @@ const dark: typeof light = {
   borderStrong: '#3A4350',
   text: '#ECEFF3',
   textMuted: '#A2AAB5',
-  textFaint: '#6E7783',
+  textFaint: '#949EAC',
   inverseBg: '#ECEFF3',
   inverseText: brand.night,
   accent: brand.sky,

@@ -15,7 +15,7 @@ function training(workouts: readonly Workout[]): Workout[] {
 /** "Natación fondo 6×300 m · Carrera tempo 2×12'" → titles, or "Descanso" / "Libre". */
 export function daySessionsLine(workouts: readonly Workout[], isPast: boolean): string {
   const sessions = training(workouts);
-  if (sessions.length === 0) return isPast ? 'Sin sesiones' : 'Libre';
+  if (sessions.length === 0) return workouts.length ? 'Descanso' : isPast ? 'Sin sesiones' : 'Libre';
   return sessions.map((w) => w.title).join(' · ');
 }
 
@@ -25,19 +25,21 @@ export function dayDurationLabel(workouts: readonly Workout[]): string | null {
   return minutes > 0 ? formatDuration(minutes) : null;
 }
 
-export type DayState = 'done' | 'partial' | 'missed' | 'planned' | 'empty';
+export type DayState = 'done' | 'partial' | 'missed' | 'planned' | 'adjusted' | 'empty';
 
 /** Done when every session is completed; missed when a past day has sessions left. */
 export function dayState(workouts: readonly Workout[], date: ISODate, today: ISODate): DayState {
   const sessions = training(workouts);
   if (sessions.length === 0) return 'empty';
-  const completed = sessions.filter((w) => w.status === 'completed').length;
-  if (completed === sessions.length) return 'done';
+  const active = sessions.filter((w) => w.status !== 'skipped');
+  if (active.length === 0) return 'adjusted';
+  const completed = active.filter((w) => w.status === 'completed').length;
+  if (completed === active.length) return 'done';
   if (date < today) return completed > 0 ? 'partial' : 'missed';
   return completed > 0 ? 'partial' : 'planned';
 }
 
-/** Open by default: today, and the next day when today is already done or empty. */
+/** Open today's agenda by default. */
 export function dayOpenByDefault(date: ISODate, today: ISODate): boolean {
   return date === today;
 }

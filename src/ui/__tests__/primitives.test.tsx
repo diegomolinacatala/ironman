@@ -37,6 +37,7 @@ describe('colour helpers', () => {
     expect(contrastRatio(c.accentInk, c.surface)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(c.onAccentSoft, c.accentSoft)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(c.textMuted, c.surfaceAlt)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(c.textFaint, c.surfaceAlt)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(c.danger, c.surface)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(c.text, c.surface)).toBeGreaterThanOrEqual(4.5);
   });
@@ -54,7 +55,7 @@ describe('Button', () => {
     await render(<Button label="Guardar" onPress={() => {}} size="lg" />);
     const style = StyleSheet.flatten(screen.getByRole('button', { name: 'Guardar' }).props.style);
     expect(style.borderRadius).toBe(12);
-    expect(style.height).toBe(52);
+    expect(style.minHeight).toBe(52);
   });
 
   test('calls onPress and exposes the disabled state', async () => {

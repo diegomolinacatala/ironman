@@ -21,7 +21,7 @@ En v2 (docs/V2.md) el coach con IA está encendido en la app (`EXPO_PUBLIC_AI_CO
 **no cuesta nada**: `coach`, `briefing` y `meal` usan **Cloudflare Workers AI** (plan gratuito, 10.000
 neuronas/día) a través de nuestro worker `ironman-ai` (`cloudflare/ai`). Proveedor por orden:
 1. Workers AI si están `AI_WORKER_URL` y `AI_WORKER_SECRET` (modelo `AI_MODEL` para coach e informe y
-   `AI_VISION_MODEL` para fotos; por defecto `@cf/nvidia/nemotron-3-120b-a12b` para texto y `@cf/meta/llama-4-scout-17b-16e-instruct` para fotos);
+   `AI_VISION_MODEL` para fotos; por defecto `@cf/qwen/qwen3.8-27b` para texto y `@cf/meta/llama-4-scout-17b-16e-instruct` para fotos);
 2. Claude (`claude-opus-5-5`, de pago) si está `ANTHROPIC_API_KEY` **y además** `AI_ALLOW_PAID=1` (opcional, se conserva como alternativa; sin ese permiso nunca se paga, aunque falten los secretos del worker);
 3. ninguno → `503 ai_unavailable` y la app usa el motor de reglas / el informe y la estimación locales
    (`briefing` devuelve igualmente el informe ya guardado).
@@ -82,7 +82,7 @@ Los inyecta Supabase automáticamente: `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` (o
 | `APPLE_CLIENT_ID` | Igual que arriba | Bundle id de la app: `io.github.diegomolinacatala.ironman`. Si pones una lista separada por comas se usa la primera. |
 | `AI_WORKER_URL` | Sí para la IA gratuita de v2 (`coach`, `briefing`, `meal`) y la voz natural (`speech`) | URL del worker `ironman-ai` (`https://ironman-ai.<tu-subdominio>.workers.dev`, la que imprime `wrangler deploy`). |
 | `AI_WORKER_SECRET` | Igual que arriba | El mismo valor que el secreto `AI_SHARED_SECRET` del worker, **mínimo 32 caracteres** (p. ej. `openssl rand -hex 32`); más corto se ignora (y el worker responde `500 misconfigured`). |
-| `AI_MODEL` | No (por defecto `@cf/nvidia/nemotron-3-120b-a12b`) | Modelo de Workers AI para `coach` y `briefing`. Permitidos por el worker (todos del plan gratuito): `@cf/nvidia/nemotron-3-120b-a12b`, `@cf/meta/llama-4-scout-17b-16e-instruct`, `@cf/google/gemma-4-26b-a4b-it`. |
+| `AI_MODEL` | No (por defecto `@cf/qwen/qwen3.8-27b`) | Modelo de Workers AI para `coach` y `briefing`. Permitidos por el worker (todos del plan gratuito): `@cf/qwen/qwen3.8-27b`, `@cf/openai/gpt-oss-120b`, `@cf/meta/llama-4-scout-17b-16e-instruct`, `@cf/google/gemma-4-26b-a4b-it`. Si Cloudflare retira un modelo, el worker reintenta una vez con `gpt-oss-120b` (texto) o Llama 4 Scout (fotos). |
 | `AI_VISION_MODEL` | No (por defecto `@cf/meta/llama-4-scout-17b-16e-instruct`) | Modelo de Workers AI para las fotos de `meal` (debe aceptar imágenes). |
 | `SPEECH_USER_DAILY_CHARS` | No (por defecto `15000`) | Caracteres (de cualquier voz) que un usuario puede enviar a `speech` en 24 h (ventana móvil). Al llegar, `429 rate_limited` y la app usa la voz del iPhone. |
 | `SPEECH_USER_PREMIUM_DAILY_CHARS` | No (por defecto `1800`) | Parte del presupuesto premium que puede gastar **un** usuario por día UTC; pasado, ese usuario recibe la voz básica y el resto sigue teniendo premium. |
@@ -107,7 +107,7 @@ npx supabase secrets set GARMIN_KEY_SECRET="$(openssl rand -base64 48)"
 npx supabase secrets set APPLE_TEAM_ID=ABCDE12345 APPLE_KEY_ID=XYZ987WVU1 APPLE_CLIENT_ID=io.github.diegomolinacatala.ironman
 npx supabase secrets set APPLE_PRIVATE_KEY="$(cat AuthKey_XYZ987WVU1.p8)"
 npx supabase secrets set AI_WORKER_URL=https://ironman-ai.<tu-subdominio>.workers.dev AI_WORKER_SECRET=<mismo valor que AI_SHARED_SECRET>
-npx supabase secrets set AI_MODEL=@cf/nvidia/nemotron-3-120b-a12b AI_VISION_MODEL=@cf/meta/llama-4-scout-17b-16e-instruct   # opcional
+npx supabase secrets set AI_MODEL=@cf/qwen/qwen3.8-27b AI_VISION_MODEL=@cf/meta/llama-4-scout-17b-16e-instruct   # opcional
 npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-... AI_ALLOW_PAID=1   # opcional (de pago), solo sin worker
 npx supabase secrets list
 ```

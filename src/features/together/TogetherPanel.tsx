@@ -9,7 +9,7 @@ import { addDays, startOfWeek } from '@/domain/dates';
 import type { Friend, ISODate } from '@/domain/types';
 import { firstName } from '@/features/social/friendModel';
 import { errorMessage } from '@/lib/logger';
-import { ErrorNotice, Loading, SectionHeader, Segmented, space } from '@/ui';
+import { Disclosure, ErrorNotice, Loading, SectionHeader, Segmented, space } from '@/ui';
 
 import { CommonSlotsList } from './CommonSlotsList';
 import { CompactWeekCompare } from './CompactWeekCompare';
@@ -64,32 +64,19 @@ export function TogetherPanel({ friend, myName, today }: TogetherPanelProps) {
       ) : null}
       {!data.isLoading && !data.error ? (
         <>
-          <CompactWeekCompare
-            days={data.days}
-            myName={myName}
-            friendName={name}
-            onPress={() => openFriendWeek(friendId, weekStart)}
-          />
-          <VisibilityNotice friendName={name} visibility={data.visibility} />
-          <WeekVolumeCompare
-            volumes={weekVolumes(data.myWorkouts, data.friendItems, data.visibility)}
-            myName="Tú"
-            friendName={name}
-          />
-
           <SectionHeader title="Huecos comunes" action={{ label: 'Ver semana', onPress: () => openFriendWeek(friendId, weekStart) }} />
           <CommonSlotsList
             slots={data.slots}
             today={today}
             friendName={name}
             onPropose={(slot) => openJointNew(prefillFromSlot(slot, friendId))}
-            maxDays={4}
+            maxDays={2}
           />
 
           {opportunities.length > 0 ? (
             <>
               <SectionHeader
-                title="Oportunidades"
+                title="Entrenos compatibles"
                 action={
                   data.opportunities.length > MAX_OPPORTUNITIES
                     ? { label: `Ver las ${data.opportunities.length}`, onPress: () => openFriendWeek(friendId, weekStart) }
@@ -106,6 +93,20 @@ export function TogetherPanel({ friend, myName, today }: TogetherPanelProps) {
               ))}
             </>
           ) : null}
+          <Disclosure variant="plain" icon="week" title="Comparar la semana" summary="Calendarios y volumen de entrenamiento">
+            <CompactWeekCompare
+              days={data.days}
+              myName={myName}
+              friendName={name}
+              onPress={() => openFriendWeek(friendId, weekStart)}
+            />
+            <VisibilityNotice friendName={name} visibility={data.visibility} />
+            <WeekVolumeCompare
+              volumes={weekVolumes(data.myWorkouts, data.friendItems, data.visibility)}
+              myName="Tú"
+              friendName={name}
+            />
+          </Disclosure>
         </>
       ) : null}
     </View>

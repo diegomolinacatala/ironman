@@ -106,7 +106,7 @@ describe('Semana', () => {
     const today = todayISO();
     mockData = data({ workouts: [makeWorkout({ id: 'w-1', date: today })], summary: { ...emptySummary, sessions: 1 } });
     await render(<WeekScreen />);
-    let pick = 'Imprevisto (pádel, viaje, lesión…)';
+    let pick = 'Imprevisto';
     const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation((options, callback) => {
       callback((options.options as string[]).indexOf(pick));
     });
@@ -127,6 +127,8 @@ describe('Semana', () => {
   test('today is highlighted and headed in sentence case', async () => {
     mockData = data();
     await render(<WeekScreen />);
+    expect(screen.queryByTestId('day-today')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver días de la semana' }));
     expect(screen.getByTestId('day-today')).toBeTruthy();
     expect(screen.getByText(/^Hoy · /)).toBeTruthy();
   });
@@ -163,6 +165,7 @@ describe('Semana', () => {
     await render(<WeekScreen />);
     // Folded day: the title is in the summary line, not in a card.
     expect(screen.queryByRole('button', { name: /^Natación técnica/ })).toBeNull();
+    if (other < today) await fireEvent.press(screen.getByRole('button', { name: /^Días anteriores/ }));
     await fireEvent.press(screen.getByRole('button', { name: /Natación técnica\. 45'/ }));
     expect(screen.getAllByText(/Natación técnica/).length).toBeGreaterThan(0);
   });

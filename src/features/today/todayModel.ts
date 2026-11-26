@@ -124,7 +124,7 @@ export function refreshSyncFor({ watchBrand, garminConnected, healthReady }: Ref
 
 /** "520 kcal · 1 comida", or a nudge when nothing is logged yet. */
 export function mealsSummary(meals: readonly NutritionLog[]): string {
-  if (meals.length === 0) return 'Haz una foto y te calculo kcal e hidratos';
+  if (meals.length === 0) return 'Añade una foto o registra tu comida';
   const totals = mealTotals(meals);
   const count = meals.length === 1 ? '1 comida' : `${meals.length} comidas`;
   return totals.kcal != null ? `${formatThousands(totals.kcal)} kcal · ${count}` : count;
@@ -133,7 +133,7 @@ export function mealsSummary(meals: readonly NutritionLog[]): string {
 /** "Descanso", "Bici larga Z2 · 2h 30'" or "2 sesiones · 2h 10'". */
 export function tomorrowSummary(workouts: readonly Workout[]): string {
   const training = workouts.filter((w) => w.sport !== 'rest');
-  if (training.length === 0) return 'Descanso';
+  if (training.length === 0) return workouts.length ? 'Descanso' : 'Sin sesiones previstas';
   const minutes = training.reduce((sum, w) => sum + (w.durationMin ?? 0), 0);
   if (training.length === 1) return `${training[0]?.title ?? 'Entreno'} · ${formatDuration(minutes)}`;
   return `${training.length} sesiones · ${formatDuration(minutes)}`;

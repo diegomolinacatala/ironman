@@ -42,14 +42,12 @@ beforeEach(() => {
 });
 
 describe('sign-in', () => {
-  test('shows the calm brand hero: mark, sentence-case wordmark and value points', async () => {
+  test('shows the calm brand hero: mark, sentence-case wordmark and a one-line promise', async () => {
     await render(<SignInScreen />);
     expect(screen.getByRole('header', { name: 'Road to Ironman' })).toBeTruthy();
     expect(screen.getByTestId('brand-mark', { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByText('Tu coach de bolsillo para el triatlón')).toBeTruthy();
-    for (const point of ['Lee tu Garmin o COROS', 'Vive en tu calendario', 'Le hablas y se adapta']) {
-      expect(screen.getByText(point)).toBeTruthy();
-    }
+    expect(screen.getByText('Tu plan de triatlón, día a día.')).toBeTruthy();
+    expect(screen.queryByText('Le hablas y se adapta')).toBeNull();
     // The retired race-bib identity: no all-caps wordmark, no numbered lime list.
     expect(screen.queryByText('IRONMAN')).toBeNull();
     expect(screen.queryByText('01')).toBeNull();

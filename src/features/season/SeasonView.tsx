@@ -1,13 +1,12 @@
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
 
+import { addDays, formatDayMedium } from '@/domain/dates';
 import type { SeasonWeek } from '@/domain/season';
 import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
-import { Appear } from '@/features/onboarding/Appear';
 import { PlanViewSwitch } from '@/features/week/PlanViewSwitch';
 import { errorMessage } from '@/lib/logger';
-import { Button, EmptyState, ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
+import { Button, Disclosure, EmptyState, ErrorNotice, Loading, Screen } from '@/ui';
 
 import { AdjustWeekSheet, type AdjustRequest } from './AdjustWeekSheet';
 import { SeasonHero } from './SeasonHero';
@@ -37,7 +36,6 @@ export function SeasonView() {
 
   return (
     <Screen
-      overline="Temporada"
       title="Plan"
       onRefresh={() => void data.refresh()}
       refreshing={data.isRefreshing}
@@ -64,32 +62,36 @@ function SeasonBody({ data, onAdjust }: { data: SeasonData; onAdjust: (week: Sea
       <EmptyState
         icon="profile"
         title="Completa tu perfil"
-        message="Con tus deportes y tu nivel preparamos el plan general hasta tu carrera; las horas salen de tu calendario."
+        message="Indica tus deportes y tu nivel para preparar las semanas hasta tu carrera."
         action={<Button label="Tu perfil" variant="secondary" onPress={() => router.push('/settings/profile')} />}
       />
     );
   }
   if (!season) return error;
+  const current = season.weeks.find((week) => week.isCurrent);
+  const future = season.weeks.filter((week) => !week.isCurrent);
+  const renderWeek = (week: SeasonWeek) => (
+    <SeasonWeekRow
+      key={week.weekStart}
+      week={week}
+      sessions={data.sessions[week.weekStart] ?? 0}
+      keySessions={data.keySessions[week.weekStart] ?? NO_KEY_SESSIONS}
+      onOpen={openWeek}
+      onAdjust={onAdjust}
+    />
+  );
   return (
     <>
       {error}
-      <Appear>
-        <SeasonHero season={season} today={data.today} />
-      </Appear>
-      {groupSeasonBlocks(season.weeks).map((block, index) => (
-        <Appear key={block.id} index={index + 1} style={styles.block}>
-          <SectionHeader title={block.title} />
-          {block.weeks.map((week) => (
-            <SeasonWeekRow
-              key={week.weekStart}
-              week={week}
-              sessions={data.sessions[week.weekStart] ?? 0}
-              keySessions={data.keySessions[week.weekStart] ?? NO_KEY_SESSIONS}
-              onOpen={openWeek}
-              onAdjust={onAdjust}
-            />
-          ))}
-        </Appear>
+      <SeasonHero season={season} today={data.today} />
+      {current ? renderWeek(current) : null}
+      {groupSeasonBlocks(future).map((block) => (
+        <Disclosure
+          key={block.weeks[0]!.weekStart}
+          title={block.title}
+          summary={`${formatDayMedium(block.weeks[0]!.weekStart)} – ${formatDayMedium(addDays(block.weeks[block.weeks.length - 1]!.weekStart, 6))}`}>
+          {block.weeks.map(renderWeek)}
+        </Disclosure>
       ))}
       <Button
         label="Hablar del plan con tu coach"
@@ -102,6 +104,3 @@ function SeasonBody({ data, onAdjust }: { data: SeasonData; onAdjust: (week: Sea
   );
 }
 
-const styles = StyleSheet.create({
-  block: { gap: space.md },
-});

@@ -9,7 +9,7 @@ import { MorningSection } from '@/features/account/MorningSection';
 import { ProfileHero } from '@/features/account/ProfileHero';
 import { GroupDivider, SettingsGroup } from '@/features/account/SettingsGroup';
 import { errorMessage } from '@/lib/logger';
-import { EmptyState, ErrorNotice, Loading, Screen } from '@/ui';
+import { EmptyState, ErrorNotice, GroupedList, Loading, Screen } from '@/ui';
 
 /**
  * Tú: the settings hub — who you are, then grouped lists (Entrenamiento, Tu coach,
@@ -56,16 +56,18 @@ export default function MeScreen() {
   return (
     <Screen title="Tú" onRefresh={refresh} refreshing={profile.isRefetching} contentStyle={contentStyle}>
       <ProfileHero profile={me} isDemo={isDemo} />
-      <TrainingGroup profile={me} races={races.data} />
-      <SettingsGroup title="Tu coach">
-        <MorningSection profile={me} />
-        <GroupDivider />
-        <CoachVoiceRow />
-        <GroupDivider />
-        <CoachNotesSection notes={me.coachNotes} />
-      </SettingsGroup>
-      <ConnectionsSection profile={me} />
-      <PreferencesGroup />
+      <GroupedList>
+        <TrainingGroup profile={me} races={races.data} />
+        <ConnectionsSection profile={me} />
+        <SettingsGroup title="Tu coach" icon="coach" summary="Informe de la mañana, voz y notas">
+          <MorningSection profile={me} />
+          <GroupDivider />
+          <CoachVoiceRow />
+          <GroupDivider />
+          <CoachNotesSection notes={me.coachNotes} />
+        </SettingsGroup>
+        <PreferencesGroup />
+      </GroupedList>
       <AccountActions isDemo={isDemo} />
     </Screen>
   );

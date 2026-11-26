@@ -97,8 +97,7 @@ export function Segmented<T extends string>({ options, value, onChange, accessib
             <Text
               variant="caption"
               color={selected ? 'text' : 'textMuted'}
-              style={selected ? styles.segmentSelected : undefined}
-              numberOfLines={1}>
+              style={[styles.segmentLabel, selected && styles.segmentSelected]}>
               {option.label}
             </Text>
           </Pressable>
@@ -216,7 +215,9 @@ const styles = StyleSheet.create({
   segmented: { flexDirection: 'row', borderRadius: radius.pill, padding: 3 },
   segment: {
     flex: 1,
-    height: 34,
+    minHeight: 44,
+    paddingHorizontal: space.xs,
+    paddingVertical: space.xs,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -224,6 +225,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   segmentSelected: { fontFamily: fonts.bodySemibold },
+  segmentLabel: { textAlign: 'center' },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',

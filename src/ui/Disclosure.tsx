@@ -84,11 +84,11 @@ export function Disclosure({
           </View>
         ) : null}
         <View style={styles.text}>
-          <Text variant={card ? 'bodyStrong' : 'heading'} numberOfLines={1}>
+          <Text variant={card ? 'bodyStrong' : 'heading'}>
             {title}
           </Text>
           {summary ? (
-            <Text variant="caption" color="textMuted" numberOfLines={open ? 2 : 1}>
+            <Text variant="caption" color="textMuted">
               {summary}
             </Text>
           ) : null}

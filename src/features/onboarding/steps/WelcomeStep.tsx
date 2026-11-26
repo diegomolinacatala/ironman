@@ -1,37 +1,29 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
 
 import { useUpdateProfile } from '@/data/queries';
 import type { Profile } from '@/domain/types';
 import { errorMessage, logger } from '@/lib/logger';
-import { ErrorNotice, TextField, haptics, space } from '@/ui';
+import { ErrorNotice, TextField, haptics } from '@/ui';
 
 import { Appear } from '../Appear';
-import { ValueLine } from '../GuideParts';
-import { NAME_MAX, nameError, welcomePatches, welcomeWatchValue } from '../onboardingModel';
+import { NAME_MAX, nameError, welcomePatches } from '../onboardingModel';
 import { StepLayout, type StepNav } from '../StepLayout';
-
-const MORE_VALUES = [
-  { icon: 'calendarCheck', title: 'Vive en tu calendario', text: 'Tus entrenos aparecen entre tus planes, con aviso.' },
-  { icon: 'mic', title: 'Le hablas y se adapta', text: 'Cuéntale un imprevisto y recoloca la semana.' },
-] as const;
 
 export interface WelcomeStepProps {
   nav: StepNav;
   profile: Profile;
 }
 
-/** Step 1: name (prefilled) + what the app does in three lines. */
+/** The first step only asks for the name, prefilled when available. */
 export function WelcomeStep({ nav, profile }: WelcomeStepProps) {
   const update = useUpdateProfile();
   const [name, setName] = useState(profile.displayName ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const invalid = nameError(name);
-  const values = [{ icon: 'watch' as const, ...welcomeWatchValue(profile.watchBrand) }, ...MORE_VALUES];
 
   const onNext = async () => {
-    if (invalid) return;
+    if (invalid || saving) return;
     setSaving(true);
     setError(null);
     const attempts = welcomePatches(profile, name);
@@ -75,16 +67,8 @@ export function WelcomeStep({ nav, profile }: WelcomeStepProps) {
           onSubmitEditing={() => void onNext()}
         />
       </Appear>
-      <View style={styles.values}>
-        {values.map((v, i) => (
-          <ValueLine key={v.title} icon={v.icon} title={v.title} text={v.text} index={i + 2} />
-        ))}
-      </View>
       {error ? <ErrorNotice message={error} /> : null}
     </StepLayout>
   );
 }
 
-const styles = StyleSheet.create({
-  values: { gap: space.lg },
-});

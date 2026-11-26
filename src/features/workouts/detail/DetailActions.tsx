@@ -2,83 +2,62 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import type { Workout } from '@/domain/types';
-import { Button, Card, Divider, ListRow, space } from '@/ui';
+import { Button, space } from '@/ui';
 
+import { useActionSheet, type SheetAction } from '../actionSheet';
 import { leaveTo } from '../ModalClose';
 import type { WorkoutActions } from '../useWorkoutActions';
 
-export interface DetailActionsProps {
+interface DetailActionsProps {
   workout: Workout;
   actions: WorkoutActions;
   onComplete: () => void;
   onMove: () => void;
 }
 
-/** Divider inset that lines up with `ListRow` text (padding 4 + icon tile 32 + gap 12). */
-const LIST_ICON_INSET = 48;
-
-/** Primary actions (Hecho / Saltar / Mover or Reabrir) + secondary list. */
 export function DetailActions({ workout, actions, onComplete, onMove }: DetailActionsProps) {
-  const isPlanned = workout.status === 'planned';
-  const isRest = workout.sport === 'rest';
+  const sheet = useActionSheet();
+  const planned = workout.status === 'planned';
+  const canComplete = planned && workout.sport !== 'rest';
+
+  const openOptions = () => {
+    const options: SheetAction[] = [
+      { label: 'Editar', icon: 'edit', onPress: () => router.push(`/workout/edit?id=${workout.id}`) },
+    ];
+    if (planned) options.push({ label: 'Mover', icon: 'move', onPress: onMove });
+    if (canComplete) options.push({ label: 'Saltar', icon: 'skip', onPress: () => void actions.skip(workout) });
+    if (!planned) options.push({ label: 'Reabrir entreno', icon: 'undo', onPress: () => void actions.reset(workout) });
+    if (canComplete && !workout.jointSessionId) {
+      options.push({ label: 'Invitar a un amigo', icon: 'together', onPress: () => actions.invite(workout) });
+    }
+    options.push(
+      {
+        label: 'Duplicar', icon: 'copy', onPress: async () => {
+          const copy = await actions.duplicate(workout);
+          if (copy) router.push(`/workout/${copy.id}`);
+        },
+      },
+      {
+        label: 'Borrar', icon: 'trash', destructive: true, onPress: async () => {
+          if (await actions.remove(workout)) leaveTo('/today');
+        },
+      },
+    );
+    sheet.open({ title: workout.title, actions: options });
+  };
+
   return (
-    <View style={styles.root}>
-      {isPlanned && !isRest ? (
-        <>
-          <Button label="Hecho" icon="check" onPress={onComplete} size="lg" fullWidth />
-          <View style={styles.row}>
-            <Button label="Saltar" icon="skip" variant="secondary" onPress={() => void actions.skip(workout)} style={styles.flex} />
-            <Button label="Mover" icon="move" variant="secondary" onPress={onMove} style={styles.flex} />
-          </View>
-        </>
+    <View style={styles.row}>
+      {canComplete ? (
+        <Button label="Registrar entreno" icon="check" onPress={onComplete} disabled={actions.busy} style={styles.primary} />
       ) : null}
-      {!isPlanned ? (
-        <Button label="Reabrir entreno" icon="undo" variant="secondary" onPress={() => void actions.reset(workout)} fullWidth loading={actions.busy} />
-      ) : null}
-      <Card padding="sm">
-        <ListRow title="Editar" icon="edit" onPress={() => router.push(`/workout/edit?id=${workout.id}`)} />
-        <Divider inset={LIST_ICON_INSET} />
-        {isPlanned && isRest ? (
-          <>
-            <ListRow title="Mover" icon="move" onPress={onMove} />
-            <Divider inset={LIST_ICON_INSET} />
-          </>
-        ) : null}
-        <ListRow
-          title="Duplicar"
-          subtitle="Crea una copia el mismo día"
-          icon="copy"
-          onPress={() => {
-            void actions.duplicate(workout).then((copy) => {
-              if (copy) router.push(`/workout/${copy.id}`);
-            });
-          }}
-        />
-        {isPlanned && !isRest && !workout.jointSessionId ? (
-          <>
-            <Divider inset={LIST_ICON_INSET} />
-            <ListRow title="Invitar a un amigo" subtitle="Proponer una quedada" icon="together" onPress={() => actions.invite(workout)} />
-          </>
-        ) : null}
-        <Divider inset={LIST_ICON_INSET} />
-        <ListRow
-          title="Borrar"
-          icon="trash"
-          destructive
-          onPress={() => {
-            void actions.remove(workout).then((deleted) => {
-              // Opened from a widget there may be no back stack: fall back to Hoy instead of staying on "no encontrado".
-              if (deleted) leaveTo('/today');
-            });
-          }}
-        />
-      </Card>
+      <Button label="Opciones" variant="secondary" onPress={openOptions} disabled={actions.busy} accessibilityHint="Gestiona este entreno" />
+      {sheet.element}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { gap: space.md },
-  row: { flexDirection: 'row', gap: space.sm },
-  flex: { flex: 1 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  primary: { flexGrow: 1 },
 });

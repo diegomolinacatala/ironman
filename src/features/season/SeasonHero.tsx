@@ -83,7 +83,7 @@ function NoRaceHero() {
           Sin carrera a la vista
         </Text>
         <Text variant="callout" color="textMuted">
-          Añade tu próxima carrera y ordenamos las semanas hasta ella: carga, descargas y afinamiento. Mientras, mantienes la forma.
+          Añade una carrera para preparar las semanas hasta la salida. Mientras tanto, tienes un plan de mantenimiento.
         </Text>
       </View>
       <Button label="Añadir carrera" icon="add" size="lg" fullWidth onPress={() => router.push(ADD_RACE_FROM_PLAN_HREF)} />

@@ -39,7 +39,7 @@ Estado de las pruebas al empezar: todo en verde.
 
 - **Inyección desde texto de amigos.** El título de un entreno de un amigo entraba en el prompt y podía acabar como "memoria" permanente del coach o como imprevisto. Ahora, si la petición lleva datos de amigos, el coach no escribe ninguna de las dos cosas. Las instrucciones MCP también marcan ese texto como datos.
 - **Zona horaria fija en Madrid.** Nada actualizaba `profiles.timezone`, así que en Canarias o de viaje el "hoy" del servidor no coincidía con el de la app. Ahora se sincroniza con la del teléfono.
-- **La integración continua no probaba la base de datos ni las funciones.** Nuevo `.github/workflows/checks.yml`: `test:all` y el worker en cada PR hacia `main`, en Linux y sin generar builds.
+- **La integración continua no probaba la base de datos ni las funciones.** Se añadió `checks.yml` (`test:all` y el worker en cada PR); al unir con `main` (26-11) se fusionó en el `ci.yml` de Diego, que ahora también pasa ESLint y el worker.
 - **Ráfagas de recargas en tiempo real.** Una sincronización de Garmin con N entrenos invalidaba N veces. Ahora los avisos se agrupan durante 300 ms.
 - Índice nuevo `friendships(requester_id)`.
 

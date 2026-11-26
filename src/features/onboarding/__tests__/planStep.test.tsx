@@ -6,7 +6,6 @@ import type { Profile, Race } from '@/domain/types';
 import { makeProfile, makeRace } from '@/features/workouts/__tests__/fixtures';
 
 import { ONBOARDING_STEPS } from '../onboardingModel';
-import { planProgressCopy } from '../planSummary';
 import { PlanStep } from '../steps/PlanStep';
 import type { PlanGeneration } from '../usePlanGeneration';
 
@@ -46,45 +45,42 @@ beforeEach(() => {
   mockRaces = [];
 });
 
-describe('planProgressCopy', () => {
-  test('names the athlete watch, or "tu reloj" until it is chosen', () => {
-    expect(planProgressCopy('coros')[0]).toBe('Leyendo tu COROS…');
-    expect(planProgressCopy('garmin')[0]).toBe('Leyendo tu Garmin…');
-    expect(planProgressCopy(null)[0]).toBe('Leyendo tu reloj…');
-    expect(planProgressCopy(undefined)).toHaveLength(3);
-  });
-});
-
 describe('PlanStep', () => {
-  test('while the plan is prepared it reads the athlete watch', async () => {
+  test('while the plan is prepared it shows the work in progress, without the weeks', async () => {
     mockGeneration = generation({ phase: 'working', summary: [] });
-    mockProfile = makeProfile({ watchBrand: 'coros' });
     await renderStep();
-    expect(screen.getByText('Leyendo tu COROS…')).toBeTruthy();
-    expect(screen.queryByText('Así llegarás a tu carrera')).toBeNull();
+    expect(screen.getByText('Organizando tus sesiones…')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ver las próximas semanas' })).toBeNull();
   });
 
-  test('a watch that is not chosen yet is "tu reloj"', async () => {
-    mockGeneration = generation({ phase: 'working', summary: [] });
-    mockProfile = makeProfile({ watchBrand: null });
+  test('if the plan fails it offers to retry or to start without a plan', async () => {
+    const retry = jest.fn();
+    mockGeneration = generation({ phase: 'error', summary: [], error: 'Sin conexión.', retry });
     await renderStep();
-    expect(screen.getByText('Leyendo tu reloj…')).toBeTruthy();
+    expect(screen.getByText(/^Sin conexión\. Reinténtalo/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole('button', { name: 'Empezar sin plan' }));
+    expect(onFinish).toHaveBeenCalledTimes(1);
   });
 
-  test('once ready it shows how the next 4 weeks lead to the race', async () => {
+  test('once ready the next 4 weeks to the race are folded under "Ver las próximas semanas"', async () => {
     mockRaces = [makeRace({ name: 'Valencia', date: addDays(monday, 7 * 12 + 6) })];
     await renderStep();
     expect(screen.getByText('Tu plan está listo')).toBeTruthy();
+    expect(screen.queryByText('Así llegarás a tu carrera')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver las próximas semanas' }));
     expect(screen.getByText('Así llegarás a tu carrera')).toBeTruthy();
     expect(screen.getByText(/^Hasta Valencia: /)).toBeTruthy();
     expect(screen.getByTestId('preview-week-current')).toBeTruthy();
     expect(screen.getAllByLabelText(/^(Esta semana|Semana del .+): .+, \d+ hora/)).toHaveLength(4);
-    await fireEvent.press(screen.getByRole('button', { name: 'Empezar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Ir a Hoy' }));
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
 
-  test('without a race the preview shows the next weeks, and nothing without weekly hours', async () => {
+  test('without a race the folded preview shows the next weeks', async () => {
     await renderStep();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver las próximas semanas' }));
     expect(screen.getByText('Tus próximas semanas')).toBeTruthy();
     expect(screen.getByText(/^Sin carrera a la vista\. Próximas 8 semanas: /)).toBeTruthy();
   });
@@ -93,6 +89,6 @@ describe('PlanStep', () => {
     mockProfile = makeProfile({ availability: { ...makeProfile().availability, mode: 'manual', weeklyHoursTarget: 0 } });
     await renderStep();
     expect(screen.getByText('Tu plan está listo')).toBeTruthy();
-    expect(screen.queryByText('Tus próximas semanas')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ver las próximas semanas' })).toBeNull();
   });
 });

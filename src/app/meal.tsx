@@ -83,8 +83,6 @@ export default function MealScreen() {
   const date = params.date && DATE_RE.test(params.date) ? params.date : todayISO();
   const flow = useMealFlow(source, date);
   const voice = useVoiceInput();
-  const text = useRef(flow.state.text);
-  text.current = flow.state.text;
 
   // `?source=camera|library` opens the picker at once (cancel → the chooser). Once, even if effects re-run.
   const opened = useRef(false);
@@ -96,12 +94,11 @@ export default function MealScreen() {
   }, []);
 
   useVoiceTake(voice, (dictated) => {
-    if (dictated) flow.dispatch({ type: 'text', text: appendDictation(text.current, dictated) });
+    if (dictated) flow.dispatch({ type: 'text', text: appendDictation(flow.state.text, dictated) });
   });
 
-  const cancelVoice = useRef(voice.cancel);
-  cancelVoice.current = voice.cancel;
-  useEffect(() => () => cancelVoice.current(), []);
+  const { cancel: cancelVoice } = voice;
+  useEffect(() => () => cancelVoice(), [cancelVoice]);
 
   const onMic = () => {
     haptics.impact();

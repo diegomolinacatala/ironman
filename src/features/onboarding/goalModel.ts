@@ -47,7 +47,7 @@ export function nextRace(races: readonly Race[], today: ISODate): Race | null {
 export function initialGoal(profile: Profile | null | undefined, races: readonly Race[], today: ISODate): GoalInput {
   const race = nextRace(races, today);
   return {
-    hasRace: true,
+    hasRace: race != null,
     race: race ? { name: race.name, date: race.date, distance: race.distance } : EMPTY_RACE,
     raceId: race?.id ?? null,
     sports: profile?.sports?.length ? [...profile.sports] : [...DEFAULT_SPORTS],

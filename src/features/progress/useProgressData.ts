@@ -19,7 +19,8 @@ import { buildVolumeWeeks, type VolumeWeek } from './volumeModel';
 export interface ProgressData {
   pmc: PmcSeries | null;
   volume: VolumeWeek[];
-  recovery: RecoverySeries[];
+  recovery: RecoverySeries[] | null;
+  racesLoaded: boolean;
   race: Race | null;
   phase: ReturnType<typeof phaseFor> | null;
   /** Easy sessions that keep coming out harder than planned: suggest reviewing the zones. */
@@ -48,7 +49,7 @@ export function useProgressData(today: ISODate): ProgressData {
     [workouts.data, events.data, today],
   );
   const volume = useMemo(() => (workouts.data ? buildVolumeWeeks(workouts.data, today) : []), [workouts.data, today]);
-  const recovery = useMemo(() => buildRecoverySeries(metrics.data ?? [], today), [metrics.data, today]);
+  const recovery = useMemo(() => metrics.data ? buildRecoverySeries(metrics.data, today) : null, [metrics.data, today]);
   const nutrition = useMemo(
     () => (meals.data ? { totals: dayTotals(meals.data), entries: meals.data.length } : null),
     [meals.data],
@@ -72,13 +73,14 @@ export function useProgressData(today: ISODate): ProgressData {
     volume,
     recovery,
     race,
+    racesLoaded: races.data != null,
     phase,
     zoneTrend,
     nutrition,
     // Metrics too: otherwise Recuperación shows "sin datos" before they arrive.
     isLoading: workouts.isLoading || races.isLoading || metrics.isLoading,
     error: firstError ? errorMessage(firstError, 'No se ha podido cargar tu progreso.') : null,
-    isRefetching: workouts.isRefetching || metrics.isRefetching,
+    isRefetching: workouts.isRefetching || events.isRefetching || races.isRefetching || metrics.isRefetching || meals.isRefetching,
     refetch: () => {
       void workouts.refetch();
       void events.refetch();

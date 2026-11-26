@@ -150,7 +150,7 @@ export function ListRow({
           </View>
         ) : null)}
       <View style={styles.rowText}>
-        <Text variant="bodyStrong" style={destructive ? { color: colors.danger } : undefined} numberOfLines={1}>
+        <Text variant="bodyStrong" style={destructive ? { color: colors.danger } : undefined}>
           {title}
         </Text>
         {subtitle ? (

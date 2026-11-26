@@ -94,8 +94,8 @@ export default function VerifyScreen() {
           Revisa tu correo
         </Text>
         <Text variant="callout" color="textMuted">
-          Lo hemos enviado a <Text variant="bodyStrong">{email}</Text>. Abre el enlace desde este iPhone y entrarás
-          directamente; si el correo trae un código de 6 dígitos, escríbelo aquí. Si no aparece, mira en spam.
+          Abre el enlace que enviamos a <Text variant="bodyStrong">{email}</Text> en este dispositivo
+          o escribe aquí el código de 6 dígitos.
         </Text>
       </View>
       <CodeInput ref={inputRef} value={code} onChange={onChange} error={error} editable={!verifying} />
