@@ -178,3 +178,29 @@ test('propose_plan_changes accepts step targets, cues, brick legs and the coachi
   const cleared = await run(state, 'propose_plan_changes', { week_start: '2026-10-26', summary: 'x', changes: [clear] });
   assert.equal(cleared.isError, undefined, text(cleared));
 });
+
+test('get_planning_context: «Tu forma de entrenar» is "automático" until chosen, then every choice with the summary', async () => {
+  const state = seasonState();
+  const before = data<{ athlete: { trainingPrefs: unknown } }>(await run(state, 'get_planning_context', { week_start: '2026-10-26' }));
+  assert.equal(before.athlete.trainingPrefs, 'automático');
+  state.profiles = [
+    profile({
+      trainingPrefs: {
+        sessionsPerWeek: { run: 3 },
+        preferredDays: { swim: [0, 2] },
+        longRideDays: [5],
+        longRunDays: [],
+        intensityModel: 'polarized',
+        fixedSessions: [{ sport: 'swim', weekday: 1, startTime: '20:00', durationMin: 60, title: 'Natación del club' }],
+      },
+    }),
+  ];
+  const after = data<{ athlete: { trainingPrefs: Record<string, unknown> } }>(await run(state, 'get_planning_context', { week_start: '2026-10-26' }));
+  const prefs = after.athlete.trainingPrefs;
+  assert.equal(prefs.summary, 'piscina L y X, larga S, 3 de carrera, polarizado 80/20, natación del club M 20:00');
+  assert.deepEqual(prefs.sessionsPerWeek, { run: 3 });
+  assert.equal(prefs.longRunDays, undefined, 'automático parts are left out');
+  assert.deepEqual(prefs.intensity, { model: 'Polarizado 80/20', lowIntensityShare: 0.8 });
+  assert.deepEqual(prefs.fixedSessions, [{ day: 'martes', start: '20:00', durationMin: 60, sport: 'swim', title: 'Natación del club' }]);
+  assert.match(String(prefs.how), /no las dupliques/);
+});

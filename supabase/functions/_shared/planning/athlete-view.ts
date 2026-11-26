@@ -4,7 +4,8 @@
  * compact so the coach and Claude can copy targets instead of inventing them.
  */
 import { WEEKDAYS_ES } from '../dates.ts';
-import type { Availability, Profile, RaceDistance, Thresholds, WatchBrand } from '../types.ts';
+import type { Availability, Profile, RaceDistance, Thresholds, TrainingPrefs, WatchBrand } from '../types.ts';
+import { INTENSITY_MODEL_OPTIONS, isDefaultTrainingPrefs, LOW_INTENSITY_SHARE, PREF_SPORTS, trainingPrefsSummary } from './domain/trainingPrefs.ts';
 import { athleteZones, targetParts } from './domain/zones.ts';
 import type { ZoneRow } from './domain/zones.ts';
 
@@ -80,6 +81,39 @@ export function watchBrandOf(p: Pick<Profile, 'watchBrand'>): WatchBrand {
   return p.watchBrand ?? 'garmin';
 }
 
+const PREFS_HOW =
+  'Su forma de entrenar (Tú › Tu forma de entrenar): respétala al proponer sesiones. sessionsPerWeek = sesiones por semana de ese deporte ' +
+  '(dentro de los minutos de la semana y sin bajar de los mínimos seguros); preferredDays = días preferidos por deporte; longRideDays y ' +
+  'longRunDays = días de la bici larga y de la tirada larga; intensity = reparto de intensidad (lowIntensityShare = parte mínima en Z1-Z2); ' +
+  'fixedSessions = sesiones que hace todas las semanas (ya cuentan en el volumen): no las dupliques y planifica alrededor. ' +
+  'Lo que no aparece es automático. La seguridad (lesiones, enfermedad, rampa de carga) manda sobre estas preferencias.';
+
+/** «Tu forma de entrenar» for the coach and Claude; 'automático' when nothing is set. */
+export function trainingPrefsView(prefs: TrainingPrefs | null | undefined): Record<string, unknown> | 'automático' {
+  if (!prefs || isDefaultTrainingPrefs(prefs)) return 'automático';
+  const preferredDays = Object.fromEntries(PREF_SPORTS.flatMap((s) => (prefs.preferredDays[s]?.length ? [[s, dayNames(prefs.preferredDays[s] ?? [])]] : [])));
+  return {
+    how: PREFS_HOW,
+    summary: trainingPrefsSummary(prefs),
+    ...(Object.keys(prefs.sessionsPerWeek).length > 0 ? { sessionsPerWeek: prefs.sessionsPerWeek } : {}),
+    ...(Object.keys(preferredDays).length > 0 ? { preferredDays } : {}),
+    ...(prefs.longRideDays.length > 0 ? { longRideDays: dayNames(prefs.longRideDays) } : {}),
+    ...(prefs.longRunDays.length > 0 ? { longRunDays: dayNames(prefs.longRunDays) } : {}),
+    intensity: { model: INTENSITY_MODEL_OPTIONS[prefs.intensityModel].label, lowIntensityShare: LOW_INTENSITY_SHARE[prefs.intensityModel] },
+    ...(prefs.fixedSessions.length > 0
+      ? {
+          fixedSessions: prefs.fixedSessions.map((f) => ({
+            day: WEEKDAYS_ES[f.weekday],
+            start: f.startTime,
+            durationMin: f.durationMin,
+            sport: f.sport,
+            title: f.title,
+          })),
+        }
+      : {}),
+  };
+}
+
 export function athleteView(p: Profile, raceDistance: RaceDistance | null, plan?: AvailabilityPlan): Record<string, unknown> {
   return {
     name: p.displayName,
@@ -90,6 +124,7 @@ export function athleteView(p: Profile, raceDistance: RaceDistance | null, plan?
     zones: zonesView(p.thresholds, raceDistance),
     watchBrand: watchBrandOf(p),
     availability: availabilityView(p.availability, plan),
+    trainingPrefs: trainingPrefsView(p.trainingPrefs),
     coachNotes: p.coachNotes,
   };
 }

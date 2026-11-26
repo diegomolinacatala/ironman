@@ -25,6 +25,8 @@ export interface RestDayInput {
   raceDates: readonly ISODate[];
   /** Dates reserved by pinned sessions (race, activation, pre-race swim…). */
   pinnedDates: readonly ISODate[];
+  /** Dates the rest day avoids when another day can take it («Tu forma de entrenar»: preferred days). */
+  avoidDates?: readonly ISODate[];
 }
 
 export interface RestDayPlan {
@@ -53,7 +55,8 @@ export function resolveRestDay(input: RestDayInput): Weekday | null {
   if (own) return weekdayOf(own);
   if (input.hours > 12 && input.profile.level !== 'beginner') return null;
   const candidates = input.days.filter((d) => d.plannable && !input.longDays.includes(d.weekday) && !input.pinnedDates.includes(d.date));
-  const best = leastFree(candidates);
+  const avoid = input.avoidDates ?? [];
+  const best = leastFree(candidates.filter((d) => !avoid.includes(d.date))) ?? leastFree(candidates);
   return best ? best.weekday : 0;
 }
 

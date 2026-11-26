@@ -40,6 +40,11 @@ export interface PlacementContext {
   /** C-race dates: easy day before, 1 easy day after (§5.3). */
   cRaceDates?: readonly ISODate[];
   readinessToday: { date: ISODate; level: ReadinessLevel } | null;
+  /** «Tu forma de entrenar»: preferred weekdays per sport (soft: other days only cost more). */
+  preferredDays?: Partial<Record<'swim' | 'bike' | 'run' | 'strength', readonly number[]>>;
+  /** Preferred days of the long ride (and long bricks) and of the long run. */
+  longRideDays?: readonly number[];
+  longRunDays?: readonly number[];
 }
 
 export interface Dropped {
@@ -304,13 +309,40 @@ function canPlace(s: State, ctx: PlacementContext, i: number, spec: SessionSpec,
   return { ok: true, bigWeekend };
 }
 
-function penalty(s: State, i: number, spec: SessionSpec, duration: number, pendingBikeLong: boolean): number {
+/** Extra cost of a day the athlete did not choose for this session («Tu forma de entrenar»). [H] */
+const OFF_PREFERENCE_PENALTY = 6;
+
+/** Preferred days for this session: the long ride / long run days for long sessions, else the sport's days. */
+function preferredFor(ctx: PlacementContext, spec: SessionSpec): readonly number[] | null {
+  const cls = specClass(spec);
+  const sport = specSport(spec);
+  const pick = (list: readonly number[] | undefined) => (list && list.length > 0 ? list : null);
+  if (spec.code === 'RN_LONG') return pick(ctx.longRunDays) ?? pick(ctx.preferredDays?.run);
+  if (spec.code === 'BK_LONG' || (cls === 'BRICK' && spec.longBrick)) return pick(ctx.longRideDays) ?? pick(ctx.preferredDays?.bike);
+  if (sport === 'swim' || sport === 'bike' || sport === 'run' || sport === 'strength') return pick(ctx.preferredDays?.[sport]);
+  return null;
+}
+
+/** Extra cost of taking a day another sport prefers (only for sessions with no preference of their own). [H] */
+const RESERVED_DAY_PENALTY = 3;
+
+function reservedForOther(ctx: PlacementContext, sport: Sport, weekday: number): boolean {
+  const days = ctx.preferredDays;
+  if (!days) return false;
+  return (Object.keys(days) as (keyof typeof days)[]).some((other) => other !== sport && (days[other] ?? []).includes(weekday));
+}
+
+function penalty(s: State, ctx: PlacementContext, i: number, spec: SessionSpec, duration: number, pendingBikeLong: boolean): number {
   const day = s.days[i];
   if (!day) return Number.POSITIVE_INFINITY;
   const cls = specClass(spec);
   const sport = specSport(spec);
   const capacity = day.free.reduce((sum, r) => sum + (r.end - r.start), 0);
   let p = i * 0.01 + sessionCount(s, i) * 2;
+  const preferred = preferredFor(ctx, spec);
+  if (preferred && !preferred.includes(day.weekday)) p += OFF_PREFERENCE_PENALTY;
+  // A day the athlete keeps for another sport (swim Mon/Wed…) is left free for it when another day works.
+  else if (!preferred && reservedForOther(ctx, sport, day.weekday)) p += RESERVED_DAY_PENALTY;
   if (cls === 'LONG' || cls === 'BRICK') p += day.isLongDay ? -capacity / 600 : 8;
   if (spec.code === 'RN_LONG' && pendingBikeLong && day.isLongDay) {
     const maxLongCap = Math.max(...s.days.filter((d) => d.isLongDay && d.plannable).map((d) => d.free.reduce((sum, r) => sum + (r.end - r.start), 0)));
@@ -369,7 +401,7 @@ function bestDay(s: State, ctx: PlacementContext, spec: SessionSpec, duration: n
   for (let i = 0; i < s.days.length; i += 1) {
     const check = canPlace(s, ctx, i, spec, duration);
     if (!check.ok) continue;
-    const score = penalty(s, i, spec, duration, pendingBikeLong);
+    const score = penalty(s, ctx, i, spec, duration, pendingBikeLong);
     if (!best || score < best.score) best = { index: i, bigWeekend: check.bigWeekend, score };
   }
   return best ? { index: best.index, bigWeekend: best.bigWeekend } : null;
@@ -412,7 +444,15 @@ function queueOrder(a: SessionSpec, b: SessionSpec): number {
   const fixedB = b.allowedDates ? 0 : 1;
   const anchorA = isAnchor(a) ? 0 : 1;
   const anchorB = isAnchor(b) ? 0 : 1;
-  return queueRank(a) - queueRank(b) || fixedA - fixedB || anchorA - anchorB || b.durationMin - a.durationMin || a.code.localeCompare(b.code);
+  // Among the anchors their own priority still decides who gets the weekend first.
+  return (
+    queueRank(a) - queueRank(b) ||
+    fixedA - fixedB ||
+    anchorA - anchorB ||
+    a.priority - b.priority ||
+    b.durationMin - a.durationMin ||
+    a.code.localeCompare(b.code)
+  );
 }
 
 /** Places sessions on the week; never touches fixed items. */

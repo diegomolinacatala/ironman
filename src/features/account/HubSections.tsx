@@ -4,11 +4,12 @@ import type { Profile, Race } from '@/domain/types';
 import { coachVoiceName, useCoachVoice } from '@/integrations/speech/coachVoice';
 
 import { AppearancePicker } from '../settings/AppearancePicker';
+import { trainingPrefsSubtitle } from '../settings/trainingPrefsModel';
 import { availabilitySubtitle, raceRow, sportsProfileSubtitle } from './hubModel';
 import { MyWhooshRow } from './MyWhooshRow';
 import { GroupDivider, LinkRows, SettingsGroup } from './SettingsGroup';
 
-/** Entrenamiento: your race, your week, your sport profile and whether you ride indoors with MyWhoosh. */
+/** Entrenamiento: your race, your week, how you like to train, your sport profile and whether you ride indoors with MyWhoosh. */
 export function TrainingGroup({ profile, races }: { profile: Profile; races: readonly Race[] | undefined }) {
   const race = raceRow(races, todayISO());
   return (
@@ -17,6 +18,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
         items={[
           { icon: 'flag', title: race.title, subtitle: race.subtitle, href: '/races', brand: true },
           { icon: 'clock', title: 'Tus horarios', subtitle: availabilitySubtitle(profile.availability), href: '/settings/availability' },
+          { icon: 'target', title: 'Tu forma de entrenar', subtitle: trainingPrefsSubtitle(profile.trainingPrefs), href: '/settings/training' },
           { icon: 'profile', title: 'Perfil deportivo', subtitle: sportsProfileSubtitle(profile), href: '/settings/profile' },
         ]}
       />

@@ -593,3 +593,66 @@ describe('v4: coaching, step targets, sensations, watch and season plan', () => 
     ).toEqual({ weekStart: '2026-11-30', kind: 'load', targetMinutes: 421, note: null, source: 'manual', updatedAt: NOW });
   });
 });
+
+describe('«Tu forma de entrenar» (profiles.training_prefs)', () => {
+  const profile = rowToProfile({
+    id: ME,
+    username: 'diego',
+    display_name: 'Diego',
+    avatar_url: null,
+    sports: ['swim', 'bike', 'run'],
+    level: 'intermediate',
+    thresholds: {},
+    availability: {},
+    visibility: 'full',
+    notification_prefs: {},
+    timezone: 'Europe/Madrid',
+    coach_notes: null,
+    onboarded_at: null,
+    created_at: NOW,
+  });
+  const prefs: NonNullable<Profile['trainingPrefs']> = {
+    sessionsPerWeek: { swim: 3, strength: 1 },
+    preferredDays: { swim: [0, 2] },
+    longRideDays: [5],
+    longRunDays: [6],
+    intensityModel: 'polarized',
+    fixedSessions: [{ sport: 'swim', weekday: 1, startTime: '20:00', durationMin: 60, title: 'Natación del club' }],
+  };
+
+  it('nothing stored (or the column not deployed yet) → absent: everything automático', () => {
+    expect('trainingPrefs' in profile).toBe(false);
+    expect(profileToRow(profile).training_prefs).toBeNull();
+  });
+
+  it('round trip and PATCH', () => {
+    expect(rowToProfile(profileToRow({ ...profile, trainingPrefs: prefs }))).toEqual({ ...profile, trainingPrefs: prefs });
+    expect(profilePatchToRow({ trainingPrefs: prefs })).toEqual({ training_prefs: prefs });
+    expect(profilePatchToRow({ trainingPrefs: null })).toEqual({ training_prefs: null });
+  });
+
+  it('bad stored values are dropped and never break the profile', () => {
+    const row = {
+      ...profileToRow(profile),
+      training_prefs: {
+        sessionsPerWeek: { swim: 30, bike: -1, run: 'tres', strength: 2 },
+        preferredDays: { swim: [9, 2, 2, 0], run: 'L' },
+        longRideDays: [5, 'S'],
+        intensityModel: 'a tope',
+        fixedSessions: [
+          { sport: 'swim', weekday: 1, startTime: '20:00:00', durationMin: 60, title: ' Club ' },
+          { sport: 'yoga', weekday: 1, durationMin: 60 },
+        ],
+      },
+    };
+    expect(rowToProfile(row).trainingPrefs).toEqual({
+      sessionsPerWeek: { swim: 7, strength: 2 },
+      preferredDays: { swim: [0, 2] },
+      longRideDays: [5],
+      longRunDays: [],
+      intensityModel: 'auto',
+      fixedSessions: [{ sport: 'swim', weekday: 1, startTime: '20:00', durationMin: 60, title: 'Club' }],
+    });
+    expect('trainingPrefs' in rowToProfile({ ...profileToRow(profile), training_prefs: [1, 2] })).toBe(false);
+  });
+});

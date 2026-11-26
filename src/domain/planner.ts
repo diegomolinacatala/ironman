@@ -16,10 +16,10 @@
  */
 import { READINESS_EFFECTS, maxHardDays, type DistanceKind } from './constants';
 import { allocateWeek } from './allocation';
-import { addDays, daysInRange, formatDuration, maxDate, weekRange } from './dates';
+import { addDays, daysInRange, formatDuration, maxDate, weekdayOf, weekRange } from './dates';
 import { distanceKindOf, phaseFor, racePrepOf, type PhaseInfo, type PhaseOptions } from './periodization';
 import { placeSessions, type Dropped, type Placed, type PlacementResult } from './placement';
-import { dailyLoads } from './load';
+import { dailyLoads, estimateTss } from './load';
 import {
   activeWeekPlan,
   capRunSpecs,
@@ -38,12 +38,29 @@ import {
 import { reasonFor, summaryFor } from './plannerText';
 import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
-import { examVolumeFactor, NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
+import { allowsSession, examVolumeFactor, NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
+import { fixedSessionsOn, lowIntensityShareFor, trainingPrefsSentence } from './trainingPrefs';
 import { recentRunMinutes, runWeekCapMinutes, workoutRunMinutes } from './runVolume';
 import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
 import { applyWeekPlan, weekMinutesFor } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
-import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, RacePrep, Sport, Weekday, WeekPlan, Workout } from './types';
+import type {
+  BusyBlock,
+  FixedWeeklySession,
+  ISODate,
+  JointSession,
+  LifeEvent,
+  PlanChange,
+  Profile,
+  Race,
+  RacePrep,
+  Sport,
+  TrainingPrefs,
+  Weekday,
+  WeekPlan,
+  Workout,
+  WorkoutDraft,
+} from './types';
 import { rangesLength } from './timeRanges';
 import { buildWeekModel, type DayState, type FixedInput } from './weekModel';
 
@@ -301,6 +318,16 @@ interface WeekContext {
   exam: { factor: number; days: ISODate[] } | null;
   /** Mean day volume factor of the plannable days without the exams (they cut the whole week instead). */
   dayFactor: number;
+  /** «Tu forma de entrenar» (null = everything automático). */
+  prefs: TrainingPrefs | null;
+  /** Fixed weekly sessions («Tu forma de entrenar») this week adds: already in `fixed`, proposed as new workouts. */
+  prefFixed: PrefFixed[];
+}
+
+interface PrefFixed {
+  id: string;
+  date: ISODate;
+  session: FixedWeeklySession;
 }
 
 /** Periodization options of the planned week: level, life stress and the athlete's recent volume. */
@@ -329,6 +356,25 @@ function examOf(events: readonly LifeEvent[], from: ISODate, to: ISODate): { fac
   return { factor: Math.min(...exams.map((e) => examVolumeFactor(e.severity))), days };
 }
 
+/**
+ * Fixed weekly sessions («Tu forma de entrenar») on the plannable days, unless
+ * the athlete already has a session of that sport that day, a race is on it or
+ * the day's restrictions (injury, illness, travel…) do not allow it.
+ */
+function fixedPrefSessions(
+  prefs: TrainingPrefs | null,
+  plannable: readonly ISODate[],
+  existing: readonly Workout[],
+  restrictions: Record<ISODate, DayRestriction>,
+  raceDates: readonly ISODate[],
+): PrefFixed[] {
+  return fixedSessionsOn(prefs, plannable).flatMap(({ date, session, index }) => {
+    if (raceDates.includes(date) || existing.some((w) => w.date === date && w.sport === session.sport)) return [];
+    const allowed = allowsSession(restrictions[date] ?? NO_RESTRICTION, { sport: session.sport, intensity: 'endurance', durationMin: session.durationMin, isLong: false, isQuality: false });
+    return allowed ? [{ id: `fixed-${index}-${date}`, date, session }] : [];
+  });
+}
+
 function weekPlanContext(input: PlannerInput): WeekContext {
   const range = weekRange(input.weekStart);
   const dates = daysInRange(range);
@@ -346,7 +392,14 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   const inWeek = (date: ISODate) => date >= range.from && date <= range.to;
   const active = input.existing.filter((w) => w.status !== 'skipped' && inWeek(w.date));
   const existing = active.filter((w) => w.sport !== 'rest');
-  const fixed = [...existing.map(workoutFixed), ...jointExtras(input.jointSessions, input.existing, input.profile.id).filter((f) => inWeek(f.date))];
+  const prefs = input.profile.trainingPrefs ?? null;
+  const raceDates = input.races.filter((r) => inWeek(r.date)).map((r) => r.date);
+  const prefFixed = fixedPrefSessions(prefs, plannable, existing, restrictions, raceDates);
+  const fixed = [
+    ...existing.map(workoutFixed),
+    ...jointExtras(input.jointSessions, input.existing, input.profile.id).filter((f) => inWeek(f.date)),
+    ...prefFixed.map((f): FixedInput => ({ id: f.id, date: f.date, sport: f.session.sport, intensity: 'endurance', durationMin: f.session.durationMin, startTime: f.session.startTime })),
+  ];
   const exam = examOf(events, range.from, range.to);
   const week = summarizeRestrictions(plannable, restrictions);
   const dayFactor = exam ? summarizeRestrictions(plannable, restrictionsForDates(dates, input.lifeEvents.filter((e) => e.kind !== 'exam'))).factor : week.factor;
@@ -354,7 +407,9 @@ function weekPlanContext(input: PlannerInput): WeekContext {
     exam,
     dayFactor,
     ownRestDates: [...new Set(active.filter((w) => w.sport === 'rest').map((w) => w.date))].sort(),
-    raceDates: input.races.filter((r) => inWeek(r.date)).map((r) => r.date),
+    raceDates,
+    prefs,
+    prefFixed,
     range,
     dates,
     firstPlannable,
@@ -444,12 +499,13 @@ function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): Week
     level: input.profile.level,
     // Exams: maintenance strength instead of heavy lifting.
     lightStrength: ctx.exam !== null,
+    prefs: ctx.prefs,
   });
   const existingPlannable = ctx.fixed.filter((f) => ctx.plannable.includes(f.date));
   const remaining = trimToBudget(consumeExisting(ideal.specs, existingPlannable), Math.max(0, budget.budgetMinutes - specialMin));
   // «Preparación específica» of a B/C race: some race-pace sessions target it (before the Z1-Z2 guard, which keeps them for last).
   const specific = specializeForRace(remaining, info.specificPrep);
-  const run = runWarnings(caps, enforceIntensityDistribution(specific, info.phase === 'race_week'));
+  const run = runWarnings(caps, enforceIntensityDistribution(specific, info.phase === 'race_week', lowIntensityShareFor(ctx.prefs)));
   // Existing runs that did not match the ideal week can still go over the cap: trim the new runs.
   const weekly = capRunSpecs(run.specs, runCap === null ? null : runCap - ran.outside - ran.inside - pinnedRun);
   return {
@@ -483,7 +539,11 @@ function minorRaceDates(races: readonly Race[], preps: readonly RacePrep[]): ISO
   }).map((r) => r.date);
 }
 
+/** Long-session days: the days of the long ride and long run chosen in «Tu forma de entrenar», else the availability's. */
 function longDaysOf(profile: Profile): Weekday[] {
+  const prefs = profile.trainingPrefs;
+  const chosen = [...new Set([...(prefs?.longRideDays ?? []), ...(prefs?.longRunDays ?? [])])].sort((a, b) => a - b);
+  if (chosen.length > 0) return chosen;
   return profile.availability.longSessionDays.length > 0 ? profile.availability.longSessionDays : DEFAULT_LONG_DAYS;
 }
 
@@ -507,6 +567,14 @@ function draftWeekDays(input: PlannerInput, ctx: WeekContext): DayState[] {
   }).map((d) => ({ ...d, plannable: d.plannable && ctx.plannable.includes(d.date) }));
 }
 
+/** Dates of the week on the athlete's preferred days («Tu forma de entrenar»). */
+function preferredDates(ctx: WeekContext): ISODate[] {
+  const prefs = ctx.prefs;
+  if (!prefs) return [];
+  const days = new Set<number>([...Object.values(prefs.preferredDays).flatMap((d) => d ?? []), ...prefs.longRideDays, ...prefs.longRunDays]);
+  return ctx.dates.filter((d) => days.has(weekdayOf(d)));
+}
+
 function placeWeek(input: PlannerInput, ctx: WeekContext, budget: Budget, specs: readonly SessionSpec[], draftDays: DayState[]): WeekPlacement {
   const profile = input.profile;
   const longDays = longDaysOf(profile);
@@ -518,7 +586,10 @@ function placeWeek(input: PlannerInput, ctx: WeekContext, budget: Budget, specs:
     longDays,
     ownRestDates: ctx.ownRestDates,
     raceDates: ctx.raceDates,
-    pinnedDates: [...new Set(specs.flatMap((s) => s.allowedDates ?? []))],
+    // Fixed weekly sessions keep their day: the rest day goes elsewhere.
+    pinnedDates: [...new Set([...specs.flatMap((s) => s.allowedDates ?? []), ...ctx.prefFixed.map((f) => f.date)])],
+    // Days the athlete prefers for a sport are not the first choice for resting.
+    avoidDates: preferredDates(ctx),
   });
   return placeOn(input, ctx, budget, specs, rest, today);
 }
@@ -533,15 +604,19 @@ function placeOn(input: PlannerInput, ctx: WeekContext, budget: Budget, specs: r
     bRaceDates: minorRaceDates(input.races, ['taper', 'specific']),
     cRaceDates: minorRaceDates(input.races, ['training']),
     readinessToday: today && input.readiness ? { date: today, level: input.readiness.level } : null,
+    preferredDays: ctx.prefs?.preferredDays,
+    longRideDays: ctx.prefs?.longRideDays,
+    longRunDays: ctx.prefs?.longRunDays,
   });
   return { placement, rest };
 }
 
 /** Placement may shorten or drop easy sessions: re-check the Z1-Z2 share on what was actually placed (lower hard points only). */
-function enforcePlacedDistribution(placed: readonly Placed[], raceWeek: boolean): Placed[] {
+function enforcePlacedDistribution(placed: readonly Placed[], raceWeek: boolean, minShare: number): Placed[] {
   const specs = enforceIntensityDistribution(
     placed.map((p) => p.spec),
     raceWeek,
+    minShare,
   );
   return placed.map((p, i) => {
     const spec = specs[i] ?? p.spec;
@@ -573,6 +648,33 @@ function examSentence(budget: Budget): string | null {
   return `${EXAM_NOTE_PREFIX}: ${amount}, sin series el día antes ni el día del examen.`;
 }
 
+const FIXED_TITLE: Readonly<Record<FixedWeeklySession['sport'], string>> = { swim: 'Natación', bike: 'Bici', run: 'Carrera', strength: 'Fuerza' };
+
+/** The workout of a fixed weekly session (easy by default: the athlete knows what it holds). */
+function fixedSessionDraft(f: PrefFixed): WorkoutDraft {
+  const { session } = f;
+  return {
+    date: f.date,
+    startTime: session.startTime,
+    sport: session.sport,
+    title: session.title || FIXED_TITLE[session.sport],
+    description: 'Sesión fija de cada semana (Tú › Tu forma de entrenar).',
+    durationMin: session.durationMin,
+    distanceM: null,
+    intensity: 'endurance',
+    tss: estimateTss({ sport: session.sport, durationMin: session.durationMin, intensity: 'endurance' }),
+    steps: [],
+    isKey: false,
+    source: 'rules',
+  };
+}
+
+/** «Según tu forma de entrenar: …» when the athlete set anything and the week gets sessions. */
+function prefsNote(ctx: WeekContext): string[] {
+  const sentence = trainingPrefsSentence(ctx.prefs);
+  return sentence ? [sentence] : [];
+}
+
 function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed: WeekPlacement, built: WeekSpecs): PlanWeekResult {
   const { info } = ctx;
   const { runCapped } = built;
@@ -583,13 +685,21 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     fixedLoads: dailyLoads(ctx.existing, ctx.events, ctx.range, { includePlanned: true }),
     placed: placed.placement.placed,
   });
-  const guard = { ...guarded, placed: enforcePlacedDistribution(guarded.placed, info.phase === 'race_week') };
+  const guard = { ...guarded, placed: enforcePlacedDistribution(guarded.placed, info.phase === 'race_week', lowIntensityShareFor(ctx.prefs)) };
   const draftCtx = { thresholds: input.profile.thresholds, raceDistance: info.targetRace?.distance ?? null };
-  const changes: PlanChange[] = guard.placed.map((p) => ({
+  const fixedChanges: PlanChange[] = ctx.prefFixed.map((f) => ({
     op: 'add',
-    workout: specToDraft(p.spec, p.date, p.startTime, draftCtx),
-    reason: reasonFor(p.spec, info, p.adjusted, runCapped && p.spec.code === 'RN_LONG'),
+    workout: fixedSessionDraft(f),
+    reason: 'Sesión fija de tu forma de entrenar: la planifico cada semana y el resto encaja alrededor.',
   }));
+  const changes: PlanChange[] = [
+    ...fixedChanges,
+    ...guard.placed.map((p): PlanChange => ({
+      op: 'add',
+      workout: specToDraft(p.spec, p.date, p.startTime, draftCtx),
+      reason: reasonFor(p.spec, info, p.adjusted, runCapped && p.spec.code === 'RN_LONG'),
+    })),
+  ];
   const fatigueNote = guard.removed.length > 0 ? [`He quitado ${guard.removed.length} sesión(es) para no acumular demasiada fatiga.`] : [];
   const examNote = examSentence(budget);
   const warnings = [...info.warnings, ...budget.warnings, ...runCapWarning(built), ...fatigueNote, ...(guard.warning ? [guard.warning] : [])];
@@ -602,7 +712,10 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     easyDay: placed.rest.easyDay,
     existingCount: ctx.existing.filter((w) => ctx.plannable.includes(w.date)).length,
     warnings,
-    notes: examNote ? [examNote, ...ctx.week.notes.filter((n) => !n.startsWith(EXAM_NOTE_PREFIX))] : ctx.week.notes,
+    notes: [
+      ...(examNote ? [examNote, ...ctx.week.notes.filter((n) => !n.startsWith(EXAM_NOTE_PREFIX))] : ctx.week.notes),
+      ...prefsNote(ctx),
+    ],
   });
   return {
     changes,

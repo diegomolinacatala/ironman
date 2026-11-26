@@ -6,9 +6,12 @@
  */
 export type {
   AthleteLevel,
+  FixedWeeklySession,
   Intensity,
+  IntensityModel,
   ISODate,
   NumberRange,
+  PrefSport,
   Race,
   RaceDistance,
   RacePrep,
@@ -16,6 +19,7 @@ export type {
   StepTarget,
   Thresholds,
   TrainableSport,
+  TrainingPrefs,
   WeekPlan,
   WeekPlanDraft,
   WeekPlanKind,

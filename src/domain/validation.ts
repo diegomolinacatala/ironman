@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { validateCoaching } from './changes';
 import { diffDays, isISODate, timeToMinutes, weekdayOf } from './dates';
+import { FIXED_MAX_MINUTES, FIXED_MIN_MINUTES, FIXED_TITLE_MAX, INTENSITY_MODELS, MAX_FIXED_SESSIONS, MAX_SESSIONS } from './trainingPrefs';
 import {
   BODY_AREAS,
   INTENSITIES,
@@ -281,6 +282,36 @@ export const notificationPrefsSchema = z.object({
   wakeWindow: wakeWindowSchema.nullable().optional(),
 });
 
+const prefDays = z.array(weekdaySchema).max(7);
+const sessionCount = (max: number) => z.number().int().min(0, { error: 'Sesiones por semana no válidas' }).max(max, { error: `Como mucho ${max} sesiones por semana` });
+
+export const fixedWeeklySessionSchema = z.object({
+  sport: z.enum(['swim', 'bike', 'run', 'strength'], { error: 'Elige el deporte de la sesión fija' }),
+  weekday: weekdaySchema,
+  startTime: isoTimeSchema.nullable(),
+  durationMin: z
+    .number({ error: 'Indica la duración' })
+    .int()
+    .min(FIXED_MIN_MINUTES, { error: `La sesión fija dura al menos ${FIXED_MIN_MINUTES} min` })
+    .max(FIXED_MAX_MINUTES, { error: `La sesión fija dura como mucho ${FIXED_MAX_MINUTES} min` }),
+  title: z.string().trim().min(1, { error: 'Ponle un nombre a la sesión fija' }).max(FIXED_TITLE_MAX, { error: `Nombre: máximo ${FIXED_TITLE_MAX} caracteres` }),
+});
+
+/** «Tu forma de entrenar» (profiles.training_prefs; the database checks the shape and the size). */
+export const trainingPrefsSchema = z.object({
+  sessionsPerWeek: z.object({
+    swim: sessionCount(MAX_SESSIONS.swim).optional(),
+    bike: sessionCount(MAX_SESSIONS.bike).optional(),
+    run: sessionCount(MAX_SESSIONS.run).optional(),
+    strength: sessionCount(MAX_SESSIONS.strength).optional(),
+  }),
+  preferredDays: z.object({ swim: prefDays.optional(), bike: prefDays.optional(), run: prefDays.optional(), strength: prefDays.optional() }),
+  longRideDays: prefDays,
+  longRunDays: prefDays,
+  intensityModel: z.enum(INTENSITY_MODELS, { error: 'Elige cómo repartir la intensidad' }),
+  fixedSessions: z.array(fixedWeeklySessionSchema).max(MAX_FIXED_SESSIONS, { error: `Como mucho ${MAX_FIXED_SESSIONS} sesiones fijas` }),
+});
+
 export const profilePatchSchema = z
   .object({
     username: usernameSchema,
@@ -296,6 +327,7 @@ export const profilePatchSchema = z
     coachNotes: z.string().max(4000, { error: 'Notas para el coach: máximo 4000 caracteres' }).nullable(),
     onboardedAt: z.string().nullable(),
     watchBrand: z.enum(WATCH_BRANDS, { error: 'Elige tu reloj: Garmin o COROS' }).nullable(),
+    trainingPrefs: trainingPrefsSchema.nullable(),
   })
   .partial();
 

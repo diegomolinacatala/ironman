@@ -4,6 +4,7 @@
  * defaults instead of throwing, so one odd row never breaks a whole response.
  */
 import { normalizeTime } from '../dates.ts';
+import { parseTrainingPrefs } from '../planning/domain/trainingPrefs.ts';
 import {
   BODY_AREAS,
   INTENSITIES,
@@ -254,6 +255,7 @@ export function mapProfile(raw: unknown): Profile {
     timezone: str(r.timezone, 'Europe/Madrid') || 'Europe/Madrid',
     coachNotes: strOrNull(r.coach_notes),
     watchBrand: watchBrandOf(r.watch_brand),
+    trainingPrefs: parseTrainingPrefs(r.training_prefs),
   };
 }
 

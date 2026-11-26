@@ -210,11 +210,15 @@ function easierStep(specs: readonly SessionSpec[]): SessionSpec[] | null {
   return null;
 }
 
-/** Keeps Z1-Z2 ≥ 75 % of endurance time (§2.2 invariant) by downgrading the least important quality sessions. */
-export function enforceIntensityDistribution(specs: readonly SessionSpec[], raceWeek: boolean): SessionSpec[] {
+/**
+ * Keeps Z1-Z2 ≥ 75 % of endurance time (§2.2 invariant) by downgrading the
+ * least important quality sessions; `minShare` = the athlete's intensity model
+ * («Tu forma de entrenar»: 80 % polarizado, 70 % piramidal).
+ */
+export function enforceIntensityDistribution(specs: readonly SessionSpec[], raceWeek: boolean, minShare: number = MIN_LOW_INTENSITY_SHARE): SessionSpec[] {
   if (raceWeek) return [...specs];
   let out = [...specs];
-  while (lowIntensityShare(out) < MIN_LOW_INTENSITY_SHARE) {
+  while (lowIntensityShare(out) < minShare) {
     const next = easierStep(out);
     if (!next) break;
     out = next;

@@ -169,6 +169,8 @@ describe('Tú', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/races');
     await fireEvent.press(screen.getByRole('button', { name: /^Tus horarios\./ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/availability');
+    await fireEvent.press(screen.getByRole('button', { name: /^Tu forma de entrenar\. Automático/ }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/training');
     await fireEvent.press(screen.getByRole('button', { name: /^Perfil deportivo\. Natación, Bici, Carrera/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/profile');
   });
