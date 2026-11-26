@@ -191,8 +191,16 @@ export function createCredentialStore(db: Db): CredentialStore {
       unwrap(await db.from('integration_credentials').delete().eq('user_id', userId).eq('provider', PROVIDER), 'delete credential');
     },
     async listSyncable() {
+      // Longest without a sync first: when a run hits its 200-user cap or its time budget, the users
+      // left out go first next time instead of being skipped on every run.
       const rows = rowsOf(
-        await db.from('integration_credentials').select(CRED_COLS).eq('provider', PROVIDER).in('state', ['connected', 'error']).limit(200),
+        await db
+          .from('integration_credentials')
+          .select(CRED_COLS)
+          .eq('provider', PROVIDER)
+          .in('state', ['connected', 'error'])
+          .order('last_sync_at', { ascending: true, nullsFirst: true })
+          .limit(200),
         'syncable credentials',
       );
       return rows.map(mapCredential);

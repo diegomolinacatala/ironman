@@ -311,7 +311,8 @@ gh variable set EXPO_PUBLIC_PRIVACY_URL --body https://diegomolinacatala.github.
 ## Opcional
 
 - **IA de pago (Claude API)** en lugar de Cloudflare: solo si algún día quieres más calidad. Con
-  `ANTHROPIC_API_KEY` en Supabase y sin `AI_WORKER_*`, las funciones usan Claude. `EXPO_PUBLIC_AI_COACH=0`
+  `ANTHROPIC_API_KEY` y `AI_ALLOW_PAID=1` en Supabase y sin `AI_WORKER_*`, las funciones usan Claude
+  (sin `AI_ALLOW_PAID=1` la clave se ignora, para no pagar por un despiste). `EXPO_PUBLIC_AI_COACH=0`
   apaga toda la IA de la app.
 - **Garmin "Starter"** (gratis, con solicitud en developer.garmin.com): permitiría enviar los entrenos
   directamente al reloj desde la app.

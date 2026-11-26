@@ -1,7 +1,8 @@
 /**
  * Which AI runs coach, briefing and meal (docs/V2.md, "the app must cost nothing"):
  * Cloudflare Workers AI through our worker when AI_WORKER_URL + AI_WORKER_SECRET (≥ 32 chars)
- * are set (free tier), else Claude when ANTHROPIC_API_KEY is set, else none (503 ai_unavailable).
+ * are set (free tier), else Claude when ANTHROPIC_API_KEY is set AND AI_ALLOW_PAID=1 (a paid path is
+ * never taken by accident, e.g. after the worker secrets go missing), else none (503 ai_unavailable).
  * Pure: the entry points build the port from this choice.
  */
 import type { EnvReader } from '../secrets.ts';
@@ -37,5 +38,5 @@ export function chooseAiProvider(env: EnvReader, purpose: AiPurpose): AiProvider
     return { kind: 'workers', url, secret, model };
   }
   const apiKey = value(env, 'ANTHROPIC_API_KEY');
-  return apiKey ? { kind: 'claude', apiKey } : { kind: 'none' };
+  return apiKey && value(env, 'AI_ALLOW_PAID') === '1' ? { kind: 'claude', apiKey } : { kind: 'none' };
 }

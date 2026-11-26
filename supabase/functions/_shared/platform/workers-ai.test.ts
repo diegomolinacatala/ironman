@@ -57,7 +57,7 @@ function objectNodes(node: unknown): Record<string, unknown>[] {
   return [...self, ...Object.values(n).flatMap(objectNodes)];
 }
 
-test('provider choice: Workers AI first (secret ≥ 32 chars), then Claude, else none; models per purpose', () => {
+test('provider choice: Workers AI first (secret ≥ 32 chars), then Claude only with AI_ALLOW_PAID=1, else none; models per purpose', () => {
   const env = (vars: Record<string, string>) => (name: string) => vars[name];
   assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: SECRET, ANTHROPIC_API_KEY: 'k' }), 'text'), {
     kind: 'workers',
@@ -66,11 +66,14 @@ test('provider choice: Workers AI first (secret ≥ 32 chars), then Claude, else
     model: DEFAULT_WORKERS_MODEL,
   });
   assert.equal((chooseAiProvider(env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: SECRET }), 'vision') as { model: string }).model, DEFAULT_WORKERS_VISION_MODEL);
-  assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: 'short', ANTHROPIC_API_KEY: 'k' }), 'text'), { kind: 'claude', apiKey: 'k' });
+  assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: 'short', ANTHROPIC_API_KEY: 'k', AI_ALLOW_PAID: '1' }), 'text'), { kind: 'claude', apiKey: 'k' });
+  // A key alone never switches to the paid model (e.g. when the worker secrets go missing).
+  assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: 'short', ANTHROPIC_API_KEY: 'k' }), 'text'), { kind: 'none' });
+  assert.deepEqual(chooseAiProvider(env({ ANTHROPIC_API_KEY: 'k', AI_ALLOW_PAID: 'true' }), 'text'), { kind: 'none' });
   const custom = env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: SECRET, AI_MODEL: '@cf/nvidia/nemotron-3-120b-a12b', AI_VISION_MODEL: '@cf/google/gemma-4-26b-a4b-it' });
   assert.equal((chooseAiProvider(custom, 'text') as { model: string }).model, '@cf/nvidia/nemotron-3-120b-a12b');
   assert.equal((chooseAiProvider(custom, 'vision') as { model: string }).model, '@cf/google/gemma-4-26b-a4b-it');
-  assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', ANTHROPIC_API_KEY: 'k' }), 'vision'), { kind: 'claude', apiKey: 'k' });
+  assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', ANTHROPIC_API_KEY: 'k', AI_ALLOW_PAID: '1' }), 'vision'), { kind: 'claude', apiKey: 'k' });
   assert.deepEqual(chooseAiProvider(env({ AI_WORKER_SECRET: '  ' }), 'text'), { kind: 'none' });
 });
 

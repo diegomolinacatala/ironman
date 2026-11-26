@@ -424,7 +424,7 @@ your `verify_jwt` needs in your report (expected: coach/garmin = true … see be
 
 | Function | Auth | API |
 |---|---|---|
-| `coach` | user JWT (`verify_jwt=true`) | `POST CoachRequest` → `202 {jobId}`; inserts `coach_jobs`, runs Claude in `EdgeRuntime.waitUntil`, writes `plan_proposals` (source `ai_coach`) + job result. `503 {error:'ai_unavailable'}` when `ANTHROPIC_API_KEY` missing. Rate limit 30 jobs/user/day (`429`). |
+| `coach` | user JWT (`verify_jwt=true`) | `POST CoachRequest` → `202 {jobId}`; inserts `coach_jobs`, runs Claude in `EdgeRuntime.waitUntil`, writes `plan_proposals` (source `ai_coach`) + job result. `503 {error:'ai_unavailable'}` when there is no AI provider (neither the Workers AI worker nor Claude with `ANTHROPIC_API_KEY` + `AI_ALLOW_PAID=1`). Rate limit 30 jobs/user/day (`429`). |
 | `mcp` | path token, `verify_jwt=false` | `POST /mcp/u/<secret>` Streamable HTTP, stateless JSON responses, dual-era (2025-03-26…2025-11-25 with `initialize`, and 2026-07-28 `_meta`/`server/discover`), GET/DELETE → 405. Resolve user via `svc_resolve_token(sha256(secret),'mcp')`. Never log the path. |
 | `ics` | path token, `verify_jwt=false` | `GET /ics/<secret>.ics` → `text/calendar` (VTIMEZONE Europe/Madrid), workouts −14..+56 days + confirmed quedadas; all-day events when no start time. |
 | `push-dispatch` | secret key (`verify_jwt=false`, check `apikey` == secret) | Sends unsent `notifications` (last 24 h) straight to APNs (see §13), respects `notification_prefs.social` for social types, marks `pushed_at`/`push_error`, deletes tokens Apple rejects. |

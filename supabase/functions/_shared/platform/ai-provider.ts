@@ -1,6 +1,6 @@
 /**
  * Builds the AI port of an entry point: Workers AI (free, via the `ironman-ai` worker) when
- * AI_WORKER_URL + AI_WORKER_SECRET are set, else Claude with ANTHROPIC_API_KEY, else null
+ * AI_WORKER_URL + AI_WORKER_SECRET are set, else Claude with ANTHROPIC_API_KEY + AI_ALLOW_PAID=1, else null
  * (the functions then answer 503 ai_unavailable and the app uses its local engines).
  */
 import { chooseAiProvider } from '../ai/provider.ts';

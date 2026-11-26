@@ -21,7 +21,7 @@ En v2 (docs/V2.md) el coach con IA está encendido en la app (`EXPO_PUBLIC_AI_CO
 neuronas/día) a través de nuestro worker `ironman-ai` (`cloudflare/ai`). Proveedor por orden:
 1. Workers AI si están `AI_WORKER_URL` y `AI_WORKER_SECRET` (modelo `AI_MODEL` para coach e informe y
    `AI_VISION_MODEL` para fotos; por defecto `@cf/nvidia/nemotron-3-120b-a12b` para texto y `@cf/meta/llama-4-scout-17b-16e-instruct` para fotos);
-2. Claude (`claude-opus-5-5`, de pago) si solo está `ANTHROPIC_API_KEY` (opcional, se conserva como alternativa);
+2. Claude (`claude-opus-5-5`, de pago) si está `ANTHROPIC_API_KEY` **y además** `AI_ALLOW_PAID=1` (opcional, se conserva como alternativa; sin ese permiso nunca se paga, aunque falten los secretos del worker);
 3. ninguno → `503 ai_unavailable` y la app usa el motor de reglas / el informe y la estimación locales
    (`briefing` devuelve igualmente el informe ya guardado).
 
@@ -87,7 +87,8 @@ Los inyecta Supabase automáticamente: `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` (o
 | `SPEECH_USER_PREMIUM_DAILY_CHARS` | No (por defecto `1800`) | Parte del presupuesto premium que puede gastar **un** usuario por día UTC; pasado, ese usuario recibe la voz básica y el resto sigue teniendo premium. |
 | `SPEECH_PREMIUM_DAILY_CHARS` | No (por defecto `2500`) | Caracteres por día UTC (Cloudflare reinicia las neuronas a las 00:00 UTC), sumando **todos** los usuarios, que se leen con la voz premium (Deepgram Aura-2, 2.727 neuronas por 1.000 caracteres). Pasado el presupuesto, voz básica. 2500 ≈ 6.800 de las 10.000 neuronas gratuitas (el LLM usa ≤ 1.500 al día). `0` = siempre básica. |
 | `SPEECH_BASIC_DAILY_CHARS` | No (por defecto `60000`) | Caracteres por día UTC, sumando todos los usuarios, con la voz básica (MeloTTS, ~18,6 neuronas por minuto de audio ≈ 1.000 caracteres): 60.000 ≈ 1.100 neuronas. Pasado, `429 rate_limited` para todos hasta las 00:00 UTC. |
-| `ANTHROPIC_API_KEY` | No (opcional, de pago) | Claude `claude-opus-5-5`, solo si no está configurado el worker. Sin worker ni clave las tres funciones responden `503 {error:'ai_unavailable'}` y la app usa el motor de reglas, el informe local y la estimación local de comidas. `briefing` también usa `GARMIN_KEY_SECRET` (si está) para refrescar Garmin antes de preparar el informe. |
+| `ANTHROPIC_API_KEY` | No (opcional, de pago) | Claude `claude-opus-5-5`, solo si no está configurado el worker y además `AI_ALLOW_PAID=1`. Sin worker ni Claude permitido las tres funciones responden `503 {error:'ai_unavailable'}` y la app usa el motor de reglas, el informe local y la estimación local de comidas. `briefing` también usa `GARMIN_KEY_SECRET` (si está) para refrescar Garmin antes de preparar el informe. |
+| `AI_ALLOW_PAID` | No | `1` permite usar Claude de pago cuando no hay worker. Sin él, la clave de Anthropic se ignora y nunca se paga por un despiste de configuración. |
 
 **Una sola clave de Apple para push y Sign in with Apple.** En *Certificates, Identifiers & Profiles ›
 Keys › +* crea una clave y marca a la vez **Apple Push Notifications service (APNs)** (entorno
@@ -106,7 +107,7 @@ npx supabase secrets set APPLE_TEAM_ID=ABCDE12345 APPLE_KEY_ID=XYZ987WVU1 APPLE_
 npx supabase secrets set APPLE_PRIVATE_KEY="$(cat AuthKey_XYZ987WVU1.p8)"
 npx supabase secrets set AI_WORKER_URL=https://ironman-ai.<tu-subdominio>.workers.dev AI_WORKER_SECRET=<mismo valor que AI_SHARED_SECRET>
 npx supabase secrets set AI_MODEL=@cf/nvidia/nemotron-3-120b-a12b AI_VISION_MODEL=@cf/meta/llama-4-scout-17b-16e-instruct   # opcional
-npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...             # opcional (de pago), solo sin worker
+npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-... AI_ALLOW_PAID=1   # opcional (de pago), solo sin worker
 npx supabase secrets list
 ```
 
@@ -238,7 +239,7 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
   - `{ action: 'sync' }` → `SyncResult`. `404 not_connected`, `409 garmin_expired` (clave caducada o
     revocada; estado `expired`), `502 garmin_unavailable`.
   - `{ action: 'disconnect' }` → `{ provider, state: 'disconnected', …, ok: true }` (borra la clave).
-  - `{ action: 'sync_all' }` (solo con `apikey` secreta, para `pg_cron`) → resumen `{ users, ok, expired, failed, skipped }`.
+  - `{ action: 'sync_all' }` (solo con `apikey` secreta, para `pg_cron`) → resumen `{ users, ok, expired, failed, skipped }`. Como mucho 200 usuarios por llamada, primero los que llevan más tiempo sin sincronizar.
 - **ics** — `text/calendar` con `VTIMEZONE` Europe/Madrid, entrenos de −14 a +56 días (los saltados no
   salen) y quedadas confirmadas sin entreno enlazado. UID estable por entreno (`workout-<id>@roadtoironman.app`).
 - **push-dispatch** — reclama las notificaciones sin enviar de las últimas 24 h (`pushed_at`) y las
