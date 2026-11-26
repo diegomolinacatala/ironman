@@ -4,13 +4,16 @@
  * (`zones.sessionRpe`); the real data is what the athlete or the watch logged
  * (FC media, RPE, sensaciones, duration). Easy sessions done easier are fine;
  * a session that hurt (RPE well above the plan or bad sensations) gets advice
- * for tomorrow. Spanish copy with numbers the way athletes read them. Pure.
+ * for tomorrow. `reviewTrend` closes the loop: easy sessions that keep coming
+ * out harder than planned suggest reviewing the zones (never changed by itself).
+ * Spanish copy with numbers the way athletes read them. Pure.
  */
 import { COMPLIANCE_BANDS } from './constants';
+import { addDays } from './dates';
 import { feelLabel } from './labels';
 import { complianceOf, isUnplanned } from './load';
 import { intensityRank } from './restrictions';
-import type { NumberRange, RaceDistance, Thresholds, Workout } from './types';
+import type { ISODate, NumberRange, RaceDistance, Thresholds, Workout } from './types';
 import { sessionHrRange, sessionRpe, type ZoneOptions } from './zones';
 
 export type ReviewVerdict = 'on_target' | 'harder' | 'easier' | 'short' | 'long' | 'unknown';
@@ -199,4 +202,128 @@ export function reviewWorkout(workout: Workout, thresholds?: Thresholds | null, 
     plannedHr,
     plannedRpe,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Trend: easy sessions that keep coming out harder than planned
+// ---------------------------------------------------------------------------
+
+/** Sports whose easy sessions are compared: average HR for run and bike, RPE for all three. */
+export const TREND_SPORTS = ['run', 'bike', 'swim'] as const;
+export type TrendSport = (typeof TREND_SPORTS)[number];
+/** The last easy sessions compared (with HR or RPE to compare)… */
+export const TREND_WINDOW = 4;
+/** …how many of them must have come out harder than planned… */
+export const TREND_MIN_HARDER = 3;
+/** …and how far back they may be (older ones say little about today's zones). */
+export const TREND_DAYS = 42;
+
+export type TrendSignal = 'hr' | 'rpe' | 'both';
+
+export interface ReviewTrend {
+  sport: TrendSport;
+  /** Easy sessions compared (newest first, at most TREND_WINDOW). */
+  sessions: number;
+  /** How many of them came out harder than planned. */
+  harder: number;
+  /** What showed it: average HR above the zone, RPE above the plan, or both. */
+  signal: TrendSignal;
+  /** Date of the newest session compared. */
+  lastDate: ISODate;
+  /** «Tus rodajes suaves van más duros de lo previsto: ¿revisamos tus zonas?» */
+  message: string;
+  /** «3 de tus últimos 4 rodajes suaves, con el pulso medio por encima de tu zona.» */
+  detail: string;
+  /** What reviewing means: update the thresholds if they changed, else go easier. */
+  advice: string;
+}
+
+export interface ReviewTrendOptions extends ReviewOptions {
+  today: ISODate;
+}
+
+const TREND_COPY: Readonly<Record<TrendSport, { message: string; noun: string; last: string }>> = {
+  run: { message: 'Tus rodajes suaves van más duros de lo previsto: ¿revisamos tus zonas?', noun: 'rodajes suaves', last: 'últimos' },
+  bike: {
+    message: 'Tus salidas suaves en bici van más duras de lo previsto: ¿revisamos tus zonas?',
+    noun: 'salidas suaves en bici',
+    last: 'últimas',
+  },
+  swim: { message: 'Tus nados suaves van más duros de lo previsto: ¿revisamos tus zonas?', noun: 'nados suaves', last: 'últimos' },
+};
+
+const SIGNAL_TEXT: Readonly<Record<TrendSignal, string>> = {
+  hr: 'con el pulso medio por encima de tu zona',
+  rpe: 'con un esfuerzo (RPE) por encima de lo previsto',
+  both: 'con el pulso o el esfuerzo por encima de lo previsto',
+};
+
+const ADVICE: Readonly<Record<TrendSignal, string>> = {
+  hr: 'Si tu pulso de umbral ha cambiado, actualízalo; si no, frena un poco en los días suaves.',
+  rpe: 'Si tus umbrales ya no son los de ahora, actualízalos; si no, frena un poco en los días suaves.',
+  both: 'Si tus umbrales ya no son los de ahora, actualízalos; si no, frena un poco en los días suaves.',
+};
+
+interface EasyCheck {
+  date: ISODate;
+  hr: boolean;
+  rpe: boolean;
+}
+
+/** An easy session against its plan (HR above the zone, RPE above the plan); null with nothing to compare. */
+function easyCheck(w: Workout, thresholds: Thresholds | null | undefined, opts: ZoneOptions): EasyCheck | null {
+  const done = w.completed ?? {};
+  const hr = side(done.avgHr, sessionHrRange(w, thresholds ?? null, opts), HR_TOLERANCE);
+  const rpe = side(typeof done.rpe === 'number' ? done.rpe : undefined, expectedRpe(w, opts), RPE_TOLERANCE);
+  if (hr === null && rpe === null) return null;
+  return { date: w.date, hr: hr === 'above', rpe: rpe === 'above' };
+}
+
+function newestFirst(a: Workout, b: Workout): number {
+  if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+  return (b.startTime ?? '').localeCompare(a.startTime ?? '');
+}
+
+function trendOf(sport: TrendSport, workouts: readonly Workout[], thresholds: Thresholds | null | undefined, opts: ReviewTrendOptions): ReviewTrend | null {
+  const from = addDays(opts.today, -TREND_DAYS);
+  const zoneOpts = { raceDistance: opts.raceDistance ?? null };
+  const checks = workouts
+    .filter((w) => w.sport === sport && w.status === 'completed' && w.date >= from && w.date <= opts.today)
+    .filter((w) => !isUnplanned(w) && isEasySession(w))
+    .sort(newestFirst)
+    .map((w) => easyCheck(w, thresholds, zoneOpts))
+    .filter((c): c is EasyCheck => c !== null)
+    .slice(0, TREND_WINDOW);
+  const harder = checks.filter((c) => c.hr || c.rpe);
+  if (harder.length < TREND_MIN_HARDER) return null;
+  const byHr = harder.some((c) => c.hr);
+  const byRpe = harder.some((c) => c.rpe);
+  const signal: TrendSignal = byHr && byRpe ? 'both' : byHr ? 'hr' : 'rpe';
+  const copy = TREND_COPY[sport];
+  // «3 de tus últimos 4 rodajes suaves, …» or, when all of them, «Tus últimas 3 salidas suaves en bici, …».
+  const scope = `${copy.last} ${checks.length} ${copy.noun}, ${SIGNAL_TEXT[signal]}.`;
+  return {
+    sport,
+    sessions: checks.length,
+    harder: harder.length,
+    signal,
+    lastDate: checks[0]?.date ?? opts.today,
+    message: copy.message,
+    detail: harder.length === checks.length ? `Tus ${scope}` : `${harder.length} de tus ${scope}`,
+    advice: ADVICE[signal],
+  };
+}
+
+/**
+ * When ≥ 3 of the last 4 easy (Z1–Z2) sessions of a sport came out harder than planned
+ * (average HR above the zone, or RPE above the plan) the zones may be off: a suggestion
+ * to review them (run first, then bike, then swim). Bad sensations alone do not count
+ * (that is fatigue, not zones). Null when there is nothing to suggest.
+ */
+export function reviewTrend(workouts: readonly Workout[], thresholds: Thresholds | null | undefined, opts: ReviewTrendOptions): ReviewTrend | null {
+  for (const sport of TREND_SPORTS) {
+    const trend = trendOf(sport, workouts, thresholds, opts);
+    if (trend) return trend;
+  }
+  return null;
 }

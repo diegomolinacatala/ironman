@@ -8,6 +8,10 @@ import { addDays, todayISO } from '@/domain/dates';
 import type { Thresholds, Workout, WorkoutPatch, WorkoutStep } from '@/domain/types';
 import type { CoachVerdictModel } from '@/features/workouts/coachAdapters';
 import { HR_HINT_TEXT } from '@/features/workouts/detail/ThresholdsHint';
+import { MYWHOOSH_STORAGE_KEY, resetMyWhooshForTests, setMyWhooshEnabled } from '@/features/workouts/myWhooshSetting';
+import { completeKey, enqueueOffline, resetOfflineQueueForTests } from '@/data/offline/offlineQueue';
+import { OFFLINE_NOTICE_TEXT } from '@/features/offline/OfflineNotice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ME, makeWorkout } from './fixtures';
 
@@ -93,8 +97,10 @@ function series(overrides: Partial<Workout> = {}): Workout {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   resetDisclosureState();
+  resetMyWhooshForTests();
+  await AsyncStorage.removeItem(MYWHOOSH_STORAGE_KEY);
   jest.clearAllMocks();
   mockRouter.canGoBack.mockReturnValue(true);
   mockAuth = { session: { userId: ME, email: null }, isLoading: false };
@@ -241,6 +247,66 @@ describe('workout detail · completed', () => {
     ).toBeTruthy();
     expect(screen.queryByText('Si no es tu día')).toBeNull();
     expect(screen.getByRole('button', { name: /^Lo has hecho bien si…/ })).toBeTruthy();
+  });
+});
+
+describe('workout detail · «Hecho» saved without connection', () => {
+  test('says it waits on the phone, only for this session', async () => {
+    resetOfflineQueueForTests();
+    await enqueueOffline(ME, { kind: 'complete', key: completeKey('w1'), workoutId: 'w1', data: { durationMin: 60 } });
+    mockWorkout = { data: series({ status: 'completed', completed: { durationMin: 60 } }), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.getByText(OFFLINE_NOTICE_TEXT)).toBeTruthy();
+    mockWorkout = { data: series({ id: 'other' }), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.queryByText(OFFLINE_NOTICE_TEXT)).toBeNull();
+    resetOfflineQueueForTests();
+  });
+});
+
+describe('workout detail · MyWhoosh on the indoor trainer', () => {
+  const BIKE_STEPS: WorkoutStep[] = [
+    { kind: 'warmup', durationMin: 12, intensity: 'recovery' },
+    { kind: 'work', durationMin: 20, repeat: 2, intensity: 'threshold' },
+    { kind: 'recovery', durationMin: 4, repeat: 2, intensity: 'recovery' },
+    { kind: 'cooldown', durationMin: 1, intensity: 'recovery' },
+  ];
+  const LINE = "En rodillo: MyWhoosh › Threshold › Threshold 20 (2×20' al 95 %, 61')";
+
+  function bikeSession(overrides: Partial<Workout> = {}): Workout {
+    return series({ sport: 'bike', title: "Bici umbral 2×20'", durationMin: 61, steps: BIKE_STEPS, coaching: undefined, ...overrides });
+  }
+
+  test('off by default: no MyWhoosh line', async () => {
+    mockWorkout = { data: bikeSession(), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.getByText('Estructura')).toBeTruthy();
+    expect(screen.queryByText(/^En rodillo/)).toBeNull();
+  });
+
+  test('turned on: one quiet line with the closest free workout', async () => {
+    await setMyWhooshEnabled(true);
+    mockWorkout = { data: bikeSession(), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.getByText(LINE)).toBeTruthy();
+    expect(screen.getByLabelText("En rodillo: MyWhoosh, carpeta Threshold, Threshold 20: 2×20' al 95 %, 61 minutos.")).toBeTruthy();
+  });
+
+  test('the setting stored on the device is read on open', async () => {
+    await AsyncStorage.setItem(MYWHOOSH_STORAGE_KEY, '1');
+    mockWorkout = { data: bikeSession(), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(await screen.findByText(LINE)).toBeTruthy();
+  });
+
+  test('only for planned bike sessions', async () => {
+    await setMyWhooshEnabled(true);
+    mockWorkout = { data: series(), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.queryByText(/^En rodillo/)).toBeNull();
+    mockWorkout = { data: bikeSession({ status: 'completed', completed: { durationMin: 61 } }), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.queryByText(/^En rodillo/)).toBeNull();
   });
 });
 

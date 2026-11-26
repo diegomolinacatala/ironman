@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { StorageKeys } from '@/lib/storage';
 
+import { completeKey, enqueueOffline, getOfflineItems, offlineWritesSettled, storageKeyFor } from '../offline/offlineQueue';
 import { createSupabaseAuth } from '../supabase/auth';
 import { isAppleUser } from '../supabase/appleRevoke';
 import { parseStoredPushToken } from '../supabase/pushToken';
@@ -143,6 +144,15 @@ describe('Supabase auth', () => {
     expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(appleMock().signInAsync).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('forgets the check-ins and «Hecho» still waiting on the phone for the deleted account', async () => {
+    await enqueueOffline('me', { kind: 'complete', key: completeKey('w1'), workoutId: 'w1', data: { durationMin: 40 } });
+    await offlineWritesSettled();
+    expect(await AsyncStorage.getItem(storageKeyFor('me'))).not.toBeNull();
+    await createSupabaseAuth(authClient().client).deleteAccount();
+    expect(getOfflineItems('me')).toHaveLength(0);
+    expect(await AsyncStorage.getItem(storageKeyFor('me'))).toBeNull();
   });
 });
 

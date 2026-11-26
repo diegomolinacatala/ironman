@@ -47,6 +47,8 @@ export interface CompareDay {
 
 export interface JointPrefill {
   friendId?: UUID;
+  /** Several friends at once («Repetir la semana que viene»); in the URL, comma-separated. */
+  friendIds?: UUID[];
   date?: ISODate;
   sport?: Sport;
   startTime?: ISOTime;

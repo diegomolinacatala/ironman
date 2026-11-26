@@ -2,6 +2,7 @@
  * Quedada form: route params parsing, validation and conversion to a draft.
  * Pure — the screen only wires state and mutations.
  */
+import { addDays } from '@/domain/dates';
 import {
   INTENSITIES,
   SPORTS,
@@ -25,6 +26,8 @@ export const JOINT_LIMITS = {
   maxDuration: 480,
   durationStep: 15,
   defaultDuration: 60,
+  /** Friends one quedada can invite (MCP and RPC allow 10). */
+  maxInvitees: 10,
 } as const;
 
 /** Sports that make sense for a joint session (no "rest"). */
@@ -67,6 +70,12 @@ export function clampDuration(value: number): number {
   return Math.min(JOINT_LIMITS.maxDuration, Math.max(JOINT_LIMITS.minDuration, stepped));
 }
 
+/** "a,b,c" → ['a', 'b', 'c'] (empty and repeated ids dropped, at most the 10 friends a quedada can invite). */
+function idList(value: string | undefined): UUID[] | undefined {
+  const ids = [...new Set((value ?? '').split(',').map((id) => id.trim()).filter((id) => id.length > 0))];
+  return ids.length > 0 ? ids.slice(0, JOINT_LIMITS.maxInvitees) : undefined;
+}
+
 /** Parses `/joint/new` search params defensively (anything invalid is dropped). */
 export function parseJointParams(raw: RawParams): JointPrefill {
   const date = first(raw, 'date');
@@ -78,6 +87,7 @@ export function parseJointParams(raw: RawParams): JointPrefill {
   const location = first(raw, 'location')?.trim();
   return {
     friendId: first(raw, 'friendId'),
+    friendIds: idList(first(raw, 'friendIds')),
     date: date && DATE_RE.test(date) ? date : undefined,
     sport: isSport(sport) && sport !== 'rest' ? sport : undefined,
     startTime: startTime && TIME_RE.test(startTime) ? startTime : undefined,
@@ -105,13 +115,19 @@ export function defaultTitle(sport: Sport): string {
   return names[sport];
 }
 
+/** Who the form starts inviting: the prefilled friends who are still friends, else the only friend. */
+function initialInvitees(prefill: JointPrefill, acceptedFriendIds: readonly UUID[]): UUID[] {
+  const wanted = [...(prefill.friendIds ?? []), ...(prefill.friendId ? [prefill.friendId] : [])];
+  const valid = [...new Set(wanted.filter((id) => acceptedFriendIds.includes(id)))];
+  if (valid.length > 0) return valid;
+  const onlyFriend = acceptedFriendIds.length === 1 ? acceptedFriendIds[0] : undefined;
+  return onlyFriend ? [onlyFriend] : [];
+}
+
 export function initialForm(prefill: JointPrefill, today: ISODate, acceptedFriendIds: readonly UUID[]): JointForm {
   const sport = prefill.sport ?? 'run';
-  const friendOk = prefill.friendId && acceptedFriendIds.includes(prefill.friendId);
-  const fallbackFriend = acceptedFriendIds.length === 1 ? acceptedFriendIds[0] : undefined;
-  const invitee = friendOk ? prefill.friendId : fallbackFriend;
   return {
-    inviteeIds: invitee ? [invitee] : [],
+    inviteeIds: initialInvitees(prefill, acceptedFriendIds),
     sport,
     title: prefill.title ?? defaultTitle(sport),
     date: prefill.date && prefill.date >= today ? prefill.date : today,
@@ -224,6 +240,45 @@ export function prefillFromOpportunity(opportunity: Opportunity, friendId: UUID)
     durationMin: opportunity.durationMin > 0 ? clampDuration(opportunity.durationMin) : undefined,
     fromWorkoutId: opportunity.myWorkoutId ?? undefined,
     title: opportunity.title,
+  };
+}
+
+/** «Repetir la semana que viene»: seven days later. */
+export const REPEAT_AFTER_DAYS = 7;
+
+/** A week after `date`; when that is already past, the same weekday from today on. */
+export function nextWeekDate(date: ISODate, today: ISODate): ISODate {
+  let next = addDays(date, REPEAT_AFTER_DAYS);
+  while (next < today) next = addDays(next, REPEAT_AFTER_DAYS);
+  return next;
+}
+
+/** I organised it or said yes, and it was not cancelled: I can propose it again. */
+export function canRepeat(session: JointSession, myId: UUID | null): boolean {
+  if (!myId || session.status === 'cancelled') return false;
+  if (session.organizerId === myId) return true;
+  return session.participants.some((p) => p.userId === myId && p.status === 'accepted');
+}
+
+/**
+ * The new-quedada form for «Repetir la semana que viene»: same sport, title, start time,
+ * duration, intensity, place and people (everyone but me who did not decline; the form keeps
+ * only those who are still my friends), a week later. Notes are not copied: they are usually
+ * about that one day. Open to all my friends only when I organised an open one.
+ */
+export function repeatPrefill(session: JointSession, myId: UUID | null, today: ISODate): JointPrefill {
+  const friendIds = session.participants.filter((p) => p.userId !== myId && p.status !== 'declined').map((p) => p.userId);
+  const location = session.location?.trim();
+  return {
+    ...(friendIds.length > 0 ? { friendIds: friendIds.slice(0, JOINT_LIMITS.maxInvitees) } : {}),
+    date: nextWeekDate(session.date, today),
+    ...(session.sport !== 'rest' ? { sport: session.sport } : {}),
+    ...(session.startTime ? { startTime: session.startTime } : {}),
+    durationMin: clampDuration(session.durationMin),
+    title: session.title.slice(0, JOINT_LIMITS.titleMax),
+    intensity: session.intensity,
+    ...(location ? { location: location.slice(0, JOINT_LIMITS.locationMax) } : {}),
+    ...(session.isOpen === true && session.organizerId === myId ? { open: '1' } : {}),
   };
 }
 

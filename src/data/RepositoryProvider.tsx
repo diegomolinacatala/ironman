@@ -6,6 +6,7 @@ import { removeKey, StorageKeys } from '@/lib/storage';
 
 import { AuthContext, RepositoryContext, type AuthState } from './context';
 import { createRepository } from './createRepository';
+import { OfflineSyncBridge } from './offline/useOfflineSync';
 import { useRealtimeInvalidation } from './queries';
 import type { Repository } from './repository';
 
@@ -64,6 +65,8 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
       <AuthContext.Provider value={auth}>
         <QueryClientProvider client={queryClient}>
           {auth.session ? <RealtimeBridge /> : null}
+          {/* Check-ins and «Hecho» saved without connection are sent from here. */}
+          {auth.session ? <OfflineSyncBridge userId={auth.session.userId} /> : null}
           {children}
         </QueryClientProvider>
       </AuthContext.Provider>

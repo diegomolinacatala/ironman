@@ -60,7 +60,8 @@ export function CompleteSheet({ workout, visible, onClose, onDone, raceDistance 
       completedAt: new Date().toISOString(),
     };
     try {
-      const done = await complete.mutateAsync({ id: workout.id, data });
+      // Without connection it is kept on the phone and resolves as done (a notice says it will be sent).
+      const done = await complete.mutateAsync({ id: workout.id, data, workout });
       haptics.success();
       onDone?.(done);
       onClose();

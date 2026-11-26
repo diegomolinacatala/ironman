@@ -301,8 +301,8 @@ of the tabs), never `router.push`, which would stack a second tab navigator. Fiv
 | `nutrition` (`?date`) | ui-coach | nutrition log + fueling tips |
 | `friends/add` | ui-together | search username, share invite (modal) |
 | `friends/[id]` (`?week`) | ui-together | full week compare + huecos + oportunidades |
-| `joint/new` (`?friendId&date&sport&startTime&durationMin&fromWorkoutId&title`) | ui-together | propose quedada (modal) |
-| `joint/[id]` | ui-together | quedada detail, accept/decline/cancel |
+| `joint/new` (`?friendId&friendIds&date&sport&startTime&durationMin&fromWorkoutId&title&intensity&location&open`) | ui-together | propose quedada (modal) |
+| `joint/[id]` | ui-together | quedada detail, accept/decline/cancel, «Repetir la semana que viene» |
 | `notifications` | ui-together | **Avisos** inbox (bell on Hoy and Juntos); tap → `data.url` (tab paths via `dismissTo`) |
 | `settings/profile` | ui-account | name, username, level, sports, thresholds, coach notes |
 | `settings/availability` | ui-account | weekly hours, rest/long/pool days, windows |
@@ -788,3 +788,29 @@ Four changes approved by David; the contract details live in §4 (`periodization
   preparas?» for B/C races (`RaceForm`, `raceFormModel`).
 - **Deploy order:** `supabase db push` (`20261126000100_race_prep.sql`) before deploying the edge functions
   (`RACE_COLS` reads `prep`) or shipping the app.
+
+## 19. Indoor trainer, offline saves, repeated quedadas and zone reviews (2026-11-26)
+
+- **MyWhoosh** (`domain/mywhoosh.ts`): hand-curated catalog of free MyWhoosh workouts (source: the fan site
+  mywhooshinfo.com, checked 26-11-2026). `myWhooshFor(workout, { thresholds, raceDistance })` reads the session's
+  main set (kind, rep length, rep count, then duration; sweet spot from the title or its 88–94 % target; race pace
+  → tempo or sweet spot by % FTP; rides over 105' → «90 Minute Endurance» + free ride). Opt-in device setting
+  `rti.myWhoosh.v1` (`features/workouts/myWhooshSetting.ts`, Tú › Entrenamiento); when on, planned bike sessions
+  show one line under the structure (`detail/MyWhooshNote.tsx`).
+- **Offline check-in and «Hecho»** (`data/offline/`): `useUpsertCheckin` and `useCompleteWorkout` run with
+  `networkMode: 'always'` through `saveOrQueue`: a `network | unavailable | rate_limited | not_authenticated` error,
+  a request slower than 10 s or `onlineManager` offline keeps the change in a per-account AsyncStorage queue
+  (`rti.offline.queue.v1.user.<id>`, one item per `checkin:<date>` / `complete:<workoutId>`) and resolves with the
+  optimistic result; other errors throw as before. `useWorkouts` / `useWorkout` / `useCheckins` lay the queue over
+  the server data (`pendingOverlay.ts`), so the optimistic state survives refetches and restarts. `OfflineSyncBridge`
+  (mounted by `RepositoryProvider` while signed in) flushes on sign-in, foreground, `onlineManager` back online,
+  «Reintentar» and a 15 s → 5 min backoff timer. Idempotent: check-ins upsert by date; a queued «Hecho» first reads
+  the session (deleted → dropped; same or newer manual «Hecho» → nothing sent; completed by the watch → only RPE,
+  sensations and notes are added). «Reabrir» drops a queued «Hecho». Notice: `features/offline/OfflineNotice.tsx`
+  (Hoy, workout detail, check-in result). React Native has no network listener installed (no NetInfo): there the
+  foreground and the timer do the work.
+- **«Repetir la semana que viene»** (`joint/[id]`, organiser or accepted participant, not cancelled):
+  `jointForm.repeatPrefill` opens `/joint/new` with the same sport, title, start time, duration, intensity, place and
+  people (everyone but me who did not decline, `friendIds` comma-separated; the form keeps only current friends),
+  date + 7 days (never in the past: `nextWeekDate`). Notes are not copied; open only if I organised an open one.
+  The athlete reviews and sends; nothing is sent by itself.

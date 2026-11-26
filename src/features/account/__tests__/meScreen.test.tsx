@@ -5,7 +5,9 @@ import { Alert, type AlertButton } from 'react-native';
 import MeScreen from '@/app/(tabs)/me';
 import { addDays, todayISO } from '@/domain/dates';
 import type { IntegrationStatus, PersonalToken, Profile, Race } from '@/domain/types';
+import { getMyWhooshEnabled, MYWHOOSH_STORAGE_KEY, resetMyWhooshForTests } from '@/features/workouts/myWhooshSetting';
 import { getAppearancePreference, resetAppearanceForTests } from '@/ui/appearance';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockUpdateProfile = jest.fn(async (patch: Record<string, unknown>) => patch);
@@ -169,6 +171,20 @@ describe('Tú', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/availability');
     await fireEvent.press(screen.getByRole('button', { name: /^Perfil deportivo\. Natación, Bici, Carrera/ }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/profile');
+  });
+
+  test('Entrenamiento: «Entreno en rodillo con MyWhoosh» starts off and is saved on the device', async () => {
+    resetMyWhooshForTests();
+    await AsyncStorage.removeItem(MYWHOOSH_STORAGE_KEY);
+    await render(<MeScreen />);
+    expect(screen.getByText('En cada sesión de bici te diremos el entrenamiento gratuito de MyWhoosh más parecido')).toBeTruthy();
+    const toggle = screen.getByLabelText('Entreno en rodillo con MyWhoosh');
+    expect(toggle.props.value).toBe(false);
+    await fireEvent(toggle, 'valueChange', true);
+    expect(getMyWhooshEnabled()).toBe(true);
+    await waitFor(async () => expect(await AsyncStorage.getItem(MYWHOOSH_STORAGE_KEY)).toBe('1'));
+    expect(screen.getByLabelText('Entreno en rodillo con MyWhoosh').props.value).toBe(true);
+    await act(async () => resetMyWhooshForTests());
   });
 
   test('without a race the row asks to add one', async () => {

@@ -1,11 +1,12 @@
 /**
  * Loads and derives everything the Progreso tab shows (form, volume, recovery, today's
- * nutrition and the next race).
+ * nutrition, the next race and the zone-review suggestion).
  */
 import { useMemo } from 'react';
 
 import { useLifeEvents, useMetrics, useNutrition, useProfile, useRaces, useWorkouts } from '@/data/queries';
 import { nextRace, phaseFor } from '@/domain/periodization';
+import { reviewTrend, type ReviewTrend } from '@/domain/review';
 import type { ISODate, Race } from '@/domain/types';
 import { dayTotals, type DayTotals } from '@/features/nutrition/nutritionModel';
 import { useFitnessMinutes } from '@/features/week/useFitnessMinutes';
@@ -21,6 +22,8 @@ export interface ProgressData {
   recovery: RecoverySeries[];
   race: Race | null;
   phase: ReturnType<typeof phaseFor> | null;
+  /** Easy sessions that keep coming out harder than planned: suggest reviewing the zones. */
+  zoneTrend: ReviewTrend | null;
   /** Today's nutrition log summary (null until loaded). */
   nutrition: { totals: DayTotals; entries: number } | null;
   isLoading: boolean;
@@ -53,6 +56,14 @@ export function useProgressData(today: ISODate): ProgressData {
   const raceList = races.data ?? [];
   const race = nextRace(raceList, today);
   const phase = raceList.length > 0 ? phaseFor(today, raceList, { level: profile.data?.level, recentWeeklyMinutes: fitness }) : null;
+  const raceDistance = race?.distance ?? null;
+  const thresholds = profile.data?.thresholds ?? null;
+  // Waits for the profile: without its thresholds the HR check would be skipped for a moment.
+  const profileReady = !profile.isLoading;
+  const zoneTrend = useMemo(
+    () => (workouts.data && profileReady ? reviewTrend(workouts.data, thresholds, { today, raceDistance }) : null),
+    [workouts.data, profileReady, thresholds, today, raceDistance],
+  );
 
   // A failed meals query must not read as "Nada apuntado hoy".
   const firstError = workouts.error ?? events.error ?? metrics.error ?? races.error ?? meals.error;
@@ -62,6 +73,7 @@ export function useProgressData(today: ISODate): ProgressData {
     recovery,
     race,
     phase,
+    zoneTrend,
     nutrition,
     // Metrics too: otherwise Recuperación shows "sin datos" before they arrive.
     isLoading: workouts.isLoading || races.isLoading || metrics.isLoading,

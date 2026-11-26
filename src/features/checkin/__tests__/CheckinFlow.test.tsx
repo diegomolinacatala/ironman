@@ -3,13 +3,16 @@
  * triggers the same refetch as in the app (the mocked-hooks suite cannot).
  */
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import CheckinScreen from '@/app/checkin';
 import { AuthContext, RepositoryContext } from '@/data/context';
-import type { Repository } from '@/data/repository';
+import { getOfflineItems, resetOfflineQueueForTests } from '@/data/offline/offlineQueue';
+import { RepositoryError, type Repository } from '@/data/repository';
+import { OFFLINE_NOTICE_TEXT } from '@/features/offline/OfflineNotice';
 import type { CheckinDraft, DailyCheckin, DailyMetrics, DateRange, Workout } from '@/domain/types';
 import { makeWorkout } from '@/features/coach/__tests__/fixtures';
 
@@ -96,8 +99,10 @@ async function answerAll(values: [number, number, number, number, number]) {
   await fireEvent.press(screen.getByLabelText(`Motivación: ${motivation} de 5`));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  resetOfflineQueueForTests();
+  await AsyncStorage.clear();
   repo = makeRepo();
 });
 
@@ -164,5 +169,17 @@ describe('first check-in of the day', () => {
     await answerAll([4, 2, 2, 2, 4]);
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
     expect(await within(screen.getByTestId('form-footer')).findByText('Sin conexión')).toBeTruthy();
+  });
+
+  test('without connection the check-in is kept on the phone: same result, plus a calm notice', async () => {
+    repo.upsertCheckin.mockRejectedValue(new RepositoryError('network', 'Sin conexión. Revisa tu internet e inténtalo de nuevo.'));
+    await render(<CheckinScreen />, { wrapper: Providers });
+    await screen.findByRole('button', { name: 'Guardar check-in' });
+    await answerAll([4, 2, 2, 2, 4]);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(await screen.findByText('Disposición de hoy')).toBeTruthy();
+    expect(screen.getByText(OFFLINE_NOTICE_TEXT)).toBeTruthy();
+    expect(screen.queryByText(/Revisa tu internet/)).toBeNull();
+    expect(getOfflineItems('me').map((item) => item.key)).toEqual([`checkin:${DATE}`]);
   });
 });

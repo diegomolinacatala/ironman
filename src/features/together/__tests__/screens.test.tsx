@@ -261,6 +261,40 @@ describe('joint/new', () => {
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/joint/j-new'));
   });
 
+  test('a repeated quedada arrives filled in and is only sent when the athlete taps', async () => {
+    const nextWeek = addDays(tomorrow, 7);
+    mockParams = {
+      friendIds: ALEX,
+      date: nextWeek,
+      sport: 'bike',
+      startTime: '08:30',
+      durationMin: '150',
+      title: 'Salida del sábado',
+      intensity: 'endurance',
+      location: 'Puerta de Hierro',
+    };
+    await render(<JointNewScreen />, { wrapper: Providers });
+    const send = await screen.findByRole('button', { name: 'Enviar invitación' });
+    expect(screen.getByDisplayValue('Salida del sábado')).toBeTruthy();
+    expect(screen.getByDisplayValue('Puerta de Hierro')).toBeTruthy();
+    expect(screen.getByDisplayValue('08:30')).toBeTruthy();
+    expect(repo.proposeJointSession).not.toHaveBeenCalled();
+    await fireEvent.press(send);
+    await waitFor(() => expect(repo.proposeJointSession).toHaveBeenCalledTimes(1));
+    expect(repo.proposeJointSession.mock.calls[0]?.[0]).toMatchObject({
+      inviteeIds: [ALEX],
+      sport: 'bike',
+      date: nextWeek,
+      startTime: '08:30',
+      durationMin: 150,
+      title: 'Salida del sábado',
+      intensity: 'endurance',
+      location: 'Puerta de Hierro',
+      notes: null,
+      isOpen: false,
+    });
+  });
+
   test('shows overlaps for me and the friend', async () => {
     mockParams = { friendId: ALEX, date: tomorrow, startTime: '18:00', sport: 'bike' };
     await render(<JointNewScreen />, { wrapper: Providers });
@@ -283,6 +317,46 @@ describe('joint/[id]', () => {
     expect(screen.getByText('Invitado')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Aceptar' }));
     await waitFor(() => expect(repo.respondJointSession).toHaveBeenCalledWith('j-invite', true));
+  });
+
+  test('«Repetir la semana que viene» opens the new-quedada form a week later, and sends nothing', async () => {
+    const ride = jointSession({
+      id: 'j-ride',
+      sport: 'bike',
+      date: tomorrow,
+      startTime: '08:30',
+      durationMin: 150,
+      title: 'Salida del sábado',
+      location: 'Puerta de Hierro',
+      notes: 'Llevo yo los geles',
+      status: 'confirmed',
+      participants: [participant({ userId: ALEX, displayName: 'Álex', status: 'accepted' }), participant({ userId: ME, status: 'accepted' })],
+    });
+    repo.getJointSession.mockResolvedValue(ride);
+    mockParams = { id: 'j-ride' };
+    await render(<JointSessionScreen />, { wrapper: Providers });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Repetir la semana que viene' }));
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/joint/new',
+      params: {
+        friendIds: ALEX,
+        date: addDays(tomorrow, 7),
+        sport: 'bike',
+        startTime: '08:30',
+        durationMin: '150',
+        title: 'Salida del sábado',
+        intensity: 'endurance',
+        location: 'Puerta de Hierro',
+      },
+    });
+    expect(repo.proposeJointSession).not.toHaveBeenCalled();
+  });
+
+  test('an invitee who has not answered cannot repeat it yet', async () => {
+    mockParams = { id: 'j-invite' };
+    await render(<JointSessionScreen />, { wrapper: Providers });
+    expect(await screen.findByText('Rodaje largo')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Repetir la semana que viene' })).toBeNull();
   });
 
   test('a missing quedada goes back to the Juntos tab', async () => {

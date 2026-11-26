@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking';
 
 import { logger } from '@/lib/logger';
 
+import { clearOfflineQueue } from '../offline/offlineQueue';
 import { RepositoryError, type AuthApi, type AuthSession } from '../repository';
 import { requestAppleCredential } from './apple';
 import { revokeAppleAuthorization } from './appleRevoke';
@@ -31,7 +32,7 @@ async function clearDeviceData(client: SupabaseClient): Promise<void> {
   try {
     const { data } = await client.auth.getSession();
     const userId = data.session?.user.id;
-    if (userId) await clearLocalBriefings(userId);
+    if (userId) await Promise.all([clearLocalBriefings(userId), clearOfflineQueue(userId)]);
   } catch (error) {
     logger.warn('device data cleanup skipped', error);
   }
