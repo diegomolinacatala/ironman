@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, jest, test } from '@jest/globals';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { ActionSheetIOS } from 'react-native';
 
 import TodayScreen from '@/app/(tabs)/today';
+import { completeKey, enqueueOffline, removeOfflineKey, resetOfflineQueueForTests } from '@/data/offline/offlineQueue';
+import { listenFlushRequests } from '@/data/offline/useOfflineSync';
+import { OFFLINE_NOTICE_TEXT } from '@/features/offline/OfflineNotice';
 import type { JointSession, NutritionLog, Thresholds, Workout, WorkoutPatch, WorkoutStep } from '@/domain/types';
 import { ME, makeSession, makeWorkout } from '@/features/workouts/__tests__/fixtures';
 
@@ -184,6 +187,28 @@ describe('Hoy · the coach in the session card', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Más opciones: no es mi día, mover o saltar' }));
     expect(sheet.mock.calls[0]?.[0].options).toEqual(['Mover a otro día', 'Saltar', 'Cancelar']);
     sheet.mockRestore();
+  });
+});
+
+describe('Hoy · saved without connection', () => {
+  test('a calm notice while a «Hecho» waits on the phone; «Reintentar» asks to send it now', async () => {
+    resetOfflineQueueForTests();
+    mockData = data({ todayWorkouts: [coachedSeries()] });
+    await render(<TodayScreen />);
+    expect(screen.queryByText(OFFLINE_NOTICE_TEXT)).toBeNull();
+    await act(async () => {
+      await enqueueOffline(ME, { kind: 'complete', key: completeKey('h'), workoutId: 'h', data: { durationMin: 60 } });
+    });
+    expect(screen.getByText(OFFLINE_NOTICE_TEXT)).toBeTruthy();
+    const flush = jest.fn();
+    const stop = listenFlushRequests(flush);
+    await fireEvent.press(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(flush).toHaveBeenCalledTimes(1);
+    stop();
+    await act(async () => {
+      await removeOfflineKey(ME, completeKey('h'));
+    });
+    expect(screen.queryByText(OFFLINE_NOTICE_TEXT)).toBeNull();
   });
 });
 

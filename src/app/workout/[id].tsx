@@ -6,7 +6,9 @@ import { sportLabel } from '@/domain/labels';
 import { complianceOf } from '@/domain/load';
 import type { ISODate, Workout } from '@/domain/types';
 import { useAuth } from '@/data/context';
+import { completeKey } from '@/data/offline/offlineQueue';
 import { useJointSession, useWorkout } from '@/data/queries';
+import { OfflineNotice } from '@/features/offline/OfflineNotice';
 import { easierPatch, workoutVerdict } from '@/features/workouts/coachAdapters';
 import { CompleteSheet } from '@/features/workouts/CompleteSheet';
 import { CoachVerdict } from '@/features/workouts/detail/CoachVerdict';
@@ -84,6 +86,7 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
     <Screen inSheet onRefresh={onRefresh} refreshing={refreshing}>
       <Stack.Screen options={{ title: sportLabel(workout.sport) }} />
       <WorkoutHeader workout={workout} partnerName={partnerName} />
+      <OfflineNotice pendingKey={completeKey(workout.id)} />
       <CompletedPanel workout={workout} compliance={compliance} thresholds={athlete.thresholds} raceDistance={athlete.raceDistance} />
       <CoachVerdict verdict={workoutVerdict(workout, athlete.thresholds, athlete.raceDistance)} />
       {workout.status === 'completed' ? <SimilarSessionsNote workout={workout} /> : null}

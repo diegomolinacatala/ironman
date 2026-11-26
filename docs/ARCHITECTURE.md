@@ -701,3 +701,15 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   → tempo or sweet spot by % FTP; rides over 105' → «90 Minute Endurance» + free ride). Opt-in device setting
   `rti.myWhoosh.v1` (`features/workouts/myWhooshSetting.ts`, Tú › Entrenamiento); when on, planned bike sessions
   show one line under the structure (`detail/MyWhooshNote.tsx`).
+- **Offline check-in and «Hecho»** (`data/offline/`): `useUpsertCheckin` and `useCompleteWorkout` run with
+  `networkMode: 'always'` through `saveOrQueue`: a `network | unavailable | rate_limited | not_authenticated` error,
+  a request slower than 10 s or `onlineManager` offline keeps the change in a per-account AsyncStorage queue
+  (`rti.offline.queue.v1.user.<id>`, one item per `checkin:<date>` / `complete:<workoutId>`) and resolves with the
+  optimistic result; other errors throw as before. `useWorkouts` / `useWorkout` / `useCheckins` lay the queue over
+  the server data (`pendingOverlay.ts`), so the optimistic state survives refetches and restarts. `OfflineSyncBridge`
+  (mounted by `RepositoryProvider` while signed in) flushes on sign-in, foreground, `onlineManager` back online,
+  «Reintentar» and a 15 s → 5 min backoff timer. Idempotent: check-ins upsert by date; a queued «Hecho» first reads
+  the session (deleted → dropped; same or newer manual «Hecho» → nothing sent; completed by the watch → only RPE,
+  sensations and notes are added). «Reabrir» drops a queued «Hecho». Notice: `features/offline/OfflineNotice.tsx`
+  (Hoy, workout detail, check-in result). React Native has no network listener installed (no NetInfo): there the
+  foreground and the timer do the work.

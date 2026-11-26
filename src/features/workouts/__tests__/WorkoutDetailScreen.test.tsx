@@ -9,6 +9,8 @@ import type { Thresholds, Workout, WorkoutPatch, WorkoutStep } from '@/domain/ty
 import type { CoachVerdictModel } from '@/features/workouts/coachAdapters';
 import { HR_HINT_TEXT } from '@/features/workouts/detail/ThresholdsHint';
 import { MYWHOOSH_STORAGE_KEY, resetMyWhooshForTests, setMyWhooshEnabled } from '@/features/workouts/myWhooshSetting';
+import { completeKey, enqueueOffline, resetOfflineQueueForTests } from '@/data/offline/offlineQueue';
+import { OFFLINE_NOTICE_TEXT } from '@/features/offline/OfflineNotice';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ME, makeWorkout } from './fixtures';
@@ -245,6 +247,20 @@ describe('workout detail · completed', () => {
     ).toBeTruthy();
     expect(screen.queryByText('Si no es tu día')).toBeNull();
     expect(screen.getByRole('button', { name: /^Lo has hecho bien si…/ })).toBeTruthy();
+  });
+});
+
+describe('workout detail · «Hecho» saved without connection', () => {
+  test('says it waits on the phone, only for this session', async () => {
+    resetOfflineQueueForTests();
+    await enqueueOffline(ME, { kind: 'complete', key: completeKey('w1'), workoutId: 'w1', data: { durationMin: 60 } });
+    mockWorkout = { data: series({ status: 'completed', completed: { durationMin: 60 } }), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.getByText(OFFLINE_NOTICE_TEXT)).toBeTruthy();
+    mockWorkout = { data: series({ id: 'other' }), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.queryByText(OFFLINE_NOTICE_TEXT)).toBeNull();
+    resetOfflineQueueForTests();
   });
 });
 

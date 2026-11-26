@@ -6,6 +6,7 @@ import { needsInlineAccessory } from '@/features/accessory/coachActions';
 import { CoachAccessory } from '@/features/accessory/CoachAccessory';
 import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { BriefingCard } from '@/features/briefing/BriefingCard';
+import { OfflineNotice } from '@/features/offline/OfflineNotice';
 import { Appear } from '@/features/today/Appear';
 import { Banners } from '@/features/today/Banners';
 import { MealsStrip } from '@/features/today/MealsStrip';
@@ -76,6 +77,7 @@ export default function TodayScreen() {
           <CoachAccessory placement="regular" surface="card" />
         </Appear>
       ) : null}
+      <OfflineNotice />
       <Banners invites={data.invites} proposals={data.proposals} today={today} />
 
       <Appear index={2}>

@@ -3,14 +3,15 @@
  * data (never the repository or Supabase directly), so caching and
  * invalidation stay consistent.
  */
-import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { onlineManager, useMutation, useQuery, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query';
+import { useCallback, useEffect } from 'react';
 
 import type {
   BusyBlockDraft,
   CheckinDraft,
   CoachRequest,
   CompletedData,
+  DailyCheckin,
   DateRange,
   ISODate,
   JointSessionDraft,
@@ -28,11 +29,15 @@ import type {
   UserReportDraft,
   UUID,
   WeekPlanDraft,
+  Workout,
   WorkoutDraft,
   WorkoutPatch,
 } from '@/domain/types';
 
 import { useAuth, useRepository } from './context';
+import { checkinKey, completeKey, removeOfflineKey, useOfflineItems, type OfflineItem } from './offline/offlineQueue';
+import { checkinOf, completedWorkout, saveOrQueue } from './offline/offlineSync';
+import { withPendingCheckins, withPendingCompletion, withPendingCompletions } from './offline/pendingOverlay';
 import type { ChangeTopic } from './repository';
 
 // ---------------------------------------------------------------------------
@@ -108,6 +113,23 @@ function useRepoMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>, 
 
 function useSignedIn(): boolean {
   return Boolean(useAuth().session);
+}
+
+/** Check-ins and «Hecho» of the signed-in account still waiting on the phone (offline/offlineQueue). */
+function usePendingOffline(): { userId: UUID | null; items: readonly OfflineItem[] } {
+  const userId = useAuth().session?.userId ?? null;
+  return { userId, items: useOfflineItems(userId) };
+}
+
+/** The session as the screens last saw it (base of an optimistic «Hecho»). */
+function cachedWorkout(client: QueryClient, id: UUID): Workout | null {
+  const detail = client.getQueryData<Workout | null>(qk.workout(id));
+  if (detail) return detail;
+  for (const [, list] of client.getQueriesData<Workout[]>({ queryKey: ['workouts'] })) {
+    const found = list?.find((w) => w.id === id);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** Realtime bursts (a Garmin sync writes N workouts) are gathered this long before refetching. */
@@ -189,15 +211,21 @@ export function useUsernameAvailable(username: string) {
 
 export function useWorkouts(range: DateRange) {
   const repo = useRepository();
-  return useQuery({ queryKey: qk.workouts(range), queryFn: () => repo.listWorkouts(range), enabled: useSignedIn() });
+  const { items } = usePendingOffline();
+  // A «Hecho» saved without connection shows as done until it is sent.
+  const select = useCallback((data: Workout[]) => withPendingCompletions(data, items), [items]);
+  return useQuery({ queryKey: qk.workouts(range), queryFn: () => repo.listWorkouts(range), enabled: useSignedIn(), select });
 }
 
 export function useWorkout(id: UUID | undefined) {
   const repo = useRepository();
+  const { items } = usePendingOffline();
+  const select = useCallback((data: Workout | null) => withPendingCompletion(data, items), [items]);
   return useQuery({
     queryKey: qk.workout(id ?? ''),
     queryFn: () => repo.getWorkout(id as UUID),
     enabled: useSignedIn() && Boolean(id),
+    select,
   });
 }
 
@@ -218,12 +246,32 @@ export function useDeleteWorkout() {
   return useRepoMutation((id: UUID) => repo.deleteWorkout(id), ['workouts', 'joint_sessions']);
 }
 
+/**
+ * «Hecho». Without connection (pool, mountains) the change waits on the phone and
+ * resolves with the session as done (`offline/offlineSync`); it is sent later.
+ * Pass `workout` so the optimistic result has a base even when it is not cached.
+ */
 export function useCompleteWorkout() {
   const repo = useRepository();
-  return useRepoMutation(
-    ({ id, data }: { id: UUID; data: CompletedData }) => repo.completeWorkout(id, data),
-    ['workouts', 'feed'],
-  );
+  const client = useQueryClient();
+  const userId = useAuth().session?.userId ?? null;
+  const invalidate = useInvalidate();
+  return useMutation({
+    // Runs offline too: the mutation itself decides between sending and keeping it on the phone.
+    networkMode: 'always',
+    mutationFn: async ({ id, data, workout }: { id: UUID; data: CompletedData; workout?: Workout }) => {
+      const base = workout ?? cachedWorkout(client, id);
+      const outcome = await saveOrQueue({
+        userId,
+        item: { kind: 'complete', key: completeKey(id), workoutId: id, data },
+        send: () => repo.completeWorkout(id, data),
+        optimistic: () => (base ? completedWorkout(base, data) : null),
+        isOnline: () => onlineManager.isOnline(),
+      });
+      if (!outcome.queued) await invalidate(['workouts', 'feed']);
+      return outcome.result;
+    },
+  });
 }
 
 export function useSkipWorkout() {
@@ -235,7 +283,12 @@ export function useSkipWorkout() {
 
 export function useResetWorkout() {
   const repo = useRepository();
-  return useRepoMutation((id: UUID) => repo.resetWorkout(id), ['workouts', 'feed']);
+  const userId = useAuth().session?.userId ?? null;
+  return useRepoMutation(async (id: UUID) => {
+    // «Reabrir» also undoes a «Hecho» still waiting on the phone.
+    if (userId) await removeOfflineKey(userId, completeKey(id));
+    return repo.resetWorkout(id);
+  }, ['workouts', 'feed']);
 }
 
 export function useApplyPlanChanges() {
@@ -366,12 +419,35 @@ export function useDeleteBusyBlock() {
 
 export function useCheckins(range: DateRange) {
   const repo = useRepository();
-  return useQuery({ queryKey: qk.checkins(range), queryFn: () => repo.listCheckins(range), enabled: useSignedIn() });
+  const { userId, items } = usePendingOffline();
+  const { from, to } = range;
+  // A check-in saved without connection counts as done until it is sent.
+  const select = useCallback(
+    (data: DailyCheckin[]) => (userId ? withPendingCheckins(data, items, { from, to }, userId) : data),
+    [items, userId, from, to],
+  );
+  return useQuery({ queryKey: qk.checkins(range), queryFn: () => repo.listCheckins(range), enabled: useSignedIn(), select });
 }
 
+/** Morning check-in (upsert by date). Without connection it waits on the phone and resolves as saved. */
 export function useUpsertCheckin() {
   const repo = useRepository();
-  return useRepoMutation((draft: CheckinDraft) => repo.upsertCheckin(draft), ['checkins']);
+  const userId = useAuth().session?.userId ?? null;
+  const invalidate = useInvalidate();
+  return useMutation({
+    networkMode: 'always',
+    mutationFn: async (draft: CheckinDraft) => {
+      const outcome = await saveOrQueue({
+        userId,
+        item: { kind: 'checkin', key: checkinKey(draft.date), draft },
+        send: () => repo.upsertCheckin(draft),
+        optimistic: () => (userId ? checkinOf(userId, draft) : null),
+        isOnline: () => onlineManager.isOnline(),
+      });
+      if (!outcome.queued) await invalidate(['checkins']);
+      return outcome.result;
+    },
+  });
 }
 
 export function useMetrics(range: DateRange) {

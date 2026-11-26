@@ -6,7 +6,9 @@ import { formatDayLabel } from '@/domain/dates';
 import { computeReadiness, type Readiness } from '@/domain/readiness';
 import type { DailyMetrics, ISODate } from '@/domain/types';
 import { checkinDraftSchema, firstError } from '@/domain/validation';
+import { checkinKey } from '@/data/offline/offlineQueue';
 import { useUpsertCheckin } from '@/data/queries';
+import { OfflineNotice } from '@/features/offline/OfflineNotice';
 import { FormFooter } from '@/features/workouts/FormFooter';
 import { FormScreen } from '@/features/workouts/FormScreen';
 import { ModalCancel } from '@/features/workouts/ModalClose';
@@ -70,6 +72,7 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
     return (
       <Screen inSheet>
         <Stack.Screen options={{ title: 'Tu disposición', headerLeft: () => <ModalCancel label="Cerrar" /> }} />
+        <OfflineNotice pendingKey={checkinKey(date)} />
         <CheckinResult readiness={result} date={date} plan={plan} />
       </Screen>
     );
