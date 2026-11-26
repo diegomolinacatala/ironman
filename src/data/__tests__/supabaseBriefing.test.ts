@@ -215,8 +215,8 @@ describe('Supabase generateBriefing', () => {
     expect(briefing.headline).toBe("Dormiste 7 h 20' · Hoy rodaje suave 50'");
     expect(briefing.script).toMatch(/^Buenos días, Diego\./);
     const metricsCall = calls.find((c) => c.target === 'daily_metrics');
-    // 28 nights before: the baseline of the illness signal (the HRV baseline uses the last 7).
-    expect(chainArgs(metricsCall, 'gte')).toEqual(['date', '2026-09-29']);
+    // 30 nights before: the stress-and-sleep baseline (28 before its 3 nights) also covers the illness one (28).
+    expect(chainArgs(metricsCall, 'gte')).toEqual(['date', '2026-09-27']);
     expect(String(chainArgs(metricsCall, 'select')?.[0])).toContain('sleep_deep_min');
     expect(chainArgs(calls.find((c) => c.target === 'workouts'), 'lte')).toEqual(['date', '2026-10-28']);
   });

@@ -4,9 +4,12 @@
  * diagnosis. Plus the illness signal of last night with the athlete's answer
  * in the morning check-in (mirrored domain/illness.ts, the same the app uses).
  */
-import type { DailyCheckin, DailyMetrics, IllnessAnswer, ISODate } from '../types.ts';
+import { localParts, timeToMinutes } from '../dates.ts';
+import type { DailyCheckin, DailyMetrics, IllnessAnswer, ISODate, LifeEvent } from '../types.ts';
 import { illnessOutcome, illnessSignal } from './domain/illness.ts';
 import type { IllnessLevel, IllnessOutcomeKind } from './domain/illness.ts';
+import { clockOf, stressSleepSignal, suggestedBedtime } from './domain/stressSleep.ts';
+import type { StressSleepLevel } from './domain/stressSleep.ts';
 
 export interface WellnessSignals {
   latestDate: ISODate | null;
@@ -39,6 +42,59 @@ export function illnessView(metrics: readonly DailyMetrics[], checkins: readonly
   const outcome = illnessOutcome(illnessSignal(metrics, today), answer);
   if (!outcome) return null;
   return { signal: outcome.level, answer: outcome.answer, outcome: outcome.kind, message: outcome.message, factor: outcome.factor, reasons: outcome.reasons };
+}
+
+/**
+ * Stress that is costing the athlete sleep (mirrored domain/stressSleep.ts, the same the app
+ * uses): two of the last three nights with a stressful day before and worse sleep than usual.
+ */
+export interface StressSleepView {
+  /** moderate (ease 2 days) | high (3 days: three nights, an exam period or 1 h 30 less sleep). */
+  level: StressSleepLevel;
+  /** An exam around today. */
+  exam: boolean;
+  flaggedNights: number;
+  stressDays: number;
+  /** «Estrés alto 3 días y dormiste 1 h menos de lo habitual: hoy suave y acuéstate antes.» */
+  message: string;
+  /** Days to ease from today. */
+  easeDays: number;
+  /** Usual bedtime and the suggested one (30 min earlier), local 'HH:mm'. */
+  usualBedtime: string;
+  suggestedBedtime: string;
+  /** One line per flagged night with its numbers. */
+  reasons: string[];
+}
+
+/**
+ * `metrics` should reach ~31 days back (28-night baseline + the window), `checkins` the last
+ * 3 days and `events` the exams around today; `tz` turns bedtimes into local times. Null when
+ * there is nothing to say (or not enough data).
+ */
+export function stressSleepView(
+  metrics: readonly DailyMetrics[],
+  checkins: readonly DailyCheckin[],
+  events: readonly LifeEvent[],
+  today: ISODate,
+  tz: string,
+): StressSleepView | null {
+  const localMinutes = (iso: string): number | null => {
+    const d = new Date(iso);
+    return Number.isFinite(d.getTime()) ? timeToMinutes(localParts(d, tz).time) : null;
+  };
+  const signal = stressSleepSignal({ today, metrics, checkins, lifeEvents: events, localMinutes });
+  if (!signal) return null;
+  return {
+    level: signal.level,
+    exam: signal.exam,
+    flaggedNights: signal.flaggedNights,
+    stressDays: signal.stressDays,
+    message: signal.message,
+    easeDays: signal.easeDays,
+    usualBedtime: clockOf(signal.usualBedtimeMin),
+    suggestedBedtime: clockOf(suggestedBedtime(signal)),
+    reasons: signal.reasons,
+  };
 }
 
 /** Symptoms make the day amber (red with a likely signal), like the app's readiness; anything else is a note. */

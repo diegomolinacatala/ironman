@@ -7,6 +7,7 @@ import { ConnectionsSection } from '@/features/account/ConnectionsSection';
 import { CoachVoiceRow, PreferencesGroup, TrainingGroup } from '@/features/account/HubSections';
 import { MorningSection } from '@/features/account/MorningSection';
 import { ProfileHero } from '@/features/account/ProfileHero';
+import { BreathingRow } from '@/features/stress/BreathingRow';
 import { GroupDivider, SettingsGroup } from '@/features/account/SettingsGroup';
 import { errorMessage } from '@/lib/logger';
 import { EmptyState, ErrorNotice, GroupedList, Loading, Screen } from '@/ui';
@@ -59,10 +60,12 @@ export default function MeScreen() {
       <GroupedList>
         <TrainingGroup profile={me} races={races.data} />
         <ConnectionsSection profile={me} />
-        <SettingsGroup title="Tu coach" icon="coach" summary="Informe de la mañana, voz y notas">
+        <SettingsGroup title="Tu coach" icon="coach" summary="Informe de la mañana, voz, respiración y notas">
           <MorningSection profile={me} />
           <GroupDivider />
           <CoachVoiceRow />
+          <GroupDivider />
+          <BreathingRow />
           <GroupDivider />
           <CoachNotesSection notes={me.coachNotes} />
         </SettingsGroup>

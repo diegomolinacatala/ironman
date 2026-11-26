@@ -928,3 +928,38 @@ every field by `trainingPrefsSchema` in `validation.ts`). Mirrored `domain/train
 - Server: `athlete-view.ts` `trainingPrefsView` → MCP `get_planning_context` `athlete.trainingPrefs` («automático» or
   the choices with `summary`, `how`, `intensity.lowIntensityShare`); the coach and the briefing read the same view.
   Safety (injuries, illness, load ramp) always wins over the preferences.
+
+
+## 23. Stress that is costing sleep: ease, bedtime reminder, breathing (2026-11-27)
+
+Approved by David (exam periods first). Mirrored pure module `domain/stressSleep.ts` (`npm run sync:mirror`):
+
+- **Signal** `stressSleepSignal({ today, metrics, checkins, lifeEvents, localMinutes? })` looks at the nights that end on
+  today, yesterday and the day before. A night is flagged when the day before was stressful **and** the night was worse
+  than the athlete's own baseline (median of the 28 days before the window, ≥ 7 values per metric; no baseline = that
+  metric is not judged). Stressful: watch `stressAvg` ≥ max(baseline + 10, 35) (without a baseline ≥ 50), check-in
+  stress 4-5 (that day or the next morning), or an exam that day or in the next 2. Worse: −45' of sleep (watch, else the
+  check-in hours), score −10, +20' awake (and ≥ 30'), or to bed 45' later. **≥ 2 of 3 flagged** → signal; level `high`
+  with 3 nights, an exam from today − 3 to today + 3 or −90' of sleep, else `moderate`. No data = null (silent).
+  `headline` «Estrés alto 3 días y dormiste 1 h menos de lo habitual», `message` adds «: hoy suave y acuéstate antes.»,
+  `usualBedtimeMin` (median `sleepStart` of the last 21 nights, ≥ 5, else 23:00), `easeDays` 2 / 3.
+- **Ease** `domain/replanStressSleep.ts` `replanForStressSleep`: today .. today + easeDays − 1; keeps the key session
+  (isKey, else the first quality/long; −15 % when high), other quality/long → easy ≤ 60', the rest −20 % (−30 % high),
+  quedadas untouched. Hoy's `AdaptNudge` kind `stress` (after today's readiness, before missed sessions; shown even
+  after the check-in) offers «Suavizar» (a `replan` proposal to review) and «Respirar 3 min». The rules coach uses it
+  for a replan when the readiness alone changes nothing.
+- **Planner** `PlannerInput.stressSleep` (this and next week only, `useWeekData`): life stress (2:1 cadence, slower
+  ramp) and the week × 0.9 (moderate) / × 0.85 (high), × 0.9 on top of the exam cut; never on a descarga; summary
+  «Estrés alto y peor sueño estos días: la semana va un 10 % más suave y la progresión se frena.».
+- **Bedtime reminder** local notification kind `bedtime` (category `calm`, button «Respirar», opens `/breathing`):
+  45' before the usual bedtime (after midnight = that night), only on a flagged day, body with the figure and the
+  suggested bedtime (30' earlier). `notification_prefs.bedtimeReminder` (jsonb, no migration), absent = **on**: it
+  only exists on flagged days, at most once a day, and the athlete can turn it off in Notificaciones («Acuéstate antes»).
+  Built by `AppEffects` → `useBedtimeReminder` → `usePlanMirrors`; it needs the app to be opened that day.
+- **Breathing** `/breathing` (modal «Respira», `features/stress/BreathingSession.tsx`): inhale 4 s / exhale 6 s for
+  3 min, Reanimated circle (still with reduced motion), optional soft haptic per phase. From the notification, the
+  Hoy card and Tú › Tu coach › Respiración guiada.
+- **Briefing**: the local script says one spoken sentence after the sleep (`domain/briefingStress.ts`) and an easy
+  focus; server `briefing/context.ts` `stressSleep` (`planning/wellness.ts` `stressSleepView`, bedtimes in the
+  profile zone; life events read today − 3 .. today + 3, metrics 31 days) with a prompt rule. Coach, MCP and Claude:
+  `get_planning_context` `wellness.stressSleep` (+ a note, the coach prompt and the MCP instructions).

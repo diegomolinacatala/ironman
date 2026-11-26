@@ -7,6 +7,7 @@ import { useMetrics, useWorkouts } from '@/data/queries';
 import { addDays, startOfWeek, todayISO } from '@/domain/dates';
 import type { NotificationPrefs, Profile } from '@/domain/types';
 import { WAKE_HISTORY_DAYS } from '@/domain/wakeWindow';
+import { useBedtimeReminder } from '@/features/stress/useBedtimeReminder';
 import { useNotificationPermission } from '@/integrations/hooks';
 import { rescheduleLocalNotifications } from '@/integrations/notifications';
 import { logger } from '@/lib/logger';
@@ -57,6 +58,8 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
   const metrics = useMetrics(nightsRange);
   const windowView = useMemo(() => wakeWindowView(prefs, learnedFromMetrics(metrics.data, today), today), [prefs, metrics.data, today]);
   const set = (patch: Partial<NotificationPrefs>) => setPrefs((prev) => ({ ...prev, ...patch }));
+  // Today's bedtime reminder (stress costing sleep), kept when the schedule is rebuilt here.
+  const bedtime = useBedtimeReminder(today);
 
   const onSave = async () => {
     setWarning(null);
@@ -65,7 +68,7 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
     // Without loaded workouts we skip: AppEffects reschedules on the next foreground anyway.
     if (Platform.OS !== 'web' && workouts.data) {
       try {
-        await rescheduleLocalNotifications({ workouts: workouts.data, profile: updated, today, serverWake: mode !== 'demo' });
+        await rescheduleLocalNotifications({ workouts: workouts.data, profile: updated, today, serverWake: mode !== 'demo', bedtime });
       } catch (err) {
         logger.warn('reschedule local notifications failed', err);
         setWarning('Guardado, pero no pudimos reprogramar los avisos de este móvil. Se reintentará al abrir la app.');
@@ -130,6 +133,14 @@ export function NotificationPrefsForm({ profile }: { profile: Profile }) {
           onChange={(eveningCheckin) => set({ eveningCheckin })}>
           <TimeStepper label="Hora" value={prefs.eveningTime} onChange={(eveningTime) => set({ eveningTime })} />
         </SwitchRow>
+        <Divider inset={ROW_INSET} />
+        <SwitchRow
+          icon="sleep"
+          title="Acuéstate antes"
+          subtitle="Solo los días de estrés alto en que tu reloj ve que duermes peor, 45 min antes de tu hora de dormir."
+          value={prefs.bedtimeReminder !== false}
+          onChange={(bedtimeReminder) => set({ bedtimeReminder })}
+        />
         <Divider inset={ROW_INSET} />
         <SwitchRow
           icon="week"

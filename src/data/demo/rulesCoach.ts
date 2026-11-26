@@ -14,6 +14,8 @@ import { addDays, maxDate, minDate, startOfWeek } from '@/domain/dates';
 import { computeReadiness } from '@/domain/readiness';
 import { generateWeek } from '@/domain/planner';
 import { replanForEvent, replanForReadiness, replanMissed } from '@/domain/replanner';
+import { replanForStressSleep } from '@/domain/replanStressSleep';
+import { stressSleepSignal, type StressSleepSignal } from '@/domain/stressSleep';
 import type {
   BusyBlock,
   CoachRequest,
@@ -91,6 +93,8 @@ export interface CoachContext {
   upcoming: Workout[];
   /** Season plan entries (Plan → General) from the planned week up to a year ahead. */
   weekPlans: WeekPlan[];
+  /** Stress costing sleep today (domain/stressSleep.ts); absent/null = nothing to say. */
+  stressSleep?: StressSleepSignal | null;
 }
 
 interface PlanResult {
@@ -227,6 +231,7 @@ export async function loadCoachContext(repo: RulesCoachRepo, request: CoachReque
     history: workouts.filter((w) => w.status === 'completed' && w.date < today),
     upcoming: upcoming.filter((w) => w.status === 'planned'),
     weekPlans,
+    stressSleep: stressSleepSignal({ today, metrics, checkins, lifeEvents: events }),
   };
 }
 
@@ -274,6 +279,9 @@ function runReplan(ctx: CoachContext, request: CoachRequest): PlanResult {
   const missed = ctx.weekWorkouts.filter((w) => w.status === 'planned' && w.date < ctx.today);
   const readiness = readinessFromMessage(ctx.readiness, request.message);
   if (missed.length > 0 && readiness === ctx.readiness) return replanMissed({ ...replanInput(ctx), missed });
+  // Stress costing sleep eases the next days when the readiness alone would not change anything.
+  const calm = readiness.level !== 'amber' && readiness.level !== 'red';
+  if (calm && ctx.stressSleep && ctx.weekStart <= ctx.today) return replanForStressSleep({ ...replanInput(ctx), signal: ctx.stressSleep });
   return replanForReadiness({ ...replanInput(ctx), readiness });
 }
 
@@ -294,6 +302,8 @@ export function planForRequest(request: CoachRequest, ctx: CoachContext): PlanRe
     today: ctx.today,
     history: ctx.history,
     weekPlan: weekPlanOf(ctx),
+    // Today's signal only shapes this week and the next.
+    stressSleep: ctx.weekStart <= addDays(startOfWeek(ctx.today), 7) ? (ctx.stressSleep ?? null) : null,
   });
 }
 

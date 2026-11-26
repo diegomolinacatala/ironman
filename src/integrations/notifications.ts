@@ -18,6 +18,7 @@ import {
   isLocalNotificationKind,
   isOwnNotificationKind,
   wakeBriefingSpec,
+  type BedtimeReminder,
   type NotificationSpec,
 } from './notifications/schedule';
 import { createSerialQueue } from './notifications/serial';
@@ -48,6 +49,9 @@ async function registerCategories(): Promise<void> {
       { identifier: 'open', buttonTitle: 'Escuchar', options: { opensAppToForeground: true } },
     ]),
     Notifications.setNotificationCategoryAsync('weekly', []),
+    Notifications.setNotificationCategoryAsync('calm', [
+      { identifier: 'open', buttonTitle: 'Respirar', options: { opensAppToForeground: true } },
+    ]),
   ]);
 }
 
@@ -172,6 +176,8 @@ export async function rescheduleLocalNotifications(input: {
   raceDistance?: RaceDistance | null;
   /** The server sends the briefing in wake mode (backend configured): no fixed-time one here. */
   serverWake?: boolean;
+  /** Today's stress-and-sleep signal: the bedtime reminder (null = none today). */
+  bedtime?: BedtimeReminder | null;
 }): Promise<number> {
   if (!isNative) return 0;
   return localQueue.run(async (isCurrent) => {
@@ -187,6 +193,7 @@ export async function rescheduleLocalNotifications(input: {
       thresholds: input.profile.thresholds ?? null,
       raceDistance: input.raceDistance ?? null,
       serverWake: input.serverWake,
+      bedtime: input.bedtime ?? null,
     });
     const results = await Promise.allSettled(specs.map((spec) => Notifications.scheduleNotificationAsync(toRequest(spec))));
     const failed = results.filter((r) => r.status === 'rejected');

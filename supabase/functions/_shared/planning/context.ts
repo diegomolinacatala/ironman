@@ -19,8 +19,8 @@ import type { PhaseInfo } from './phase.ts';
 import { seasonOf, seasonView } from './season-view.ts';
 import type { SeasonView } from './season-view.ts';
 import type { PlanningReader } from './store.ts';
-import { illnessView, mergeMetricsByDate, wellnessSignals } from './wellness.ts';
-import type { IllnessView, WellnessSignals } from './wellness.ts';
+import { illnessView, mergeMetricsByDate, stressSleepView, wellnessSignals } from './wellness.ts';
+import type { IllnessView, StressSleepView, WellnessSignals } from './wellness.ts';
 import { workoutView } from './workout-view.ts';
 import type { Detail, ViewContext, WorkoutView } from './workout-view.ts';
 
@@ -85,6 +85,8 @@ export interface PlanningContext {
     readiness: WellnessSignals;
     /** Last night's possible-illness signal and the athlete's morning answer (null = nothing to say). */
     illness: IllnessView | null;
+    /** Stress costing sleep: two of the last three nights stressful and worse than usual (null = nothing to say). */
+    stressSleep: StressSleepView | null;
     checkins: Record<string, unknown>[];
     metrics: Record<string, unknown>[];
   };
@@ -220,6 +222,7 @@ function wellnessBlock(raw: RawContext, detail: Detail): PlanningContext['wellne
   return {
     readiness: wellnessSignals(recent, raw.checkins, raw.today, illness),
     illness,
+    stressSleep: stressSleepView(raw.metrics, raw.checkins, raw.events, raw.today, raw.tz),
     checkins: raw.checkins.filter((c) => c.date >= since).map((c) => ({ ...c })),
     metrics: metrics.map((m) => ({ ...m })),
   };
@@ -235,6 +238,7 @@ const NOTES = [
   'phase.runMaxMinutes es el tope de minutos de carrera a pie de la semana (+15 % sobre la semana con más carrera de las 3 últimas; los bricks cuentan su parte a pie): entre lo ya planificado y lo que propongas no lo superes; si sobra tiempo, a la bici o a la piscina. null = sin historial.',
   'Las métricas del reloj (Garmin o COROS) guardadas aquí pueden ir con retraso respecto a sus conectores.',
   'wellness.illness: si outcome=possible_illness, díselo con tacto usando su message («Puede que estés empezando a ponerte malo…»), propón suavizar la sesión dura de hoy (nunca la cambies sin que acepte) y no lo plantees como diagnóstico; si outcome=explained, explica la causa probable sin alarmar; si fine, mantén el plan.',
+  'wellness.stressSleep (estrés del reloj, del check-in o exámenes que le está quitando sueño frente a su media): dilo con su cifra usando su message, propón suavizar los próximos easeDays días (menos intensidad y volumen, manteniendo la sesión clave si se puede; en exámenes, más), sugiere acostarse sobre suggestedBedtime y unos minutos de respiración lenta (en la app: Tú › Tu coach › Respiración guiada). Es una propuesta: el atleta decide.',
   'Ante dolor, lesión o enfermedad: prioriza la seguridad y recomienda consultar a un profesional sanitario.',
 ];
 

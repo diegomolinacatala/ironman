@@ -88,6 +88,8 @@ export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => P
         weekPlan: data.weekPlan,
         // A stressful day (check-in stress ≥ 4) slows the ramp like a stress event.
         checkinStress: data.checkinStress ?? null,
+        // Stress costing sleep (watch + check-in + exams): a lighter week, more in exam weeks.
+        stressSleep: data.stressSleep ?? null,
       });
       if (result.changes.length === 0) {
         notify('Tu semana ya está completa', result.summary || 'No quedan huecos libres en tu calendario que rellenar.');

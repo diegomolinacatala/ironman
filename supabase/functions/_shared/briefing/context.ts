@@ -14,8 +14,8 @@ import { lifeEventLabel, raceDistanceLabel } from '../planning/labels.ts';
 import { fitnessWeeklyMinutesOf, workoutLoad } from '../planning/load.ts';
 import { nextRace, phaseFor } from '../planning/phase.ts';
 import type { PlanningReader } from '../planning/store.ts';
-import { illnessView, wellnessSignals } from '../planning/wellness.ts';
-import type { IllnessView, WellnessSignals } from '../planning/wellness.ts';
+import { illnessView, stressSleepView, wellnessSignals } from '../planning/wellness.ts';
+import type { IllnessView, StressSleepView, WellnessSignals } from '../planning/wellness.ts';
 import type {
   BusyBlock,
   DailyCheckin,
@@ -65,6 +65,8 @@ export interface BriefingContext {
   recovery: WellnessSignals;
   /** Last night's possible-illness signal with the morning check-in answer (null = nothing to say). */
   illness: IllnessView | null;
+  /** Stress costing sleep (two of the last three nights), with its figure (null = nothing to say). */
+  stressSleep: StressSleepView | null;
   todayWorkouts: Record<string, unknown>[];
   tomorrowWorkouts: Record<string, unknown>[];
   yesterday: { sessions: Record<string, unknown>[]; totalMin: number; load: number };
@@ -129,11 +131,13 @@ async function loadData(reader: BriefingReader, opts: BriefingContextOptions): P
     // From 4 weeks before this week: yesterday's sessions and the athlete's volume (phase of a short-notice plan).
     reader.listWorkouts(userId, addDays(monday, -28), tomorrow),
     reader.listRaces(userId),
-    reader.listLifeEvents(userId, date, date),
+    // Today's imprevistos, and exams around the day for the stress-and-sleep signal.
+    reader.listLifeEvents(userId, addDays(date, -3), addDays(date, 3)),
     reader.listBusyBlocks(userId, zonedToUtc(date, '00:00', tz), zonedToUtc(tomorrow, '00:00', tz)),
     reader.listCheckins(userId, addDays(date, -7), date),
-    // 28 nights back for the illness baseline; sleep and recovery read their own 7-14 nights.
-    reader.listMetrics(userId, addDays(date, -ILLNESS_BASELINE_DAYS), date),
+    // 31 nights back: the illness baseline and the stress-and-sleep one (28 before its three nights);
+    // sleep and recovery read their own 7-14 nights.
+    reader.listMetrics(userId, addDays(date, -(ILLNESS_BASELINE_DAYS + 3)), date),
     reader.listJointSessions(userId, date, addDays(date, INVITE_HORIZON_DAYS - 1)),
     reader.listWeekPlans(userId, monday, monday),
   ]);
@@ -185,6 +189,7 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
     sleepView: sleepForPrompt(sleep, data.tz),
     recovery: wellnessSignals(recent, data.checkins, date, illness),
     illness,
+    stressSleep: stressSleepView(data.metrics, data.checkins, data.events, date, data.tz),
     todayWorkouts: sessionsOn(data.workouts, date).map((w) => todaySession(w, view)),
     tomorrowWorkouts: sessionsOn(data.workouts, addDays(date, 1)).map((w) => tomorrowSession(w, view)),
     yesterday: yesterdayView(data, date, view),
@@ -208,6 +213,9 @@ export function promptPayload(ctx: BriefingContext): Record<string, unknown> {
     sleepLastNight: ctx.sleepView,
     recovery: { level: ctx.recovery.level, signals: ctx.recovery.signals },
     ...(ctx.illness ? { illness: { outcome: ctx.illness.outcome, answer: ctx.illness.answer, message: ctx.illness.message, reasons: ctx.illness.reasons } } : {}),
+    ...(ctx.stressSleep
+      ? { stressSleep: { level: ctx.stressSleep.level, exam: ctx.stressSleep.exam, message: ctx.stressSleep.message, suggestedBedtime: ctx.stressSleep.suggestedBedtime } }
+      : {}),
     today: ctx.todayWorkouts,
     tomorrow: ctx.tomorrowWorkouts,
     yesterday: ctx.yesterday,

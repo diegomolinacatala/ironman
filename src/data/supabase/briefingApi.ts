@@ -11,12 +11,15 @@ import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
 import { addDays, isISODate } from '@/domain/dates';
 import { illnessOutcome, illnessSignal, type IllnessOutcome } from '@/domain/illness';
 import { nextRace } from '@/domain/periodization';
+import { STRESS_SLEEP, stressSleepSignal, type StressSleepSignal } from '@/domain/stressSleep';
 import type {
   Briefing,
+  DailyCheckin,
   DailyMetrics,
   IllnessAnswer,
   ISODate,
   JointSession,
+  LifeEvent,
   Profile,
   Race,
   RaceDistance,
@@ -37,24 +40,50 @@ import { asString, isRecord } from './narrow';
 import type { BriefingRow } from './rows';
 
 export const BRIEFING_TIMEOUT_MS = 60_000;
-/** Last night + the 28 previous nights: 7 for the HRV baseline, 28 for the illness signal (domain/illness.ts). */
-const METRICS_DAYS = 29;
+/**
+ * Last night + the previous nights: 7 for the HRV baseline, 28 for the illness signal
+ * (domain/illness.ts), 28 before the three-day window for the stress-and-sleep signal.
+ */
+const METRICS_DAYS = STRESS_SLEEP.baselineMaxDays + STRESS_SLEEP.windowDays;
 const BRIEFING_COLUMNS = 'user_id,date,headline,sleep_verdict,sleep_summary,script,focus,sleep,model,created_at,updated_at';
 
 type BriefingMethods = Pick<Repository, 'getBriefing' | 'generateBriefing'>;
 export type BriefingSourceRepo = Pick<Repository, 'getMyProfile' | 'listMetrics' | 'listWorkouts' | 'listRaces'> &
-  Partial<Pick<Repository, 'listJointSessions' | 'getWeather' | 'listCheckins'>>;
+  Partial<Pick<Repository, 'listJointSessions' | 'getWeather' | 'listCheckins' | 'listLifeEvents'>>;
 
-/** The morning answer to the illness question, if the athlete already did the check-in (a bonus: never fails the briefing). */
-async function illnessAnswerFor(repo: BriefingSourceRepo, date: ISODate): Promise<IllnessAnswer | null> {
-  if (!repo.listCheckins) return null;
+/**
+ * The last days' check-ins: the morning answer to the illness question and the stress of the
+ * stress-and-sleep signal (a bonus: never fails the briefing).
+ */
+async function recentCheckinsFor(repo: BriefingSourceRepo, date: ISODate): Promise<DailyCheckin[]> {
+  if (!repo.listCheckins) return [];
   try {
-    const checkins = await repo.listCheckins({ from: date, to: date });
-    return checkins.find((c) => c.date === date)?.illnessAnswer ?? null;
+    return await repo.listCheckins({ from: addDays(date, -STRESS_SLEEP.windowDays), to: date });
   } catch (error) {
     logger.warn('briefing: check-in unavailable for the local template', error instanceof RepositoryError ? error.code : error);
-    return null;
+    return [];
   }
+}
+
+/** Exams around the day, for the stress-and-sleep signal (a bonus too). */
+async function lifeEventsFor(repo: BriefingSourceRepo, date: ISODate): Promise<LifeEvent[]> {
+  if (!repo.listLifeEvents) return [];
+  try {
+    return await repo.listLifeEvents({ from: addDays(date, -STRESS_SLEEP.examPeriodDays), to: addDays(date, STRESS_SLEEP.examPeriodDays) });
+  } catch (error) {
+    logger.info('briefing: life events unavailable for the local template', error instanceof RepositoryError ? error.code : error);
+    return [];
+  }
+}
+
+/** Stress costing sleep on `date` (device time zone), for the local briefing. */
+export function briefingStressSleep(
+  metrics: readonly DailyMetrics[],
+  date: ISODate,
+  checkins: readonly DailyCheckin[],
+  lifeEvents: readonly LifeEvent[],
+): StressSleepSignal | null {
+  return stressSleepSignal({ today: date, metrics, checkins, lifeEvents });
 }
 
 /** Last night's illness signal with the morning answer, for the local briefing. */
@@ -109,14 +138,16 @@ async function forecastFor(repo: BriefingSourceRepo): Promise<WeatherForecast | 
 /** Composes the local ('rules') briefing from the athlete's data. */
 export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODate, now: Date): Promise<Briefing> {
   const tomorrow = addDays(date, 1);
-  const [profile, metrics, workouts, races, joint, answer] = await Promise.all([
+  const [profile, metrics, workouts, races, joint, checkins, events] = await Promise.all([
     repo.getMyProfile(),
     repo.listMetrics({ from: addDays(date, -(METRICS_DAYS - 1)), to: date }),
     repo.listWorkouts({ from: date, to: tomorrow }),
     repo.listRaces(),
     jointSessionsFor(repo, date),
-    illnessAnswerFor(repo, date),
+    recentCheckinsFor(repo, date),
+    lifeEventsFor(repo, date),
   ]);
+  const answer = checkins.find((c) => c.date === date)?.illnessAnswer ?? null;
   const race = nextRace(races, date);
   const forecast = profile?.weatherPlace ? await forecastFor(repo) : null;
   return composeBriefing({
@@ -128,6 +159,7 @@ export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODa
     race,
     now,
     illness: briefingIllness(metrics, date, answer),
+    stressSleep: briefingStressSleep(metrics, date, checkins, events),
     ...briefingAthleteFields(profile, race),
     ...(profile && joint ? { social: { me: profile.id, jointSessions: joint } } : {}),
     ...(forecast ? { forecast } : {}),

@@ -28,6 +28,8 @@ import {
 } from './briefingScript';
 import { diffDays, formatDuration, toISODate } from './dates';
 import type { IllnessOutcome } from './illness';
+import { STRESS_SLEEP_FOCUS, stressSleepSpoken } from './briefingStress';
+import type { StressSleepSignal } from './stressSleep';
 import { rainySessionsOn, type WeatherForecast } from './weather';
 import type {
   Briefing,
@@ -75,6 +77,11 @@ export interface BriefingInput {
    * sentence after the sleep and, when it may be the start of a cold, an easy focus.
    */
   illness?: IllnessOutcome | null;
+  /**
+   * Stress costing sleep (domain/stressSleep.ts): one sentence after the sleep with its figure
+   * and, on a training day, an easy focus with «acuéstate antes».
+   */
+  stressSleep?: StressSleepSignal | null;
 }
 
 /** Today's outdoor session in the rain (key session first) and its dry gap, for the script; null otherwise. */
@@ -213,7 +220,8 @@ export function composeBriefing(input: BriefingInput): Briefing {
   const daysToRace = race && race.date >= date ? diffDays(race.date, date) : null;
   const plan = dayPlanOf(input.todayWorkouts, daysToRace === 0);
   const unwell = input.illness?.kind === 'possible_illness' && plan.kind === 'train';
-  const focus = unwell ? ILLNESS_FOCUS : focusOf({ plan, verdict, daysToRace });
+  const stressed = Boolean(input.stressSleep) && plan.kind === 'train' && daysToRace !== 1;
+  const focus = unwell ? ILLNESS_FOCUS : stressed ? STRESS_SLEEP_FOCUS : focusOf({ plan, verdict, daysToRace });
   const hasAnyMetrics = input.metrics.length > 0;
   const script = composeScript({
     date,
@@ -232,6 +240,7 @@ export function composeBriefing(input: BriefingInput): Briefing {
     watchBrand: input.watchBrand ?? null,
     weather: briefingWeatherOf(input.forecast, input.todayWorkouts, date, now),
     illness: input.illness?.message ?? null,
+    stressSleep: input.stressSleep && plan.kind !== 'race' ? stressSleepSpoken(input.stressSleep) : null,
   });
   return {
     date,

@@ -616,6 +616,11 @@ export interface NotificationPrefs {
   wakeDelayMin?: number;
   /** 'wake' mode: the athlete's own usual wake-up window; absent/null = learned from the watch's sleep. */
   wakeWindow?: { from: ISOTime; to: ISOTime } | null;
+  /**
+   * «Hoy toca acostarse antes»: 45 min before the usual bedtime, only on days stress is costing
+   * sleep (domain/stressSleep.ts). Absent = on.
+   */
+  bedtimeReminder?: boolean;
 }
 
 /** «Tu forma de entrenar»: how the intensity of the week is distributed. */

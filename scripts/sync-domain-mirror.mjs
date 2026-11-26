@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Mirrors the pure domain modules the edge functions need (periodization,
- * zones, season overview, weekly run volume, the weather rules and their dependencies) from `src/domain` into
+ * zones, season overview, weekly run volume, the weather rules, the stress-and-sleep signal and their dependencies) from `src/domain` into
  * `supabase/functions/_shared/planning/domain`. Edge bundles cannot import
  * `src/`, and the app and the server must compute the same weeks, zones and
  * targets, so the server copy is generated, never edited by hand.
@@ -24,6 +24,7 @@ export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planni
  * Modules copied whole (their imports must stay inside this list, `dates` or `types`).
  * `wakeWindow`: the usual wake-up window and the wake-up briefing decision (app settings + `morning` sweep).
  * `trainingPrefs`: «Tu forma de entrenar» (parsing, summary) for the planning context.
+ * `stressSleep`: stress that is costing the athlete sleep (briefing, coach and Claude contexts).
  */
 const WHOLE = [
   'constants',
@@ -38,6 +39,7 @@ const WHOLE = [
   'watchCompletion',
   'illness',
   'trainingPrefs',
+  'stressSleep',
 ];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */

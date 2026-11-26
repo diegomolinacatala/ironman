@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { addDays, startOfWeek } from '@/domain/dates';
 import { computeReadiness } from '@/domain/readiness';
 import { replanForReadiness, replanMissed } from '@/domain/replanner';
+import { replanForStressSleep } from '@/domain/replanStressSleep';
 import type { ISODate } from '@/domain/types';
 import {
   useBusyBlocks,
@@ -20,10 +21,12 @@ import {
 import { errorMessage, logger } from '@/lib/logger';
 import { readJson, writeJson } from '@/lib/storage';
 
+import { stressSleepFrom, stressSleepRanges, STRESS_SLEEP_METRICS_DAYS } from '../stress/useStressSleep';
 import { adaptNudge, MISSED_LOOKBACK_DAYS, type AdaptNudge } from './adaptNudge';
 
 const DISMISSED_KEY = 'rti.adapt.dismissed.v1';
-const METRICS_DAYS = 30;
+/** Readiness reads ~28 days; the stress-and-sleep signal its baseline + 3 nights. */
+const METRICS_DAYS = Math.max(30, STRESS_SLEEP_METRICS_DAYS);
 const EVENTS_BACK_DAYS = 14;
 
 interface Dismissed {
@@ -46,7 +49,8 @@ export function useAdaptNudge(today: ISODate, checkinDone: boolean): {
   const range = { from: addDays(today, -MISSED_LOOKBACK_DAYS - 1), to: addDays(today, 6) };
   const workouts = useWorkouts(range);
   const metrics = useMetrics({ from: addDays(today, -METRICS_DAYS), to: today });
-  const checkins = useCheckins({ from: today, to: today });
+  // Today's check-in for the readiness, the last three days' for the stress-and-sleep signal.
+  const checkins = useCheckins(stressSleepRanges(today).checkins);
   const profile = useProfile();
   const busyBlocks = useBusyBlocks(range);
   const lifeEvents = useLifeEvents({ from: addDays(today, -EVENTS_BACK_DAYS), to: range.to });
@@ -68,10 +72,12 @@ export function useAdaptNudge(today: ISODate, checkinDone: boolean): {
   }, [today]);
 
   const loading = workouts.isLoading || metrics.isLoading || proposals.isLoading;
-  const readiness = metrics.data ? computeReadiness({ today, checkin: checkins.data?.[0] ?? null, metrics: metrics.data }) : null;
+  const todayCheckin = checkins.data?.find((c) => c.date === today) ?? null;
+  const readiness = metrics.data ? computeReadiness({ today, checkin: todayCheckin, metrics: metrics.data }) : null;
+  const stressSleep = stressSleepFrom(today, metrics.data, checkins.data, lifeEvents.data);
   const nudge = loading
     ? null
-    : adaptNudge({ today, readiness, checkinDone, workouts: workouts.data ?? [], pendingProposals: proposals.data?.length ?? 0, dismissed });
+    : adaptNudge({ today, readiness, checkinDone, workouts: workouts.data ?? [], pendingProposals: proposals.data?.length ?? 0, dismissed, stressSleep });
 
   const dismiss = () => {
     if (!nudge) return;
@@ -94,7 +100,11 @@ export function useAdaptNudge(today: ISODate, checkinDone: boolean): {
     };
     try {
       const result =
-        nudge.kind === 'readiness' && readiness ? replanForReadiness({ ...input, readiness }) : replanMissed({ ...input, missed: nudge.kind === 'missed' ? nudge.workouts : [] });
+        nudge.kind === 'stress'
+          ? replanForStressSleep({ ...input, signal: nudge.signal })
+          : nudge.kind === 'readiness' && readiness
+            ? replanForReadiness({ ...input, readiness })
+            : replanMissed({ ...input, missed: nudge.kind === 'missed' ? nudge.workouts : [] });
       if (result.changes.length === 0) {
         setMessage(result.summary || 'No hace falta cambiar nada.');
         dismiss();
