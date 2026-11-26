@@ -15,6 +15,12 @@ export const env = {
    * ANTHROPIC_API_KEY, and each user's consent (`profiles.ai_consent_at`, asked in onboarding).
    */
   aiCoachEnabled: process.env.EXPO_PUBLIC_AI_COACH !== '0',
+  /**
+   * With the AI on, concrete plan changes the rules engine is sure about ("mueve…", "hoy no puedo",
+   * "tengo exámenes", "solo tengo 30'"…) are answered by it first: exact and instant, without AI
+   * quota. EXPO_PUBLIC_COACH_RULES_FIRST=0 sends every chat message to the AI again.
+   */
+  coachRulesFirst: process.env.EXPO_PUBLIC_COACH_RULES_FIRST !== '0',
 } as const;
 
 export const isBackendConfigured = Boolean(env.supabaseUrl && env.supabaseKey) && !env.forceDemo;

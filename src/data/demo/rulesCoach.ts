@@ -362,6 +362,35 @@ async function editResponse(repo: RulesCoachRepo, ctx: CoachContext, edit: EditR
   return { reply: withNotice(notice, reply), proposal, engine: 'rules', ...told };
 }
 
+// ---------------------------------------------------------------------------
+// Rules first (with the AI on)
+// ---------------------------------------------------------------------------
+
+/** Better with the AI: pain or illness (advice and logging), friends (quedadas). */
+const AI_FIRST_RE = /dolor|duele|lesi[oó]n|molest|enferm|fiebre|gripe|resfriad|catarro|tos\b|covid|amig[oa]|quedada|entrenar con|coincidir|juntos/i;
+/** Long, free-form messages go to the AI: the rules engine is for short, concrete requests. */
+const RULES_FIRST_MAX_WORDS = 30;
+const EDIT_VERB_RE = /\b(?:mueve|muev[ea]l[oa]|pasa|p[aá]sal[oa]|pon|p[oó]nl[oa]|quita|qu[ií]tal[oa]|borra|elimina|cancela|cambia|c[aá]mbial[oa])\b/gi;
+
+/**
+ * The rules engine first, for the concrete plan changes it is sure about ("mueve…", "hoy no
+ * puedo", "tengo exámenes", "no tengo piscina", "solo tengo 30'"…): exact changes, instantly and
+ * without spending AI quota. Questions, pain, friends, planning a whole week and long or
+ * compound messages go to the AI: null.
+ */
+export async function runRulesFirst(repo: RulesCoachRepo, request: CoachRequest, options: Pick<RulesCoachOptions, 'today'>): Promise<CoachResponse | null> {
+  const message = request.message?.trim() ?? '';
+  if (request.mode !== 'chat' || (request.friendIds?.length ?? 0) > 0 || !message) return null;
+  if (AI_FIRST_RE.test(message) || message.split(/\s+/).length > RULES_FIRST_MAX_WORDS) return null;
+  if ((message.match(EDIT_VERB_RE)?.length ?? 0) > 1) return null;
+  if (detectPlanAction(message) || detectWeekPlanRequest(message, options.today)) return null;
+  const ctx = await loadCoachContext(repo, request, options.today);
+  const edit = chatEditFor(request, ctx);
+  if (!edit || (edit.changes.length === 0 && !edit.logEvent)) return null;
+  const response = await editResponse(repo, ctx, edit, undefined);
+  return { ...response, instant: true };
+}
+
 /** Runs the rules engine for a coach request and stores the proposal (if any). */
 export async function runRulesCoach(
   repo: RulesCoachRepo,

@@ -103,7 +103,7 @@ export function TurnView({ turn, latest, open, decision, speaking, onListen, onS
               accessibilityHint={speaking ? 'Deja de leer la respuesta' : 'Lee la respuesta en voz alta'}
               onPress={speaking ? onStopSpeaking : onListen}
             />
-            {response.engine === 'rules' ? (
+            {response.engine === 'rules' && !response.instant ? (
               <Text variant="caption" color="textMuted" style={styles.flex}>
                 Modo sin IA
               </Text>

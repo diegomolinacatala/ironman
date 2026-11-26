@@ -10,8 +10,10 @@ import type { RulesCoachRepo } from '../demo/rulesCoach';
 import { fakeClient } from './supabaseFake';
 
 const mockRunRulesCoach = jest.fn();
+const mockRunRulesFirst = jest.fn(async (..._args: unknown[]): Promise<unknown> => null);
 jest.mock('../demo/rulesCoach', () => ({
   runRulesCoach: (...args: unknown[]) => mockRunRulesCoach(...args),
+  runRulesFirst: (...args: unknown[]) => mockRunRulesFirst(...args),
 }));
 jest.mock('@react-native-async-storage/async-storage', () =>
   jest.requireActual('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -19,9 +21,9 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // `env` is read on every request, so each test can flip the AI coach flag.
 jest.mock('@/lib/env', () => {
   const actual = jest.requireActual<typeof import('@/lib/env')>('@/lib/env');
-  return { ...actual, env: { ...actual.env, aiCoachEnabled: true } };
+  return { ...actual, env: { ...actual.env, aiCoachEnabled: true, coachRulesFirst: true } };
 });
-const mockEnv = jest.requireMock<{ env: { aiCoachEnabled: boolean } }>('@/lib/env').env;
+const mockEnv = jest.requireMock<{ env: { aiCoachEnabled: boolean; coachRulesFirst: boolean } }>('@/lib/env').env;
 
 // Repository failures are logged as warnings by design; keep test output clean.
 beforeAll(() => {
@@ -116,6 +118,28 @@ describe('Supabase requestCoach with the AI coach off (default)', () => {
 });
 
 describe('Supabase requestCoach with the AI coach on', () => {
+  it('a concrete change the rules engine is sure about is answered first: no AI job', async () => {
+    const instant = { reply: 'Paso «Rodaje» al jueves.', proposal: PROPOSAL, engine: 'rules', instant: true, memory: [], lifeEvent: null };
+    mockRunRulesFirst.mockResolvedValueOnce(instant);
+    const ctx = fakeCtx({ data: { jobId: 'job' }, error: null }, [{ status: 'done', engine: 'ai' }]);
+    const chat: CoachRequest = { mode: 'chat', weekStart: '2026-10-26', message: 'Mueve el rodaje al jueves' };
+    expect(await createCoachRequester({ ...fastDeps, ctx })(chat)).toEqual(instant);
+    expect(mockRunRulesFirst).toHaveBeenCalledWith(repo, chat, { today: '2026-10-25' });
+    expect(ctx.client.functions.invoke).not.toHaveBeenCalled();
+  });
+
+  it('with rules-first off, or when it has nothing, the AI answers', async () => {
+    const ctx = fakeCtx({ data: { jobId: 'job' }, error: null }, [{ status: 'done', reply: 'IA', engine: 'ai' }]);
+    const chat: CoachRequest = { mode: 'chat', weekStart: '2026-10-26', message: '¿Qué opinas de mi semana?' };
+    expect((await createCoachRequester({ ...fastDeps, ctx })(chat)).reply).toBe('IA');
+    mockEnv.coachRulesFirst = false;
+    mockRunRulesFirst.mockClear();
+    const ctx2 = fakeCtx({ data: { jobId: 'job' }, error: null }, [{ status: 'done', reply: 'IA', engine: 'ai' }]);
+    await createCoachRequester({ ...fastDeps, ctx: ctx2 })(chat);
+    expect(mockRunRulesFirst).not.toHaveBeenCalled();
+    mockEnv.coachRulesFirst = true;
+  });
+
   it('polls the job and returns the AI proposal', async () => {
     const ctx = fakeCtx({ data: { jobId: 'job' }, error: null }, [
       { status: 'running' },

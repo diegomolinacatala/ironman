@@ -16,7 +16,7 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
 import { RepositoryError, type Repository } from '../repository';
-import { runRulesCoach, type RulesCoachRepo } from '../demo/rulesCoach';
+import { runRulesCoach, runRulesFirst, type RulesCoachRepo } from '../demo/rulesCoach';
 import { run, type SupabaseCtx } from './base';
 import { functionErrorInfo, isNetworkError } from './errors';
 import { rowToLifeEvent } from './mappers';
@@ -180,6 +180,15 @@ export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) =
   return async (request) => {
     // AI off (EXPO_PUBLIC_AI_COACH=0): the rules engine IS the coach, so no notice.
     if (!env.aiCoachEnabled) return runRulesCoach(deps.repo, request, { today: deps.today() });
+    // Concrete plan changes the rules engine is sure about: exact and instant, no AI quota.
+    if (env.coachRulesFirst) {
+      try {
+        const instant = await runRulesFirst(deps.repo, request, { today: deps.today() });
+        if (instant) return instant;
+      } catch (error) {
+        logger.warn('coach rules-first failed, asking the AI', error instanceof RepositoryError ? error.code : error);
+      }
+    }
     const started = await startJob(deps.ctx, request);
     if ('notice' in started) return fallback(request, started.notice);
     const job = await pollJob(deps, started.jobId);

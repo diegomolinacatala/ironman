@@ -617,6 +617,13 @@ The product contract is `docs/V2.md`; this section lists what changed in the arc
   `coach`, `briefing` and `meal` functions use **Cloudflare Workers AI** through `cloudflare/ai` (see V2 §3,
   *AI provider*; the worker also serves `POST /v1/speech`, neural text-to-speech for the coach voice). `_shared/ai/provider.ts` picks Workers AI → Claude (optional) → none; the Workers port
   (`_shared/platform/workers-ai.ts`) implements the same `ClaudePort`. Consent copy names Cloudflare.
+- **Coach rules first (2026-11-26):** with the AI on, a chat message the rules engine is sure about
+  (`runRulesFirst`: a move, delete, swap, «hoy no puedo», a match, a dinner, exams, a trip, work or
+  stress, no pool, little time, a softer week, more/less of a sport, tired today) is answered by it
+  first: exact changes with full prescriptions, instantly, no AI quota (`CoachResponse.instant`, no
+  «Modo sin IA»). Pain/illness, friends, questions, planning a whole week, compound or long messages
+  go to the AI. `EXPO_PUBLIC_COACH_RULES_FIRST=0` sends everything to the AI. Imprevistos told in the
+  message (exams, trips, matches…) are logged (`EditResult.logEvent`).
 - **Coach chat reliability (2026-11-22):** chat uses the `concise` context; the model sees short workout ids
   (`w1`, `w2`… — `_shared/coach/short-ids.ts`, mapped back to UUIDs, unknown ids loosely matched by
   title/sport/date) and answers a short change shape (10 keys, structure + prescription in one nullable

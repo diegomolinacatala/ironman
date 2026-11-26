@@ -3,7 +3,7 @@ import type { CoachRequest, PlanChange, Workout } from '@/domain/types';
 import { makeProfile, makeWorkout } from '@/domain/__tests__/fixtures';
 
 import { chatEdit, dayRefs, sportIn, type EditContext } from '../demo/coachEdits';
-import { runRulesCoach, type RulesCoachRepo } from '../demo/rulesCoach';
+import { runRulesCoach, runRulesFirst, type RulesCoachRepo } from '../demo/rulesCoach';
 import { EXAMPLE_PROMPTS, examplePrompts } from '@/features/talk/talkSession';
 
 // 2026-10-27 is a Tuesday: the editable window is Tue 27 → Mon 2.
@@ -139,6 +139,22 @@ describe('runRulesCoach with a chat edit', () => {
     expect(response.reply).toMatch(/^La IA gratuita ha llegado a su límite de hoy\.\n\nPaso «Rodaje Z2»/);
     expect(response.reply).toMatch(/Te he preparado 1 cambio/);
     expect(r.created).toHaveLength(1);
+  });
+
+  test('rules first (AI on): exact changes for concrete requests, the AI for the rest', async () => {
+    const chat = (message: string): CoachRequest => ({ mode: 'chat', weekStart: '2026-10-26', message });
+    const moved = await runRulesFirst(repo(), chat('Mueve el rodaje del martes al jueves'), { today: TODAY });
+    expect(moved).toMatchObject({ engine: 'rules', instant: true });
+    expect(moved?.proposal?.changes).toEqual([expect.objectContaining({ op: 'move', workoutId: 'tue-run' })]);
+    const exams = repo();
+    const told = await runRulesFirst(exams, chat('Esta semana tengo exámenes'), { today: TODAY });
+    expect(told?.lifeEvent).toMatchObject({ kind: 'exam' });
+    expect(told?.reply).toMatch(/Lo apunto en tus imprevistos: «Exámenes»/);
+    // Pain, friends, questions, a whole week to plan and compound requests: the AI.
+    for (const message of ['Me duele la rodilla, quita la carrera de mañana', 'Quiero entrenar con Álex el sábado', '¿Qué opinas de mi semana?', 'Planifícame la semana que viene', 'Mueve el rodaje al jueves y quita la tirada']) {
+      expect(await runRulesFirst(repo(), chat(message), { today: TODAY })).toBeNull();
+    }
+    expect(await runRulesFirst(repo(), { ...chat('Mueve el rodaje al jueves'), friendIds: ['f1'] }, { today: TODAY })).toBeNull();
   });
 });
 

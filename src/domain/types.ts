@@ -821,6 +821,11 @@ export interface CoachResponse {
   proposal: PlanProposal | null;
   /** 'ai' when Claude answered, 'rules' when the deterministic engine did (offline/demo/fallback). */
   engine: 'ai' | 'rules';
+  /**
+   * True when the rules engine answered first on purpose (a concrete plan edit it is sure about),
+   * with the AI on: exact and instant, not a fallback ("Modo sin IA" is not shown).
+   */
+  instant?: boolean;
   /** Preferences/facts the coach saved to `profile.coachNotes` from this message ("Prefiere nadar por la mañana"). */
   memory: string[];
   /** Imprevisto the coach logged from this message (injury, illness, travel…), or null. */
