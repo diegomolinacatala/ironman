@@ -116,13 +116,8 @@ export async function applyCoachExtras(
     if (output.memory.length || output.life_event || output.quedada || output.week_plans) log.info('coach extras ignored outside a chat message', { mode: request.mode });
     return noExtras();
   }
-  // Friends' titles and names travel in the prompt when a friend is mentioned: text a friend
-  // wrote must never become lasting memory or an imprevisto (prompt injection). The quedada
-  // and the week plans are only suggestions the athlete confirms in the app.
-  const friendTextInPrompt = (request.friendIds ?? []).length > 0;
-  if (friendTextInPrompt && (output.memory.length > 0 || output.life_event)) log.info('coach memory and imprevisto skipped: friend data in the prompt');
-  const memory = friendTextInPrompt ? [] : await remember(deps, userId, output.memory, log);
-  const lifeEventId = friendTextInPrompt ? null : await logLifeEvent(deps, userId, output.life_event, context, log);
+  const memory = await remember(deps, userId, output.memory, log);
+  const lifeEventId = await logLifeEvent(deps, userId, output.life_event, context, log);
   const quedada = suggestQuedada(request, output.quedada, context, log);
   const weekPlans = await suggestWeekPlans(deps, userId, output.week_plans, context, log);
   return { memory, lifeEventId, quedada, weekPlans };
