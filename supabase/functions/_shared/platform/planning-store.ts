@@ -25,7 +25,7 @@ import type { Db } from './db.ts';
 const WORKOUT_COLS =
   'id,user_id,date,start_time,sport,title,description,duration_min,distance_m,intensity,tss,steps,status,completed,source,is_key,joint_session_id,external_id,coaching,created_at,updated_at';
 const PROFILE_COLS =
-  'id,username,display_name,sports,level,thresholds,availability,visibility,notification_prefs,timezone,coach_notes,watch_brand,training_prefs';
+  'id,username,display_name,sports,level,thresholds,availability,visibility,notification_prefs,timezone,coach_notes,watch_brand,training_prefs,athlete_context';
 const RACE_COLS = 'id,name,date,distance,priority,location,goal,notes,prep,created_at';
 const WEEK_PLAN_COLS = 'week_start,kind,target_minutes,note,source,updated_at';
 const EVENT_COLS = 'id,kind,title,start_date,end_date,start_time,duration_min,severity,body_area,notes';

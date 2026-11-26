@@ -677,3 +677,50 @@ describe('«Tu forma de entrenar» (profiles.training_prefs)', () => {
     expect('trainingPrefs' in rowToProfile({ ...profileToRow(profile), training_prefs: [1, 2] })).toBe(false);
   });
 });
+
+describe('«Tu contexto» (profiles.athlete_context)', () => {
+  const profile = rowToProfile({
+    id: ME,
+    username: 'diego',
+    display_name: 'Diego',
+    avatar_url: null,
+    sports: ['swim', 'bike', 'run'],
+    level: 'intermediate',
+    thresholds: {},
+    availability: {},
+    visibility: 'full',
+    notification_prefs: {},
+    timezone: 'Europe/Madrid',
+    coach_notes: null,
+    onboarded_at: null,
+    created_at: NOW,
+  });
+  const ctx: NonNullable<Profile['athleteContext']> = {
+    sports: { swim: { background: 'lifelong', goal: 'maintain' } },
+    limitations: null,
+    previousRaces: null,
+    occupation: 'study',
+    load: 'high',
+    schedule: null,
+    periods: [{ kind: 'exams', from: '2027-01-12', to: '2027-01-30', label: 'Exámenes', eventId: 'e1' }],
+    habits: { breakfast: null, lunch: '14:00', dinner: null, wake: '06:30', bed: '23:00', weekendsDiffer: false, weekendWake: null, weekendBed: null, preferredTime: 'morning' },
+    notes: [],
+    answered: ['swim_bg'],
+    completedAt: null,
+    promptDismissed: false,
+  };
+
+  it('nothing stored (or the column not deployed yet) → absent', () => {
+    expect('athleteContext' in profile).toBe(false);
+    expect(profileToRow(profile).athlete_context).toBeNull();
+  });
+
+  it('round trip, PATCH and odd values dropped', () => {
+    expect(rowToProfile(profileToRow({ ...profile, athleteContext: ctx }))).toEqual({ ...profile, athleteContext: ctx });
+    expect(profilePatchToRow({ athleteContext: ctx })).toEqual({ athlete_context: ctx });
+    const odd = rowToProfile({ ...profileToRow(profile), athlete_context: { occupation: 'pirata', habits: { lunch: '14:00:00' } } });
+    expect(odd.athleteContext?.occupation).toBeNull();
+    expect(odd.athleteContext?.habits.lunch).toBe('14:00');
+    expect('athleteContext' in rowToProfile({ ...profileToRow(profile), athlete_context: 'x' })).toBe(false);
+  });
+});

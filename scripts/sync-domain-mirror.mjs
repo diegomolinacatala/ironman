@@ -24,6 +24,7 @@ export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planni
  * Modules copied whole (their imports must stay inside this list, `dates` or `types`).
  * `wakeWindow`: the usual wake-up window and the wake-up briefing decision (app settings + `morning` sweep).
  * `trainingPrefs`: «Tu forma de entrenar» (parsing, summary) for the planning context.
+ * `athleteContext`: «Tu contexto» (parsing, summary) for the planning context, the coach and the briefing.
  */
 const WHOLE = [
   'constants',
@@ -38,6 +39,7 @@ const WHOLE = [
   'watchCompletion',
   'illness',
   'trainingPrefs',
+  'athleteContext',
 ];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
@@ -101,8 +103,19 @@ const TYPES_MODULE = `${header('the domain types used by the mirrored modules')}
  * calendar types the mirrored date helpers need.
  */
 export type {
+  AthleteContext,
   AthleteLevel,
   CompletedData,
+  ContextHabits,
+  ContextPeriod,
+  ContextSport,
+  LifeLoad,
+  Occupation,
+  SportBackground,
+  SportContext,
+  SportGoal,
+  TrainingTimeOfDay,
+  WorkSchedule,
   IllnessAnswer,
   FixedWeeklySession,
   Intensity,

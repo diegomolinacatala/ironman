@@ -40,11 +40,13 @@ import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
 import { allowsSession, examVolumeFactor, NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
 import { fixedSessionsOn, lowIntensityShareFor, trainingPrefsSentence } from './trainingPrefs';
+import { athleteContextPlanSentence, lifeLoadFactor, mealRanges, preferredTrainingTime, sportFocus, wakingDayOn } from './athleteContext';
 import { recentRunMinutes, runWeekCapMinutes, workoutRunMinutes } from './runVolume';
 import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
 import { applyWeekPlan, weekMinutesFor } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
 import type {
+  AthleteContext,
   BusyBlock,
   FixedWeeklySession,
   ISODate,
@@ -62,7 +64,7 @@ import type {
   WorkoutDraft,
 } from './types';
 import { rangesLength } from './timeRanges';
-import { buildWeekModel, type DayState, type FixedInput } from './weekModel';
+import { buildWeekModel, type DayState, type FixedInput, type WeekModelInput } from './weekModel';
 
 /** Share of endurance time in Z1-Z2 (kept here for the public API; lives in plannerSupport). */
 export { lowIntensityShare } from './plannerSupport';
@@ -322,6 +324,9 @@ interface WeekContext {
   prefs: TrainingPrefs | null;
   /** Fixed weekly sessions («Tu forma de entrenar») this week adds: already in `fixed`, proposed as new workouts. */
   prefFixed: PrefFixed[];
+  /** «Tu contexto» (null = not told yet) and whether its studies/work load lowered the automatic hours. */
+  athlete: AthleteContext | null;
+  loadApplied: boolean;
 }
 
 interface PrefFixed {
@@ -384,7 +389,11 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   const lifeStress = stressedByCheckin || events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
   const raw = stressedPhase(input, range.from, lifeStress);
   const weekPlan = activeWeekPlan(raw, input.weekPlan, range.from);
-  const weeklyHours = normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null);
+  const athlete = input.profile.athleteContext ?? null;
+  const auto = isAutoAvailability(input.profile.availability);
+  // «Tu contexto»: heavy studies/work lower the automatic hours (the athlete's own hours stay as set).
+  const loadFactor = auto ? lifeLoadFactor(athlete) : 1;
+  const weeklyHours = normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null) * loadFactor;
   const info = applyWeekPlan(raw, weekPlan, weeklyHours);
   const target = info.raceInWeek && info.phase === 'race_week' && info.targetRace?.id === info.raceInWeek.id ? info.targetRace : null;
   const plannable = dates.filter((d) => d >= firstPlannable && !(target !== null && d > target.date));
@@ -424,7 +433,9 @@ function weekPlanContext(input: PlannerInput): WeekContext {
     existing,
     fixed,
     weeklyHours,
-    auto: isAutoAvailability(input.profile.availability),
+    auto,
+    athlete,
+    loadApplied: loadFactor < 1,
   };
 }
 
@@ -500,6 +511,7 @@ function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): Week
     // Exams: maintenance strength instead of heavy lifting.
     lightStrength: ctx.exam !== null,
     prefs: ctx.prefs,
+    focus: sportFocus(ctx.athlete),
   });
   const existingPlannable = ctx.fixed.filter((f) => ctx.plannable.includes(f.date));
   const remaining = trimToBudget(consumeExisting(ideal.specs, existingPlannable), Math.max(0, budget.budgetMinutes - specialMin));
@@ -547,6 +559,17 @@ function longDaysOf(profile: Profile): Weekday[] {
   return profile.availability.longSessionDays.length > 0 ? profile.availability.longSessionDays : DEFAULT_LONG_DAYS;
 }
 
+/** «Tu contexto»: the waking day from wake-up/bed times, meals kept free and the preferred time of day. */
+function contextDayShape(athlete: AthleteContext | null): Pick<WeekModelInput, 'wakingDay' | 'habitBlocks' | 'preferredTime'> {
+  if (!athlete) return {};
+  const wakingDay: Partial<Record<Weekday, { start: string; end: string }>> = {};
+  for (const day of [0, 1, 2, 3, 4, 5, 6] as const) {
+    const waking = wakingDayOn(athlete, day);
+    if (waking) wakingDay[day] = waking;
+  }
+  return { wakingDay, habitBlocks: mealRanges(athlete), preferredTime: preferredTrainingTime(athlete) };
+}
+
 /** Week model before the rest day: free time (windows or the waking day − busy − timed sessions) per day. */
 function draftWeekDays(input: PlannerInput, ctx: WeekContext): DayState[] {
   const profile = input.profile;
@@ -564,6 +587,7 @@ function draftWeekDays(input: PlannerInput, ctx: WeekContext): DayState[] {
     restrictions: ctx.restrictions,
     today: today ?? undefined,
     nowMinutes: today ? input.nowMinutes : undefined,
+    ...contextDayShape(ctx.athlete),
   }).map((d) => ({ ...d, plannable: d.plannable && ctx.plannable.includes(d.date) }));
 }
 
@@ -675,6 +699,13 @@ function prefsNote(ctx: WeekContext): string[] {
   return sentence ? [sentence] : [];
 }
 
+/** «Según tu contexto: natación para mantener…» when the athlete's context shaped the week. */
+function contextNote(ctx: WeekContext): string[] {
+  // Meals and the preferred time shape the days without training windows (automatic availability).
+  const sentence = athleteContextPlanSentence(ctx.athlete, { volumeApplied: ctx.loadApplied, habitsApplied: ctx.auto });
+  return sentence ? [sentence] : [];
+}
+
 function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed: WeekPlacement, built: WeekSpecs): PlanWeekResult {
   const { info } = ctx;
   const { runCapped } = built;
@@ -715,6 +746,7 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     notes: [
       ...(examNote ? [examNote, ...ctx.week.notes.filter((n) => !n.startsWith(EXAM_NOTE_PREFIX))] : ctx.week.notes),
       ...prefsNote(ctx),
+      ...contextNote(ctx),
     ],
   });
   return {

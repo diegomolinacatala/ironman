@@ -8,6 +8,20 @@ import { z } from 'zod';
 
 import { validateCoaching } from './changes';
 import { diffDays, isISODate, timeToMinutes, weekdayOf } from './dates';
+import {
+  CONTEXT_MAX_ANSWERED,
+  CONTEXT_MAX_NOTES,
+  CONTEXT_MAX_PERIODS,
+  CONTEXT_NOTE_MAX,
+  CONTEXT_PERIOD_LABEL_MAX,
+  CONTEXT_TEXT_MAX,
+  LIFE_LOADS,
+  OCCUPATIONS,
+  SPORT_BACKGROUNDS,
+  SPORT_GOALS,
+  TRAINING_TIMES,
+  WORK_SCHEDULES,
+} from './athleteContext';
 import { FIXED_MAX_MINUTES, FIXED_MIN_MINUTES, FIXED_TITLE_MAX, INTENSITY_MODELS, MAX_FIXED_SESSIONS, MAX_SESSIONS } from './trainingPrefs';
 import {
   BODY_AREAS,
@@ -319,6 +333,45 @@ export const trainingPrefsSchema = z.object({
   fixedSessions: z.array(fixedWeeklySessionSchema).max(MAX_FIXED_SESSIONS, { error: `Como mucho ${MAX_FIXED_SESSIONS} sesiones fijas` }),
 });
 
+const clockOrNull = isoTimeSchema.nullable();
+const sportContextSchema = z.object({ background: z.enum(SPORT_BACKGROUNDS).optional(), goal: z.enum(SPORT_GOALS).optional() });
+
+export const contextPeriodSchema = z
+  .object({
+    kind: z.enum(['exams', 'busy']),
+    from: isoDateSchema,
+    to: isoDateSchema,
+    label: z.string().trim().min(1, { error: 'Ponle un nombre' }).max(CONTEXT_PERIOD_LABEL_MAX, { error: `Nombre: máximo ${CONTEXT_PERIOD_LABEL_MAX} caracteres` }),
+    eventId: z.string().max(64).nullable(),
+  })
+  .refine((p) => p.to >= p.from, { error: 'La fecha de fin va después de la de inicio', path: ['to'] });
+
+/** «Tu contexto» (profiles.athlete_context; the database checks the outline and the size). */
+export const athleteContextSchema = z.object({
+  sports: z.object({ swim: sportContextSchema.optional(), bike: sportContextSchema.optional(), run: sportContextSchema.optional() }),
+  limitations: z.string().max(CONTEXT_TEXT_MAX, { error: `Máximo ${CONTEXT_TEXT_MAX} caracteres` }).nullable(),
+  previousRaces: z.string().max(CONTEXT_TEXT_MAX, { error: `Máximo ${CONTEXT_TEXT_MAX} caracteres` }).nullable(),
+  occupation: z.enum(OCCUPATIONS).nullable(),
+  load: z.enum(LIFE_LOADS).nullable(),
+  schedule: z.enum(WORK_SCHEDULES).nullable(),
+  periods: z.array(contextPeriodSchema).max(CONTEXT_MAX_PERIODS, { error: `Como mucho ${CONTEXT_MAX_PERIODS} épocas` }),
+  habits: z.object({
+    breakfast: clockOrNull,
+    lunch: clockOrNull,
+    dinner: clockOrNull,
+    wake: clockOrNull,
+    bed: clockOrNull,
+    weekendsDiffer: z.boolean(),
+    weekendWake: clockOrNull,
+    weekendBed: clockOrNull,
+    preferredTime: z.enum(TRAINING_TIMES).nullable(),
+  }),
+  notes: z.array(z.string().max(CONTEXT_NOTE_MAX, { error: `Nota: máximo ${CONTEXT_NOTE_MAX} caracteres` })).max(CONTEXT_MAX_NOTES, { error: `Como mucho ${CONTEXT_MAX_NOTES} notas` }),
+  answered: z.array(z.string().max(40)).max(CONTEXT_MAX_ANSWERED),
+  completedAt: z.string().max(40).nullable(),
+  promptDismissed: z.boolean(),
+});
+
 export const profilePatchSchema = z
   .object({
     username: usernameSchema,
@@ -335,6 +388,7 @@ export const profilePatchSchema = z
     onboardedAt: z.string().nullable(),
     watchBrand: z.enum(WATCH_BRANDS, { error: 'Elige tu reloj: Garmin o COROS' }).nullable(),
     trainingPrefs: trainingPrefsSchema.nullable(),
+    athleteContext: athleteContextSchema.nullable(),
   })
   .partial();
 

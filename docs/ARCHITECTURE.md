@@ -307,6 +307,7 @@ of the tabs), never `router.push`, which would stack a second tab navigator. Fiv
 | `settings/profile` | ui-account | name, username, level, sports, thresholds, coach notes |
 | `settings/availability` | ui-account | weekly hours, rest/long/pool days, windows |
 | `settings/training` | ui-account | **Tu forma de entrenar**: sessions per sport, preferred days, long ride/run days, intensity model, fixed weekly sessions |
+| `settings/context` | ui-account | **Tu contexto**: the coach's guided interview (sport, studies/work, habits; resumable, editable rows) + «¿Algo más que deba saber?» |
 | `settings/notifications` | ui-account | **Notificaciones** prefs (stored in profile) |
 | `settings/integrations` | ui-account | Garmin Personal API, Apple Salud, Calendario |
 | `settings/claude` | ui-account | "Conecta tu Claude" (MCP URL generator + guide) |
@@ -936,3 +937,38 @@ every field by `trainingPrefsSchema` in `validation.ts`). Mirrored `domain/train
 - Server: `athlete-view.ts` `trainingPrefsView` → MCP `get_planning_context` `athlete.trainingPrefs` («automático» or
   the choices with `summary`, `how`, `intensity.lowIntensityShare`); the coach and the briefing read the same view.
   Safety (injuries, illness, load ramp) always wins over the preferences.
+
+## 23. «Tu contexto»: the coach gets to know the athlete (2026-11-27)
+
+Tú › Entrenamiento › **Tu contexto** (`settings/context`, `features/context/*`) and a card on Hoy («Cuéntale al
+coach cómo eres: 3 min», also what a new athlete sees after onboarding; the cross sets `promptDismissed`). Stored in
+`profiles.athlete_context jsonb` (null = nothing told; `20261127000400_athlete_context.sql`: own row, outline + 8 KB
+checked by the database, every field by `athleteContextSchema`). Mirrored `domain/athleteContext.ts`
+(`parseAthleteContext`, the planner hints and `athleteContextSummary`).
+
+- **Guided interview** (`interviewModel.ts`, deterministic and free): one question at a time with chips (and an
+  optional text for injuries and races), «Saltar» everywhere, saved after every answer (`answered` makes it
+  resumable), ~15 questions. Deporte: per sport (only the athlete's) background («Empiezo ahora», «1-2 años», «Varios
+  años», «Desde pequeño») and goal («Mantener», «Mejorar un poco», «Mejorar mucho»); injuries; previous races.
+  Estudios/trabajo: occupation, load, typical schedule, exam periods (students) and «épocas con menos tiempo» with
+  dates. Hábitos: breakfast/lunch/dinner, wake-up/bed on weekdays (prefilled from the watch's nights,
+  `watchSleepTimes`), whether weekends change (then weekend times), preferred time to train. Once finished the
+  screen shows the summary by section; each row reopens its question (and the follow-ups it opens).
+- **Periods** become life events (`useContextSave`): exams → kind `exam` (severity 2: −30 % week, no series the day
+  before or on exam days), «menos tiempo» → kind `work` (severity 2); the event id is kept in the period, removing
+  the period deletes it.
+- **«¿Algo más que deba saber?»** (`ContextChat`): with the Coach IA on and consent given, a coach chat turn with
+  `topic: 'context'` (the server answers with `CONTEXT_TASK`: listen, save 0-3 memory facts to `coach_notes`, ask at
+  most one question; changes, imprevistos, quedadas and week plans are dropped by `contextOnlyOutput`, no repair).
+  Without the AI, on a rules fallback, or when the AI saved nothing, the text is kept in `athleteContext.notes` (≤ 5)
+  and the coach answers «Apuntado…». The rules coach never plans from it (`data/demo/coachContext.ts`).
+- **Rules planner**: `sportFocus` → `allocateWeek({ focus })`: «mantener» with years of background = one session
+  fewer (≥ 1) and ×0.8 of the sport's share; «mejorar mucho» (or a new swimmer) = one more (≤ 5) and ×1.2; an explicit
+  count in «Tu forma de entrenar» wins. `lifeLoadFactor` lowers the automatic hours with studies/work load (media
+  ×0.95, alta ×0.88, studying and working −4 %, never below ×0.85; manual hours untouched). On days without
+  training windows the week model uses the waking day (`wakingDayOn`: wake-up +30', bed −60', weekend times apart),
+  keeps meals free (`mealRanges`: breakfast 30', lunch and dinner 75') and placement prefers the athlete's time of
+  day (`preferredTime` on `DayState`, other anchors +180'). The week summary adds «Según tu contexto: …».
+- **Coach, briefing and Claude**: `athlete-view.ts` `athleteContextView` → `athlete.context` in the planning context
+  (MCP `get_planning_context`, the AI coach): «sin contar» or `{ how, summary, sportFocus, periods }`; the briefing's
+  `athlete.context` is the summary line. Deploy the migration before the functions (they select the column).

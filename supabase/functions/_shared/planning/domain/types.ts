@@ -5,8 +5,19 @@
  * calendar types the mirrored date helpers need.
  */
 export type {
+  AthleteContext,
   AthleteLevel,
   CompletedData,
+  ContextHabits,
+  ContextPeriod,
+  ContextSport,
+  LifeLoad,
+  Occupation,
+  SportBackground,
+  SportContext,
+  SportGoal,
+  TrainingTimeOfDay,
+  WorkSchedule,
   IllnessAnswer,
   FixedWeeklySession,
   Intensity,

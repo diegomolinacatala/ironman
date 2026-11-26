@@ -164,6 +164,17 @@ const WEEKEND_MORNING_START_MIN = 8 * 60;
 const EVENING_START_MIN = 18 * 60 + 30;
 /** Weekends (Sat/Sun): the long session goes in the morning. */
 const WEEKEND: readonly number[] = [5, 6];
+/** «Tu contexto» › A mediodía: around 13:00 (before the usual lunch when it is blocked). [H] */
+const MIDDAY_START_MIN = 13 * 60;
+/** Minutes a start away from the preferred time of day costs, so it wins whenever it fits. [H] */
+const OFF_PREFERRED_TIME_PENALTY = 180;
+
+/** Start-time anchors of a short session, the preferred time of day first. */
+function anchorsFor(day: DayState, morning: number): number[] {
+  if (day.preferredTime === 'evening') return [EVENING_START_MIN, morning];
+  if (day.preferredTime === 'midday') return [MIDDAY_START_MIN, morning, EVENING_START_MIN];
+  return [morning, EVENING_START_MIN];
+}
 
 /**
  * Without training windows (automatic availability) every session still gets
@@ -177,16 +188,18 @@ function calendarSlot(day: DayState, spec: SessionSpec, duration: number, need: 
   const cls = specClass(spec);
   const morning = WEEKEND.includes(day.weekday) || day.isLongDay ? WEEKEND_MORNING_START_MIN : MORNING_START_MIN;
   const long = cls === 'LONG' || cls === 'BRICK';
-  const anchors = long ? [morning] : [morning, EVENING_START_MIN];
+  const anchors = long ? [morning] : anchorsFor(day, morning);
   let best: { start: number; score: number } | null = null;
   for (const range of day.free) {
     if (range.end - range.start < need) continue;
     const lo = range.start + offset;
     const hi = range.end - need + offset;
-    for (const anchor of anchors) {
+    for (const [k, anchor] of anchors.entries()) {
       const start = Math.min(hi, Math.max(lo, anchor));
-      // Long sessions far from the morning (e.g. a 3 h ride at 17:00) only when nothing else fits.
-      const score = Math.abs(start - anchor) + (long && start > anchor + 120 ? 600 : 0);
+      // Long sessions far from the morning (e.g. a 3 h ride at 17:00) only when nothing else fits;
+      // with a preferred time of day («Tu contexto») the other anchors only win when it does not fit.
+      const offPreference = day.preferredTime && k > 0 ? OFF_PREFERRED_TIME_PENALTY : 0;
+      const score = Math.abs(start - anchor) + (long && start > anchor + 120 ? 600 : 0) + offPreference;
       if (!best || score < best.score) best = { start, score };
     }
   }

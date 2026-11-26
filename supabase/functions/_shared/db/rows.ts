@@ -5,6 +5,7 @@
  */
 import { normalizeTime } from '../dates.ts';
 import { parseTrainingPrefs } from '../planning/domain/trainingPrefs.ts';
+import { parseAthleteContext } from '../planning/domain/athleteContext.ts';
 import {
   BODY_AREAS,
   ILLNESS_ANSWERS,
@@ -261,6 +262,7 @@ export function mapProfile(raw: unknown): Profile {
     coachNotes: strOrNull(r.coach_notes),
     watchBrand: watchBrandOf(r.watch_brand),
     trainingPrefs: parseTrainingPrefs(r.training_prefs),
+    athleteContext: parseAthleteContext(r.athlete_context),
   };
 }
 

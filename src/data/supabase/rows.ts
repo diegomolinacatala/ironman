@@ -29,6 +29,8 @@ export interface ProfileRow {
   watch_brand?: string | null;
   /** «Tu forma de entrenar» (`20261126000600_training_prefs.sql`): jsonb object or null (automático). */
   training_prefs?: unknown;
+  /** «Tu contexto» (`20261127000400_athlete_context.sql`): jsonb object or null (not told yet). */
+  athlete_context?: unknown;
   /** `20261126000500_weather.sql`: the city for the forecast (all three or none). */
   weather_place?: string | null;
   weather_lat?: number | string | null;

@@ -4,7 +4,8 @@
  * compact so the coach and Claude can copy targets instead of inventing them.
  */
 import { WEEKDAYS_ES } from '../dates.ts';
-import type { Availability, Profile, RaceDistance, Thresholds, TrainingPrefs, WatchBrand } from '../types.ts';
+import type { AthleteContext, Availability, Profile, RaceDistance, Thresholds, TrainingPrefs, WatchBrand } from '../types.ts';
+import { athleteContextSummary, sportFocus } from './domain/athleteContext.ts';
 import { INTENSITY_MODEL_OPTIONS, isDefaultTrainingPrefs, LOW_INTENSITY_SHARE, PREF_SPORTS, trainingPrefsSummary } from './domain/trainingPrefs.ts';
 import { athleteZones, targetParts } from './domain/zones.ts';
 import type { ZoneRow } from './domain/zones.ts';
@@ -125,6 +126,27 @@ export function athleteView(p: Profile, raceDistance: RaceDistance | null, plan?
     watchBrand: watchBrandOf(p),
     availability: availabilityView(p.availability, plan),
     trainingPrefs: trainingPrefsView(p.trainingPrefs),
+    context: athleteContextView(p.athleteContext),
     coachNotes: p.coachNotes,
+  };
+}
+
+const CONTEXT_HOW =
+  'Su contexto (Tú › Tu contexto, lo que te ha contado): úsalo para adaptar el plan y tus palabras. sportFocus: less = deporte que solo quiere ' +
+  'mantener con años de base (menos frecuencia), more = deporte que quiere mejorar mucho (más frecuencia, técnica). Con estudios o trabajo de carga ' +
+  'alta, menos volumen y sesiones más cortas entre semana; en sus épocas de exámenes o con menos tiempo, lo esencial. No pongas sesiones justo ' +
+  'después de sus comidas ni antes de que se levante o pegadas a la hora de acostarse; respeta cuándo prefiere entrenar. Las lesiones o límites ' +
+  'que cuente mandan. Pregunta si te falta algo importante, sin repetir lo que ya sabes.';
+
+/** «Tu contexto» for the coach and Claude; 'sin contar' when the athlete has told nothing yet. */
+export function athleteContextView(ctx: AthleteContext | null | undefined): Record<string, unknown> | 'sin contar' {
+  const summary = athleteContextSummary(ctx);
+  if (!ctx || !summary) return 'sin contar';
+  const focus = sportFocus(ctx);
+  return {
+    how: CONTEXT_HOW,
+    summary,
+    ...(Object.keys(focus).length > 0 ? { sportFocus: focus } : {}),
+    ...(ctx.periods.length > 0 ? { periods: ctx.periods.map((x) => ({ kind: x.kind, from: x.from, to: x.to, label: x.label })) } : {}),
   };
 }

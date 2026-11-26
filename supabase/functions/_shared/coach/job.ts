@@ -113,6 +113,8 @@ export interface Prepared {
   effort: ClaudeRequest['effort'];
   /** Chat message that asks to change the plan: changes are mandatory. */
   wantsChange: boolean;
+  /** «Tu contexto» chat (`topic: 'context'`): no changes, no imprevisto, no quedada, no week plans. */
+  contextOnly?: boolean;
   /** Planned + done workouts of the 14-day window (validation, loose id matching). */
   workouts: Workout[];
 }
@@ -141,7 +143,8 @@ async function prepare(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal): 
     signal,
   );
   const ids = shortIdsFor(context);
-  const wantsChange = chat && wantsPlanChange(job.request.message);
+  const contextOnly = chat && job.request.topic === 'context';
+  const wantsChange = chat && !contextOnly && wantsPlanChange(job.request.message);
   const weather = forecast ? weatherForCoach(forecast, context.today) : null;
   return {
     context,
@@ -149,8 +152,14 @@ async function prepare(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal): 
     messages: buildCoachMessages(job.request, context, { lifeEvent, friends, ids, weather }),
     effort: chat && !wantsChange ? 'low' : 'medium',
     wantsChange,
+    contextOnly,
     workouts,
   };
+}
+
+/** «Tu contexto»: the coach only listens and remembers — whatever else the model returned is dropped. */
+export function contextOnlyOutput(output: CoachOutput): CoachOutput {
+  return { ...output, changes: [], malformedChanges: 0, life_event: null, quedada: null, week_plans: null };
 }
 
 interface Clock {
@@ -229,8 +238,9 @@ function evaluate(response: ClaudeResponse, prep: Prepared): Attempt {
   }
   const base = { text: response.text, model: response.model };
   if (response.stopReason === 'max_tokens') return { ...base, output: null, validated: null, problem: 'cut' };
-  const output = parseCoachOutput(response.text);
-  if (!output) return { ...base, output: null, validated: null, problem: 'bad_json' };
+  const parsed = parseCoachOutput(response.text);
+  if (!parsed) return { ...base, output: null, validated: null, problem: 'bad_json' };
+  const output = prep.contextOnly ? contextOnlyOutput(parsed) : parsed;
   const validated = validateOutput(output, prep);
   const proposed = output.changes.length + output.malformedChanges;
   const extrasOnly = output.week_plans !== null || output.quedada !== null;

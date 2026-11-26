@@ -22,6 +22,7 @@ import {
   type DistanceKind,
   type SportSplit,
 } from './constants';
+import { FOCUS_SHARE, focusedSessionCount, type SportFocus } from './athleteContext';
 import type { PhaseInfo } from './periodization';
 import type { SessionCode, SessionSpec } from './sessions';
 import type { AthleteLevel, IntensityModel, RaceDistance, Sport, TrainableSport, TrainingPrefs } from './types';
@@ -77,6 +78,8 @@ export interface AllocationInput {
    * never below the minimum session length) and the intensity model.
    */
   prefs?: TrainingPrefs | null;
+  /** «Tu contexto»: sports to keep (fewer sessions, a bit less time) or to improve a lot (one more, a bit more time). */
+  focus?: Partial<Record<Endurance, SportFocus>>;
 }
 
 type Endurance = 'swim' | 'bike' | 'run';
@@ -367,6 +370,20 @@ function weightedSplit(split: SportSplit, usual: Record<Endurance, number>, want
   return { ...split, swim: split.swim * weight('swim'), bike: split.bike * weight('bike'), run: split.run * weight('run') };
 }
 
+/**
+ * «Tu contexto»: a sport to keep (years of background) gets a bit less of the
+ * week's time, one to improve a lot a bit more (FOCUS_SHARE, then renormalised).
+ * The athlete's own session count («Tu forma de entrenar») wins over it.
+ */
+function focusedSplit(split: SportSplit, focus: AllocationInput['focus'], wanted: Partial<Record<Endurance | 'strength', number>>): SportSplit {
+  if (!focus) return split;
+  const weight = (sport: Endurance): number => {
+    const f = focus[sport];
+    return f && wanted[sport] === undefined ? FOCUS_SHARE[f] : 1;
+  };
+  return { ...split, swim: split.swim * weight('swim'), bike: split.bike * weight('bike'), run: split.run * weight('run') };
+}
+
 function normalizeSplit(split: SportSplit, sports: readonly TrainableSport[]): Record<Endurance, number> {
   const raw: Record<Endurance, number> = {
     swim: sports.includes('swim') ? split.swim : 0,
@@ -467,13 +484,14 @@ export function allocateWeek(input: AllocationInput): AllocationResult {
   const strength = input.sports.includes('strength') && !input.blockedAllWeek.includes('strength') ? strengthPlan(info, counts.strength, input.minutes, free, light, wanted.strength) : [];
   const strengthMin = strength.reduce((s, x) => s + x.durationMin, 0);
   const enduranceMin = Math.max(0, input.minutes - strengthMin);
-  const shares = normalizeSplit(weightedSplit(splitFor(info, kind, distance), counts, wanted), input.sports);
+  const shares = normalizeSplit(focusedSplit(weightedSplit(splitFor(info, kind, distance), counts, wanted), input.focus, wanted), input.sports);
+  const focus = input.focus ?? {};
   const base: Record<Endurance, number> = { swim: enduranceMin * shares.swim, bike: enduranceMin * shares.bike, run: enduranceMin * shares.run };
   const { minutes: split, easyOnly } = applySubstitutes(base, input);
   const sportCounts: Record<Endurance, number> = {
-    swim: split.swim > 0 ? (wanted.swim ?? Math.max(counts.swim, input.blockedAllWeek.length > 0 ? 2 : 0)) : 0,
-    bike: split.bike > 0 ? (wanted.bike ?? Math.max(counts.bike, 1)) : 0,
-    run: split.run > 0 ? (wanted.run ?? Math.max(counts.run, 1)) : 0,
+    swim: split.swim > 0 ? (wanted.swim ?? focusedSessionCount(Math.max(counts.swim, input.blockedAllWeek.length > 0 ? 2 : 0), focus.swim)) : 0,
+    bike: split.bike > 0 ? (wanted.bike ?? focusedSessionCount(Math.max(counts.bike, 1), focus.bike)) : 0,
+    run: split.run > 0 ? (wanted.run ?? focusedSessionCount(Math.max(counts.run, 1), focus.run)) : 0,
   };
   const q: QualityAssignment = info.phase === 'race_week' ? { bike: [], run: [], shortBrick: false, longBrick: false, left: 0 } : assignQualities(input, sportCounts);
   // Swim CSS is extra quality for most athletes; beginners and capped weeks (exams, work) count it in the budget.

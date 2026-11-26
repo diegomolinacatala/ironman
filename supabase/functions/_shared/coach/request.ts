@@ -21,6 +21,7 @@ const requestSchema = object(
     lifeEventId: optional(uuidSchema()),
     friendIds: optional(array(uuidSchema(), { max: 5 })),
     channel: optional(enumOf(['voice', 'text'] as const)),
+    topic: optional(enumOf(['context'] as const)),
   },
   undefined,
   { stripUnknown: true },
@@ -42,6 +43,8 @@ export function parseCoachRequest(input: unknown): Result<CoachRequest> {
       ...(v.lifeEventId ? { lifeEventId: v.lifeEventId } : {}),
       ...(v.friendIds && v.friendIds.length ? { friendIds: [...new Set(v.friendIds)] } : {}),
       ...(v.channel ? { channel: v.channel } : {}),
+      // «Tu contexto» only makes sense as a chat turn.
+      ...(v.topic && v.mode === 'chat' ? { topic: v.topic } : {}),
     },
   };
 }

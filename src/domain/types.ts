@@ -651,6 +651,72 @@ export interface TrainingPrefs {
   fixedSessions: FixedWeeklySession[];
 }
 
+/** «Tu contexto»: the endurance sports the coach asks about. */
+export type ContextSport = 'swim' | 'bike' | 'run';
+/** How long the athlete has done a sport: «Empiezo ahora», «1-2 años», «Varios años», «Desde pequeño». */
+export type SportBackground = 'new' | 'some' | 'years' | 'lifelong';
+/** What the athlete wants from a sport: keep it, improve a bit, improve a lot. */
+export type SportGoal = 'maintain' | 'improve' | 'improve_lot';
+export type Occupation = 'study' | 'work' | 'both' | 'none';
+export type LifeLoad = 'light' | 'medium' | 'high';
+export type WorkSchedule = 'morning' | 'afternoon' | 'full_day' | 'shifts' | 'flexible';
+export type TrainingTimeOfDay = 'morning' | 'midday' | 'evening' | 'any';
+
+export interface SportContext {
+  background?: SportBackground;
+  goal?: SportGoal;
+}
+
+/** A stretch with less time (exams, a work peak): also logged as a life event the planner understands. */
+export interface ContextPeriod {
+  kind: 'exams' | 'busy';
+  /** 'YYYY-MM-DD', inclusive. */
+  from: string;
+  to: string;
+  label: string;
+  /** The life event created for it (kind 'exam' or 'work'), null until saved. */
+  eventId: string | null;
+}
+
+/** Usual times 'HH:MM' (null = no usual time). Weekend times only when `weekendsDiffer`. */
+export interface ContextHabits {
+  breakfast: string | null;
+  lunch: string | null;
+  dinner: string | null;
+  wake: string | null;
+  bed: string | null;
+  weekendsDiffer: boolean;
+  weekendWake: string | null;
+  weekendBed: string | null;
+  preferredTime: TrainingTimeOfDay | null;
+}
+
+/**
+ * «Tu contexto» (`profiles.athlete_context`): what the coach learnt in the
+ * guided interview (sport background and goals, studies/work, habits) and the
+ * free notes of «¿Algo más que deba saber?». Everything optional.
+ */
+export interface AthleteContext {
+  sports: Partial<Record<ContextSport, SportContext>>;
+  /** Injuries or limitations, in the athlete's words. */
+  limitations: string | null;
+  /** Previous races, in the athlete's words. */
+  previousRaces: string | null;
+  occupation: Occupation | null;
+  load: LifeLoad | null;
+  schedule: WorkSchedule | null;
+  periods: ContextPeriod[];
+  habits: ContextHabits;
+  /** Free notes («¿Algo más que deba saber?») when the AI did not turn them into coach notes. */
+  notes: string[];
+  /** Interview questions answered or skipped (resumable). */
+  answered: string[];
+  /** When the interview was finished (null = not yet). */
+  completedAt: string | null;
+  /** The athlete closed the prompt on Hoy. */
+  promptDismissed: boolean;
+}
+
 export interface Profile {
   id: UUID;
   username: string;
@@ -674,6 +740,8 @@ export interface Profile {
   trainingPrefs?: TrainingPrefs | null;
   /** City for the weather forecast; null/absent = none (nothing about the weather is shown). */
   weatherPlace?: WeatherPlace | null;
+  /** «Tu contexto» (guided interview + free notes); null/absent = not told yet. */
+  athleteContext?: AthleteContext | null;
   createdAt: ISODateTime;
 }
 
@@ -924,6 +992,8 @@ export interface CoachRequest {
   friendIds?: UUID[];
   /** 'voice' when `message` is a speech transcript (may contain recognition errors). */
   channel?: 'voice' | 'text';
+  /** 'context': «Tu contexto» › «¿Algo más que deba saber?» (chat): the coach only listens, remembers and asks; never changes the plan. */
+  topic?: 'context';
 }
 
 export interface CoachResponse {

@@ -68,7 +68,15 @@ function weatherBlock(weather: Record<string, unknown> | null | undefined): stri
   return `\n\nEl tiempo en su ciudad (MET Norway; dryGaps = tramos secos de al menos 1 h 30 entre las 07:00 y las 22:00; windMaxKmh = viento medio máximo y gustMaxKmh = rachas, en km/h; strongWindHours = horas con viento fuerte para la bici, ≥ ${WIND_RULES.bike.strongKmh} km/h o rachas ≥ ${WIND_RULES.bike.strongGustKmh}: para correr molesta pero solo es un problema desde ${WIND_RULES.run.strongKmh} km/h o rachas de ${WIND_RULES.run.strongGustKmh}; el viento es sobre todo un aviso: solo propón cambiar la sesión si es fuerte, y siempre como propuesta; approx = previsión por bloques de 6 h, menos precisa):\n${JSON.stringify(weather)}`;
 }
 
+/** «Tu contexto» › «¿Algo más que deba saber?»: listen, remember, ask; never touch the plan. */
+export const CONTEXT_TASK =
+  'Modo chat de «Tu contexto»: el atleta te cuenta cosas de su vida para que le conozcas (deporte, estudios o trabajo, hábitos, ' +
+  'familia, lesiones…). No propongas cambios: changes [], life_event null, quedada null y week_plans null. Guarda en memory de 0 a 3 hechos ' +
+  'duraderos que sirvan para entrenar mejor (sin repetir lo que ya está en coachNotes ni en athlete.context). En reply, 1-3 frases: ' +
+  'agradece lo concreto, di en una frase cómo lo tendrás en cuenta en el plan y, si te falta algo importante, hazle una sola pregunta.';
+
 function taskText(request: CoachRequest): string {
+  if (request.topic === 'context') return CONTEXT_TASK;
   const base = MODE_TASK[request.mode](request.weekStart);
   if (request.mode !== 'chat') return base;
   const nextWeek = mentionsNextWeek(request.message)
