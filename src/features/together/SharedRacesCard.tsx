@@ -14,8 +14,6 @@ import { Card, Disclosure, Icon, SectionHeader, Text, radius, space, useTheme } 
 
 import { countdownLabel, sharedRaces } from './sharedModel';
 
-const MAX_OTHERS = 3;
-
 function friendRaceLine(r: FriendRace, today: ISODate): string {
   return [r.name ?? raceDistanceLabel(r.distance), formatDayLabel(r.date, today)].join(' · ');
 }
@@ -28,7 +26,7 @@ export function SharedRacesCard({ today, folded = false }: { today: ISODate; fol
   const friendRaces = friends.data ?? [];
   const shared = sharedRaces(mine.data ?? [], friendRaces, today);
   const sharedIds = new Set(shared.flatMap((s) => s.friends.map((f) => f.raceId)));
-  const others = friendRaces.filter((r) => !sharedIds.has(r.raceId)).slice(0, MAX_OTHERS);
+  const others = friendRaces.filter((r) => !sharedIds.has(r.raceId));
   if (shared.length === 0 && others.length === 0) return null;
 
   const title = shared.length > 0 ? 'Carreras juntos' : 'Carreras de tus amigos';
@@ -69,9 +67,9 @@ export function SharedRacesCard({ today, folded = false }: { today: ISODate; fol
     </View>
   );
   if (!folded) return body;
-  const summary = shared.length > 0 ? `${shared.length === 1 ? '1 carrera' : `${shared.length} carreras`} con amigos` : `${others.length} de tus amigos`;
+  const summary = shared[0]?.race.name ?? (others[0] ? friendRaceLine(others[0], today) : undefined);
   return (
-    <Disclosure variant="plain" title={title} summary={summary} storageKey="together.races">
+    <Disclosure icon="flag" title={title} summary={summary} storageKey="together.races">
       {body}
     </Disclosure>
   );

@@ -22,7 +22,7 @@ describe('folded day', () => {
     expect(daySessionsLine(w, false)).toBe('Natación fondo · Carrera tempo');
     expect(daySessionsLine([], false)).toBe('Libre');
     expect(daySessionsLine([], true)).toBe('Sin sesiones');
-    expect(daySessionsLine([makeWorkout({ id: 'r', sport: 'rest', title: 'Descanso' })], false)).toBe('Libre');
+    expect(daySessionsLine([makeWorkout({ id: 'r', sport: 'rest', title: 'Descanso' })], false)).toBe('Descanso');
   });
 
   test('total planned time of the day', () => {
@@ -38,6 +38,9 @@ describe('folded day', () => {
     expect(dayState([done, planned], '2026-11-10', '2026-11-12')).toBe('partial');
     expect(dayState([planned], '2026-11-13', '2026-11-12')).toBe('planned');
     expect(dayState([], '2026-11-13', '2026-11-12')).toBe('empty');
+    const skipped = makeWorkout({ id: 's', status: 'skipped' });
+    expect(dayState([skipped], '2026-11-10', '2026-11-12')).toBe('adjusted');
+    expect(dayState([skipped, done], '2026-11-10', '2026-11-12')).toBe('done');
   });
 });
 

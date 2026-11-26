@@ -1,11 +1,10 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatDayLabel, formatDayLong, formatDayMedium } from '@/domain/dates';
 import { lifeEventLabel } from '@/domain/labels';
 import type { ISODate, LifeEvent, RaceDistance, Thresholds, Workout } from '@/domain/types';
-import { useState } from 'react';
-import { Pressable } from 'react-native';
 
 import { Chip, Icon, IconButton, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
@@ -66,7 +65,7 @@ export function DaySection({
         isToday={isToday}
         isPast={isPast}
         open={open}
-        summary={open ? null : daySessionsLine(workouts, isPast)}
+        summary={open ? null : workouts.length || (!events.length && !busyText) ? daySessionsLine(workouts, isPast) : busyText ?? 'Sin entrenos'}
         duration={dayDurationLabel(workouts)}
         state={state}
         eventCount={events.length}
@@ -103,7 +102,7 @@ export function DaySection({
       ) : (
         <View style={[styles.empty, { borderColor: colors.border, backgroundColor: isToday ? colors.surface : 'transparent' }]}>
           <Text variant="caption" color="textMuted">
-            {isPast ? 'Sin sesiones' : 'Libre'}
+            {isPast || events.length || busyText ? 'Sin entrenos' : 'Libre'}
           </Text>
         </View>
       )}
@@ -135,7 +134,12 @@ function StateMark({ state }: { state: DayState }) {
 
 function DayHeader({ date, today, busyText, isToday, isPast, open, summary, duration, state, eventCount, onToggle }: DayHeaderProps) {
   const { colors } = useTheme();
-  const label = `${isToday ? 'Hoy, ' : ''}${formatDayLong(date)}${summary ? `. ${summary}` : ''}${duration ? `. ${duration}` : ''}`;
+  const eventLabel = eventCount === 1 ? '1 imprevisto' : `${eventCount} imprevistos`;
+  const label = [
+    `${isToday ? 'Hoy, ' : ''}${formatDayLong(date)}`,
+    summary, duration, eventCount ? eventLabel : null, busyText,
+    state === 'done' ? 'Completado' : state === 'missed' ? 'Sin completar' : null,
+  ].filter(Boolean).join('. ');
   return (
     <View style={styles.header}>
       <Pressable
@@ -163,7 +167,7 @@ function DayHeader({ date, today, busyText, isToday, isPast, open, summary, dura
         </View>
         {summary ? (
           <Text variant="caption" color="textMuted" numberOfLines={1}>
-            {eventCount > 0 ? `Imprevisto · ${summary}` : summary}
+            {eventCount > 0 ? `${eventLabel} · ${summary}` : summary}
           </Text>
         ) : null}
         {busyText ? (
@@ -190,7 +194,7 @@ const styles = StyleSheet.create({
   tabular: { fontVariant: ['tabular-nums'] },
   today: { borderRadius: radius.lg, padding: space.md, marginHorizontal: -space.xs },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: iconSize.lg + space.lg },
-  headerText: { flex: 1, gap: 2 },
+  headerText: { flex: 1, gap: 2, minHeight: 48, justifyContent: 'center' },
   busy: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   flex: { flex: 1, flexShrink: 1 },
   events: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },

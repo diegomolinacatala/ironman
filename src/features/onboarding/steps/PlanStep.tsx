@@ -1,20 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { useProfile } from '@/data/queries';
 import { todayISO } from '@/domain/dates';
 import { SeasonPreview } from '@/features/season/SeasonPreview';
 import { useSeasonPreview } from '@/features/season/useSeasonPreview';
 import { errorMessage, logger } from '@/lib/logger';
-import { ErrorNotice, Icon, ProgressBar, Text, haptics, iconSize, space, useTheme } from '@/ui';
+import { Disclosure, ErrorNotice, Icon, Text, haptics, iconSize, space, useTheme } from '@/ui';
 
 import { Appear } from '../Appear';
 import { SuccessHero, WorkingState } from '../GuideParts';
 import { StepLayout, type StepAction, type StepNav } from '../StepLayout';
-import { planProgressCopy } from '../planSummary';
 import { usePlanGeneration, type PlanGeneration } from '../usePlanGeneration';
-
-const COPY_INTERVAL_MS = 1800;
 
 export interface PlanStepProps {
   nav: StepNav;
@@ -31,7 +27,6 @@ export interface PlanStepProps {
  */
 export function PlanStep({ nav, plannedWeeks, onWeekPlanned, onFinish }: PlanStepProps) {
   const plan = usePlanGeneration(todayISO(), { plannedWeeks, onWeekPlanned });
-  const profile = useProfile();
   const season = useSeasonPreview();
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
@@ -57,7 +52,7 @@ export function PlanStep({ nav, plannedWeeks, onWeekPlanned, onFinish }: PlanSte
       primary={primaryFor(plan, finishing, finish)}
       secondary={secondaryFor(plan, finishing, finish)}>
       <Appear index={1}>
-        {plan.phase === 'working' ? <PlanProgress copy={planProgressCopy(profile.data?.watchBrand)} /> : null}
+        {plan.phase === 'working' ? <WorkingState title="Organizando tus sesiones…" /> : null}
         {plan.phase === 'done' ? <PlanReady summary={plan.summary} /> : null}
         {plan.phase === 'error' ? (
           <ErrorNotice message={`${plan.error ?? 'No hemos podido preparar tu plan.'} Reinténtalo o empieza y lo preparas desde Plan.`} />
@@ -65,7 +60,9 @@ export function PlanStep({ nav, plannedWeeks, onWeekPlanned, onFinish }: PlanSte
       </Appear>
       {plan.phase === 'done' && season ? (
         <Appear index={2}>
-          <SeasonPreview season={season} />
+          <Disclosure variant="plain" icon="week" title="Ver las próximas semanas">
+            <SeasonPreview season={season} />
+          </Disclosure>
         </Appear>
       ) : null}
       {finishError ? <ErrorNotice message={finishError} /> : null}
@@ -73,25 +70,10 @@ export function PlanStep({ nav, plannedWeeks, onWeekPlanned, onFinish }: PlanSte
   );
 }
 
-function PlanProgress({ copy }: { copy: readonly string[] }) {
-  const [index, setIndex] = useState(0);
-  useEffect(() => {
-    if (index >= copy.length - 1) return undefined;
-    const timer = setTimeout(() => setIndex((i) => i + 1), COPY_INTERVAL_MS);
-    return () => clearTimeout(timer);
-  }, [index, copy.length]);
-  return (
-    <View style={styles.block}>
-      <WorkingState title={copy[index] ?? copy[0] ?? ''} message="Suele tardar menos de un minuto." />
-      <ProgressBar value={(index + 1) / (copy.length + 1)} />
-    </View>
-  );
-}
-
 function PlanReady({ summary }: { summary: readonly string[] }) {
   const { colors } = useTheme();
   return (
-    <SuccessHero title="Tu plan está listo" message="Lo tienes en Hoy y en Plan. Si algo cambia, cuéntaselo a tu coach.">
+    <SuccessHero title="Tu plan está listo" message="Abre Hoy para ver tu próxima sesión.">
       <View style={styles.bullets} accessibilityRole="list">
         {summary.map((line) => (
           <View key={line} style={styles.bullet}>
@@ -109,7 +91,7 @@ function PlanReady({ summary }: { summary: readonly string[] }) {
 function primaryFor(plan: PlanGeneration, finishing: boolean, finish: () => Promise<void>): StepAction {
   if (plan.phase === 'working') return { label: 'Preparando…', onPress: () => undefined, loading: true };
   if (plan.phase === 'error') return { label: 'Reintentar', icon: 'refresh', onPress: plan.retry, disabled: finishing };
-  return { label: 'Empezar', icon: 'bolt', onPress: () => void finish(), loading: finishing };
+  return { label: 'Ir a Hoy', iconRight: 'arrowRight', onPress: () => void finish(), loading: finishing };
 }
 
 function secondaryFor(plan: PlanGeneration, finishing: boolean, finish: () => Promise<void>): StepAction | null {
@@ -118,7 +100,6 @@ function secondaryFor(plan: PlanGeneration, finishing: boolean, finish: () => Pr
 }
 
 const styles = StyleSheet.create({
-  block: { gap: space.lg },
   flex: { flex: 1 },
   bullets: { gap: space.md },
   bullet: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },

@@ -1,5 +1,5 @@
 import { Redirect, router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,7 +11,7 @@ import { DemoBanner } from '@/features/account/DemoBanner';
 import { isPlausibleEmail } from '@/features/settings/format';
 import { TERMS_URL, openPrivacyPolicy } from '@/features/settings/privacyPolicy';
 import { logger } from '@/lib/logger';
-import { Button, Divider, ErrorNotice, Text, TextField, haptics, space, useTheme } from '@/ui';
+import { Button, ErrorNotice, Text, TextField, haptics, space, useTheme } from '@/ui';
 
 const DEMO_EMAIL = 'demo@roadtoironman.app';
 const DEMO_CODE = '000000';
@@ -24,13 +24,19 @@ export default function SignInScreen() {
   const { auth, mode, session } = useAuth();
   const appleAvailable = useAppleSignInAvailable();
   const [email, setEmail] = useState('');
+  const [choseEmail, setChoseEmail] = useState(false);
+  const [emailBlurred, setEmailBlurred] = useState(false);
+  const submitting = useRef(false);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
 
   const trimmed = email.trim().toLowerCase();
-  const emailError = email.length > 0 && !isPlausibleEmail(trimmed) ? 'Revisa el email' : null;
+  const showEmail = !appleAvailable || choseEmail || email.length > 0;
+  const emailError = emailBlurred && email.length > 0 && !isPlausibleEmail(trimmed) ? 'Revisa el email' : null;
 
   const run = async (kind: Exclude<Busy, null>, task: () => Promise<void>, fallback: string) => {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(kind);
     setError(null);
     try {
@@ -41,6 +47,7 @@ export default function SignInScreen() {
       haptics.warning();
       setError(authErrorMessage(err, fallback));
     } finally {
+      submitting.current = false;
       setBusy(null);
     }
   };
@@ -88,20 +95,18 @@ export default function SignInScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + space.xxl }}>
         <BrandHero topInset={insets.top} />
         <View style={styles.form}>
-          {mode === 'demo' ? <DemoBanner onEnter={() => void enterDemo()} loading={busy === 'demo'} /> : null}
+          <Text variant="title" accessibilityRole="header">
+            Entra o crea tu cuenta
+          </Text>
+          {appleAvailable ? <AppleSignInButton onPress={() => void signInApple()} /> : null}
+          {showEmail ? (
           <View style={styles.block}>
-            <View style={styles.heading}>
-              <Text variant="title" accessibilityRole="header">
-                Entra o crea tu cuenta
-              </Text>
-              <Text variant="callout" color="textMuted">
-                Te mandamos un código de 6 dígitos. Sin contraseñas.
-              </Text>
-            </View>
             <TextField
               label="Email"
               value={email}
               onChangeText={setEmail}
+              onBlur={() => setEmailBlurred(true)}
+              autoFocus={choseEmail}
               placeholder="tu@email.com"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -124,13 +129,9 @@ export default function SignInScreen() {
               onPress={() => void sendCode()}
             />
           </View>
-          {appleAvailable ? (
-            <View style={styles.block}>
-              <OrDivider />
-              <AppleSignInButton onPress={() => void signInApple()} />
-            </View>
-          ) : null}
+          ) : <Button label="Continuar con email" icon="mail" variant="secondary" disabled={busy !== null} onPress={() => setChoseEmail(true)} />}
           {error ? <ErrorNotice message={error} /> : null}
+          {mode === 'demo' ? <DemoBanner onEnter={() => void enterDemo()} loading={busy === 'demo'} /> : null}
           <Text variant="caption" color="textMuted" align="center">
             Al entrar aceptas las normas de uso: tolerancia cero con el acoso y el contenido ofensivo. Tus datos
             son tuyos: puedes borrar la cuenta y todo su contenido cuando quieras desde Tú.
@@ -147,28 +148,9 @@ export default function SignInScreen() {
   );
 }
 
-function OrDivider() {
-  return (
-    <View style={styles.or}>
-      <View style={styles.flex}>
-        <Divider />
-      </View>
-      <Text variant="caption" color="textMuted">
-        o
-      </Text>
-      <View style={styles.flex}>
-        <Divider />
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
   form: { paddingHorizontal: space.lg, paddingTop: space.xl, gap: space.xl, width: '100%', maxWidth: 560, alignSelf: 'center' },
   block: { gap: space.md },
-  heading: { gap: space.xs },
-  or: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   links: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap' },
-  flex: { flex: 1 },
 });

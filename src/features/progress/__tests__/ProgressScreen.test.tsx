@@ -8,6 +8,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import ProgressScreen from '@/app/(tabs)/progress';
+import { startOfWeek, todayISO } from '@/domain/dates';
 import { AuthContext, RepositoryContext } from '@/data/context';
 import { createDemoRepository, type DemoRepository } from '@/data/demo/DemoRepository';
 import type { Repository } from '@/data/repository';
@@ -65,7 +66,7 @@ afterEach(async () => {
   await repo.store.dispose();
 });
 
-/** Every section but "Tu forma" starts folded. */
+/** The athlete chooses which analysis to open. */
 async function openFold(title: string): Promise<void> {
   await fireEvent.press(await screen.findByRole('button', { name: new RegExp(`^${title}\\.`) }));
 }
@@ -79,6 +80,10 @@ describe('Progreso tab', () => {
     expect(positions.every((p) => p >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     expect(screen.getByText('Progreso')).toBeTruthy();
+    expect(screen.getByText('Tiempo entrenado esta semana')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Tu forma\./, expanded: false })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver mi semana' }));
+    expect(mockRouter.navigate).toHaveBeenCalledWith({ pathname: '/week', params: { view: 'week', week: startOfWeek(todayISO()) } });
   });
 
   test('shows a single races entry (no duplicate countdown or links card)', async () => {

@@ -1,0 +1,30 @@
+name: Estado de TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: Número de compilación iOS
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 32
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Consultar la compilación en Apple
+        env:
+          IOS_BUILD_NUMBER: ${{ inputs.build }}
+          APP_BUNDLE_ID: ${{ vars.APP_BUNDLE_ID || 'io.github.diegomolinacatala.ironman' }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: node scripts/asc/testflight-status.mjs

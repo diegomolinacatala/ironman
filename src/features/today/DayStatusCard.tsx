@@ -2,45 +2,40 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import type { ISODate } from '@/domain/types';
-import { Button, Card, Icon, Text, iconSize, radius, space, useTheme } from '@/ui';
+import { Button, Card, Icon, Text, radius, space, useTheme, type IconName } from '@/ui';
 
-/** Shown instead of the hero when there is nothing left to do today. */
-export function DayStatusCard({ kind, today }: { kind: 'rest' | 'done'; today: ISODate }) {
+const STATES = {
+  rest: { icon: 'moon', title: 'Hoy toca descanso', detail: 'Tu plan reserva este día para recuperar.' },
+  free: { icon: 'week', title: 'Hoy tienes el día libre', detail: 'No hay sesiones en tu plan para hoy.' },
+  finished: { icon: 'checkCircle', title: 'Hecho por hoy', detail: 'Has registrado todos los entrenos de hoy.' },
+  skipped: { icon: 'week', title: 'Día cerrado', detail: 'Ya no quedan sesiones pendientes hoy.' },
+} as const satisfies Record<string, { icon: IconName; title: string; detail: string }>;
+
+export function DayStatusCard({ kind, today }: { kind: keyof typeof STATES; today: ISODate }) {
   const { colors } = useTheme();
-  const isRest = kind === 'rest';
+  const { icon, title, detail } = STATES[kind];
   return (
-    <Card variant={isRest ? 'tinted' : 'flat'} padding="lg" style={styles.card}>
-      <View style={styles.row}>
-        <View style={[styles.icon, { backgroundColor: isRest ? colors.surface : colors.surfaceAlt }]}>
-          <Icon name={isRest ? 'moon' : 'checkCircle'} size={iconSize.lg} color={isRest ? colors.textMuted : colors.success} />
-        </View>
-        <View style={styles.body}>
-          <Text variant="title">{isRest ? 'Hoy toca descanso' : 'Hecho por hoy'}</Text>
-          <Text variant="callout" color="textMuted">
-            {isRest
-              ? 'El descanso también es entrenamiento: duerme bien, come rico y estira un poco.'
-              : 'Buen trabajo. Haz el check-in para que el plan se ajuste a cómo te sientes.'}
-          </Text>
-        </View>
+    <Card variant="tinted" tint={colors.accentSoft} padding="xl" style={styles.hero}>
+      <View style={[styles.icon, { backgroundColor: colors.surface }]}>
+        <Icon name={icon} size={24} color={colors.accentInk} />
       </View>
-      {isRest ? (
-        <Button
-          label="Añadir entreno"
-          icon="add"
-          variant="secondary"
-          size="sm"
-          onPress={() => router.push(`/workout/edit?date=${today}`)}
-          style={styles.cta}
-        />
-      ) : null}
+      <View style={styles.body}>
+        <Text variant="display" accessibilityRole="header">{title}</Text>
+        <Text variant="callout" color="onAccentSoft">{detail}</Text>
+      </View>
+      <View style={styles.actions}>
+        <Button label="Ver mi semana" iconRight="arrowRight" onPress={() => router.navigate('/week')} />
+        {kind === 'rest' || kind === 'free' ? (
+          <Button label="Añadir entreno" variant="ghost" onPress={() => router.push(`/workout/edit?date=${today}`)} />
+        ) : null}
+      </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: space.md },
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
-  icon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  body: { flex: 1, gap: space.xs },
-  cta: { alignSelf: 'flex-start' },
+  hero: { borderRadius: radius.xl, gap: space.lg },
+  icon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  body: { gap: space.xs },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
 });

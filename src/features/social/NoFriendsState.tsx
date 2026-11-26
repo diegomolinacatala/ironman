@@ -1,6 +1,6 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
-import { Button, Card, Icon, Text, iconSize, radius, space, useTheme } from '@/ui';
+import { Button, Card, Text, space, useTheme } from '@/ui';
 
 import { useInviteActions } from './useInviteActions';
 
@@ -10,45 +10,24 @@ export interface NoFriendsStateProps {
   onAdd: () => void;
 }
 
-const POINTS = [
-  { icon: 'calendarBadge', text: 'Huecos: los ratos en que los dos estáis libres, sin comparar calendarios a mano.' },
-  { icon: 'sparkles', text: 'Oportunidades: si los dos tenéis rodaje el sábado, os lo proponemos juntos.' },
-  { icon: 'lock', text: 'Tú decides qué ven: todo, solo deporte y duración, o solo ocupado/libre.' },
-] as const;
-
 /** Empty Juntos: what training together gives you + share my username. */
 export function NoFriendsState({ username, pendingOutgoing, onAdd }: NoFriendsStateProps) {
   const { colors } = useTheme();
   const invite = useInviteActions(username);
   return (
-    <Card padding="xl" style={styles.box}>
-      <Text variant="overline" color="textMuted">
-        Entrena con amigos
+    <Card variant="tinted" tint={colors.accentSoft} padding="xl" style={styles.box}>
+      <Text variant="title" color="onAccentSoft">{pendingOutgoing > 0 ? 'Esperando respuesta' : '¿Con quién entrenas?'}</Text>
+      <Text variant="callout" color="onAccentSoft">
+        {pendingOutgoing > 0
+          ? `Tienes ${pendingOutgoing === 1 ? 'una solicitud pendiente' : `${pendingOutgoing} solicitudes pendientes`}. Cuando acepten, podréis comparar horarios.`
+          : 'Busca a un amigo para encontrar un hueco libre en vuestras agendas.'}
       </Text>
-      <Text variant="title">Entrenar acompañado es más fácil</Text>
-      <View style={styles.points}>
-        {POINTS.map((point) => (
-          <View key={point.icon} style={styles.point}>
-            <View style={[styles.tile, { backgroundColor: colors.accentSoft }]}>
-              <Icon name={point.icon} size={iconSize.sm} color={colors.onAccentSoft} />
-            </View>
-            <Text variant="callout" style={styles.flex}>
-              {point.text}
-            </Text>
-          </View>
-        ))}
-      </View>
-      {pendingOutgoing > 0 ? (
-        <Text variant="caption" color="textMuted">
-          {pendingOutgoing === 1 ? 'Tienes 1 solicitud enviada pendiente.' : `Tienes ${pendingOutgoing} solicitudes enviadas pendientes.`}
-        </Text>
-      ) : null}
-      <Button label="Buscar amigos" icon="search" onPress={onAdd} fullWidth />
+      <Button label={pendingOutgoing > 0 ? 'Ver solicitudes' : 'Buscar amigos'} icon={pendingOutgoing > 0 ? 'mail' : 'search'} onPress={onAdd} fullWidth />
       {username ? (
         <Button
-          label={invite.copied ? 'Invitación copiada' : `Compartir mi usuario @${username}`}
+          label={invite.copied ? 'Invitación copiada' : 'Compartir mi usuario'}
           icon="share"
-          variant="secondary"
+          variant="ghost"
           onPress={() => void invite.share()}
           loading={invite.sharing}
           fullWidth
@@ -60,8 +39,4 @@ export function NoFriendsState({ username, pendingOutgoing, onAdd }: NoFriendsSt
 
 const styles = StyleSheet.create({
   box: { gap: space.md },
-  points: { gap: space.md, marginVertical: space.xs },
-  point: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-  tile: { width: 32, height: 32, borderRadius: radius.md - 2, alignItems: 'center', justifyContent: 'center' },
-  flex: { flex: 1 },
 });

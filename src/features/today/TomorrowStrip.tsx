@@ -21,7 +21,7 @@ export function TomorrowStrip({ date, workouts, embedded = false }: { date: ISOD
           <View style={styles.row}>
             <Icon name="moon" size={18} color={colors.textMuted} />
             <Text variant="callout" color="textMuted">
-              Descanso. Recargar también es entrenar.
+              {workouts.length > 0 ? 'Día de descanso previsto.' : 'Todavía no hay sesiones para mañana.'}
             </Text>
           </View>
         </Card>

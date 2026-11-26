@@ -2,32 +2,24 @@ import { router } from 'expo-router';
 import { Fragment, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Card, Divider, ListRow, SectionHeader, Text, space, useTheme, type IconName } from '@/ui';
+import { Disclosure, Divider, ListRow, space, useTheme, type IconName } from '@/ui';
 
 /** Icon tile (32) + gap (12) + row inset (4): dividers start under the row text, iOS Settings style. */
 export const ROW_DIVIDER_INSET = 48;
 
 export interface SettingsGroupProps {
   title: string;
-  /** Small explanatory line under the card. */
-  footer?: string;
+  summary: string;
+  icon: IconName;
   children: ReactNode;
 }
 
-/** Tú: one titled, grouped list card (rows with icon tiles, inset dividers, chevrons). */
-export function SettingsGroup({ title, footer, children }: SettingsGroupProps) {
+/** A category in the settings index. Its controls mount when the athlete opens it. */
+export function SettingsGroup({ title, summary, icon, children }: SettingsGroupProps) {
   return (
-    <View style={styles.group}>
-      <SectionHeader title={title} />
-      <Card padding={0} style={styles.card}>
-        {children}
-      </Card>
-      {footer ? (
-        <Text variant="caption" color="textMuted" style={styles.footer}>
-          {footer}
-        </Text>
-      ) : null}
-    </View>
+    <Disclosure variant="plain" title={title} summary={summary} icon={icon} style={styles.category}>
+      <View style={styles.controls}>{children}</View>
+    </Disclosure>
   );
 }
 
@@ -67,7 +59,6 @@ export function LinkRows({ items }: { items: readonly LinkItem[] }) {
 }
 
 const styles = StyleSheet.create({
-  group: { gap: space.sm, marginTop: space.sm },
-  card: { paddingHorizontal: space.md, paddingVertical: space.xs },
-  footer: { paddingHorizontal: space.xs },
+  category: { paddingHorizontal: space.lg, paddingVertical: space.xs },
+  controls: { paddingBottom: space.md },
 });

@@ -62,21 +62,16 @@ export default function AddFriendScreen() {
   const profile = useProfile();
   const friends = useFriends();
   const [query, setQuery] = useState('');
-  const debounced = useDebouncedValue(query.trim().replace(/^@/, ''), SEARCH_DEBOUNCE_MS);
+  const searchTerm = query.trim().replace(/^@/, '');
+  const debounced = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
   const { incoming, outgoing } = splitFriends(friends.data);
 
   return (
     <FormScreen inSheet>
       <Stack.Screen options={{ headerLeft: () => <ModalCancel label="Cerrar" /> }} />
-      {profile.isLoading ? <Loading /> : null}
-      {profile.data ? <UsernameCard username={profile.data.username} /> : null}
-      {profile.error ? (
-        <ErrorNotice message={errorMessage(profile.error, 'No se ha podido cargar tu perfil.')} onRetry={() => void profile.refetch()} />
-      ) : null}
-
       <View style={styles.section}>
-        <SectionHeader title="Buscar" />
         <TextField
+          label="Buscar a un amigo"
           value={query}
           onChangeText={setQuery}
           placeholder="@usuario o nombre"
@@ -86,7 +81,7 @@ export default function AddFriendScreen() {
           returnKeyType="search"
           accessibilityLabel="Buscar amigos por usuario o nombre"
         />
-        <SearchResults query={debounced} />
+        {debounced === searchTerm ? <SearchResults query={debounced} /> : <Loading label="Buscando" />}
       </View>
 
       {friends.error ? (
@@ -109,6 +104,11 @@ export default function AddFriendScreen() {
             <FriendRequestRow key={friend.friendshipId} friend={friend} />
           ))}
         </View>
+      ) : null}
+      {profile.isLoading ? <Loading /> : null}
+      {profile.data ? <UsernameCard username={profile.data.username} /> : null}
+      {profile.error ? (
+        <ErrorNotice message={errorMessage(profile.error, 'No se ha podido cargar tu perfil.')} onRetry={() => void profile.refetch()} />
       ) : null}
     </FormScreen>
   );

@@ -30,8 +30,8 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     id: 'welcome',
     icon: 'bolt',
     overline: 'Bienvenida',
-    title: 'Tu coach de bolsillo',
-    subtitle: 'Te prepara para tu carrera con lo que de verdad pasa en tu día.',
+    title: 'Prepara tu primer plan',
+    subtitle: 'Dinos tu nombre y qué entrenas. Después verás tu primera semana.',
     required: true,
     nativeOnly: false,
   },
@@ -39,8 +39,8 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     id: 'goal',
     icon: 'flag',
     overline: 'Tu objetivo',
-    title: '¿A por qué vamos?',
-    subtitle: 'Con tu carrera y tu calendario, el plan sabe cuánto apretar.',
+    title: '¿Qué estás preparando?',
+    subtitle: 'Elige tus deportes. Si tienes una carrera en mente, añade su fecha.',
     required: false,
     nativeOnly: false,
   },
@@ -99,8 +99,10 @@ export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
 }
 
 /** Steps shown on this platform: web skips the native-only ones automatically. */
-export function visibleSteps(platform: string): OnboardingStep[] {
-  return ONBOARDING_STEPS.filter((s) => platform !== 'web' || !s.nativeOnly);
+export function visibleSteps(platform: string, guidedSetup = true): OnboardingStep[] {
+  return ONBOARDING_STEPS.filter((s) =>
+    guidedSetup ? platform !== 'web' || !s.nativeOnly : s.id === 'welcome' || s.id === 'goal' || s.id === 'plan',
+  );
 }
 
 export function stepIndexOf(steps: readonly OnboardingStep[], id: OnboardingStepId): number {
@@ -208,6 +210,8 @@ export const PROGRESS_VERSION = 2;
 export interface StoredProgress {
   version: typeof PROGRESS_VERSION;
   step: OnboardingStepId;
+  /** The athlete opted into the connection walkthrough before generating the plan. */
+  guidedSetup: boolean;
   /** Claude connected or skipped (demo connections have no `lastUsedAt` to check later). */
   claudeDone: boolean;
   /**
@@ -222,7 +226,9 @@ export interface StoredProgress {
 }
 
 export function emptyProgress(step: OnboardingStepId): StoredProgress {
-  return { version: PROGRESS_VERSION, step, claudeDone: false, garminSkipped: false, claudeTokenId: null, plannedWeeks: [] };
+  // v2 progress saved in a connection step must reopen the same walkthrough after updating.
+  const guidedSetup = step !== 'welcome' && step !== 'goal' && step !== 'plan';
+  return { version: PROGRESS_VERSION, step, guidedSetup, claudeDone: false, garminSkipped: false, claudeTokenId: null, plannedWeeks: [] };
 }
 
 export function parseStoredProgress(value: unknown): StoredProgress | null {
@@ -233,6 +239,7 @@ export function parseStoredProgress(value: unknown): StoredProgress | null {
   return {
     version: PROGRESS_VERSION,
     step: record.step,
+    guidedSetup: typeof record.guidedSetup === 'boolean' ? record.guidedSetup : emptyProgress(record.step).guidedSetup,
     claudeDone: record.claudeDone === true,
     garminSkipped: record.garminSkipped === true,
     claudeTokenId: typeof record.claudeTokenId === 'string' ? record.claudeTokenId : null,

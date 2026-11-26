@@ -63,6 +63,7 @@ describe('Plan → General', () => {
     expect(screen.getByTestId('season-week-current')).toBeTruthy();
     expect(screen.getByText('Afinamiento y carrera')).toBeTruthy();
     expect(screen.getByText('Detallada · 2 sesiones', { includeHiddenElements: true })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: /^Afinamiento y carrera/ }));
     expect(screen.getAllByText(/lo marca la carrera|la organiza la carrera/).length).toBeGreaterThan(0);
 
     await fireEvent.press(screen.getByRole('button', { name: 'Hablar del plan con tu coach' }));
@@ -82,6 +83,8 @@ describe('Plan → General', () => {
   test('without a race: one way to add it and 8 maintenance weeks', async () => {
     await render(<PlanScreen />);
     expect(screen.getByText('Sin carrera a la vista')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Ajustar semana' })).toHaveLength(1);
+    await fireEvent.press(screen.getByRole('button', { name: /^Mantenimiento · 7 semanas/ }));
     expect(screen.getAllByRole('button', { name: 'Ajustar semana' })).toHaveLength(8);
     await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/races/edit?from=plan');

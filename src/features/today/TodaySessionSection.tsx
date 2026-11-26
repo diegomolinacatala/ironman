@@ -7,7 +7,7 @@ import { partnerNameFor } from '@/features/workouts/draft';
 import { WorkoutCard } from '@/features/workouts/WorkoutCard';
 import { useTrainingCalendar } from '@/integrations/calendar/trainingCalendar';
 import { errorMessage } from '@/lib/logger';
-import { Card, ErrorNotice, SectionHeader, radius, space } from '@/ui';
+import { Card, Disclosure, ErrorNotice, radius, space } from '@/ui';
 
 import { DayStatusCard } from './DayStatusCard';
 import { planForToday } from './selectors';
@@ -17,7 +17,6 @@ import type { TodayData } from './useTodayData';
 export interface TodaySessionSectionProps {
   data: TodayData;
   busy: boolean;
-  onComplete: (workout: Workout) => void;
   onMore: (workout: Workout) => void;
 }
 
@@ -33,7 +32,7 @@ function SessionSkeleton() {
 }
 
 /** "Tu entreno de hoy": next session, rest / done states and the rest of today's sessions. */
-export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySessionSectionProps) {
+export function TodaySessionSection({ data, busy, onMore }: TodaySessionSectionProps) {
   const calendar = useTrainingCalendar();
   const { today } = data;
   const plan = planForToday(data.todayWorkouts, today);
@@ -50,23 +49,22 @@ export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySes
         partnerName={partner(hero)}
         inCalendar={calendar.enabled && calendar.syncedWorkoutIds.includes(hero.id)}
         onOpen={() => router.push(`/workout/${hero.id}`)}
-        onComplete={() => onComplete(hero)}
         onMore={() => onMore(hero)}
         busy={busy}
-        thresholds={data.thresholds}
-        raceDistance={data.raceDistance}
       />
     );
-  } else body = <DayStatusCard kind={plan.isRestDay ? 'rest' : 'done'} today={today} />;
+  } else {
+    const kind = !data.todayWorkouts.length ? 'free' : plan.isRestDay ? 'rest' :
+      data.todayWorkouts.some((w) => w.status === 'skipped') ? 'skipped' : 'finished';
+    body = <DayStatusCard kind={kind} today={today} />;
+  }
 
   const showOthers = !data.isLoading && !data.error && plan.others.length > 0;
   return (
     <View style={styles.root}>
-      <SectionHeader title="Tu entreno de hoy" />
       {body}
       {showOthers ? (
-        <View style={styles.others}>
-          <SectionHeader title={plan.hero ? 'También hoy' : 'Sesiones de hoy'} />
+        <Disclosure title={plan.hero ? 'También hoy' : 'Sesiones de hoy'} summary={plan.others.map((w) => w.title).join(' · ')} icon="week">
           {plan.others.map((w) => (
             <WorkoutCard
               key={w.id}
@@ -79,7 +77,7 @@ export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySes
               onPress={() => router.push(`/workout/${w.id}`)}
             />
           ))}
-        </View>
+        </Disclosure>
       ) : null}
     </View>
   );
@@ -87,6 +85,5 @@ export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySes
 
 const styles = StyleSheet.create({
   root: { gap: space.sm },
-  others: { gap: space.sm, marginTop: space.sm },
   skeleton: { gap: space.md },
 });

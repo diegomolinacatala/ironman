@@ -92,7 +92,6 @@ export function RecoveryCard({ series }: { series: readonly RecoverySeries[] }) 
           <Text variant="callout" color="textMuted">
             {noRecoveryMessage(brand)}
           </Text>
-          <Button label="Conexiones" icon="link" size="sm" variant="secondary" onPress={() => router.push('/settings/integrations')} />
         </View>
       )}
       {hasAny ? (
@@ -100,6 +99,7 @@ export function RecoveryCard({ series }: { series: readonly RecoverySeries[] }) 
           Línea discontinua: tu media del periodo.
         </Text>
       ) : null}
+      <Button label="Conexiones" icon="link" size="sm" variant="secondary" style={styles.link} onPress={() => router.push('/settings/integrations')} />
     </Card>
   );
 }
@@ -114,4 +114,5 @@ const styles = StyleSheet.create({
   valueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   sparkCol: { flex: 1 },
   empty: { gap: space.md, alignItems: 'flex-start' },
+  link: { alignSelf: 'flex-start' },
 });

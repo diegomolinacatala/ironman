@@ -1,192 +1,63 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { formatDistance, formatDuration } from '@/domain/dates';
 import { sportLabel } from '@/domain/labels';
-import { sessionFeel, targetSummary } from '@/domain/prescription';
-import type { RaceDistance, Thresholds, Workout } from '@/domain/types';
-import { timeRangeLabel, workoutA11yLabel } from '@/features/workouts/format';
-import { IntensityTag } from '@/features/workouts/IntensityTag';
-import { JuntosTag, KeyTag } from '@/features/workouts/Tags';
-import { Button, Card, Icon, IconButton, SportBadge, Text, haptics, radius, space, useTheme } from '@/ui';
-import { useDisclosureOpen } from '@/ui/disclosureState';
+import type { Workout } from '@/domain/types';
+import { timeRangeLabel } from '@/features/workouts/format';
+import { Button, Card, Icon, IconButton, SportBadge, Text, radius, space, useTheme } from '@/ui';
 
-import { structureSummary } from './todayModel';
-
-export interface TodaySessionProps {
+interface TodaySessionProps {
   workout: Workout;
   partnerName: string | null;
-  /** The workout is mirrored in the device calendar ("En tu calendario"). */
   inCalendar: boolean;
   onOpen: () => void;
-  onComplete: () => void;
-  /** Opens No es mi día / Mover / Saltar. */
   onMore: () => void;
-  busy?: boolean;
-  /** The athlete's thresholds: the target line in ppm / pace / watts (RPE without them). */
-  thresholds?: Thresholds | null;
-  raceDistance?: RaceDistance | null;
+  busy: boolean;
 }
 
-function CalendarBadge() {
+/** The next session opens the full prescription. Its menu also lets the athlete log or adapt it. */
+export function TodaySession({ workout, partnerName, inCalendar, onOpen, onMore, busy }: TodaySessionProps) {
   const { colors } = useTheme();
-  return (
-    <View
-      accessible
-      accessibilityLabel="Está en tu calendario"
-      style={[styles.badge, { backgroundColor: colors.surfaceAlt }]}>
-      <Icon name="calendarCheck" size={12} color={colors.textMuted} />
-      <Text variant="caption" color="textMuted">
-        En tu calendario
-      </Text>
-    </View>
-  );
-}
-
-/** Main set + targets ("3×8' Z4 · 162–168 ppm · RPE 7–8") and how it should feel: the card's highlight (accentSoft). */
-function TargetWell({ target, feel }: { target: string; feel: string }) {
-  const { colors } = useTheme();
-  return (
-    <View style={[styles.well, { backgroundColor: colors.accentSoft }]}>
-      <View style={styles.wellRow}>
-        <Icon name="target" size={16} color={colors.onAccentSoft} />
-        <Text variant="callout" color="onAccentSoft" style={[styles.flex, styles.tabular]}>
-          {target}
-        </Text>
-      </View>
-      {feel ? (
-        <Text variant="caption" color="onAccentSoft" numberOfLines={2}>
-          {feel}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-/** "Objetivo y estructura" fold: the card stays short until the athlete wants the details. */
-function DetailsToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ expanded: open }}
-      onPress={() => {
-        haptics.tap();
-        onToggle();
-      }}
-      hitSlop={8}
-      style={({ pressed }) => [styles.toggle, pressed && { opacity: 0.6 }]}>
-      <Text variant="callout" color="accentInk">
-        {open ? 'Ocultar detalles' : 'Objetivo, ritmos y estructura'}
-      </Text>
-      <View style={open ? styles.flip : undefined}>
-        <Icon name="chevronDown" size={12} color={colors.accentInk} />
-      </View>
-    </Pressable>
-  );
-}
-
-/**
- * Today's next session — the one primary action on Hoy ("Hecho"). Raised card with the sport
- * rail; time, duration, the coach's objective, the target line, how it should feel and the
- * structure in one calm block.
- */
-export function TodaySession({
-  workout,
-  partnerName,
-  inCalendar,
-  onOpen,
-  onComplete,
-  onMore,
-  busy,
-  thresholds = null,
-  raceDistance = null,
-}: TodaySessionProps) {
-  const theme = useTheme();
+  const distance = workout.distanceM ? formatDistance(workout.distanceM, workout.sport) : null;
   const time = timeRangeLabel(workout);
-  const lead = workout.coaching?.objective?.trim() || workout.description?.trim() || null;
-  const target = targetSummary(workout, thresholds, { raceDistance });
-  const feel = target ? sessionFeel(workout, thresholds, { raceDistance }) : '';
-  const structure = structureSummary(workout);
-  const [detailsOpen, setDetailsOpen] = useDisclosureOpen('today.sessionDetails', false);
-  const hasDetails = Boolean(lead || target || structure);
-  const a11y = [`Tu entreno de hoy: ${workoutA11yLabel(workout, { partnerName })}`, inCalendar ? 'en tu calendario' : '', lead ?? '', target ?? '']
-    .filter(Boolean)
-    .join('. ');
   return (
-    <Card variant="raised" padding="lg" rail={theme.sport(workout.sport).base} style={styles.card}>
-      <Pressable accessibilityRole="button" accessibilityLabel={a11y} accessibilityHint="Abre el detalle del entreno" onPress={onOpen} style={styles.body}>
-        <View style={styles.top}>
-          <View style={styles.flex}>
-            <Text variant="overline" color="textMuted">
-              {`${sportLabel(workout.sport)} · ${time ?? 'hora flexible'}`}
-            </Text>
-            <View style={styles.metricRow}>
-              <Text variant="metric">{formatDuration(workout.durationMin)}</Text>
-              {workout.distanceM ? (
-                <Text variant="metricSmall" color="textMuted">
-                  {formatDistance(workout.distanceM, workout.sport)}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-          <SportBadge sport={workout.sport} size={40} />
+    <Card variant="tinted" tint={colors.accentSoft} padding="xl" style={styles.hero}>
+      <View style={styles.row}>
+        <SportBadge sport={workout.sport} size={40} tone="solid" />
+        <View style={styles.flex}>
+          <Text variant="caption" color="onAccentSoft">Tu próxima sesión</Text>
+          <Text variant="bodyStrong" color="onAccentSoft">{sportLabel(workout.sport)}</Text>
         </View>
-        <Text variant="heading" numberOfLines={2}>
-          {workout.title}
-        </Text>
-      </Pressable>
-      {hasDetails ? <DetailsToggle open={detailsOpen} onToggle={() => setDetailsOpen(!detailsOpen)} /> : null}
-      {detailsOpen && hasDetails ? (
-        <View style={styles.body}>
-          {lead ? <Text variant="callout">{lead}</Text> : null}
-          {target ? <TargetWell target={target} feel={feel} /> : null}
-          {structure ? (
-            <Text variant="caption" color="textMuted">
-              {structure}
-            </Text>
-          ) : null}
-          <View style={styles.tags}>
-            <IntensityTag intensity={workout.intensity} />
-            {workout.isKey ? <KeyTag /> : null}
-            {partnerName ? <JuntosTag name={partnerName} /> : null}
-            {inCalendar ? <CalendarBadge /> : null}
-          </View>
-        </View>
-      ) : null}
-      <View style={styles.actions}>
-        <Button label="Hecho" icon="check" onPress={onComplete} disabled={busy} style={styles.flex} />
         <IconButton
           icon="more"
-          variant="filled"
-          size={48}
-          accessibilityLabel="Más opciones: no es mi día, mover o saltar"
+          size={44}
+          accessibilityLabel="Opciones del entreno"
           onPress={onMore}
           disabled={busy}
         />
       </View>
+      <View style={styles.summary}>
+        <Text variant="display" accessibilityRole="header">{workout.title}</Text>
+        <Text variant="bodyStrong" color="onAccentSoft">
+          {[formatDuration(workout.durationMin), distance, time ?? 'Horario flexible'].filter(Boolean).join(' · ')}
+        </Text>
+        {partnerName ? <Text variant="callout" color="onAccentSoft">{`Con ${partnerName}`}</Text> : null}
+        {inCalendar ? (
+          <View style={styles.calendar}>
+            <Icon name="calendarCheck" size={16} color={colors.onAccentSoft} />
+            <Text variant="caption" color="onAccentSoft">En tu calendario</Text>
+          </View>
+        ) : null}
+      </View>
+      <Button label="Ver entreno" iconRight="arrowRight" onPress={onOpen} accessibilityHint="Ver objetivo, ritmos y estructura" fullWidth />
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: space.md },
-  toggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs, alignSelf: 'flex-start', minHeight: 32 },
-  flip: { transform: [{ rotate: '180deg' }] },
-  body: { gap: space.sm },
-  top: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  hero: { borderRadius: radius.xl, gap: space.lg },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   flex: { flex: 1 },
-  tabular: { fontVariant: ['tabular-nums'] },
-  metricRow: { flexDirection: 'row', alignItems: 'baseline', gap: space.md, flexWrap: 'wrap' },
-  well: { borderRadius: radius.md, padding: space.md, gap: space.xs },
-  wellRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: space.xs },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  actions: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
+  summary: { gap: space.xs },
+  calendar: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
 });

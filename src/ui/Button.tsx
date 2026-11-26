@@ -88,7 +88,7 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         {
-          height: HEIGHT[size],
+          minHeight: HEIGHT[size],
           paddingHorizontal: PADDING_X[size],
           backgroundColor: pressed ? palette.pressed : palette.bg,
           borderColor: palette.border,
@@ -106,8 +106,7 @@ export function Button({
           {icon ? <Icon name={icon} size={glyph} color={palette.fg} /> : null}
           <Text
             variant={size === 'sm' ? 'caption' : 'bodyStrong'}
-            style={[{ color: palette.fg }, size === 'sm' && styles.smallLabel]}
-            numberOfLines={1}>
+            style={[styles.label, { color: palette.fg }, size === 'sm' && styles.smallLabel]}>
             {label}
           </Text>
           {iconRight ? <Icon name={iconRight} size={glyph} color={palette.fg} /> : null}
@@ -165,13 +164,17 @@ export function IconButton({ icon, onPress, accessibilityLabel, variant = 'plain
 
 const styles = StyleSheet.create({
   base: {
+    maxWidth: '100%',
+    flexShrink: 1,
+    paddingVertical: space.xs,
     borderRadius: radius.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   fullWidth: { alignSelf: 'stretch' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  row: { maxWidth: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
+  label: { flexShrink: 1, textAlign: 'center' },
   smallLabel: { fontFamily: fonts.bodySemibold, fontSize: 14 },
   iconButton: { borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
 });

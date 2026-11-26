@@ -2,7 +2,7 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 
 ## Memoria compartida del proyecto
 
-Al empezar una sesión, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota del área afectada. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Deja decisiones, cambios, comprobaciones y pendientes para los dos socios, Codex y Claude Code.
+Al empezar una sesión, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota del área afectada. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Deja decisiones, cambios, comprobaciones y pendientes para todo el equipo (ver `memoria/Cómo trabajamos.md` › Equipo) y sus asistentes, Codex y Claude Code.
 
 ## Expo has changed — do not trust your training data
 
