@@ -677,3 +677,39 @@ describe('«Tu forma de entrenar» (profiles.training_prefs)', () => {
     expect('trainingPrefs' in rowToProfile({ ...profileToRow(profile), training_prefs: [1, 2] })).toBe(false);
   });
 });
+
+describe('«Mis sitios» and the week questions (profiles.places, profiles.week_questions)', () => {
+  const profile = rowToProfile({
+    id: ME,
+    username: 'diego',
+    display_name: 'Diego',
+    avatar_url: null,
+    sports: ['swim', 'bike', 'run'],
+    level: 'intermediate',
+    thresholds: {},
+    availability: {},
+    visibility: 'full',
+    notification_prefs: {},
+    timezone: 'Europe/Madrid',
+    coach_notes: null,
+    onboarded_at: null,
+    created_at: NOW,
+  });
+  const places: NonNullable<Profile['places']> = {
+    home: { name: 'Valencia', gear: { roadBike: false, trainer: true, pool: true, gym: true } },
+    away: { name: 'Castellón', gear: { roadBike: true, trainer: false, pool: false, gym: false } },
+  };
+  const weekQuestions: NonNullable<Profile['weekQuestions']> = { enabled: true, weeks: [{ weekStart: '2026-11-30', load: 'busy', sundayDone: true }] };
+
+  it('absent when not stored (or the columns not deployed yet)', () => {
+    expect('places' in profile).toBe(false);
+    expect('weekQuestions' in profile).toBe(false);
+    expect(profileToRow(profile).places).toBeNull();
+  });
+
+  it('round trip, PATCH and odd values dropped', () => {
+    expect(rowToProfile(profileToRow({ ...profile, places, weekQuestions }))).toEqual({ ...profile, places, weekQuestions });
+    expect(profilePatchToRow({ places, weekQuestions: null })).toEqual({ places, week_questions: null });
+    expect('places' in rowToProfile({ ...profileToRow(profile), places: { home: 'Valencia' } })).toBe(false);
+  });
+});

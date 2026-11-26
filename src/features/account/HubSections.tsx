@@ -1,5 +1,6 @@
 import { todayISO } from '@/domain/dates';
 import { useRepository } from '@/data/context';
+import { placesSubtitle } from '@/domain/places';
 import type { Profile, Race } from '@/domain/types';
 import { coachVoiceName, useCoachVoice } from '@/integrations/speech/coachVoice';
 
@@ -21,6 +22,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
           { icon: 'clock', title: 'Tus horarios', subtitle: availabilitySubtitle(profile.availability), href: '/settings/availability' },
           { icon: 'target', title: 'Tu forma de entrenar', subtitle: trainingPrefsSubtitle(profile.trainingPrefs), href: '/settings/training' },
           { icon: 'profile', title: 'Perfil deportivo', subtitle: sportsProfileSubtitle(profile), href: '/settings/profile' },
+          { icon: 'location', title: 'Mis sitios', subtitle: placesSubtitle(profile.places), href: '/settings/places' },
           { icon: 'cloudSun', title: 'Tu ciudad para el tiempo', subtitle: placeRowSubtitle(profile.weatherPlace), href: '/settings/weather' },
         ]}
       />

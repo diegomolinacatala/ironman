@@ -7,7 +7,7 @@
  */
 import { addDays, formatDuration, formatTime, startOfWeek } from '@/domain/dates';
 import { intensityLabel, sportLabel } from '@/domain/labels';
-import type { ISODate, NotificationPrefs, RaceDistance, Thresholds, Workout } from '@/domain/types';
+import type { ISODate, NotificationPrefs, Profile, RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { mainTargetLine } from '@/features/coach/prescriptionContext';
 
 import { atLocal, parseTimeMinutes } from '../time';
@@ -60,6 +60,20 @@ export interface ScheduleInput {
    * fixed-time briefing then. Without a server (demo) the fixed time is kept in any mode.
    */
   serverWake?: boolean;
+  /**
+   * The Sunday/Wednesday questions are on (Tú › Mis sitios): a reminder at 19:00 on Sunday
+   * («Tu semana», instead of «Planifica tu semana») and, with a second place, on Wednesday,
+   * unless already answered. Null/absent = off.
+   */
+  weekQuestions?: WeekQuestionReminders | null;
+}
+
+export interface WeekQuestionReminders {
+  /** The other place ("Castellón"), null without one (no Wednesday reminder). */
+  away: string | null;
+  /** Mondays of the weeks whose Sunday / Wednesday question is already answered. */
+  sundayDone: readonly ISODate[];
+  wednesdayDone: readonly ISODate[];
 }
 
 /** What a workout reminder needs besides the workout. */
@@ -246,6 +260,45 @@ function weeklyPlanReminders(today: ISODate, now: Date, count: number): Notifica
     }));
 }
 
+/** The reminders input of the profile's questions (null while off). */
+export function weekQuestionRemindersOf(profile: Pick<Profile, 'weekQuestions' | 'places'>): WeekQuestionReminders | null {
+  const q = profile.weekQuestions;
+  if (!q?.enabled) return null;
+  return {
+    away: profile.places?.away?.name ?? null,
+    sundayDone: q.weeks.filter((w) => w.sundayDone).map((w) => w.weekStart),
+    wednesdayDone: q.weeks.filter((w) => w.wednesdayDone).map((w) => w.weekStart),
+  };
+}
+
+/** The next Sunday and Wednesday questions at 19:00 (see `ScheduleInput.weekQuestions`); they open Hoy. */
+function weekQuestionReminders(today: ISODate, now: Date, q: WeekQuestionReminders): NotificationSpec[] {
+  const monday = startOfWeek(today);
+  const weeks = [monday, addDays(monday, 7)];
+  const sundays = weeks
+    .map((week) => ({ day: addDays(week, 6), about: addDays(week, 7) }))
+    .filter(({ about }) => !q.sundayDone.includes(about))
+    .map(({ day }) => ({ day, id: `rti.weekq.sun.${day}`, title: 'Tu semana', body: '¿Cómo ves la semana que viene? Dos toques y la planifico contigo.' }));
+  const wednesdays = q.away
+    ? weeks
+        .filter((week) => !q.wednesdayDone.includes(week))
+        .map((week) => ({ day: addDays(week, 2), id: `rti.weekq.wed.${addDays(week, 2)}`, title: 'Tu fin de semana', body: `¿Este fin de semana vuelves a ${q.away}?` }))
+    : [];
+  return [...sundays, ...wednesdays]
+    .map((r) => ({ ...r, fireAt: atLocal(r.day, WEEKLY_PLAN_MIN) }))
+    .filter(({ fireAt }) => fireAt.getTime() > now.getTime())
+    .map((r) => ({
+      id: r.id,
+      kind: 'weekly_plan' as const,
+      title: r.title,
+      body: r.body,
+      url: '/today',
+      categoryId: 'weekly' as const,
+      threadId: 'rti.weekly',
+      trigger: { type: 'date' as const, date: r.fireAt },
+    }));
+}
+
 function sortKey(spec: NotificationSpec): number {
   return spec.trigger.type === 'date' ? spec.trigger.date.getTime() : 0;
 }
@@ -276,9 +329,11 @@ export function buildSchedule(input: ScheduleInput): NotificationSpec[] {
   const fixedSummaries = prefs.morningSummary && !briefingByServer(prefs, input.serverWake);
   const summaries = fixedSummaries ? days.map((date) => morningSummary(date, morningMin, now)) : [];
   const repeating = prefs.eveningCheckin ? [eveningCheckin(eveningMin)] : [];
-  const weekly = prefs.weeklyPlanReminder ? weeklyPlanReminders(input.today, now, WEEKLY_REMINDERS) : [];
+  // The Sunday question replaces «Planifica tu semana» (it leads to planning the week too).
+  const questions = input.weekQuestions ? weekQuestionReminders(input.today, now, input.weekQuestions) : [];
+  const weekly = prefs.weeklyPlanReminder && !input.weekQuestions ? weeklyPlanReminders(input.today, now, WEEKLY_REMINDERS) : [];
 
-  const dated = [...reminders, ...summaries, ...weekly]
+  const dated = [...reminders, ...summaries, ...weekly, ...questions]
     .filter((s): s is NotificationSpec => s !== null)
     .sort((a, b) => sortKey(a) - sortKey(b));
   return [...repeating, ...dated].slice(0, MAX_SCHEDULED);

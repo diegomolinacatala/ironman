@@ -11,6 +11,7 @@ import {
   urlFromNotificationData,
   wakeBriefingSpec,
   WAKE_BRIEFING_KIND,
+  weekQuestionRemindersOf,
   type NotificationSpec,
 } from '../notifications/schedule';
 import { prefs, workout } from './fixtures';
@@ -150,6 +151,22 @@ describe('buildSchedule', () => {
     expect(weekly[0]?.url).toBe('/week?week=2026-11-02');
     expect(dateOf(weekly[1])).toEqual(new Date(2026, 10, 8, 19, 0));
     expect(weekly[1]?.url).toBe('/week?week=2026-11-09');
+  });
+
+  test('week questions on: Sunday «Tu semana» replaces the plan reminder, Wednesday asks about the other city; answered weeks are skipped', () => {
+    const q = weekQuestionRemindersOf({
+      places: { home: { name: 'Valencia', gear: { roadBike: false, trainer: true, pool: true, gym: true } }, away: { name: 'Castellón', gear: { roadBike: true, trainer: false, pool: false, gym: false } } },
+      weekQuestions: { enabled: true, weeks: [{ weekStart: '2026-10-26', wednesdayDone: true }, { weekStart: '2026-11-09', sundayDone: true }] },
+    });
+    const specs = buildSchedule({ workouts: [], prefs, today: TODAY, now: NOW, weekQuestions: q });
+    const weekly = specs.filter((s) => s.kind === 'weekly_plan');
+    expect(weekly.map((s) => [s.title, dateOf(s)])).toEqual([
+      ['Tu semana', new Date(2026, 10, 1, 19, 0)],
+      ['Tu fin de semana', new Date(2026, 10, 4, 19, 0)],
+    ]);
+    expect(weekly[1]?.body).toBe('¿Este fin de semana vuelves a Castellón?');
+    expect(weekly.every((s) => s.url === '/today')).toBe(true);
+    expect(weekQuestionRemindersOf({ places: null, weekQuestions: { enabled: false, weeks: [] } })).toBeNull();
   });
 
   test('no local notification deep-links into the coach (a tap must never start an AI request)', () => {

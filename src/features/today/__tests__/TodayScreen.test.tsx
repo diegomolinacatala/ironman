@@ -67,6 +67,8 @@ jest.mock('@/data/queries', () => ({
 jest.mock('@/features/today/TodaySocialCard', () => ({ TodaySocialCard: () => null, todayQuedadas: () => [] }));
 // Its own hook reads the week and the watch: tested on its own (adaptNudge).
 jest.mock('@/features/today/AdaptNudgeCard', () => ({ AdaptNudgeCard: () => null }));
+// The week questions and «¿Sales con alguien?»: tested on their own (weekQuestionsCards).
+jest.mock('@/features/weekQuestions/TodayQuestions', () => ({ TodayQuestions: () => null }));
 jest.mock('@/features/accessory/CoachAccessory', () => ({ CoachAccessory: () => null }));
 jest.mock('@/features/accessory/coachActions', () => ({
   ...(jest.requireActual('@/features/accessory/coachActions') as object),

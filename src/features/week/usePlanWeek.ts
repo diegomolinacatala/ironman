@@ -5,11 +5,14 @@ import { generateWeek } from '@/domain/planner';
 import type { ISODate, PlanChange } from '@/domain/types';
 import type { WeatherForecast } from '@/domain/weather';
 import { weatherAdjustPlan } from '@/domain/weatherWeek';
-import { useCreateProposal, useWeather } from '@/data/queries';
+import { useCreateProposal, useFetchFriendWeeks, useFriends, useWeather } from '@/data/queries';
 import { errorMessage, logger } from '@/lib/logger';
 
 import { weatherModel } from '@/features/weather/weatherChecks';
+import { splitFriends } from '@/features/social/friendModel';
 import { notify } from '@/features/workouts/confirm';
+
+import { MAX_SOCIAL_FRIENDS, socialPriority, withSocial, type FriendWeek } from './socialPlan';
 
 import type { WeekData } from './useWeekData';
 
@@ -57,6 +60,16 @@ export function withWeather(planned: PlannedWeek, weekStart: ISODate, data: Week
 export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => Promise<void>; busy: boolean } {
   const create = useCreateProposal();
   const forecast = useWeather().data ?? null;
+  const friends = useFriends().data;
+  const fetchFriendWeeks = useFetchFriendWeeks();
+
+  /** «Tu semana» con gente / un poco de todo: the friends' weeks for their common slots (else none is loaded). */
+  const friendWeeks = async (weekStart: ISODate, data: WeekData): Promise<FriendWeek[]> => {
+    if (!socialPriority(data.profile, weekStart)) return [];
+    const accepted = splitFriends(friends).accepted.slice(0, MAX_SOCIAL_FRIENDS);
+    const items = await fetchFriendWeeks(accepted.map((f) => f.profile.id), { from: weekStart, to: addDays(weekStart, 6) });
+    return accepted.map((f, i) => ({ friendId: f.profile.id, displayName: f.profile.displayName, items: items[i] ?? [] }));
+  };
 
   const plan = async (weekStart: ISODate, data: WeekData) => {
     if (!data.profile) {
@@ -93,8 +106,10 @@ export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => P
         notify('Tu semana ya está completa', result.summary || 'No quedan huecos libres en tu calendario que rellenar.');
         return;
       }
+      // «Tu semana» con gente: new sessions into the friends' common slots (named, never sent).
+      const social = withSocial({ changes: result.changes, summary: result.summary }, weekStart, data, await friendWeeks(weekStart, data));
       // Weather is a layer on the planner's week: the athlete still reviews every change.
-      const week = withWeather({ changes: result.changes, summary: result.summary }, weekStart, data, forecast, minutesNow());
+      const week = withWeather(social, weekStart, data, forecast, minutesNow());
       const proposal = await create.mutateAsync({
         kind: 'generate_week',
         source: 'rules',

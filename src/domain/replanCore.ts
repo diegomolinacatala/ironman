@@ -11,6 +11,7 @@ import { isHardDay, lifeEventHardPoints, workoutHardPoints } from './hardness';
 import { workoutLoad } from './load';
 import { allowsSession, intensityRank, restrictionsForDates, type DayRestriction, NO_RESTRICTION } from './restrictions';
 import { easyCodeFor } from './sessionEasier';
+import { withWeekContext } from './weekContext';
 import { buildSession, SESSION_CATALOG, type SessionContext } from './sessions';
 import { scaleSteps } from './stepScale';
 import { busyRangesOn, rangesLength, subtractRanges, windowRangesOn, type MinuteRange } from './timeRanges';
@@ -98,7 +99,8 @@ export function makeCtx(input: ReplanInput, extraEvents: readonly LifeEvent[] = 
   const base = input.lifeEvents ?? [];
   const events = [...base, ...extraEvents.filter((e) => !base.some((x) => x.id === e.id))];
   const dates = daysInRange({ from: addDays(input.today, -7), to: addDays(weekEnd, 7) });
-  return { input, today: input.today, weekEnd, events, restrictions: restrictionsForDates(dates, events), easyWeek: false };
+  // «Mis sitios» and «Tu semana» (weekContext.ts) restrict the days like the imprevistos.
+  return { input, today: input.today, weekEnd, events, restrictions: withWeekContext(restrictionsForDates(dates, events), input.profile), easyWeek: false };
 }
 
 /** No pool restriction, or `date` is one of the athlete's pool days. */

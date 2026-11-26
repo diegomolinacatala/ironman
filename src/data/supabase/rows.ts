@@ -33,6 +33,9 @@ export interface ProfileRow {
   weather_place?: string | null;
   weather_lat?: number | string | null;
   weather_lon?: number | string | null;
+  /** `20261127000300_week_questions_places.sql`: «Mis sitios» and the Sunday/Wednesday questions (jsonb or null). */
+  places?: unknown;
+  week_questions?: unknown;
   created_at: string;
   updated_at?: string;
 }

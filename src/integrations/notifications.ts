@@ -18,6 +18,7 @@ import {
   isLocalNotificationKind,
   isOwnNotificationKind,
   wakeBriefingSpec,
+  weekQuestionRemindersOf,
   type NotificationSpec,
 } from './notifications/schedule';
 import { createSerialQueue } from './notifications/serial';
@@ -187,6 +188,7 @@ export async function rescheduleLocalNotifications(input: {
       thresholds: input.profile.thresholds ?? null,
       raceDistance: input.raceDistance ?? null,
       serverWake: input.serverWake,
+      weekQuestions: weekQuestionRemindersOf(input.profile),
     });
     const results = await Promise.allSettled(specs.map((spec) => Notifications.scheduleNotificationAsync(toRequest(spec))));
     const failed = results.filter((r) => r.status === 'rejected');

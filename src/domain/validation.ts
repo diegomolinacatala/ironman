@@ -8,6 +8,8 @@ import { z } from 'zod';
 
 import { validateCoaching } from './changes';
 import { diffDays, isISODate, timeToMinutes, weekdayOf } from './dates';
+import { PLACE_NAME_MAX } from './places';
+import { PLANS_MAX, WEEK_ANSWERS_KEPT, WEEK_LOADS, WEEK_PRIORITIES } from './weekQuestions';
 import { FIXED_MAX_MINUTES, FIXED_MIN_MINUTES, FIXED_TITLE_MAX, INTENSITY_MODELS, MAX_FIXED_SESSIONS, MAX_SESSIONS } from './trainingPrefs';
 import {
   BODY_AREAS,
@@ -319,6 +321,29 @@ export const trainingPrefsSchema = z.object({
   fixedSessions: z.array(fixedWeeklySessionSchema).max(MAX_FIXED_SESSIONS, { error: `Como mucho ${MAX_FIXED_SESSIONS} sesiones fijas` }),
 });
 
+const placeGearSchema = z.object({ roadBike: z.boolean(), trainer: z.boolean(), pool: z.boolean(), gym: z.boolean() });
+const trainingPlaceSchema = z.object({
+  name: z.string().trim().min(1, { error: 'Pon el nombre de la ciudad' }).max(PLACE_NAME_MAX, { error: `Ciudad: máximo ${PLACE_NAME_MAX} caracteres` }),
+  gear: placeGearSchema,
+});
+
+/** «Mis sitios» (profiles.places). */
+export const placesSchema = z.object({ home: trainingPlaceSchema, away: trainingPlaceSchema.nullable() });
+
+const weekAnswersSchema = z.object({
+  weekStart: z.string().refine(isISODate, { error: 'Semana no válida' }),
+  priority: z.enum(WEEK_PRIORITIES as [string, ...string[]]).optional(),
+  load: z.enum(WEEK_LOADS as [string, ...string[]]).optional(),
+  plans: z.string().max(PLANS_MAX, { error: `Tus planes: máximo ${PLANS_MAX} caracteres` }).optional(),
+  sundayDone: z.boolean().optional(),
+  awayWeekend: z.boolean().optional(),
+  awayRide: z.boolean().optional(),
+  wednesdayDone: z.boolean().optional(),
+});
+
+/** The Sunday/Wednesday questions (profiles.week_questions). */
+export const weekQuestionsSchema = z.object({ enabled: z.boolean(), weeks: z.array(weekAnswersSchema).max(WEEK_ANSWERS_KEPT) });
+
 export const profilePatchSchema = z
   .object({
     username: usernameSchema,
@@ -335,6 +360,8 @@ export const profilePatchSchema = z
     onboardedAt: z.string().nullable(),
     watchBrand: z.enum(WATCH_BRANDS, { error: 'Elige tu reloj: Garmin o COROS' }).nullable(),
     trainingPrefs: trainingPrefsSchema.nullable(),
+    places: placesSchema.nullable(),
+    weekQuestions: weekQuestionsSchema.nullable(),
   })
   .partial();
 
