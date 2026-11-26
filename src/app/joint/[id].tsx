@@ -1,7 +1,7 @@
 /**
  * Quedada detail: what, when, where, who — and my actions (Aceptar/Rechazar
  * when invited, Me apunto for a friend's open quedada, Cambiar/Cancelar when I
- * organise) plus the participants' messages.
+ * organise, «Repetir la semana que viene» once I am in) plus the participants' messages.
  */
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
@@ -13,8 +13,9 @@ import { sportLabel } from '@/domain/labels';
 import type { JointSession, UUID } from '@/domain/types';
 import { IntensityTag } from '@/features/workouts/IntensityTag';
 import { JointComments } from '@/features/together/JointComments';
+import { canRepeat, repeatPrefill } from '@/features/together/jointForm';
 import { isOrganizer, myParticipant, sessionStatusCopy, sessionTimeLabel } from '@/features/together/jointModel';
-import { openWorkout, returnToTogether } from '@/features/together/navigation';
+import { openJointNew, openWorkout, returnToTogether } from '@/features/together/navigation';
 import { ParticipantRow } from '@/features/together/ParticipantRow';
 import { StatusTag } from '@/features/together/StatusTag';
 import { useJointActions } from '@/features/together/useJointActions';
@@ -89,6 +90,16 @@ function Actions({ session, myId, today }: { session: JointSession; myId: UUID |
           variant="secondary"
           fullWidth
           onPress={() => router.push({ pathname: '/joint/new', params: { edit: session.id } })}
+        />
+      ) : null}
+      {canRepeat(session, myId) ? (
+        // Opens the new-quedada form prefilled a week later: the athlete reviews it and sends it.
+        <Button
+          label="Repetir la semana que viene"
+          icon="refresh"
+          variant="secondary"
+          fullWidth
+          onPress={() => openJointNew(repeatPrefill(session, myId, today))}
         />
       ) : null}
       {organizer && active ? (

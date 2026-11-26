@@ -285,8 +285,8 @@ of the tabs), never `router.push`, which would stack a second tab navigator. Fiv
 | `nutrition` (`?date`) | ui-coach | nutrition log + fueling tips |
 | `friends/add` | ui-together | search username, share invite (modal) |
 | `friends/[id]` (`?week`) | ui-together | full week compare + huecos + oportunidades |
-| `joint/new` (`?friendId&date&sport&startTime&durationMin&fromWorkoutId&title`) | ui-together | propose quedada (modal) |
-| `joint/[id]` | ui-together | quedada detail, accept/decline/cancel |
+| `joint/new` (`?friendId&friendIds&date&sport&startTime&durationMin&fromWorkoutId&title&intensity&location&open`) | ui-together | propose quedada (modal) |
+| `joint/[id]` | ui-together | quedada detail, accept/decline/cancel, «Repetir la semana que viene» |
 | `notifications` | ui-together | **Avisos** inbox (bell on Hoy and Juntos); tap → `data.url` (tab paths via `dismissTo`) |
 | `settings/profile` | ui-account | name, username, level, sports, thresholds, coach notes |
 | `settings/availability` | ui-account | weekly hours, rest/long/pool days, windows |
@@ -713,3 +713,8 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   sensations and notes are added). «Reabrir» drops a queued «Hecho». Notice: `features/offline/OfflineNotice.tsx`
   (Hoy, workout detail, check-in result). React Native has no network listener installed (no NetInfo): there the
   foreground and the timer do the work.
+- **«Repetir la semana que viene»** (`joint/[id]`, organiser or accepted participant, not cancelled):
+  `jointForm.repeatPrefill` opens `/joint/new` with the same sport, title, start time, duration, intensity, place and
+  people (everyone but me who did not decline, `friendIds` comma-separated; the form keeps only current friends),
+  date + 7 days (never in the past: `nextWeekDate`). Notes are not copied; open only if I organised an open one.
+  The athlete reviews and sends; nothing is sent by itself.

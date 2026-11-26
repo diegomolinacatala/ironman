@@ -1,6 +1,8 @@
 /**
  * Proponer quedada (modal). Prefilled from route params
- * (?friendId&date&sport&startTime&durationMin&fromWorkoutId&title&intensity&location&open).
+ * (?friendId&friendIds&date&sport&startTime&durationMin&fromWorkoutId&title&intensity&location&open;
+ * `friendIds` is comma-separated: «Repetir la semana que viene» invites the same people).
+ * Nothing is sent until the athlete taps the button.
  * `?edit=<id>`: the organizer changes an existing quedada (invitees stay as they are).
  */
 import { Stack, router, useLocalSearchParams } from 'expo-router';

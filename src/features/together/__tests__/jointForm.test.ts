@@ -1,15 +1,18 @@
 import { describe, expect, test } from '@jest/globals';
 
 import {
+  canRepeat,
   clampDuration,
   defaultTitle,
   initialForm,
   jointNewParams,
+  nextWeekDate,
   normalizeTime,
   parseJointParams,
   prefillFromOpportunity,
   prefillFromSlot,
   formFromSession,
+  repeatPrefill,
   toJointDraft,
   toJointPatch,
   validateJointForm,
@@ -245,5 +248,99 @@ describe('open quedadas and edits', () => {
     expect(edit.inviteeIds).toEqual([ALEX]);
     expect(toJointPatch(edit, session)).toEqual({});
     expect(toJointPatch({ ...edit, time: '7', location: 'Retiro' }, session)).toEqual({ startTime: '07:00', location: 'Retiro' });
+  });
+});
+
+describe('«Repetir la semana que viene»', () => {
+  const MARTA = 'user-marta';
+  const IVAN = 'user-ivan';
+
+  function saturdayRide(patch: Partial<JointSession> = {}): JointSession {
+    return {
+      id: 's1',
+      organizerId: 'me',
+      sport: 'bike',
+      date: '2026-10-24',
+      startTime: '08:30',
+      durationMin: 150,
+      intensity: 'endurance',
+      title: 'Salida del sábado',
+      location: ' Puerta de Hierro ',
+      notes: 'Llevo yo los geles',
+      status: 'confirmed',
+      isOpen: false,
+      participants: [
+        { userId: 'me', displayName: 'Yo', avatarUrl: null, status: 'accepted', workoutId: 'w1' },
+        { userId: ALEX, displayName: 'Álex', avatarUrl: null, status: 'accepted', workoutId: 'w2' },
+        { userId: MARTA, displayName: 'Marta', avatarUrl: null, status: 'invited', workoutId: null },
+        { userId: IVAN, displayName: 'Iván', avatarUrl: null, status: 'declined', workoutId: null },
+      ],
+      createdAt: '2026-10-20T10:00:00Z',
+      ...patch,
+    };
+  }
+
+  test('same sport, title, time, duration, intensity, place and people, seven days later', () => {
+    expect(repeatPrefill(saturdayRide({ date: '2026-10-25' }), 'me', TODAY)).toEqual({
+      friendIds: [ALEX, MARTA],
+      date: '2026-11-01',
+      sport: 'bike',
+      startTime: '08:30',
+      durationMin: 150,
+      title: 'Salida del sábado',
+      intensity: 'endurance',
+      location: 'Puerta de Hierro',
+    });
+  });
+
+  test('never in the past: a quedada from weeks ago goes to the same weekday from today on', () => {
+    expect(nextWeekDate('2026-10-24', TODAY)).toBe('2026-10-31');
+    expect(nextWeekDate('2026-10-10', TODAY)).toBe('2026-10-31');
+    expect(nextWeekDate('2026-10-18', TODAY)).toBe('2026-10-25');
+    expect(nextWeekDate('2026-10-30', TODAY)).toBe('2026-11-06');
+  });
+
+  test('from a friend’s quedada: the organiser is invited and I am not; no time or place is fine', () => {
+    const theirs = saturdayRide({ organizerId: ALEX, startTime: null, location: null });
+    const prefill = repeatPrefill(theirs, MARTA, TODAY);
+    expect(prefill.friendIds).toEqual(['me', ALEX]);
+    expect(prefill.startTime).toBeUndefined();
+    expect(prefill.location).toBeUndefined();
+  });
+
+  test('open to all my friends only when I organised an open one', () => {
+    expect(repeatPrefill(saturdayRide({ isOpen: true }), 'me', TODAY).open).toBe('1');
+    expect(repeatPrefill(saturdayRide({ isOpen: true, organizerId: ALEX }), MARTA, TODAY).open).toBeUndefined();
+  });
+
+  test('who can repeat it: the organiser and whoever said yes, never a cancelled one', () => {
+    expect(canRepeat(saturdayRide(), 'me')).toBe(true);
+    expect(canRepeat(saturdayRide(), ALEX)).toBe(true);
+    expect(canRepeat(saturdayRide(), MARTA)).toBe(false);
+    expect(canRepeat(saturdayRide(), IVAN)).toBe(false);
+    expect(canRepeat(saturdayRide(), null)).toBe(false);
+    expect(canRepeat(saturdayRide({ status: 'cancelled' }), 'me')).toBe(false);
+  });
+
+  test('through the URL: several friends travel comma-separated and only current friends stay invited', () => {
+    const params = jointNewParams(repeatPrefill(saturdayRide(), 'me', TODAY));
+    expect(params.friendIds).toBe(`${ALEX},${MARTA}`);
+    const parsed = parseJointParams(params);
+    expect(parsed.friendIds).toEqual([ALEX, MARTA]);
+    const initial = initialForm(parsed, TODAY, [ALEX, 'someone']);
+    expect(initial).toMatchObject({
+      inviteeIds: [ALEX],
+      sport: 'bike',
+      title: 'Salida del sábado',
+      date: '2026-10-31',
+      time: '08:30',
+      durationMin: 150,
+      location: 'Puerta de Hierro',
+      notes: '',
+      isOpen: false,
+      fromWorkoutId: null,
+    });
+    expect(parseJointParams({ friendIds: ` ${ALEX},,${ALEX}, ` }).friendIds).toEqual([ALEX]);
+    expect(parseJointParams({ friendIds: '' }).friendIds).toBeUndefined();
   });
 });
