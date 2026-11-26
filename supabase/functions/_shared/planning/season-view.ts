@@ -42,6 +42,8 @@ export interface SeasonInputs {
   weekPlans: readonly WeekPlan[];
   /** Weeks without a target race (default 8). */
   horizonWeeks?: number;
+  /** Completed minutes of the 4 weeks before the current week (short-notice plans, as in the app). */
+  recentWeeklyMinutes?: readonly number[];
 }
 
 /** The season from the athlete's current week (mirrored domain/season.ts). */
@@ -53,6 +55,7 @@ export function seasonOf(input: SeasonInputs): SeasonOverview {
     weeklyHoursTarget: input.weeklyHoursTarget === null ? null : input.weeklyHoursTarget > 0 ? input.weeklyHoursTarget : 0,
     weekPlans: input.weekPlans,
     horizonWeeks: input.horizonWeeks,
+    recentWeeklyMinutes: input.recentWeeklyMinutes,
   });
 }
 

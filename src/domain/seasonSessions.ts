@@ -12,7 +12,7 @@ import { allocateSessions } from './allocation';
 import { normalWeekHours } from './availability';
 import { addDays, formatDuration } from './dates';
 import { distanceKindOf, phaseFor, type PhaseInfo } from './periodization';
-import { activeWeekPlan, enforceIntensityDistribution, pinnedRaceSessions } from './plannerSupport';
+import { activeWeekPlan, enforceIntensityDistribution, pinnedRaceSessions, specializeForRace } from './plannerSupport';
 import { applyWeekPlan, type SeasonWeek } from './season';
 import { buildSession, specClass, specIntensity, specSport, type SessionClass, type SessionCode, type SessionSpec } from './sessions';
 import type { Profile, Race, WorkoutStep } from './types';
@@ -30,6 +30,8 @@ export interface SeasonWeekDetail {
 export interface SeasonDetailInput {
   profile: Profile;
   races: readonly Race[];
+  /** Completed minutes of the weeks before this one (oldest first), as given to `buildSeason`. */
+  recentWeeklyMinutes?: readonly number[];
 }
 
 const MAX_KEY_SESSIONS = 3;
@@ -49,13 +51,14 @@ const QUALITY_NAMES: Partial<Record<SessionCode, string>> = {
   RN_THR: 'Series umbral',
   RN_VO2: 'Series VO2',
   RN_HILLS: 'Cuestas',
+  RN_RP: 'Ritmo de carrera a pie',
   SW_CSS: 'Natación umbral',
   SW_SPEED: 'Natación velocidad',
 };
 
 /** The week's phase as the planner sees it: periodization plus the athlete's override. */
 function weekPhase(week: SeasonWeek, input: SeasonDetailInput): { info: PhaseInfo; freeWeek: boolean } {
-  const raw = phaseFor(week.weekStart, input.races, { level: input.profile.level });
+  const raw = phaseFor(week.weekStart, input.races, { level: input.profile.level, recentWeeklyMinutes: input.recentWeeklyMinutes });
   const plan = activeWeekPlan(raw, week.plan, week.weekStart);
   return { info: applyWeekPlan(raw, plan, normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null)), freeWeek: plan?.kind === 'rest' };
 }
@@ -68,7 +71,7 @@ function weekSpecs(week: SeasonWeek, input: SeasonDetailInput): SessionSpec[] {
   const kind = distanceKindOf(distance, profile.sports);
   const pinned = pinnedRaceSessions({
     info,
-    next: phaseFor(addDays(week.weekStart, 7), races, { level: profile.level }),
+    next: phaseFor(addDays(week.weekStart, 7), races, { level: profile.level, recentWeeklyMinutes: input.recentWeeklyMinutes }),
     kind,
     firstPlannable: week.weekStart,
     weekEnd: addDays(week.weekStart, 6),
@@ -88,7 +91,7 @@ function weekSpecs(week: SeasonWeek, input: SeasonDetailInput): SessionSpec[] {
     caps: { runLongMax: null, bikeLongMax: null },
     freeWeek,
   });
-  return [...pinned, ...enforceIntensityDistribution(ideal, info.phase === 'race_week')];
+  return [...pinned, ...enforceIntensityDistribution(specializeForRace(ideal, info.specificPrep), info.phase === 'race_week')];
 }
 
 function classRank(spec: SessionSpec): number {

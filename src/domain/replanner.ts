@@ -211,7 +211,7 @@ function placeMissed(plan: WorkingPlan, ctx: ReplanCtx, w: Workout): WorkingPlan
 
 /** Today's phase with the week's override (Plan → General) applied, and that override. */
 function todayPhase(input: ReplanInput, today: ISODate): { phase: PhaseInfo; weekPlan: WeekPlan | null } {
-  const raw = phaseFor(today, input.races ?? [], { level: input.profile.level });
+  const raw = phaseFor(today, input.races ?? [], { level: input.profile.level, recentWeeklyMinutes: input.fitnessWeeklyMinutes });
   const weekPlan = activeWeekPlan(raw, input.weekPlan, startOfWeek(today));
   return { phase: applyWeekPlan(raw, weekPlan, weeklyHoursFor(manualWeeklyHours(input.profile.availability), input.profile.level, raw.targetRace?.distance ?? null)), weekPlan };
 }

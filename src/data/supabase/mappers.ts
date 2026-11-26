@@ -14,6 +14,7 @@ import {
   MEAL_SLOTS,
   NOTIFICATION_TYPES,
   RACE_DISTANCES,
+  RACE_PREPS,
   SPORTS,
   TRAINABLE_SPORTS,
   WATCH_BRANDS,
@@ -302,6 +303,7 @@ export function rowToRace(row: RaceRow): Race {
     location: row.location,
     goal: row.goal,
     notes: row.notes,
+    prep: oneOf(row.prep, RACE_PREPS),
     createdAt: row.created_at,
   };
 }
@@ -317,6 +319,7 @@ export function raceToRow(race: Race): RaceRow {
     location: race.location,
     goal: race.goal,
     notes: race.notes,
+    prep: race.prep ?? null,
     created_at: race.createdAt,
   };
 }
@@ -330,16 +333,20 @@ export function racePatchToRow(patch: Partial<RaceDraft>): Row {
     location: patch.location,
     goal: patch.goal,
     notes: patch.notes,
+    prep: patch.prep,
   });
 }
 
 export function raceDraftToInsert(draft: RaceDraft, userId: string): Row {
+  // A null prep is the column default: left out, so a race can be created even before the migration is deployed.
+  const { prep, ...row } = racePatchToRow(draft);
   return {
     user_id: userId,
     location: null,
     goal: null,
     notes: null,
-    ...racePatchToRow(draft),
+    ...row,
+    ...(prep ? { prep } : {}),
   };
 }
 

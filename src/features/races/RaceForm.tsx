@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import type { ISODate, Race, RaceDraft, RacePriority } from '@/domain/types';
+import type { ISODate, Race, RaceDraft, RacePrep, RacePriority } from '@/domain/types';
 import { FormFooter } from '@/features/workouts/FormFooter';
 import { FormScreen } from '@/features/workouts/FormScreen';
 import { Button, Disclosure, Segmented, Text, TextField, fonts, space } from '@/ui';
 
 import { DistancePicker } from './DistancePicker';
 import { RaceDateField } from './RaceDateField';
-import { defaultRaceName, initialRaceForm, validateRaceForm, type RaceFormState } from './raceFormModel';
+import { PREP_OPTIONS, defaultRaceName, formPrep, initialRaceForm, prepHint, validateRaceForm, type RaceFormState } from './raceFormModel';
 import { PRIORITIES, PRIORITY_INFO } from './raceModel';
 
 export interface RaceFormProps {
@@ -27,6 +27,8 @@ export interface RaceFormProps {
 export function RaceForm({ race, today, saving, deleting, error, onSave, onDelete, isFirstRace = false }: RaceFormProps) {
   const [form, setForm] = useState<RaceFormState>(() => initialRaceForm(race, today, isFirstRace));
   const hasDetails = Boolean(form.location || form.goal || form.notes);
+  // B/C races: how the athlete prepares it (null for A races, which always get the full taper).
+  const prep = formPrep(form);
   const [validation, setValidation] = useState<string | null>(null);
   const set = <K extends keyof RaceFormState>(key: K, value: RaceFormState[K]) => {
     setValidation(null);
@@ -81,10 +83,28 @@ export function RaceForm({ race, today, saving, deleting, error, onSave, onDelet
           value={form.priority}
           onChange={(v) => set('priority', v)}
         />
-        <Text variant="caption" color="textMuted" accessibilityLiveRegion="polite">
-          {PRIORITY_INFO[form.priority].help}
-        </Text>
+        {prep === null ? (
+          <Text variant="caption" color="textMuted" accessibilityLiveRegion="polite">
+            {PRIORITY_INFO[form.priority].help}
+          </Text>
+        ) : null}
       </View>
+      {prep !== null ? (
+        <View style={styles.field}>
+          <Text variant="caption" color="textMuted" style={styles.label}>
+            ¿Cómo la preparas?
+          </Text>
+          <Segmented<RacePrep>
+            accessibilityLabel="Cómo preparas la carrera"
+            options={PREP_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            value={prep}
+            onChange={(v) => set('prep', v)}
+          />
+          <Text variant="caption" color="textMuted" accessibilityLiveRegion="polite">
+            {prepHint(prep)}
+          </Text>
+        </View>
+      ) : null}
       <Disclosure
         variant="plain"
         title="Más detalles"

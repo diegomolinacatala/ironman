@@ -31,7 +31,7 @@ Estado de las pruebas al empezar: todo en verde.
 
 1. **La fase cambiaba según el día de la semana.** El lunes después de una carrera A salía "transición" y el jueves, "preparación". El planificador usa el lunes, mientras que Hoy, el informe y el replanificador usan el día exacto. Ahora todo se evalúa desde el lunes (`periodization.ts`).
 2. **El ciclo de mantenimiento se rompía en Año Nuevo.** 2026 tiene 53 semanas ISO: salían 4 semanas de carga seguidas o dos descargas pegadas, empezando dentro de 5 semanas. Ahora usa un índice de semana continuo que coincide con el actual en 2026, así que nadie ve moverse su descarga.
-3. **El tope de rampa casi no limitaba.** Tras cuatro semanas de 300' permitía unos 600'. Ahora además limita el volumen a un +15 % sobre la mayor de las tres últimas semanas (+10 % principiante, +5 % con estrés), que es lo que ya decía el prompt del coach.
+3. **El tope de rampa casi no limitaba.** Tras cuatro semanas de 300' permitía unos 600'. Ahora además limita el volumen a un +15 % sobre la mayor de las tres últimas semanas (+10 % principiante, +5 % con estrés), que es lo que ya decía el prompt del coach. *Actualización del 26-11:* David lo suavizó a +20 % como máximo (+15 % principiante, +10 % con estrés), también en el prompt del coach.
 4. **Informe con datos caducados.** Una fatiga 5/5 de hace cinco días seguía poniendo el informe en rojo. Ahora solo cuentan los datos de hoy y de ayer, y los de ayer van marcados.
 5. **La disposición daba "sin datos" si el reloj aún no había sincronizado.** Ahora usa las métricas de ayer y lo dice. El sueño de ayer no se lee como el de anoche.
 

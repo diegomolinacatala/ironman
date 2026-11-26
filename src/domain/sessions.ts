@@ -110,7 +110,9 @@ export function buildSession(spec: SessionSpec, sessionCtx: SessionContext = {})
   const main = mainNumbers(sport, intensity, body.steps, ctx);
   const planB = planBSentence({ sport, intensity, durationMin: d }, ctx, spec.code);
   const coaching = recipe.coach({ spec, d, body, ctx, sport, intensity, main, planB });
-  const description = spec.note ? `${body.description} ${spec.note}` : body.description;
+  const specific = spec.specificFor ? `Específica para ${spec.specificFor}: a su ritmo de carrera.` : null;
+  const notes = [spec.note, specific].filter((n): n is string => Boolean(n));
+  const description = notes.length > 0 ? `${body.description} ${notes.join(' ')}` : body.description;
   return { ...body, description, coaching };
 }
 

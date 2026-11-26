@@ -53,6 +53,7 @@ export type SessionCode =
   | 'RN_THR'
   | 'RN_VO2'
   | 'RN_HILLS'
+  | 'RN_RP'
   | 'BRICK'
   | 'ST_HEAVY'
   | 'ST_MAINT'
@@ -88,6 +89,7 @@ export const SESSION_CATALOG: Readonly<Record<SessionCode, CatalogEntry>> = {
   RN_THR: { sport: 'run', cls: 'QUALITY', intensity: 'threshold' },
   RN_VO2: { sport: 'run', cls: 'QUALITY', intensity: 'vo2' },
   RN_HILLS: { sport: 'run', cls: 'QUALITY', intensity: 'threshold' },
+  RN_RP: { sport: 'run', cls: 'QUALITY', intensity: 'race' },
   BRICK: { sport: 'brick', cls: 'BRICK', intensity: 'endurance' },
   ST_HEAVY: { sport: 'strength', cls: 'QUALITY', intensity: 'tempo' },
   ST_MAINT: { sport: 'strength', cls: 'EASY', intensity: 'endurance' },
@@ -119,6 +121,11 @@ export interface SessionSpec {
   plain?: boolean;
   /** Distance of the race this session belongs to (race day, activation of a B race): wins over `SessionContext.raceDistance`. */
   raceDistance?: RaceDistance | null;
+  /**
+   * Name of the B/C race this session prepares («Preparación específica»): its
+   * race-pace work targets that race (`raceDistance`). Cleared when the session is made easy.
+   */
+  specificFor?: string | null;
 }
 
 export function specSport(spec: SessionSpec): Sport {

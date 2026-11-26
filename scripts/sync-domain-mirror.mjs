@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Mirrors the pure domain modules the edge functions need (periodization,
- * zones, season overview and their dependencies) from `src/domain` into
+ * zones, season overview, weekly run volume and their dependencies) from `src/domain` into
  * `supabase/functions/_shared/planning/domain`. Edge bundles cannot import
  * `src/`, and the app and the server must compute the same weeks, zones and
  * targets, so the server copy is generated, never edited by hand.
@@ -24,7 +24,7 @@ export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planni
  * Modules copied whole (their imports must stay inside this list, `dates` or `types`).
  * `wakeWindow`: the usual wake-up window and the wake-up briefing decision (app settings + `morning` sweep).
  */
-const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'wakeWindow'];
+const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'runVolume', 'wakeWindow'];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
 const DATE_DECLS = [
@@ -93,6 +93,7 @@ export type {
   NumberRange,
   Race,
   RaceDistance,
+  RacePrep,
   Sport,
   StepTarget,
   Thresholds,
@@ -101,6 +102,7 @@ export type {
   WeekPlanDraft,
   WeekPlanKind,
   WorkoutCoaching,
+  WorkoutStatus,
   WorkoutStep,
   WorkoutStepKind,
 } from '../../types.ts';

@@ -9,6 +9,7 @@ import { addDays, DEFAULT_TZ, diffDays, startOfWeek, todayIn } from '../../dates
 import { dateSchema } from '../../planning/changes.ts';
 import { NotFoundError } from '../../planning/context.ts';
 import { manualWeeklyHours } from '../../planning/domain/season.ts';
+import { fitnessWeeklyMinutesOf } from '../../planning/load.ts';
 import { seasonOf, seasonView } from '../../planning/season-view.ts';
 import type { SeasonView } from '../../planning/season-view.ts';
 import { checkWeekPlans, checkWeekStart, CLAUDE_WEEK_PLAN_WEEKS, WEEK_PLAN_LIMITS } from '../../planning/week-plans.ts';
@@ -79,9 +80,14 @@ async function resultingSeason(store: PlanningStore, userId: UUID, situation: Si
   const monday = startOfWeek(today);
   const last = touched.reduce((max, d) => (d > max ? d : max), monday);
   const rows = Math.max(MIN_SEASON_ROWS, diffDays(last, monday) / 7 + 1);
-  const weekPlans = await store.listWeekPlans(userId, monday, addDays(monday, 7 * CLAUDE_WEEK_PLAN_WEEKS));
+  const [weekPlans, recent] = await Promise.all([
+    store.listWeekPlans(userId, monday, addDays(monday, 7 * CLAUDE_WEEK_PLAN_WEEKS)),
+    // The athlete's volume before this week: the same season as get_planning_context and the app.
+    store.listWorkouts(userId, addDays(monday, -28), addDays(monday, -1)),
+  ]);
   const weeklyHoursTarget = manualWeeklyHours(profile.availability);
-  const season = seasonOf({ today, races, level: profile.level, weeklyHoursTarget, weekPlans, horizonWeeks: rows });
+  const recentWeeklyMinutes = fitnessWeeklyMinutesOf(recent, today);
+  const season = seasonOf({ today, races, level: profile.level, weeklyHoursTarget, weekPlans, horizonWeeks: rows, recentWeeklyMinutes });
   return seasonView(season, rows);
 }
 

@@ -4,10 +4,11 @@
  */
 import { useMemo } from 'react';
 
-import { useLifeEvents, useMetrics, useNutrition, useRaces, useWorkouts } from '@/data/queries';
+import { useLifeEvents, useMetrics, useNutrition, useProfile, useRaces, useWorkouts } from '@/data/queries';
 import { nextRace, phaseFor } from '@/domain/periodization';
 import type { ISODate, Race } from '@/domain/types';
 import { dayTotals, type DayTotals } from '@/features/nutrition/nutritionModel';
+import { useFitnessMinutes } from '@/features/week/useFitnessMinutes';
 import { errorMessage } from '@/lib/logger';
 
 import { buildPmcSeries, pmcRanges, type PmcSeries } from './pmcModel';
@@ -35,6 +36,9 @@ export function useProgressData(today: ISODate): ProgressData {
   const metrics = useMetrics(recoveryRange(today));
   const races = useRaces();
   const meals = useNutrition({ from: today, to: today });
+  // The phase in the header: the same short-notice plan as Plan → General.
+  const profile = useProfile();
+  const fitness = useFitnessMinutes(today);
 
   const pmc = useMemo(
     () => (workouts.data ? buildPmcSeries({ workouts: workouts.data, events: events.data ?? [], today }) : null),
@@ -48,7 +52,7 @@ export function useProgressData(today: ISODate): ProgressData {
   );
   const raceList = races.data ?? [];
   const race = nextRace(raceList, today);
-  const phase = raceList.length > 0 ? phaseFor(today, raceList) : null;
+  const phase = raceList.length > 0 ? phaseFor(today, raceList, { level: profile.data?.level, recentWeeklyMinutes: fitness }) : null;
 
   // A failed meals query must not read as "Nada apuntado hoy".
   const firstError = workouts.error ?? events.error ?? metrics.error ?? races.error ?? meals.error;

@@ -5,6 +5,7 @@ import { buildSeason, manualWeeklyHours, type SeasonOverview, type SeasonWeek } 
 import { seasonWeekDetail } from '@/domain/seasonSessions';
 import type { ISODate, Profile, Race } from '@/domain/types';
 import { useProfile, useRaces, useWeekPlans, useWorkouts } from '@/data/queries';
+import { useFitnessMinutes } from '@/features/week/useFitnessMinutes';
 import { logger } from '@/lib/logger';
 
 import type { AdjustContext } from './adjustModel';
@@ -30,9 +31,9 @@ export interface SeasonData {
 
 const NO_KEY_SESSIONS: readonly string[] = [];
 
-function keySessionsOf(week: SeasonWeek, profile: Profile, races: readonly Race[]): readonly string[] {
+function keySessionsOf(week: SeasonWeek, profile: Profile, races: readonly Race[], recentWeeklyMinutes: readonly number[]): readonly string[] {
   try {
-    return seasonWeekDetail(week, { profile, races }).keySessions;
+    return seasonWeekDetail(week, { profile, races, recentWeeklyMinutes }).keySessions;
   } catch (error) {
     // One odd week must not take the whole overview down: it just shows no key sessions.
     logger.warn('season: key sessions failed', error);
@@ -53,6 +54,7 @@ export function useSeasonData(): SeasonData {
   const range = useMemo(() => seasonRange(today, raceList ?? []), [today, raceList]);
   const weekPlans = useWeekPlans(range);
   const workouts = useWorkouts(range);
+  const fitness = useFitnessMinutes(today);
   const athlete = profile.data ?? null;
 
   const season = useMemo(() => {
@@ -63,18 +65,22 @@ export function useSeasonData(): SeasonData {
       level: athlete.level,
       weeklyHoursTarget: manualWeeklyHours(athlete.availability),
       weekPlans: weekPlans.data ?? [],
+      recentWeeklyMinutes: fitness,
     });
-  }, [today, raceList, athlete, weekPlans.data]);
+  }, [today, raceList, athlete, weekPlans.data, fitness]);
 
   const keySessions = useMemo(() => {
     if (!season || !athlete || !raceList) return {};
-    return Object.fromEntries(season.weeks.map((w) => [w.weekStart, keySessionsOf(w, athlete, raceList)]));
-  }, [season, athlete, raceList]);
+    return Object.fromEntries(season.weeks.map((w) => [w.weekStart, keySessionsOf(w, athlete, raceList, fitness)]));
+  }, [season, athlete, raceList, fitness]);
 
   const sessions = useMemo(() => sessionsByWeek(workouts.data ?? []), [workouts.data]);
   const adjustContext = useMemo<AdjustContext | null>(
-    () => (athlete && raceList ? { races: raceList, level: athlete.level, weeklyHoursTarget: manualWeeklyHours(athlete.availability) } : null),
-    [athlete, raceList],
+    () =>
+      athlete && raceList
+        ? { races: raceList, level: athlete.level, weeklyHoursTarget: manualWeeklyHours(athlete.availability), recentWeeklyMinutes: fitness }
+        : null,
+    [athlete, raceList, fitness],
   );
 
   const all = [races, profile, weekPlans, workouts];

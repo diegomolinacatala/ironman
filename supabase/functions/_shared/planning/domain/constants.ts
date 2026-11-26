@@ -143,6 +143,31 @@ export interface TaperFactors {
   raceWeek: number;
 }
 
+/**
+ * Weekly hours that already cover the aerobic base for a distance: about the
+ * end-of-base volume of a lower-intermediate plan (§6.2: the intermediate
+ * build week's lower bound × 0.85). A non-beginner who averaged at least this
+ * over the last weeks gets a short base and a build block when the race is too
+ * close for a full plan, instead of a base-only survival plan. [H] §5.2
+ */
+export const BASE_READY_HOURS: Readonly<Record<RaceDistance, number>> = {
+  sprint: 4,
+  olympic: 6,
+  half: 7.5,
+  full: 10,
+  run_5k: 3,
+  run_10k: 3.5,
+  run_half: 4,
+  run_marathon: 5,
+  other: 5,
+};
+
+/** Recent weeks (completed minutes) that measure the athlete's current volume. [H] */
+export const FITNESS_WEEKS = 4;
+
+/** Short-notice plan with the base covered: share of the training weeks left as base (the rest is build). [H] */
+export const READY_BASE_SHARE = 1 / 3;
+
 /** Weekly volume relative to the average build week. [H] inside the [C] 41-60 % range §5.4 */
 export const TAPER_FACTORS: Readonly<Record<RaceDistance, TaperFactors>> = {
   sprint: { minus2: null, minus1: 0.85, raceWeek: 0.55 },
@@ -185,9 +210,16 @@ export const RECOVERY_FACTOR_21 = 0.65;
 /** Transition (post A race) and post-B recovery volume. [H] */
 export const TRANSITION_FACTOR = 0.35;
 export const POST_B_RECOVERY_FACTOR = 0.6;
-/** Mini taper of a B race week (volume −35 %). [H] §5.3 */
+/** Mini taper of a B race week (volume −35 %): races prepared with 'taper' or 'specific'. [H] §5.3 */
 export const B_RACE_WEEK_FACTOR = 0.65;
+/** Race week of a race prepared 'training' («Como entreno»: the old C behaviour). [H] §5.3 */
 export const C_RACE_WEEK_FACTOR = 0.9;
+/**
+ * 'specific' B/C race («Preparación específica»): race-pace sessions of the week that target
+ * that race, by weeks before its race week (index 0 = the week right before it): 2 the week
+ * before, 1 the week before that. [H]
+ */
+export const SPECIFIC_PREP_SESSIONS: readonly number[] = [2, 1];
 
 // ---------------------------------------------------------------------------
 // Volume, sport split and sessions (§6-§9)
@@ -302,7 +334,18 @@ export const LONG_SHARE = { bike: 0.4, run: 0.35 } as const;
 export const RUN_SPIKE_MAX = 1.1;
 export const RUN_SPIKE_FLOOR_KM = 5;
 export const RUN_LOOKBACK_DAYS = 30;
-export const RUN_WEEKLY_MINUTES_GROWTH = 1.15; // [H] soft warning
+/**
+ * Weekly run minutes (bricks count their run leg) ≤ 1.15 × the biggest run week
+ * of the last RUN_PEAK_WEEKS weeks: running causes most triathlon overuse
+ * injuries. A cap in the weekly planner (runVolume.ts), not just a warning. [H] §6.3
+ */
+export const RUN_WEEKLY_MINUTES_GROWTH = 1.15;
+/** At very low run volumes a percentage is too tight: always allow this many extra minutes. [H] */
+export const RUN_WEEKLY_MIN_EXTRA = 10;
+/** Never cap the week's running below two short runs (2 × 25'), so an athlete who stopped running can start again. [H] */
+export const RUN_WEEKLY_FLOOR_MIN = 50;
+/** Weeks (most recent) whose biggest run week the cap grows from. [H] */
+export const RUN_PEAK_WEEKS = 3;
 /** Bike long-ride growth. [H] §6.3 */
 export const BIKE_LONG_GROWTH = 1.15;
 export const BIKE_LONG_GROWTH_MIN = 20;

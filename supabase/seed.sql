@@ -68,14 +68,15 @@ on conflict do nothing;
 -- ---------------------------------------------------------------------------
 -- Races
 -- ---------------------------------------------------------------------------
-insert into public.races (user_id, name, date, distance, priority, location, goal)
+insert into public.races (user_id, name, date, distance, priority, location, goal, prep)
 values
   ('11111111-1111-4111-8111-111111111111', 'Triatlón Media Distancia de Valencia',
-   (current_date + 180), 'half', 'A', 'Valencia', 'Bajar de 5h 30'''),
+   (current_date + 180), 'half', 'A', 'Valencia', 'Bajar de 5h 30''', null),
+  -- B race with «Preparación específica» (race-pace sessions for it in the 2 weeks before).
   ('11111111-1111-4111-8111-111111111111', 'Triatlón Olímpico de Madrid',
-   (current_date + 75), 'olympic', 'B', 'Madrid', 'Ritmo de carrera'),
+   (current_date + 75), 'olympic', 'B', 'Madrid', 'Ritmo de carrera', 'specific'),
   ('22222222-2222-4222-8222-222222222222', 'Triatlón Media Distancia de Valencia',
-   (current_date + 180), 'half', 'A', 'Valencia', 'Terminar fuerte');
+   (current_date + 180), 'half', 'A', 'Valencia', 'Terminar fuerte', null);
 
 -- ---------------------------------------------------------------------------
 -- Workouts: this week (Mon..Sun) + next week, for both

@@ -156,6 +156,17 @@ phaseFor(date: ISODate, races: Race[]): PhaseInfo
 nextRace(races: Race[], today: ISODate): Race | null   // next A, else next any
 ```
 
+Short-notice plans (2026-11-26): `phaseFor(date, races, { level, recentWeeklyMinutes })`. When the A
+race is closer than the minimum viable length (PLAN_TOO_SHORT), an intermediate or advanced athlete
+whose last 4 weeks average at least `BASE_READY_HOURS` of the distance (`fitnessWeeklyMinutes`; full 10 h,
+half 7,5 h, olympic 6 h…; null with < 2 weeks of training) gets a short base (⅓ of the training weeks)
+and build weeks instead of the base-only survival plan; the race and taper weeks stay the same, so
+week plans apply to the same weeks. Beginners and athletes without that history are unchanged. The
+volume is the 4 weeks before the **current** week and every surface passes the same numbers: the
+planner (`PlannerInput.fitnessWeeklyMinutes`, default `recentWeeklyMinutes`), the replanner, Plan →
+General (`buildSeason`/`seasonWeekDetail`, `useFitnessMinutes`), the week view, Hoy, Progreso, the rules
+coach and the server (planning context, briefing, `set_week_plans`).
+
 ### `readiness.ts`
 ```ts
 computeReadiness(input: { today: ISODate; checkin: DailyCheckin | null; metrics: DailyMetrics[] /* last ~28 days */ }): Readiness
@@ -176,7 +187,12 @@ generateWeek(input: PlannerInput): { changes: PlanChange[]; summary: string }
 ```
 
 Additive inputs (implemented): `PlannerInput.today?` (first plannable day) and `history?` (completed
-workouts of the last ~30 days: run cap 1.10×, long-ride +15 % cap, form guard). In race weeks the
+workouts of the last ~30 days: run cap 1.10×, long-ride +15 % cap, form guard, and the **weekly run
+cap**: the week's run minutes, bricks' run leg included, ≤ max(1.15 × the biggest run week of the
+last 3, +10', 50') — mirrored `runVolume.ts`; the allocation re-plans the runs keeping the long and
+quality ones and gives the freed minutes to bike/swim (run-only plans just lose them); new runs are
+trimmed when existing ones fill the week; `PlanWeekResult.runCapMinutes`; the server context shows
+the same number as `phase.runMaxMinutes` for the coach and Claude). In race weeks the
 planner adds a key 'Carrera: <nombre>' workout on the race date. `PhaseInfo` also has `subphase`,
 `cadence` ('3:1' | '2:1'), `raceInWeek`, `warnings`; `phaseFor(date, races, opts?)`.
 WorkoutStep convention: consecutive steps sharing the same `repeat` form one interval set
@@ -742,3 +758,33 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   - *Deploy order:* `supabase db push` (000300, then 000301) → `functions deploy morning` → once
     `select private.schedule_platform_jobs();` → app build (new entitlement). Needs `APNS_*`; Garmin pulls need
     `GARMIN_KEY_SECRET`.
+
+## 18. Planner and races (2026-11-26)
+
+Four changes approved by David; the contract details live in §4 (`periodization.ts`, `planner.ts`) and `docs/V4.md`.
+
+- **Softer ramp cap.** `rampCapMinutes`: the volume cap over the biggest of the last 3 weeks is +20 % at most
+  (+15 % beginners, +10 % under life stress; +15' minimum). The coach prompt states the same numbers.
+- **Weekly run cap.** Mirrored `domain/runVolume.ts`; the rules planner caps the week's run minutes (bricks count
+  their run leg) and the planning context shows the same number as `phase.runMaxMinutes`.
+- **Short-notice plans from real volume.** `PhaseOptions.recentWeeklyMinutes` (see §4 `periodization.ts`).
+- **How a B/C race is prepared — `races.prep`** (migration `20261126000100_race_prep.sql`): `text`, null or
+  `'training' | 'taper' | 'specific'` (check constraint; covered by the table grants and own-rows RLS).
+  `Race.prep?` / `RaceDraft.prep?` (`RACE_PREPS`, `RacePrep`), zod `raceDraftSchema.prep`, app mappers (a null
+  prep is left out of inserts), server `mapRace` / `RACE_COLS` / `RaceWrite`, demo repository and both seeds
+  (the demo B race is `specific`), MCP `manage_race` (`prep`, nullable). null = the priority's default (B →
+  `taper`, C → `training`); A races ignore it (`racePrepOf`).
+  - `training` («Como entreno»): race week × 0.9, the race alone (no activation), easy day before, no recovery
+    week after (the old C behaviour).
+  - `taper` («Solo afinar»): mini-taper (race week × 0.65, activation D−1, no hard day 48 h before) and the
+    post-race recovery (the old B behaviour).
+  - `specific` («Preparación específica»): `PhaseInfo.specificPrep` = 1 session two weeks before the race week
+    and 2 the week before (`SPECIFIC_PREP_SESSIONS`), only in prep/base/build weeks of a plan towards an A
+    race. `specializeForRace` (planner and Plan → General detail) retargets short race-pace bricks and turns
+    bike/run quality sessions into race-pace sets (`BK_RP`, new `RN_RP`) with the B race's distance
+    (`SessionSpec.raceDistance`, `specificFor`); long sessions and long bricks keep serving the A race. They
+    become key sessions and the Z1-Z2 guard eases them last. Then the mini-taper and recovery as `taper`.
+  Plan → General's `why` and the week focus say which preparation applies; the form asks «¿Cómo la
+  preparas?» for B/C races (`RaceForm`, `raceFormModel`).
+- **Deploy order:** `supabase db push` (`20261126000100_race_prep.sql`) before deploying the edge functions
+  (`RACE_COLS` reads `prep`) or shipping the app.

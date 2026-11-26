@@ -44,6 +44,8 @@ export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => P
         jointSessions: data.jointSessions,
         readiness: null,
         recentWeeklyMinutes: data.recentMinutes,
+        // The athlete's volume today decides a short-notice plan, like Plan → General.
+        fitnessWeeklyMinutes: data.fitnessMinutes,
         // Current week: never add sessions to days that already passed.
         ...(weekStart <= data.today ? { today: data.today, nowMinutes: minutesNow() } : {}),
         history: data.history,

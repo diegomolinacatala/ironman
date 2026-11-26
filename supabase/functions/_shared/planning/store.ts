@@ -21,6 +21,7 @@ import type {
   ProposalDraft,
   Race,
   RaceDistance,
+  RacePrep,
   RacePriority,
   UUID,
   WeekPlan,
@@ -117,6 +118,8 @@ export interface RaceWrite {
   location?: string | null;
   goal?: string | null;
   notes?: string | null;
+  /** B/C race preparation; null = the priority's default. */
+  prep?: RacePrep | null;
 }
 
 /** Quedada to propose (camelCase, as `svc_propose_joint_session` reads `p_session`). */

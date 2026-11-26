@@ -4,24 +4,32 @@
  * cap) → sport split and sessions → placement with hard rules → 'add' changes.
  * Never deletes or moves the athlete's workouts.
  *
+ * With history, the week's running stays within the weekly run cap
+ * (runVolume.ts, +15 % over the biggest run week of the last 3): the
+ * allocation moves the extra minutes to bike and swim, and the new runs are
+ * trimmed when existing runs already fill the week.
+ *
  * v4: a week-level override from Plan → General (`weekPlan`: carga, más
  * volumen, descarga, semana libre or explicit minutes) replaces the week's
  * periodization volume and descarga flag; readiness, restrictions, the ramp
  * cap and the freshness guard still apply on top of it.
  */
 import { READINESS_EFFECTS, maxHardDays, type DistanceKind } from './constants';
-import { allocateSessions } from './allocation';
-import { addDays, daysInRange, maxDate, weekRange } from './dates';
-import { distanceKindOf, phaseFor, type PhaseInfo } from './periodization';
+import { allocateWeek } from './allocation';
+import { addDays, daysInRange, formatDuration, maxDate, weekRange } from './dates';
+import { distanceKindOf, phaseFor, racePrepOf, type PhaseInfo, type PhaseOptions } from './periodization';
 import { placeSessions, type Dropped, type Placed, type PlacementResult } from './placement';
 import { dailyLoads } from './load';
 import {
   activeWeekPlan,
+  capRunSpecs,
   consumeExisting,
   enforceIntensityDistribution,
   historyCaps,
   pinnedRaceSessions,
   rampCapMinutes,
+  specRunMinutes,
+  specializeForRace,
   trimToBudget,
   tsbGuard,
   weekPlanSentence,
@@ -31,10 +39,11 @@ import { reasonFor, summaryFor } from './plannerText';
 import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
 import { NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
+import { recentRunMinutes, runWeekCapMinutes, workoutRunMinutes } from './runVolume';
 import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
 import { applyWeekPlan } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
-import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, Sport, Weekday, WeekPlan, Workout } from './types';
+import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, RacePrep, Sport, Weekday, WeekPlan, Workout } from './types';
 import { rangesLength } from './timeRanges';
 import { buildWeekModel, type DayState, type FixedInput } from './weekModel';
 
@@ -53,9 +62,19 @@ export interface PlannerInput {
   readiness?: Readiness | null;
   /** Completed minutes of the last 4 weeks (ramp control). */
   recentWeeklyMinutes?: number[];
+  /**
+   * Completed minutes of the 4 weeks before the current week (oldest first):
+   * the athlete's volume today, which can turn a short-notice plan into base +
+   * build (periodization). Plan → General gets the same; defaults to
+   * `recentWeeklyMinutes` (the same weeks when planning the current week).
+   */
+  fitnessWeeklyMinutes?: number[];
   /** Extension: first date that can still be planned (default weekStart). Pass when planning the current week. */
   today?: ISODate;
-  /** Extension: completed workouts of the last ~30 days (Frandsen run cap, long-ride growth). */
+  /**
+   * Extension: completed workouts of the last ~30 days (Frandsen run cap,
+   * long-ride growth, weekly run cap: +15 % over the biggest run week of the last 3).
+   */
   history?: Workout[];
   /**
    * Extension: local clock on `today` in minutes since midnight. Time already
@@ -85,6 +104,8 @@ export interface PlanWeekResult {
   warnings: string[];
   /** Lowest projected freshness (TSB) of the week, null without history. */
   projectedMinTsb: number | null;
+  /** Most run minutes of the week (runVolume.ts, bricks count their run leg), null without history. */
+  runCapMinutes: number | null;
 }
 
 const DEFAULT_LONG_DAYS: Weekday[] = [5, 6];
@@ -250,13 +271,18 @@ interface WeekContext {
   auto: boolean;
 }
 
+/** Periodization options of the planned week: level, life stress and the athlete's recent volume. */
+function phaseOptions(input: PlannerInput, lifeStress: boolean): PhaseOptions {
+  return { level: input.profile.level, lifeStress, recentWeeklyMinutes: input.fitnessWeeklyMinutes ?? input.recentWeeklyMinutes };
+}
+
 function weekPlanContext(input: PlannerInput): WeekContext {
   const range = weekRange(input.weekStart);
   const dates = daysInRange(range);
   const firstPlannable = maxDate(range.from, input.today ?? range.from);
   const events = input.lifeEvents.filter((e) => overlapsWeek(e, range.from, range.to));
   const lifeStress = events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
-  const raw = phaseFor(range.from, input.races, { level: input.profile.level, lifeStress });
+  const raw = phaseFor(range.from, input.races, phaseOptions(input, lifeStress));
   const weekPlan = activeWeekPlan(raw, input.weekPlan, range.from);
   const weeklyHours = normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null);
   const info = applyWeekPlan(raw, weekPlan, weeklyHours);
@@ -293,7 +319,7 @@ function raceSpecsFor(input: PlannerInput, ctx: WeekContext): SessionSpec[] {
   const { info } = ctx;
   return pinnedRaceSessions({
     info,
-    next: phaseFor(addDays(ctx.range.from, 7), input.races, { level: input.profile.level, lifeStress: ctx.lifeStress }),
+    next: phaseFor(addDays(ctx.range.from, 7), input.races, phaseOptions(input, ctx.lifeStress)),
     kind: ctx.kind,
     firstPlannable: ctx.firstPlannable,
     weekEnd: ctx.range.to,
@@ -301,13 +327,48 @@ function raceSpecsFor(input: PlannerInput, ctx: WeekContext): SessionSpec[] {
   });
 }
 
-/** Ideal week (allocation) minus what already exists, fitted to the budget, plus race-week sessions. */
-function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): { specs: SessionSpec[]; runCapped: boolean } {
+/**
+ * Run minutes already in the week: completed runs on any day, planned ones on
+ * the plannable days (a missed run does not count). `outside` = on days the
+ * planner does not plan (already gone), `inside` = on the plannable days.
+ * Bricks count their run leg; accepted quedadas without a linked workout too.
+ */
+function existingRunMinutes(ctx: WeekContext): { outside: number; inside: number } {
+  const plannable = (date: ISODate) => ctx.plannable.includes(date);
+  const linked = new Set(ctx.existing.map((w) => w.id));
+  const fromWorkouts = ctx.existing.reduce(
+    (acc, w) => {
+      if (plannable(w.date)) return { ...acc, inside: acc.inside + workoutRunMinutes(w) };
+      return w.status === 'completed' ? { ...acc, outside: acc.outside + workoutRunMinutes(w) } : acc;
+    },
+    { outside: 0, inside: 0 },
+  );
+  const quedadas = ctx.fixed
+    .filter((f) => !linked.has(f.id ?? '') && plannable(f.date))
+    .reduce((sum, f) => sum + workoutRunMinutes({ ...f, status: 'planned' }), 0);
+  return { outside: fromWorkouts.outside, inside: fromWorkouts.inside + quedadas };
+}
+
+interface WeekSpecs {
+  specs: SessionSpec[];
+  /** The Frandsen long-run cap shortened a run. */
+  runCapped: boolean;
+  /** The week's run cap (runVolume.ts), null without history. */
+  runCap: number | null;
+  /** The run cap took minutes out of this week. */
+  runCapBinding: boolean;
+}
+
+/** Ideal week (allocation) minus what already exists, fitted to the budget and the weekly run cap, plus race-week sessions. */
+function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): WeekSpecs {
   const { info, kind, week } = ctx;
   const caps = historyCaps(input.history ?? [], ctx.range.from, input.profile.thresholds);
   const raceSpecs = raceSpecsFor(input, ctx);
   const specialMin = raceSpecs.filter((s) => s.code !== 'RACE').reduce((s, x) => s + x.durationMin, 0);
-  const ideal = allocateSessions({
+  const runCap = runWeekCapMinutes(recentRunMinutes(input.history ?? [], ctx.range.from));
+  const pinnedRun = raceSpecs.filter((s) => s.code !== 'RACE').reduce((sum, s) => sum + specRunMinutes(s), 0);
+  const ran = existingRunMinutes(ctx);
+  const ideal = allocateWeek({
     phase: info,
     distance: info.targetRace?.distance ?? null,
     kind,
@@ -318,13 +379,29 @@ function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): { sp
     blockedAllWeek: week.blockedAllWeek,
     substitutes: week.substitutes,
     easyOnlyAllWeek: week.easyOnlyAllWeek,
-    caps: { runLongMax: caps.runLongMax, bikeLongMax: caps.bikeLongMax },
+    // Existing workouts on the plannable days consume the ideal week: only what is already gone is outside it.
+    caps: { runLongMax: caps.runLongMax, bikeLongMax: caps.bikeLongMax, runWeekMax: runCap === null ? null : Math.max(0, runCap - ran.outside - pinnedRun) },
     freeWeek: ctx.weekPlan?.kind === 'rest',
   });
   const existingPlannable = ctx.fixed.filter((f) => ctx.plannable.includes(f.date));
-  const remaining = trimToBudget(consumeExisting(ideal, existingPlannable), Math.max(0, budget.budgetMinutes - specialMin));
-  const run = runWarnings(caps, enforceIntensityDistribution(remaining, info.phase === 'race_week'));
-  return { specs: [...raceSpecs, ...run.specs], runCapped: run.capped };
+  const remaining = trimToBudget(consumeExisting(ideal.specs, existingPlannable), Math.max(0, budget.budgetMinutes - specialMin));
+  // «Preparación específica» of a B/C race: some race-pace sessions target it (before the Z1-Z2 guard, which keeps them for last).
+  const specific = specializeForRace(remaining, info.specificPrep);
+  const run = runWarnings(caps, enforceIntensityDistribution(specific, info.phase === 'race_week'));
+  // Existing runs that did not match the ideal week can still go over the cap: trim the new runs.
+  const weekly = capRunSpecs(run.specs, runCap === null ? null : runCap - ran.outside - ran.inside - pinnedRun);
+  return {
+    specs: [...raceSpecs, ...weekly.specs],
+    runCapped: run.capped,
+    runCap,
+    runCapBinding: ideal.runCappedMin > 0 || weekly.trimmed > 0,
+  };
+}
+
+/** "He limitado la carrera a pie a 2h 10' esta semana…" when the weekly run cap took minutes out. */
+function runCapWarning(built: WeekSpecs): string[] {
+  if (built.runCap === null || !built.runCapBinding) return [];
+  return [`He limitado la carrera a pie a ${formatDuration(built.runCap)} esta semana: no conviene subirla más de un 15 % sobre tus últimas semanas.`];
 }
 
 interface WeekPlacement {
@@ -334,6 +411,14 @@ interface WeekPlacement {
 
 function raceDatesOf(races: readonly Race[], priority: Race['priority']): ISODate[] {
   return races.filter((r) => r.priority === priority).map((r) => r.date);
+}
+
+/** B/C race dates by how they are prepared: mini-taper rules ('taper', 'specific') or "como un entreno" ('training'). */
+function minorRaceDates(races: readonly Race[], preps: readonly RacePrep[]): ISODate[] {
+  return races.filter((r) => {
+    const prep = racePrepOf(r);
+    return prep !== null && preps.includes(prep);
+  }).map((r) => r.date);
 }
 
 function longDaysOf(profile: Profile): Weekday[] {
@@ -383,8 +468,8 @@ function placeOn(input: PlannerInput, ctx: WeekContext, budget: Budget, specs: r
     maxHardDays: maxHardDays(budget.targetMinutes / 60, profile.level === 'advanced'),
     bigWeekendAllowed: ctx.kind === 'tri_long' && (ctx.info.phase === 'build' || ctx.info.phase === 'peak') && profile.level !== 'beginner',
     aRaceDates: raceDatesOf(input.races, 'A'),
-    bRaceDates: raceDatesOf(input.races, 'B'),
-    cRaceDates: raceDatesOf(input.races, 'C'),
+    bRaceDates: minorRaceDates(input.races, ['taper', 'specific']),
+    cRaceDates: minorRaceDates(input.races, ['training']),
     readinessToday: today && input.readiness ? { date: today, level: input.readiness.level } : null,
   });
   return { placement, rest };
@@ -411,8 +496,9 @@ function summaryInfo(ctx: WeekContext): PhaseInfo {
   return weekPlan ? { ...info, isRecoveryWeek: false, focus: `${weekPlanSentence(weekPlan)} ${info.focus}` } : info;
 }
 
-function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed: WeekPlacement, runCapped: boolean): PlanWeekResult {
+function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed: WeekPlacement, built: WeekSpecs): PlanWeekResult {
   const { info } = ctx;
+  const { runCapped } = built;
   const guarded = tsbGuard({
     range: ctx.range,
     history: input.history ?? [],
@@ -428,7 +514,7 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     reason: reasonFor(p.spec, info, p.adjusted, runCapped && p.spec.code === 'RN_LONG'),
   }));
   const fatigueNote = guard.removed.length > 0 ? [`He quitado ${guard.removed.length} sesión(es) para no acumular demasiada fatiga.`] : [];
-  const warnings = [...info.warnings, ...budget.warnings, ...fatigueNote, ...(guard.warning ? [guard.warning] : [])];
+  const warnings = [...info.warnings, ...budget.warnings, ...runCapWarning(built), ...fatigueNote, ...(guard.warning ? [guard.warning] : [])];
   const summary = summaryFor({
     info: summaryInfo(ctx),
     placed: guard.placed,
@@ -451,6 +537,7 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     dropped: [...placed.placement.dropped, ...guard.removed.map((p) => ({ spec: p.spec, reason: 'Demasiada fatiga acumulada para esta semana.' }))],
     warnings,
     projectedMinTsb: guard.minTsb,
+    runCapMinutes: built.runCap,
   };
 }
 
@@ -470,8 +557,8 @@ export function planWeek(rawInput: PlannerInput): PlanWeekResult {
     auto: ctx.auto,
     freeMinutes: freeTrainingMinutes(draftDays),
   });
-  const { specs, runCapped } = buildSpecs(input, ctx, budget);
-  return finalize(input, ctx, budget, placeWeek(input, ctx, budget, specs, draftDays), runCapped);
+  const built = buildSpecs(input, ctx, budget);
+  return finalize(input, ctx, budget, placeWeek(input, ctx, budget, built.specs, draftDays), built);
 }
 
 /** Rules-engine week proposal: only 'add' changes, never touches existing workouts. */

@@ -11,7 +11,7 @@ Al empezar, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota pert
 - iOS builds: GitHub Actions (`.github/workflows/ios.yml`) runs `expo prebuild` on a Mac and uploads to TestFlight; no EAS.
 - After adding or updating an Expo package run `node scripts/ios/check-prebuilt-abi.mjs`: a prebuilt module built against another `expo-modules-core` closes the app at launch (build 7). `expo-file-system` is pinned to `58.0.11` for that reason.
 - v2 (`docs/V2.md`): the in-app AI is on and free — `coach`/`briefing`/`meal` call Cloudflare Workers AI via `cloudflare/ai` (EXPO_PUBLIC_AI_COACH=0 disables). Never add a paid AI path without asking the owner.
-- `src/domain/{zones,prescription,season,periodization,recoveryLayout,constants}.ts` and part of `dates.ts` are mirrored into `supabase/functions/_shared/planning/domain/`: after editing them run `npm run sync:mirror` (`mirror.test.ts` fails otherwise). Never edit the mirror by hand.
+- `src/domain/{zones,prescription,season,periodization,recoveryLayout,constants,runVolume}.ts` and part of `dates.ts` are mirrored into `supabase/functions/_shared/planning/domain/`: after editing them run `npm run sync:mirror` (`mirror.test.ts` fails otherwise). Never edit the mirror by hand.
 - Jest replaces Reanimated globally (`jest.setup.ts`); worker tests: `node --test "cloudflare/ai/src/**/*.test.mts"`.
 
 ## Social ("Juntos") — state after v3 (2026-11-04)
@@ -27,3 +27,7 @@ Next ideas (not built): Live Activity for a quedada in progress; Garmin "same ac
 ## Coach v4 (2026-11-09) — un entrenador de verdad, COROS y plan general
 
 Every session carries targets (ppm / pace / W / RPE / sensations, derived from thresholds by `domain/zones.ts`, explicit `step.target` wins) and `coaching` (objective, keys, success, plan B); the coach (AI, rules, Claude, briefing) speaks with those numbers and reviews completed sessions (`domain/review.ts`). Watch = Garmin or COROS (`profiles.watch_brand`; COROS via Apple Salud + the official COROS connector in the athlete's Claude, guide in `/settings/coros` and `docs/SETUP.md` §8b). Plan → General (`?view=general`) shows the weeks to the race (carga, más volumen, descarga, afinamiento, carrera) from `domain/season.ts`; week-level overrides live in `week_plans` (MCP `set_week_plans`) and the weekly rules planner honours them. Deploy the two `20261109*` migrations before the functions and the app.
+
+## Planner and races (2026-11-26)
+
+Ramp cap +20 % (+15 % beginner, +10 % stress) over the biggest of the last 3 weeks; weekly run cap +15 % (mirrored `domain/runVolume.ts`, `phase.runMaxMinutes` on the server); short-notice plans get base + build when the athlete's last 4 weeks already cover the base (`PhaseOptions.recentWeeklyMinutes`, `useFitnessMinutes`); B/C races carry `races.prep` (`training | taper | specific`, null = priority default). Details in `docs/ARCHITECTURE.md` §17. Deploy `20261126000100_race_prep.sql` before the functions and the app.

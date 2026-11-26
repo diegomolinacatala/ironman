@@ -198,6 +198,17 @@ export const RACE_DISTANCES = [
 export type RaceDistance = (typeof RACE_DISTANCES)[number];
 export type RacePriority = 'A' | 'B' | 'C';
 
+/**
+ * How a B or C race is prepared (2026-11-26):
+ * - 'training' («Como entreno»): no taper, at most an easy day before;
+ * - 'taper' («Solo afinar»): a mini-taper of 3-5 days in its week and easy days after;
+ * - 'specific' («Preparación específica»): in the 2 weeks before its race week, 1 and then 2
+ *   race-pace sessions target that race; then the mini-taper and easy days after. The A race
+ *   still drives the phases, the volume and the long sessions.
+ */
+export const RACE_PREPS = ['training', 'taper', 'specific'] as const;
+export type RacePrep = (typeof RACE_PREPS)[number];
+
 export interface Race {
   id: UUID;
   userId: UUID;
@@ -209,6 +220,8 @@ export interface Race {
   /** Free text goal, e.g. "sub 5h" or "terminar". */
   goal: string | null;
   notes: string | null;
+  /** B/C races: how it is prepared; null or absent = the priority's default (B taper, C training). A races ignore it. */
+  prep?: RacePrep | null;
   createdAt: ISODateTime;
 }
 
@@ -220,6 +233,8 @@ export interface RaceDraft {
   location?: string | null;
   goal?: string | null;
   notes?: string | null;
+  /** B/C races: how it is prepared (null = the priority's default). */
+  prep?: RacePrep | null;
 }
 
 // ---------------------------------------------------------------------------

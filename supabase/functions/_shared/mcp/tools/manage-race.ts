@@ -4,7 +4,7 @@ import { raceDistanceLabel } from '../../planning/labels.ts';
 import type { RaceWrite } from '../../planning/store.ts';
 import { enumOf, nullable, object, optional, string } from '../../schema.ts';
 import type { Infer } from '../../schema.ts';
-import { RACE_DISTANCES, RACE_PRIORITIES } from '../../types.ts';
+import { RACE_DISTANCES, RACE_PREPS, RACE_PRIORITIES } from '../../types.ts';
 import type { Race } from '../../types.ts';
 import { defineTool, toolOk, ToolInputError } from '../tool.ts';
 import type { RegisteredTool, ToolContext, ToolResult } from '../tool.ts';
@@ -20,11 +20,22 @@ const input = object({
     ),
   ),
   priority: optional(
-    enumOf(RACE_PRIORITIES, 'A = objetivo principal (define la periodización), B = importante con mini-afinamiento, C = de entrenamiento. Obligatoria al crear.'),
+    enumOf(
+      RACE_PRIORITIES,
+      'A = objetivo principal (define la periodización), B = importante (por defecto, mini-afinamiento), C = de entrenamiento (por defecto, como un entreno). Obligatoria al crear.',
+    ),
   ),
   location: optional(nullable(string({ max: 200 }))),
   goal: optional(nullable(string({ max: 200, description: 'Objetivo libre, p. ej. "sub 5h" o "terminar".' }))),
   notes: optional(nullable(string({ max: 2000 }))),
+  prep: optional(
+    nullable(
+      enumOf(
+        RACE_PREPS,
+        'Solo carreras B y C: cómo se prepara. training = como un entreno (sin afinar; como mucho, el día antes suave); taper = mini-afinamiento de 3-5 días y días suaves después; specific = preparación específica: las 2 semanas antes de la de carrera llevan 1 y luego 2 sesiones a su ritmo, y después el mini-afinamiento (la carrera A sigue mandando). null = el de su prioridad (B taper, C training). Las A lo ignoran. Pregunta al usuario antes de elegirlo por él.',
+      ),
+    ),
+  ),
 });
 
 type Args = Infer<typeof input>;
@@ -38,6 +49,7 @@ function patchFrom(args: Args): RaceWrite {
     location: args.location,
     goal: args.goal,
     notes: args.notes,
+    prep: args.prep,
   }).filter(([, v]) => v !== undefined);
   return Object.fromEntries(entries) as RaceWrite;
 }
@@ -75,7 +87,7 @@ export const manageRaceTool: RegisteredTool = defineTool({
   title: 'Crear o modificar una carrera',
   description: [
     'Crea una carrera objetivo del usuario o modifica una existente (con race_id).',
-    'Al crear son obligatorios name, date, distance y priority. Las carreras A definen las fases del plan (base, construcción, afinamiento).',
+    'Al crear son obligatorios name, date, distance y priority. Las carreras A definen las fases del plan (base, construcción, afinamiento); en las B y C, prep dice cómo se preparan (como un entreno, solo afinar o preparación específica).',
     'No borra carreras: eso se hace desde la app.',
   ].join(' '),
   input,

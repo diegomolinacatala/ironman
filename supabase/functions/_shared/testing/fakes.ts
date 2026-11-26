@@ -206,7 +206,7 @@ export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): P
       return created;
     },
     insertRace: async (userId, race) => {
-      const created = { id: uuid(), userId, location: null, goal: null, notes: null, ...race } as Race & { userId: UUID };
+      const created = { id: uuid(), userId, location: null, goal: null, notes: null, prep: null, ...race } as Race & { userId: UUID };
       state.races.push(created);
       return created;
     },

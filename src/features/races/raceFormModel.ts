@@ -2,7 +2,8 @@
  * Race form state ↔ RaceDraft, validated with the domain zod schema (pure).
  */
 import { addDays } from '@/domain/dates';
-import type { ISODate, Race, RaceDistance, RaceDraft, RacePriority } from '@/domain/types';
+import { racePrepOf } from '@/domain/periodization';
+import type { ISODate, Race, RaceDistance, RaceDraft, RacePrep, RacePriority } from '@/domain/types';
 import { raceDistanceLabel } from '@/domain/labels';
 import { firstError, raceDraftSchema } from '@/domain/validation';
 
@@ -14,6 +15,29 @@ export interface RaceFormState {
   location: string;
   goal: string;
   notes: string;
+  /** B/C races: how the athlete prepares it; null = not chosen (the priority's default). */
+  prep: RacePrep | null;
+}
+
+/** «¿Cómo la preparas?» options for a B/C race, with their one-line hint. */
+export const PREP_OPTIONS: readonly { value: RacePrep; label: string; hint: string }[] = [
+  { value: 'training', label: 'Como entreno', hint: 'Como entreno: sin afinar; como mucho, el día antes suave.' },
+  { value: 'taper', label: 'Solo afinar', hint: 'Solo afinar: mini-afinamiento de 3–5 días y unos días suaves después.' },
+  {
+    value: 'specific',
+    // The full name («Preparación específica») does not fit a third of a phone: the hint says it.
+    label: 'Específica',
+    hint: 'Preparación específica: las 3 semanas antes, más sesiones a su ritmo; tu carrera A sigue mandando.',
+  },
+];
+
+/** The preparation the form shows: none for an A race, else the choice or the priority's default. */
+export function formPrep(state: Pick<RaceFormState, 'priority' | 'prep'>): RacePrep | null {
+  return racePrepOf(state);
+}
+
+export function prepHint(prep: RacePrep): string {
+  return PREP_OPTIONS.find((o) => o.value === prep)?.hint ?? '';
 }
 
 /** Default date for a new race: ~3 months out. */
@@ -33,6 +57,7 @@ export function initialRaceForm(race: Race | null, today: ISODate, isFirstRace =
       location: '',
       goal: '',
       notes: '',
+      prep: null,
     };
   }
   return {
@@ -43,6 +68,7 @@ export function initialRaceForm(race: Race | null, today: ISODate, isFirstRace =
     location: race.location ?? '',
     goal: race.goal ?? '',
     notes: race.notes ?? '',
+    prep: race.prep ?? null,
   };
 }
 
@@ -69,6 +95,8 @@ export function toRaceDraft(state: RaceFormState): RaceDraft {
     location: orNull(state.location),
     goal: orNull(state.goal),
     notes: orNull(state.notes),
+    // A races ignore it: saved as null so a later B/C starts from its default.
+    prep: state.priority === 'A' ? null : state.prep,
   };
 }
 
@@ -83,10 +111,15 @@ export function validateRaceForm(state: RaceFormState): RaceValidation {
 
 /**
  * Whether saving this draft reshapes the season: a new upcoming race, or a new
- * date, distance or priority. Then the app offers Plan → General.
+ * date, distance, priority or preparation. Then the app offers Plan → General.
  */
 export function changesSeason(before: Race | null, draft: RaceDraft, today: ISODate): boolean {
   if (draft.date < today) return false;
   if (!before) return true;
-  return before.date !== draft.date || before.distance !== draft.distance || before.priority !== draft.priority;
+  return (
+    before.date !== draft.date ||
+    before.distance !== draft.distance ||
+    before.priority !== draft.priority ||
+    racePrepOf(before) !== racePrepOf(draft)
+  );
 }

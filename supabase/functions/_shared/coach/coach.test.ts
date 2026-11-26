@@ -22,6 +22,17 @@ test('parseCoachRequest validates and normalizes the app request', () => {
   assert.equal(parseCoachRequest({ mode: 'chat', weekStart: '2026-10-26', friendIds: ['nope'] }).ok, false);
 });
 
+test('the system prompt states the app planner volume rules (ramp cap and weekly run cap)', () => {
+  assert.ok(COACH_SYSTEM_PROMPT.includes('+20 % como máximo (+15 % principiante, +10 % con estrés)'));
+  assert.ok(COACH_SYSTEM_PROMPT.includes('phase.runMaxMinutes'));
+  assert.ok(!COACH_SYSTEM_PROMPT.includes('10-15 %'), 'the old ramp wording is gone');
+});
+
+test('the system prompt prepares B/C races by their prep', () => {
+  assert.match(COACH_SYSTEM_PROMPT, /Carreras B y C según su prep/);
+  for (const prep of ['training', 'taper', 'specific']) assert.ok(COACH_SYSTEM_PROMPT.includes(`${prep} = `), prep);
+});
+
 test('structured output schema has every property required and no numeric bounds', () => {
   const schema = COACH_OUTPUT_JSON_SCHEMA as { required: string[]; properties: { changes: { items: { required: string[]; additionalProperties: boolean } } } };
   assert.deepEqual(schema.required, ['reply', 'summary', 'changes', 'memory', 'life_event', 'quedada', 'week_plans']);

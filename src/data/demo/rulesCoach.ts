@@ -80,6 +80,12 @@ export interface CoachContext {
   metrics: DailyMetrics[];
   readiness: Readiness;
   recentWeeklyMinutes: number[];
+  /**
+   * Completed minutes of the 4 weeks before the current week: the athlete's
+   * volume today, which can turn a short-notice plan into base + build (as in
+   * Plan → General). Absent = not known.
+   */
+  fitnessWeeklyMinutes?: number[];
   /** Completed workouts of the last ~4 weeks (planner ramp control). */
   history: Workout[];
   upcoming: Workout[];
@@ -183,7 +189,11 @@ export async function loadCoachContext(repo: RulesCoachRepo, request: CoachReque
   const weekStart = targetWeekStart(request, today, replanEvent);
   const weekEnd = addDays(weekStart, 6);
   const historyFrom = addDays(weekStart, -28);
-  const [races, workouts, events, busyBlocks, jointSessions, checkins, metrics, upcoming, weekPlans] = await Promise.all([
+  // The athlete's volume is measured on the 4 weeks before the current week, whatever week is planned.
+  const currentMonday = startOfWeek(today);
+  const fitnessRange: DateRange = { from: addDays(currentMonday, -28), to: addDays(currentMonday, -1) };
+  const historyCoversFitness = historyFrom <= fitnessRange.from && weekEnd >= fitnessRange.to;
+  const [races, workouts, events, busyBlocks, jointSessions, checkins, metrics, upcoming, weekPlans, fitnessWorkouts] = await Promise.all([
     repo.listRaces(),
     repo.listWorkouts({ from: historyFrom, to: weekEnd }),
     repo.listLifeEvents({ from: addDays(weekStart, -EVENT_LOOKBACK_DAYS), to: addDays(weekEnd, 14) }),
@@ -193,6 +203,7 @@ export async function loadCoachContext(repo: RulesCoachRepo, request: CoachReque
     repo.listMetrics({ from: addDays(today, -28), to: today }),
     repo.listWorkouts({ from: today, to: addDays(today, 7) }),
     loadWeekPlans(repo, weekPlanRange(weekStart, today)),
+    historyCoversFitness ? Promise.resolve(null) : repo.listWorkouts(fitnessRange),
   ]);
   const readiness = computeReadiness({
     today,
@@ -212,6 +223,7 @@ export async function loadCoachContext(repo: RulesCoachRepo, request: CoachReque
     metrics,
     readiness,
     recentWeeklyMinutes: recentWeeklyMinutesOf(workouts, weekStart),
+    fitnessWeeklyMinutes: recentWeeklyMinutesOf(fitnessWorkouts ?? workouts, currentMonday),
     history: workouts.filter((w) => w.status === 'completed' && w.date < today),
     upcoming: upcoming.filter((w) => w.status === 'planned'),
     weekPlans,
@@ -237,6 +249,7 @@ function replanInput(ctx: CoachContext): ReplanInput {
     lifeEvents: weekEvents(ctx),
     jointSessions: ctx.jointSessions,
     races: ctx.races,
+    fitnessWeeklyMinutes: ctx.fitnessWeeklyMinutes,
     weekPlan: weekPlanOf(ctx),
   };
 }
@@ -277,6 +290,7 @@ export function planForRequest(request: CoachRequest, ctx: CoachContext): PlanRe
     jointSessions: ctx.jointSessions,
     readiness: ctx.readiness,
     recentWeeklyMinutes: ctx.recentWeeklyMinutes,
+    fitnessWeeklyMinutes: ctx.fitnessWeeklyMinutes,
     today: ctx.today,
     history: ctx.history,
     weekPlan: weekPlanOf(ctx),

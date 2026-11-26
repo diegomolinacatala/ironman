@@ -152,6 +152,7 @@ export function seasonOf(ctx: CoachContext): SeasonOverview {
     level: ctx.profile.level,
     weeklyHoursTarget: manualWeeklyHours(ctx.profile.availability),
     weekPlans: ctx.weekPlans,
+    recentWeeklyMinutes: ctx.fitnessWeeklyMinutes,
   });
 }
 

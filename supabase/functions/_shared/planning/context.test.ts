@@ -75,6 +75,43 @@ test('automatic availability: the coach and Claude read the mode and the target 
   assert.ok(ctx.notes.some((n) => n.includes('mode=auto')));
 });
 
+test('the week carries the app planner run cap: +15 % over the biggest run week of the last 3', async () => {
+  const state = seeded();
+  state.workouts.push(
+    workout({ id: 'r-1', date: '2026-10-06', status: 'completed', durationMin: 40, completed: { durationMin: 40 } }),
+    workout({ id: 'r-2', date: '2026-10-08', status: 'completed', durationMin: 60, completed: { durationMin: 60 } }),
+    workout({ id: 'r-3', date: '2026-10-14', sport: 'bike', status: 'completed', durationMin: 120, completed: { durationMin: 120 } }),
+  );
+  // Week of 5 oct: 100' of running (the 20 oct run is 62'): 100 × 1.15 = 115.
+  const ctx = await buildPlanningContext(fakeStore(state), { userId: USER, weekStart: '2026-10-26', now: NOW, detail: 'concise' });
+  assert.equal(ctx.phase.runMaxMinutes, 115);
+  assert.ok(ctx.notes.some((n) => n.includes('phase.runMaxMinutes')));
+
+  const empty = emptyState();
+  const none = await buildPlanningContext(fakeStore(empty), { userId: USER, weekStart: '2026-10-26', now: NOW, detail: 'concise' });
+  assert.equal(none.phase.runMaxMinutes, null, 'no history, no cap');
+});
+
+test('a short-notice full distance shows build weeks when the recent volume covers the base (as in the app)', async () => {
+  const state = emptyState();
+  // Added the week of 19 Oct, race week of 1 Feb: 16 weeks, too short for a full plan.
+  state.races.push({ id: 'full', userId: USER, name: 'Distancia completa', date: '2027-02-07', distance: 'full', priority: 'A', location: null, goal: null, notes: null, createdAt: '2026-10-19T10:00:00Z' });
+  const withoutVolume = await buildPlanningContext(fakeStore(state), { userId: USER, weekStart: '2026-10-26', now: NOW, detail: 'concise' });
+  assert.ok(!withoutVolume.season.weeks.some((w) => w.phaseLabel.startsWith('Construcción')), 'survival plan: base only');
+
+  // ~11 h 30' a week in the 4 weeks before this one (the profile is intermediate).
+  for (const date of ['2026-09-22', '2026-09-29', '2026-10-06', '2026-10-13']) {
+    state.workouts.push(workout({ date, sport: 'bike', status: 'completed', durationMin: 690, completed: { durationMin: 690 } }));
+  }
+  const withVolume = await buildPlanningContext(fakeStore(state), { userId: USER, weekStart: '2026-10-26', now: NOW, detail: 'concise' });
+  assert.ok(withVolume.season.weeks.some((w) => w.phaseLabel === 'Construcción 1'), 'short base, then build');
+  assert.deepEqual(
+    withVolume.season.weeks.map((w) => w.fixed ?? false),
+    withoutVolume.season.weeks.map((w) => w.fixed ?? false),
+    'the same weeks take a week plan',
+  );
+});
+
 test('detailed mode adds descriptions, next week and recent sessions', async () => {
   const ctx = await buildPlanningContext(fakeStore(seeded()), { userId: USER, now: NOW, detail: 'detailed', includeNextWeek: true });
   assert.equal(ctx.weekStart, '2026-10-19');

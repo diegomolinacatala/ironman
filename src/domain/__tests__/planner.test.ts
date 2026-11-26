@@ -175,11 +175,18 @@ describe('generateWeek', () => {
   });
 
   test('Frandsen rule: runs never exceed 1.10 × the longest run of the last 30 days', () => {
-    // History inside the 30-day lookback of the planned week (2027-02-08).
-    const history = [
-      makeWorkout({ id: 'h1', date: '2027-01-31', sport: 'run', status: 'completed', durationMin: 60, distanceM: 10000, completed: { durationMin: 60, distanceM: 10000 } }),
-      makeWorkout({ id: 'h2', date: '2027-01-24', sport: 'bike', status: 'completed', durationMin: 120, completed: { durationMin: 120 } }),
-    ];
+    // Three steady weeks inside the 30-day lookback of the planned week (2027-02-08): 3 × 45' + a 60'
+    // (10 km) long run and a 120' ride. The weekly run cap (+15 %) leaves room for a long run, so the
+    // per-session cap (10 km → 11 km, 65') is the one that binds.
+    const run = (id: string, date: string, durationMin: number, distanceM: number) =>
+      makeWorkout({ id, date, sport: 'run', status: 'completed', durationMin, distanceM, completed: { durationMin, distanceM } });
+    const history = ['2027-01-18', '2027-01-25', '2027-02-01'].flatMap((monday, i) => [
+      run(`e${i}a`, addDays(monday, 1), 45, 7500),
+      run(`e${i}b`, addDays(monday, 3), 45, 7500),
+      run(`e${i}c`, addDays(monday, 4), 45, 7500),
+      run(`l${i}`, addDays(monday, 6), 60, 10000),
+      makeWorkout({ id: `b${i}`, date: addDays(monday, 5), sport: 'bike', status: 'completed', durationMin: 120, completed: { durationMin: 120 } }),
+    ]);
     const profile = makeProfile({ availability: { ...makeProfile().availability, weeklyHoursTarget: 14 } });
     const r = planWeek(baseInput({ profile, history, weekStart: '2027-02-08', races: [makeRace()] }));
     const runs = adds(r.changes).filter((d) => d.sport === 'run');

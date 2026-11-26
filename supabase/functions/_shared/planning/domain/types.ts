@@ -11,6 +11,7 @@ export type {
   NumberRange,
   Race,
   RaceDistance,
+  RacePrep,
   Sport,
   StepTarget,
   Thresholds,
@@ -19,6 +20,7 @@ export type {
   WeekPlanDraft,
   WeekPlanKind,
   WorkoutCoaching,
+  WorkoutStatus,
   WorkoutStep,
   WorkoutStepKind,
 } from '../../types.ts';

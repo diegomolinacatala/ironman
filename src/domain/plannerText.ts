@@ -13,6 +13,7 @@ export function reasonFor(spec: SessionSpec, info: PhaseInfo, shortened: boolean
   const tail = shortened ? ' (acortada para que encaje en tu semana)' : '';
   const cls = specClass(spec);
   const sport = specSport(spec);
+  if (spec.specificFor) return `Preparación específica para ${spec.specificFor}: sesión a su ritmo de carrera${tail}.`;
   let base: string;
   switch (spec.code) {
     case 'RACE':

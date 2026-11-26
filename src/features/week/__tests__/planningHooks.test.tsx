@@ -84,6 +84,7 @@ function weekData(overrides: Partial<WeekData> = {}): WeekData {
     weekPlan: null,
     targetHours: 10,
     recentMinutes: [480, 500, 520, 400],
+    fitnessMinutes: [480, 500, 520, 400],
     history: [],
     isLoading: false,
     error: null,

@@ -28,14 +28,16 @@ import {
   theSets,
   type IntervalCopy,
   type IntervalPlan,
+  type SessionContext,
   type SessionRecipe,
   type SessionSpec,
   type StepNumbers,
 } from './sessionKit';
+import type { StepTarget } from './types';
 import { formatStepMinutes } from './zones';
 
-export type RunCode = 'RN_REC' | 'RN_EASY' | 'RN_LONG' | 'RN_TEMPO' | 'RN_THR' | 'RN_VO2' | 'RN_HILLS';
-type IntervalCode = 'RN_TEMPO' | 'RN_THR' | 'RN_VO2';
+export type RunCode = 'RN_REC' | 'RN_EASY' | 'RN_LONG' | 'RN_TEMPO' | 'RN_THR' | 'RN_VO2' | 'RN_HILLS' | 'RN_RP';
+type IntervalCode = 'RN_TEMPO' | 'RN_THR' | 'RN_VO2' | 'RN_RP';
 
 const CONVERSATION_CUE = 'Ritmo de conversación, zancada ágil y hombros sueltos.';
 
@@ -47,6 +49,8 @@ interface IntervalConfig {
   max: number;
   zone: string;
   cue: string;
+  /** Explicit target of the work steps (race pace), when the zone alone is not enough. */
+  target?: (ctx: SessionContext) => StepTarget | undefined;
   objective: string;
   keys: (p: IntervalPlan, main: StepNumbers) => string[];
   success: (p: IntervalPlan, main: StepNumbers) => string;
@@ -104,6 +108,23 @@ const INTERVALS: Readonly<Record<IntervalCode, IntervalConfig>> = {
         ? `Completas ${lowerStart(theSets(p.reps))} al mismo ritmo${paren(main.nums)} sin perder la técnica (${main.rpe} en la última).`
         : `Completas el bloque a ritmo constante${paren(main.nums)} sin perder la técnica (${main.rpe} al final).`,
   },
+  RN_RP: {
+    title: 'Series a ritmo de carrera',
+    works: [15, 12, 10, 8],
+    rest: (w) => (w >= 10 ? 3 : 2),
+    min: 2,
+    max: 4,
+    zone: 'ritmo de carrera',
+    cue: 'Firme y fluido: el ritmo exacto de la carrera, ni más rápido ni más lento.',
+    target: (ctx) => raceTarget('run', ctx),
+    objective: 'Fijar tu ritmo de carrera a pie: que el día de la carrera lo reconozcas sin mirar el reloj.',
+    keys: (p, main) => [
+      'Es tu ritmo de carrera, no una serie a tope: la primera, controlada.',
+      `${byCount(p.reps, 'Bloque', 'Series')} a ritmo de carrera${paren(main.nums)}.`,
+      restKey(p, 'suaves'),
+    ],
+    success: (p, main) => `${theSets(p.reps)} al mismo ritmo${paren(main.nums)}, la última tan fluida como la primera (${main.rpe}).`,
+  },
 };
 
 /** Jog between sets, or (a single block) arrive at it warm. */
@@ -117,11 +138,11 @@ function intervalRecipe(code: IntervalCode): SessionRecipe {
   const planOf = (d: number): IntervalPlan =>
     planIntervals(d, { warm: 15, cool: 10, works: cfg.works, rest: cfg.rest, minReps: cfg.min, maxReps: cfg.max });
   return {
-    body: (spec, d) => {
+    body: (spec, d, ctx) => {
       const p = planOf(d);
       const copy: IntervalCopy = {
         warm: { cue: 'Rodaje suave y, al final, 3–4 progresiones cortas para activar.' },
-        work: { cue: cfg.cue },
+        work: { cue: cfg.cue, target: cfg.target?.(ctx) },
         rest: { cue: 'Trota muy suave, sin pararte.' },
         cool: { cue: 'Trote suave para soltar.' },
       };
@@ -317,4 +338,5 @@ export const RUN_RECIPES: Readonly<Record<RunCode, SessionRecipe>> = {
   RN_THR: intervalRecipe('RN_THR'),
   RN_VO2: intervalRecipe('RN_VO2'),
   RN_HILLS: hills,
+  RN_RP: intervalRecipe('RN_RP'),
 };

@@ -67,6 +67,10 @@ test('profile, race, event and metrics mappers apply safe defaults', () => {
   assert.deepEqual([auto.mode, auto.restDay, auto.windows, auto.poolDays], ['auto', null, [], [2]]);
   assert.equal(p.availability.mode, 'manual');
   assert.equal(mapRace({ id: 'r', name: 'X', date: '2027-04-18', distance: 'half', priority: 'A' }).distance, 'half');
+  // B/C preparation: known values pass, anything else (or no column yet) is the default (null).
+  assert.equal(mapRace({ id: 'r', name: 'X', date: '2027-04-18', distance: 'olympic', priority: 'B', prep: 'specific' }).prep, 'specific');
+  assert.equal(mapRace({ id: 'r', name: 'X', date: '2027-04-18', distance: 'olympic', priority: 'B', prep: 'mucho' }).prep, null);
+  assert.equal(mapRace({ id: 'r', name: 'X', date: '2027-04-18', distance: 'olympic', priority: 'C' }).prep, null);
   const e = mapLifeEvent({ id: 'e', kind: 'padel', title: 'Pádel', start_date: '2026-10-28', end_date: '2026-10-28', start_time: '20:00:00', severity: 3 });
   assert.equal(e.startTime, '20:00');
   assert.equal(e.severity, 3);

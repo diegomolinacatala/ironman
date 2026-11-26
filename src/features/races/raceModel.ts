@@ -38,11 +38,11 @@ export const PRIORITY_INFO: Record<RacePriority, { title: string; help: string }
   },
   B: {
     title: 'Importante',
-    help: 'Quieres hacerla bien: mini-afinamiento de 3–5 días sin romper el bloque.',
+    help: 'Quieres hacerla bien sin romper el bloque. Eliges cómo prepararla; por defecto, mini-afinamiento de 3–5 días.',
   },
   C: {
     title: 'Rodaje',
-    help: 'Para coger ritmo: cuenta como sesión de calidad, sin afinamiento.',
+    help: 'Para coger ritmo: por defecto la haces como un entreno de calidad, sin afinar.',
   },
 };
 

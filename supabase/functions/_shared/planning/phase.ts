@@ -63,6 +63,11 @@ export interface PhaseOptions {
   today?: ISODate;
   /** Season already built from `today` (avoids building it twice). */
   season?: SeasonOverview;
+  /**
+   * Completed minutes of the 4 weeks before the athlete's current week (oldest
+   * first): a short-notice plan gets base + build when they cover the base (as in the app).
+   */
+  recentWeeklyMinutes?: readonly number[];
 }
 
 const LEVELS: readonly AthleteLevel[] = ['beginner', 'intermediate', 'advanced'];
@@ -96,7 +101,13 @@ function raceRef(race: Race | null): RaceRef | null {
 function seasonWeekOf(monday: ISODate, races: readonly Race[], opts: PhaseOptions): SeasonWeek | null {
   const known = opts.season?.weeks.find((w) => w.weekStart === monday);
   if (known) return known;
-  const input = { races, level: athleteLevel(opts.level), weeklyHoursTarget: manualOf(opts.weeklyHoursTarget), weekPlans: opts.weekPlans ?? [] };
+  const input = {
+    races,
+    level: athleteLevel(opts.level),
+    weeklyHoursTarget: manualOf(opts.weeklyHoursTarget),
+    weekPlans: opts.weekPlans ?? [],
+    recentWeeklyMinutes: opts.recentWeeklyMinutes,
+  };
   const current = opts.today ? startOfWeek(opts.today) : monday;
   const ahead = diffDays(monday, current) / 7;
   if (ahead > 0 && ahead < MAX_SEASON_WEEKS) {
@@ -113,7 +124,7 @@ function seasonWeekOf(monday: ISODate, races: readonly Race[], opts: PhaseOption
  */
 export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptions = {}): PhaseInfo {
   const monday = startOfWeek(date);
-  const raw = domainPhaseFor(date, races, { level: athleteLevel(opts.level) });
+  const raw = domainPhaseFor(date, races, { level: athleteLevel(opts.level), recentWeeklyMinutes: opts.recentWeeklyMinutes });
   const plan = canOverride(raw) ? ((opts.weekPlans ?? []).find((p) => p.weekStart === monday) ?? null) : null;
   const hours = weeklyHoursFor(manualOf(opts.weeklyHoursTarget), athleteLevel(opts.level), raw.targetRace?.distance ?? null);
   const info = applyWeekPlan(raw, plan, hours);

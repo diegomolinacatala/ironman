@@ -23,6 +23,8 @@ import {
   profilePatchToRow,
   profileToRow,
   proposalToRow,
+  raceDraftToInsert,
+  racePatchToRow,
   raceToRow,
   rowToBusyBlock,
   rowToCheckin,
@@ -155,9 +157,18 @@ describe('table mappers round-trip (domain → row → domain)', () => {
       location: 'Valencia',
       goal: 'sub 5h',
       notes: null,
+      prep: 'specific',
       createdAt: NOW,
     };
     expect(rowToRace(raceToRow(race))).toEqual(race);
+  });
+
+  it('race preparation: unknown or missing values read as the default (null)', () => {
+    const row = raceToRow({ id: 'r2', userId: ME, name: 'Olímpico', date: '2027-05-02', distance: 'olympic', priority: 'B', location: null, goal: null, notes: null, prep: 'taper', createdAt: NOW });
+    expect(rowToRace({ ...row, prep: 'mucho' }).prep).toBeNull();
+    const { prep: _prep, ...beforeMigration } = row;
+    expect(rowToRace(beforeMigration).prep).toBeNull();
+    expect(raceToRow({ ...rowToRace(beforeMigration) }).prep).toBeNull();
   });
 
   it('life event', () => {
@@ -377,6 +388,16 @@ describe('insert/update builders', () => {
 
   it('life event insert defaults end date to start date', () => {
     expect(lifeEventDraftToInsert({ kind: 'padel', title: 'Pádel', startDate: '2026-10-28', severity: 2 }, ME)).toMatchObject({ end_date: '2026-10-28', start_date: '2026-10-28' });
+  });
+
+  it('race preparation: sent when chosen, left to the column default when null; a patch can clear it', () => {
+    const draft = { name: 'Olímpico de Madrid', date: '2027-05-02', distance: 'olympic' as const, priority: 'B' as const };
+    expect(raceDraftToInsert({ ...draft, prep: 'specific' }, ME)).toMatchObject({ user_id: ME, priority: 'B', prep: 'specific' });
+    expect('prep' in raceDraftToInsert({ ...draft, prep: null }, ME)).toBe(false);
+    expect('prep' in raceDraftToInsert(draft, ME)).toBe(false);
+    expect(racePatchToRow({ prep: 'training' })).toEqual({ prep: 'training' });
+    expect(racePatchToRow({ priority: 'A', prep: null })).toEqual({ priority: 'A', prep: null });
+    expect(racePatchToRow({ name: ' Madrid ' })).toEqual({ name: 'Madrid' });
   });
 });
 

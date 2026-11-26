@@ -137,6 +137,9 @@ export const RACE_DISTANCES = [
 export type RaceDistance = (typeof RACE_DISTANCES)[number];
 export const RACE_PRIORITIES = ['A', 'B', 'C'] as const;
 export type RacePriority = (typeof RACE_PRIORITIES)[number];
+/** How a B/C race is prepared: training (como entreno), taper (solo afinar), specific (preparación específica). */
+export const RACE_PREPS = ['training', 'taper', 'specific'] as const;
+export type RacePrep = (typeof RACE_PREPS)[number];
 
 export interface Race {
   id: UUID;
@@ -147,6 +150,8 @@ export interface Race {
   location: string | null;
   goal: string | null;
   notes: string | null;
+  /** B/C races: how it is prepared; null or absent = the priority's default (B taper, C training). A races ignore it. */
+  prep?: RacePrep | null;
   /** When the race was added: anchors the macrocycle (planning/domain/periodization.ts). */
   createdAt?: ISODateTime;
 }

@@ -154,6 +154,14 @@ describe('weekPhaseOf (Plan → General override in the week view)', () => {
     expect(weekPhaseOf(MONDAY, undefined, manual, [plan()])).toEqual({ phase: null, plan: null, targetHours: 10 });
   });
 
+  test('the athlete volume reaches the periodization: a short-notice full distance gets its build weeks', () => {
+    // Added 16 weeks before its race week: too short for a full plan.
+    const full = makeRace({ id: 'full', distance: 'full', date: '2027-03-14', createdAt: '2026-11-23T10:00:00' });
+    const advanced = makeProfile({ level: 'advanced' });
+    expect(weekPhaseOf('2027-01-11', [full], advanced, []).phase?.phase).toBe('base');
+    expect(weekPhaseOf('2027-01-11', [full], advanced, [], [660, 690, 720, 700]).phase?.phase).toBe('build');
+  });
+
   test('automatic availability aims at the hours for the level and race distance', () => {
     const auto = weekPhaseOf(MONDAY, [race], profile, []);
     const hours = autoWeeklyHours('intermediate', race.distance);
