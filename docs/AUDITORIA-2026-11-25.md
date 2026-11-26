@@ -67,7 +67,7 @@ Accesibilidad: el selector segmentado llega a 44 pt, las puntuaciones de 1 a 5 s
 | Comparar cada sesión con las parecidas | **Portado** (`domain/similarSessions.ts`): "Eficiencia un 6 % mejor que la media de tus 8 carreras parecidas", sin pedir nada al usuario |
 | Ratio de carga aguda/crónica y monotonía | **Portado** (`loadBalance` en `domain/load.ts`): Progreso solo avisa cuando hay un salto o una semana sin día suave |
 | Tomas con minuto exacto | **Portado** (`fuelingSchedule` en `domain/fueling.ts`) |
-| Exportar a Zwift (.zwo) | **Portado** (`domain/zwo.ts` + "Exportar a Zwift" en las sesiones de bici) |
+| Exportar a Zwift (.zwo) | **Descartado el 26-11** (el equipo usa MyWhoosh): en su lugar, el entrenamiento gratuito de MyWhoosh más parecido, si el atleta lo activa |
 | Informe corto con cifras y referencias | **Parcial**: el informe ahora va por excepción |
 | Métricas del FIT (NP, IF, desacople, deriva de pulso, curva de potencia) | **Pendiente**: hace falta que la función `garmin` descargue el FIT o las muestras y ampliar `CompletedData` |
 | FTP calculada de un test de rampa → zonas automáticas | **Pendiente**: depende de lo anterior (hacen falta las potencias) |
@@ -80,9 +80,9 @@ Cosas que necesitan decisión del dueño o un despliegue:
 
 1. **Contraseña de la cuenta de revisión** (`revision@roadtoironman.app`). Es un prefijo público más 6 dígitos: 10⁶ combinaciones contra una cuenta real. Rotarla tras la aprobación o desactivarla fuera de revisión.
 2. **Desplegar** la migración `20261125000100_friendships_requester_idx.sql` y las funciones `coach`, `briefing` y `mcp`, porque los cambios de servidor no actúan hasta desplegarlos.
-3. **Ruta de pago silenciosa.** Si falta el worker y existe `ANTHROPIC_API_KEY`, se usa Claude sin tope global de coste (`_shared/ai/provider.ts`). Va contra la regla "nunca coste sin preguntar".
-4. **Notificaciones push que se pueden perder.** `pushed_at` se marca antes de enviar y no hay reintento (`_shared/platform/service-stores.ts`).
-5. **`sync_all` de Garmin** procesa como mucho 200 usuarios sin orden. Con muchos usuarios, los últimos de la lista no se sincronizan nunca.
+3. **Ruta de pago silenciosa.** ~~Si falta el worker y existe `ANTHROPIC_API_KEY`, se usa Claude sin tope global de coste.~~ **Corregido el 26-11:** ahora exige además `AI_ALLOW_PAID=1`.
+4. **Notificaciones push.** **Corrección del 26-11:** sí se reintentan si Apple falla (429, 5xx, red); solo se perderían si la función se corta entre reservarlas y enviarlas. Se deja así.
+5. **`sync_all` de Garmin** procesaba como mucho 200 usuarios sin orden. **Corregido el 26-11:** primero quien lleva más tiempo sin sincronizar.
 6. **Sin cola sin conexión.** Un check-in o una sesión completada sin red se pierde si el usuario no reintenta.
 
 Cosas del motor que conviene hacer después:
@@ -102,3 +102,17 @@ Cosas del motor que conviene hacer después:
 - **Plan de carrera por segmentos.** Para la carrera A: vatios por tramo, ritmo de la carrera a pie, tomas por minuto y transiciones, generado a partir de umbrales y de los entrenos de ritmo de carrera.
 - **Predicción de tiempo** por segmento a partir de las sesiones de control (umbral, CSS, FTP), con un rango y no una cifra cerrada.
 - **Repetir quedada** con el mismo grupo la semana siguiente (ya está en las ideas de experiencia; es barata de construir).
+
+## 7. Actualización del 26 de noviembre
+
+David revisó las 39 propuestas una a una; sus decisiones están en `memoria/sesiones/2026-11-26-decisiones-de-david.md`. La cuenta de revisión de Apple la decide Diego ([issue #1](https://github.com/diegomolinacatala/ironman/issues/1)).
+
+Lo que se midió con un banco de pruebas propio (semanas de atletas realistas, 20 peticiones típicas al coach e imprevistos) y se corrigió:
+
+- **Plan semanal:** la frescura se calculaba desde cero con 4 semanas de historial, así que entrenar con constancia parecía fatiga y el plan quitaba sesiones (a un avanzado de distancia completa le dejaba 4 de 12, sin natación). Corregido. También: volumen habitual respetado en modo automático, tirada larga prioritaria, semanas de exámenes más ligeras, principiantes con una sola sesión de calidad.
+- **Coach:** entendía bien 7 de 20 peticiones típicas; ahora las 20. Con la IA activada, las peticiones concretas las resuelve primero el motor de reglas (exacto, al instante, sin gastar IA) y la IA queda para preguntas, dolor, amigos y mensajes largos.
+- **Imprevistos:** un partido de pádel ya no se lleva la natación ni media semana; un viaje «sin bici» ya no se lee como «con bici».
+- **Adaptación:** Hoy ofrece adaptar el día cuando el reloj dice que vas justo, o recolocar una sesión clave que te saltaste.
+
+Funciones nuevas aprobadas: plan de carrera con previsión, aviso del informe al despertar, el tiempo (lluvia → huecos secos o rodillo y piscina, con confirmación), carreras B a elegir, tope de carrera a pie, MyWhoosh opcional, guardado sin conexión, repetir quedada, revisar zonas, señales de enfermedad confirmadas en el check-in, umbrales automáticos con confirmación y «Tu forma de entrenar».
+
