@@ -23,6 +23,9 @@ export interface DayMetricsPart {
   sleepAwakeMin?: number;
   sleepStart?: ISODateTime;
   sleepEnd?: ISODateTime;
+  /** Average breathing rate (breaths/min) and heart rate (bpm) during that night (illness signal). */
+  sleepRespiration?: number;
+  sleepAvgHr?: number;
 }
 
 export interface GarminActivity {
@@ -162,9 +165,34 @@ function sleepWindow(dto: unknown, tz: string): Pick<DayMetricsPart, 'sleepStart
   return { sleepStart: new Date(start).toISOString(), sleepEnd: new Date(end).toISOString() };
 }
 
+/** Mean of `key` over the objects of an array (Garmin's per-epoch lists), or null. */
+function averageOf(list: unknown, key: string): number | null {
+  if (!Array.isArray(list)) return null;
+  const values = list.map((entry) => toNumber(at(entry, key))).filter((n): n is number => n !== null && n > 0);
+  return values.length > 0 ? values.reduce((sum, n) => sum + n, 0) / values.length : null;
+}
+
 /**
- * Daily sleep: duration, score, stages, start/end (dailySleepDTO), plus the resting HR and
- * overnight HRV some payloads carry. `tz` converts "local" timestamps when no GMT one exists.
+ * Breathing and heart rate during the night (illness signal). Garmin Connect's sleep DTO
+ * carries `averageRespirationValue` and, on recent payloads, `avgHeartRate`; otherwise the
+ * per-epoch lists (`wellnessEpochRespirationDataDTOList[].respirationValue`,
+ * `sleepHeartRate[].value`) and, last, the HR measured with the night's SpO2 readings.
+ */
+function nightVitals(row: Obj, dto: unknown): Pick<DayMetricsPart, 'sleepRespiration' | 'sleepAvgHr'> {
+  const breathing =
+    pickNumber(dto, ['averageRespirationValue', 'avgSleepRespirationValue', 'avgRespirationValue']) ??
+    averageOf(row.wellnessEpochRespirationDataDTOList, 'respirationValue');
+  const heartRate =
+    pickNumber(dto, ['avgHeartRate', 'averageHeartRate', 'avgSleepHeartRate']) ??
+    averageOf(row.sleepHeartRate, 'value') ??
+    pickNumber(dto, ['averageSpO2HRSleep']);
+  return { sleepRespiration: inRange(breathing, 4, 40), sleepAvgHr: inRange(heartRate, 25, 150) };
+}
+
+/**
+ * Daily sleep: duration, score, stages, start/end (dailySleepDTO), plus the resting HR,
+ * overnight HRV, breathing and heart rate some payloads carry. `tz` converts "local"
+ * timestamps when no GMT one exists.
  */
 export function parseSleepSummaries(payload: unknown, tz: string = DEFAULT_TZ): DayMetricsPart[] {
   const rows = isObj(payload) && isObj(payload.dailySleepDTO) ? [payload] : asRecords(payload, ['dailySleepSummaries', 'sleepSummaries', 'dailySleepDTOList', 'data', 'summaries']);
@@ -184,6 +212,7 @@ export function parseSleepSummaries(payload: unknown, tz: string = DEFAULT_TZ): 
       sleepRemMin: stageMinutes(dto, ['remSleepSeconds', 'remSleepDurationSeconds', 'sleepLevels.remSeconds']),
       sleepAwakeMin: stageMinutes(dto, ['awakeSleepSeconds', 'awakeDurationSeconds', 'awakeSeconds', 'sleepLevels.awakeSeconds']),
       ...sleepWindow(dto, tz),
+      ...nightVitals(row, dto),
     });
   });
 }

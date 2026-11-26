@@ -93,6 +93,9 @@ export interface MetricsUpsert {
   sleepAwakeMin?: number;
   sleepStart?: ISODateTime;
   sleepEnd?: ISODateTime;
+  /** Average breathing rate (breaths/min) and heart rate (bpm) during that night (illness signal). */
+  sleepRespiration?: number;
+  sleepAvgHr?: number;
   raw: Record<string, unknown>;
 }
 

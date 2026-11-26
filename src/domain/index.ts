@@ -14,6 +14,8 @@ export * from './load';
 export * from './periodization';
 export * from './season';
 export * from './readiness';
+export * from './illness';
+export * from './watchCompletion';
 export * from './restrictions';
 export * from './hardness';
 export * from './sessions';

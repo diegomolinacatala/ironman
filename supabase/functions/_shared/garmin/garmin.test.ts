@@ -408,6 +408,24 @@ test('sleep summaries carry stages (minutes) and start/end instants of the night
   assert.equal(rows[0].sleepEnd, '2026-10-24T04:50:00.000Z');
 });
 
+test('sleep summaries carry the breathing and heart rate of the night (illness signal)', () => {
+  // Garmin Connect's sleep payload: averages on dailySleepDTO…
+  const dto = parseSleepSummaries({ dailySleepDTO: { calendarDate: '2026-10-24', sleepTimeSeconds: 25200, averageRespirationValue: 14.6, avgHeartRate: 51.7 } });
+  assert.deepEqual(dto, [{ date: '2026-10-24', sleepHours: 7, sleepRespiration: 14.6, sleepAvgHr: 51.7 }]);
+  // …or only the per-epoch lists next to it, and the SpO2 heart rate as a last resort.
+  const epochs = parseSleepSummaries({
+    dailySleepDTO: { calendarDate: '2026-10-24' },
+    wellnessEpochRespirationDataDTOList: [{ startTimeGMT: 1, respirationValue: 14 }, { startTimeGMT: 2, respirationValue: 15 }, { startTimeGMT: 3, respirationValue: -1 }],
+    sleepHeartRate: [{ value: 50, startGMT: 1 }, { value: 54, startGMT: 2 }],
+  });
+  assert.deepEqual(epochs, [{ date: '2026-10-24', sleepRespiration: 14.5, sleepAvgHr: 52 }]);
+  const spo2 = parseSleepSummaries({ dailySleepDTO: { calendarDate: '2026-10-24', averageSpO2HRSleep: 55, averageRespirationValue: 90 } });
+  assert.deepEqual(spo2, [{ date: '2026-10-24', sleepAvgHr: 55 }], 'impossible breathing values are dropped');
+  const rows = toMetricRows(dto, '2026-10-24T10:00:00.000Z');
+  assert.equal(rows[0].sleepRespiration, 14.6, 'they reach the metrics upsert');
+  assert.equal(rows[0].sleepAvgHr, 51.7);
+});
+
 test('sleep start/end fall back to local timestamps (user zone) and drop inconsistent windows', () => {
   const local = parseSleepSummaries(
     { dailySleepDTO: { calendarDate: '2026-10-24', sleepStartTimestampLocal: '2026-10-23T23:10:00.0', sleepEndTimestampLocal: Date.UTC(2026, 9, 24, 6, 50) } },

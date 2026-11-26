@@ -104,7 +104,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       '@kingstinct/react-native-healthkit',
       {
         NSHealthShareUsageDescription:
-          'Road to Ironman lee tus entrenos y su frecuencia cardiaca, sueño, VFC, pulso en reposo, VO2máx y pasos (los que tu reloj sincroniza con Salud) para marcar sesiones como hechas y ajustar tu plan.',
+          'Road to Ironman lee tus entrenos y su frecuencia cardiaca, sueño, VFC, pulso en reposo, respiración durante el sueño, VO2máx y pasos (los que tu reloj sincroniza con Salud) para marcar sesiones como hechas, avisarte si quizá te estás poniendo malo y ajustar tu plan.',
         // Read-only, but the library links HealthKit's write APIs and App Store Connect rejects the
         // upload (ITMS-90683) without this key. iOS never shows it: the app never asks to write.
         NSHealthUpdateUsageDescription:

@@ -180,12 +180,14 @@ describe('v2: onboarding reset on upgrade', () => {
        where table_schema = 'public' and table_name = 'daily_metrics' and column_name like 'sleep\\_%' order by 1`,
     );
     assert.deepEqual(cols.map((c) => c.column_name), [
+      'sleep_avg_hr',
       'sleep_awake_min',
       'sleep_deep_min',
       'sleep_end',
       'sleep_hours',
       'sleep_light_min',
       'sleep_rem_min',
+      'sleep_respiration',
       'sleep_score',
       'sleep_start',
     ]);

@@ -24,6 +24,7 @@ import {
   type DayPlan,
 } from './briefingScript';
 import { diffDays, formatDuration } from './dates';
+import type { IllnessOutcome } from './illness';
 import type {
   Briefing,
   DailyMetrics,
@@ -63,7 +64,14 @@ export interface BriefingInput {
   raceDistance?: RaceDistance | null;
   /** The athlete's watch, for the "no sleep data yet" texts (absent/null: "tu reloj"). */
   watchBrand?: WatchBrand | null;
+  /**
+   * Last night's illness signal with the morning answer (domain/illness.ts): one
+   * sentence after the sleep and, when it may be the start of a cold, an easy focus.
+   */
+  illness?: IllnessOutcome | null;
 }
+
+const ILLNESS_FOCUS = 'Hoy mejor suave: cambia lo duro por algo tranquilo o descansa, y vigila cómo evoluciona.';
 
 const HEADLINE_MAX = 90;
 const LONG_SESSION_MIN = 90;
@@ -185,7 +193,8 @@ export function composeBriefing(input: BriefingInput): Briefing {
   const verdict = sleepVerdictOf(snapshot);
   const daysToRace = race && race.date >= date ? diffDays(race.date, date) : null;
   const plan = dayPlanOf(input.todayWorkouts, daysToRace === 0);
-  const focus = focusOf({ plan, verdict, daysToRace });
+  const unwell = input.illness?.kind === 'possible_illness' && plan.kind === 'train';
+  const focus = unwell ? ILLNESS_FOCUS : focusOf({ plan, verdict, daysToRace });
   const hasAnyMetrics = input.metrics.length > 0;
   const script = composeScript({
     date,
@@ -202,6 +211,7 @@ export function composeBriefing(input: BriefingInput): Briefing {
     together: input.social ? togetherOf(input.social.jointSessions, input.social.me, date) : NO_TOGETHER,
     speech: { thresholds: input.thresholds ?? null, raceDistance: input.raceDistance ?? race?.distance ?? null },
     watchBrand: input.watchBrand ?? null,
+    illness: input.illness?.message ?? null,
   });
   return {
     date,

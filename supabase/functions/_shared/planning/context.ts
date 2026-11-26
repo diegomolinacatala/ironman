@@ -18,12 +18,15 @@ import type { PhaseInfo } from './phase.ts';
 import { seasonOf, seasonView } from './season-view.ts';
 import type { SeasonView } from './season-view.ts';
 import type { PlanningReader } from './store.ts';
-import { mergeMetricsByDate, wellnessSignals } from './wellness.ts';
-import type { WellnessSignals } from './wellness.ts';
+import { illnessView, mergeMetricsByDate, wellnessSignals } from './wellness.ts';
+import type { IllnessView, WellnessSignals } from './wellness.ts';
 import { workoutView } from './workout-view.ts';
 import type { Detail, ViewContext, WorkoutView } from './workout-view.ts';
 
 export type { Detail, WorkoutView };
+
+/** Nights read for the illness signal's baseline (domain/illness.ts: median of up to 28 nights). */
+export const ILLNESS_BASELINE_DAYS = 28;
 
 export class NotFoundError extends Error {
   constructor(message: string) {
@@ -67,7 +70,13 @@ export interface PlanningContext {
   lifeEvents: Record<string, unknown>[];
   /** Busy intervals only: event titles never leave the account (they are not sent to any AI). */
   busy: BusyView[];
-  wellness: { readiness: WellnessSignals; checkins: Record<string, unknown>[]; metrics: Record<string, unknown>[] };
+  wellness: {
+    readiness: WellnessSignals;
+    /** Last night's possible-illness signal and the athlete's morning answer (null = nothing to say). */
+    illness: IllnessView | null;
+    checkins: Record<string, unknown>[];
+    metrics: Record<string, unknown>[];
+  };
   loadHistory: WeeklyLoad[];
   recentSessions?: WorkoutView[];
   nutrition?: Record<string, unknown>[];
@@ -173,7 +182,8 @@ async function loadRaw(reader: PlanningReader, opts: ContextOptions): Promise<Ra
     reader.listLifeEvents(opts.userId, historyFrom, windowEnd),
     reader.listBusyBlocks(opts.userId, zonedToUtc(weekStart, '00:00', tz), zonedToUtc(addDays(windowEnd, 1), '00:00', tz)),
     reader.listCheckins(opts.userId, addDays(today, -13), today),
-    reader.listMetrics(opts.userId, addDays(today, -13), today),
+    // 28 nights back: the illness signal's baseline (the rest of the wellness block reads the last 14 days).
+    reader.listMetrics(opts.userId, addDays(today, -ILLNESS_BASELINE_DAYS), today),
     opts.detail === 'detailed' ? reader.listNutrition(opts.userId, addDays(today, -2), today) : Promise.resolve([]),
     reader.listJointSessions(opts.userId, weekStart, windowEnd),
     reader.listFriends(opts.userId),
@@ -193,8 +203,12 @@ function wellnessBlock(raw: RawContext, detail: Detail): PlanningContext['wellne
   const days = detail === 'detailed' ? 14 : 7;
   const since = addDays(raw.today, -(days - 1));
   const metrics = mergeMetricsByDate(raw.metrics).filter((m) => m.date >= since);
+  const illness = illnessView(raw.metrics, raw.checkins, raw.today);
+  // The readiness baseline stays on the last 14 days (the extra nights are only the illness baseline).
+  const recent = raw.metrics.filter((m) => m.date >= addDays(raw.today, -13));
   return {
-    readiness: wellnessSignals(raw.metrics, raw.checkins, raw.today),
+    readiness: wellnessSignals(recent, raw.checkins, raw.today, illness),
+    illness,
     checkins: raw.checkins.filter((c) => c.date >= since).map((c) => ({ ...c })),
     metrics: metrics.map((m) => ({ ...m })),
   };
@@ -208,6 +222,7 @@ const NOTES = [
   'Las sesiones isKey=true son las clave de la semana: protégelas y ajusta antes las accesorias.',
   'athlete.availability.mode=auto (lo normal): no hay horas ni día de descanso fijados; entrena todo lo que permita el tiempo libre de busy hasta phase.targetMinutes, con hora en cada sesión. mode=manual: respeta sus horas, descanso y franjas.',
   'Las métricas del reloj (Garmin o COROS) guardadas aquí pueden ir con retraso respecto a sus conectores.',
+  'wellness.illness: si outcome=possible_illness, díselo con tacto usando su message («Puede que estés empezando a ponerte malo…»), propón suavizar la sesión dura de hoy (nunca la cambies sin que acepte) y no lo plantees como diagnóstico; si outcome=explained, explica la causa probable sin alarmar; si fine, mantén el plan.',
   'Ante dolor, lesión o enfermedad: prioriza la seguridad y recomienda consultar a un profesional sanitario.',
 ];
 

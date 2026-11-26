@@ -7,6 +7,7 @@ import {
   quantityToMeters,
   quantityToMinutes,
   sleepHoursByDate,
+  sleepWindowsByDate,
   statsByDate,
 } from '../health/mapping';
 
@@ -79,6 +80,25 @@ describe('sleepHoursByDate', () => {
   });
 });
 
+describe('sleepWindowsByDate', () => {
+  test('the main sleep from the first to the last asleep minute, awakenings inside, the afternoon nap left out', () => {
+    const samples = [
+      { startDate: new Date(2026, 9, 26, 23, 10), endDate: new Date(2026, 9, 27, 2, 0), value: 3 },
+      { startDate: new Date(2026, 9, 27, 2, 0), endDate: new Date(2026, 9, 27, 2, 40), value: 2 },
+      { startDate: new Date(2026, 9, 27, 2, 40), endDate: new Date(2026, 9, 27, 6, 55), value: 4 },
+      { startDate: new Date(2026, 9, 27, 15, 0), endDate: new Date(2026, 9, 27, 15, 30), value: 1 },
+      { startDate: new Date(2026, 9, 26, 22, 30), endDate: new Date(2026, 9, 27, 7, 15), value: 0 },
+    ];
+    expect(sleepWindowsByDate(samples)).toEqual({
+      '2026-10-27': { start: new Date(2026, 9, 26, 23, 10), end: new Date(2026, 9, 27, 6, 55) },
+    });
+  });
+
+  test('a night with no asleep samples has no window', () => {
+    expect(sleepWindowsByDate([{ startDate: new Date(2026, 9, 26, 23, 0), endDate: new Date(2026, 9, 27, 7, 0), value: 0 }])).toEqual({});
+  });
+});
+
 describe('daily metrics', () => {
   test('statsByDate keys buckets by local date', () => {
     const rows = [
@@ -111,6 +131,22 @@ describe('daily metrics', () => {
         stressAvg: null,
         trainingStatus: null,
       },
+    ]);
+  });
+
+  test('night vitals: both keys on every draft once they were read (null where a night has none)', () => {
+    const drafts = buildMetricsDrafts(['2026-10-26', '2026-10-27'], {
+      sleepHours: { '2026-10-26': 7, '2026-10-27': 6.5 },
+      restingHr: {},
+      hrvMs: {},
+      steps: {},
+      vo2max: {},
+      sleepRespiration: { '2026-10-27': 15.04 },
+      sleepAvgHr: { '2026-10-27': 55.66 },
+    });
+    expect(drafts.map((d) => [d.sleepRespiration, d.sleepAvgHr])).toEqual([
+      [null, null],
+      [15, 55.7],
     ]);
   });
 });

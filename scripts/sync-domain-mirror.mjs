@@ -21,7 +21,7 @@ const SRC = join(ROOT, 'src', 'domain');
 export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planning', 'domain');
 
 /** Modules copied whole (their imports must stay inside this list, `dates` or `types`). */
-const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'watchCompletion'];
+const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'watchCompletion', 'illness'];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
 const DATE_DECLS = [
@@ -86,6 +86,7 @@ const TYPES_MODULE = `${header('the domain types used by the mirrored modules')}
 export type {
   AthleteLevel,
   CompletedData,
+  IllnessAnswer,
   Intensity,
   ISODate,
   NumberRange,

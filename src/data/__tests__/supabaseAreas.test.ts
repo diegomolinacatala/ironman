@@ -98,6 +98,32 @@ describe('Supabase planning & wellness', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('saves the check-in and the night vitals even before the illness migration is deployed', async () => {
+    const MISSING = { data: null, error: { code: 'PGRST204', message: "Could not find the 'illness_answer' column", details: '', hint: '' } };
+    const SAVED = { data: { user_id: 'me', date: '2026-10-25', sleep_quality: 3, sleep_hours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, notes: null }, error: null };
+    const seen: Record<string, number> = { daily_checkins: 0, daily_metrics: 0 };
+    const responses = {};
+    for (const table of ['daily_checkins', 'daily_metrics'] as const) {
+      Object.defineProperty(responses, table, {
+        get: () => {
+          seen[table] = (seen[table] ?? 0) + 1;
+          if (seen[table] === 1) return MISSING;
+          return table === 'daily_checkins' ? SAVED : { data: null, error: null };
+        },
+      });
+    }
+    const { repo, calls } = repoWith(responses as FakeResponses);
+    const checkin = await repo.upsertCheckin({ date: '2026-10-25', sleepQuality: 3, sleepHours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, notes: null, illnessAnswer: 'symptoms' });
+    expect(checkin.fatigue).toBe(3);
+    const checkinRows = calls.filter((c) => c.target === 'daily_checkins').map((c) => chainArgs(c, 'upsert')?.[0] as Record<string, unknown>);
+    expect(checkinRows.map((r) => r.illness_answer)).toEqual(['symptoms', undefined]);
+    await repo.upsertMetrics([{ date: '2026-10-25', source: 'healthkit', hrvMs: 60, restingHr: 50, sleepHours: 7, sleepScore: null, bodyBattery: null, trainingReadiness: null, vo2max: null, steps: null, stressAvg: null, trainingStatus: null, sleepRespiration: 14.8, sleepAvgHr: 53 }]);
+    const metricRows = calls.filter((c) => c.target === 'daily_metrics').map((c) => (chainArgs(c, 'upsert')?.[0] as Record<string, unknown>[])[0]);
+    expect(metricRows[0]).toMatchObject({ sleep_respiration: 14.8, sleep_avg_hr: 53 });
+    expect(metricRows[1]).toMatchObject({ hrv_ms: 60, sleep_hours: 7 });
+    expect('sleep_respiration' in (metricRows[1] ?? {})).toBe(false);
+  });
+
   it('creates nutrition logs and rejects empty descriptions', async () => {
     const { repo } = repoWith({ nutrition_logs: { data: { id: 'n', user_id: 'me', date: '2026-10-25', meal: 'lunch', description: 'Arroz', kcal: 700, carbs_g: 90, protein_g: 40, fat_g: 15, created_at: ISO }, error: null } });
     expect((await repo.createNutrition({ date: '2026-10-25', meal: 'lunch', description: 'Arroz', kcal: 700 })).carbsG).toBe(90);

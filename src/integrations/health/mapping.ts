@@ -178,11 +178,8 @@ function unionMs(intervals: readonly Interval[]): number {
   return current ? total + (current.end - current.start) : total;
 }
 
-/**
- * Hours asleep per "wake-up" date. Overlapping samples from several sources
- * (iPhone + Garmin + Watch) are merged so the same night is not counted twice.
- */
-export function sleepHoursByDate(samples: readonly SleepSampleLike[]): Record<ISODate, number> {
+/** Asleep intervals grouped by "wake-up" date (samples ending before 18:00 belong to that day). */
+function asleepByDate(samples: readonly SleepSampleLike[]): Map<ISODate, Interval[]> {
   const byDate = new Map<ISODate, Interval[]>();
   for (const s of samples) {
     if (!ASLEEP_VALUES.includes(s.value)) continue;
@@ -192,10 +189,57 @@ export function sleepHoursByDate(samples: readonly SleepSampleLike[]): Record<IS
     const date = localDate(new Date(end + SLEEP_DAY_SHIFT_MS));
     byDate.set(date, [...(byDate.get(date) ?? []), { start, end }]);
   }
+  return byDate;
+}
+
+/**
+ * Hours asleep per "wake-up" date. Overlapping samples from several sources
+ * (iPhone + Garmin + Watch) are merged so the same night is not counted twice.
+ */
+export function sleepHoursByDate(samples: readonly SleepSampleLike[]): Record<ISODate, number> {
   const result: Record<ISODate, number> = {};
-  for (const [date, intervals] of byDate) {
+  for (const [date, intervals] of asleepByDate(samples)) {
     const hours = Math.min(MAX_SLEEP_HOURS, unionMs(intervals) / HOUR_MS);
     result[date] = Math.round(hours * 100) / 100;
+  }
+  return result;
+}
+
+export interface SleepWindow {
+  start: Date;
+  end: Date;
+}
+
+/** Asleep intervals closer than this belong to the same block (night awakenings); farther apart, a nap. */
+const SLEEP_BLOCK_GAP_MS = 90 * MINUTE_MS;
+
+function sleepBlocks(intervals: readonly Interval[]): Interval[][] {
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  const blocks: Interval[][] = [];
+  let end = Number.NEGATIVE_INFINITY;
+  for (const iv of sorted) {
+    const last = blocks[blocks.length - 1];
+    if (last && iv.start - end <= SLEEP_BLOCK_GAP_MS) last.push(iv);
+    else blocks.push([iv]);
+    end = Math.max(end, iv.end);
+  }
+  return blocks;
+}
+
+/**
+ * The main sleep of each "wake-up" date, first to last asleep minute (a nap on
+ * the same date is left out). Heart rate and breathing during sleep are read
+ * inside this window.
+ */
+export function sleepWindowsByDate(samples: readonly SleepSampleLike[]): Record<ISODate, SleepWindow> {
+  const result: Record<ISODate, SleepWindow> = {};
+  for (const [date, intervals] of asleepByDate(samples)) {
+    const main = sleepBlocks(intervals).reduce<Interval[] | null>((best, block) => (best === null || unionMs(block) > unionMs(best) ? block : best), null);
+    if (!main || main.length === 0) continue;
+    const start = Math.min(...main.map((iv) => iv.start));
+    const end = Math.max(...main.map((iv) => iv.end));
+    if (end - start > MAX_SLEEP_HOURS * HOUR_MS) continue;
+    result[date] = { start: new Date(start), end: new Date(end) };
   }
   return result;
 }
@@ -225,10 +269,22 @@ export interface DailyHealthSeries {
   hrvMs: Record<ISODate, number>;
   steps: Record<ISODate, number>;
   vo2max: Record<ISODate, number>;
+  /** Average breathing rate (breaths/min) and heart rate (bpm) inside each night's sleep window. */
+  sleepRespiration?: Record<ISODate, number>;
+  sleepAvgHr?: Record<ISODate, number>;
 }
 
 function round1(value: number | undefined): number | null {
   return isFiniteNumber(value) ? Math.round(value * 10) / 10 : null;
+}
+
+/**
+ * Night vitals, only when they were read: then every draft carries both keys
+ * (null when that night has none) so the batched upsert writes the same columns.
+ */
+function nightVitals(series: DailyHealthSeries, date: ISODate): Pick<MetricsDraft, 'sleepRespiration' | 'sleepAvgHr'> {
+  if (!series.sleepRespiration && !series.sleepAvgHr) return {};
+  return { sleepRespiration: round1(series.sleepRespiration?.[date]), sleepAvgHr: round1(series.sleepAvgHr?.[date]) };
 }
 
 /** One `MetricsDraft` (source 'healthkit') per date that has at least one value. */
@@ -248,9 +304,16 @@ export function buildMetricsDrafts(dates: readonly ISODate[], series: DailyHealt
       steps: isFiniteNumber(steps) && steps > 0 ? Math.round(steps) : null,
       stressAvg: null,
       trainingStatus: null,
+      ...nightVitals(series, date),
     };
     const hasValue =
-      draft.hrvMs != null || draft.restingHr != null || draft.sleepHours != null || draft.vo2max != null || draft.steps != null;
+      draft.hrvMs != null ||
+      draft.restingHr != null ||
+      draft.sleepHours != null ||
+      draft.vo2max != null ||
+      draft.steps != null ||
+      draft.sleepRespiration != null ||
+      draft.sleepAvgHr != null;
     return hasValue ? [draft] : [];
   });
 }

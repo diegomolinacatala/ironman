@@ -119,6 +119,8 @@ export interface CheckinRow {
   stress: number;
   motivation: number;
   notes: string | null;
+  /** `20261126000200_illness_signal.sql`: answer to the illness question; absent before the migration. */
+  illness_answer?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -144,6 +146,9 @@ export interface MetricsRow {
   sleep_awake_min?: NumericValue;
   sleep_start?: string | null;
   sleep_end?: string | null;
+  /** `20261126000200_illness_signal.sql`: breathing rate and heart rate during that night. */
+  sleep_respiration?: NumericValue;
+  sleep_avg_hr?: NumericValue;
   raw?: unknown;
   updated_at?: string;
 }

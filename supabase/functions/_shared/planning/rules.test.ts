@@ -9,7 +9,7 @@ import { estimateTss, intensityFromEffort, lifeEventLoad, weeklyLoadHistory, wee
 import { compatibleSport, matchActivity } from './match.ts';
 import { nextRace, phaseFor } from './phase.ts';
 import { commonSlots, friendBusyIntervals, myBusyIntervals, sameSportDays } from './slots.ts';
-import { mergeMetricsByDate, wellnessSignals } from './wellness.ts';
+import { illnessView, mergeMetricsByDate, wellnessSignals } from './wellness.ts';
 
 const race = (date: string, distance: Race['distance'], priority: Race['priority'] = 'A'): Race => ({
   id: `race-${date}`,
@@ -199,4 +199,30 @@ test('device export builds Garmin-like workouts with the app zones as targets', 
   assert.equal(toGarminWorkouts(workout({ sport: 'rest', durationMin: 0 }), {}).length, 0);
   assert.equal(defaultSteps(20, 'endurance').length, 1);
   assert.match(deviceSummary(workout({ sport: 'run' }), thresholds), /^Carrera · Rodaje Z2 · 50' · Fondo \(Z2\) · Z2 · 145–151 ppm · 5:08–5:48 \/km · RPE 3–4$/);
+});
+
+test('illness view: last night against the 14-28 night baseline, decided by the morning answer', () => {
+  const base = { source: 'garmin' as const, sleepScore: null, bodyBattery: null, trainingReadiness: null, vo2max: null, steps: null, stressAvg: null, trainingStatus: null, sleepHours: 7.5 };
+  const metrics = Array.from({ length: 20 }, (_, i) => ({
+    ...base,
+    date: `2026-10-${String(2 + i).padStart(2, '0')}`,
+    hrvMs: 60,
+    restingHr: 48,
+    sleepRespiration: 14.5,
+    sleepAvgHr: 52,
+  }));
+  metrics.push({ ...base, date: '2026-10-22', hrvMs: 59, restingHr: 49, sleepRespiration: 15.8, sleepAvgHr: 53 });
+  const checkin = { date: '2026-10-22', sleepQuality: 3, sleepHours: 7, fatigue: 2, soreness: 2, stress: 2, motivation: 4, notes: null };
+  assert.equal(illnessView(metrics, [], '2026-10-22')?.outcome, 'unanswered');
+  const fine = illnessView(metrics, [{ ...checkin, illnessAnswer: 'fine' }], '2026-10-22');
+  assert.equal(fine?.outcome, 'fine');
+  assert.equal(fine?.signal, 'watch');
+  assert.equal(wellnessSignals(metrics, [checkin], '2026-10-22', fine).level, 'green');
+  const sick = illnessView(metrics, [{ ...checkin, illnessAnswer: 'symptoms' }], '2026-10-22');
+  assert.equal(sick?.outcome, 'possible_illness');
+  const level = wellnessSignals(metrics, [checkin], '2026-10-22', sick);
+  assert.equal(level.level, 'amber');
+  assert.ok(level.signals.includes(sick?.factor ?? '?'));
+  // Normal night and no symptoms: nothing to say.
+  assert.equal(illnessView(metrics.slice(0, -1), [], '2026-10-21'), null);
 });

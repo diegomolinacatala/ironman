@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 import { addDays, diffDays, startOfWeek } from '@/domain/dates';
+import { illnessSignal } from '@/domain/illness';
 
 import { DEMO_USERS } from '../demo/ids';
 import { WEDNESDAY, resetStorage, signedInRepo } from './demoTestUtils';
@@ -80,6 +81,10 @@ describe('demo seed (relative to today)', () => {
     expect(metrics.every((m) => (m.sleepDeepMin ?? 0) >= 60 && (m.sleepDeepMin ?? 0) <= 100)).toBe(true);
     expect(metrics.every((m) => (m.sleepRemMin ?? 0) >= 80 && (m.sleepRemMin ?? 0) <= 120)).toBe(true);
     expect(metrics.every((m) => (m.sleepAwakeMin ?? 0) >= 10 && (m.sleepAwakeMin ?? 0) <= 30)).toBe(true);
+    expect(metrics.every((m) => (m.sleepRespiration ?? 0) >= 14 && (m.sleepRespiration ?? 0) <= 15)).toBe(true);
+    expect(metrics.every((m) => (m.sleepAvgHr ?? 0) >= (m.restingHr ?? 0) + 3)).toBe(true);
+    // The demo never asks whether you are getting ill.
+    expect(illnessSignal(metrics, TODAY).level).toBe('none');
     const last = metrics[metrics.length - 1];
     expect(last?.date).toBe(TODAY);
     const minutes = (Date.parse(last?.sleepEnd ?? '') - Date.parse(last?.sleepStart ?? '')) / 60_000;

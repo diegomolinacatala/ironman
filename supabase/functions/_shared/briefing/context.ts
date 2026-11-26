@@ -9,13 +9,13 @@
  * Compact and in the athlete's local time.
  */
 import { addDays, DEFAULT_TZ, diffDays, startOfWeek, todayIn, weekdayOf, WEEKDAYS_ES, zonedToUtc } from '../dates.ts';
-import { busyView, NotFoundError } from '../planning/context.ts';
+import { busyView, ILLNESS_BASELINE_DAYS, NotFoundError } from '../planning/context.ts';
 import { lifeEventLabel, raceDistanceLabel } from '../planning/labels.ts';
 import { workoutLoad } from '../planning/load.ts';
 import { nextRace, phaseFor } from '../planning/phase.ts';
 import type { PlanningReader } from '../planning/store.ts';
-import { wellnessSignals } from '../planning/wellness.ts';
-import type { WellnessSignals } from '../planning/wellness.ts';
+import { illnessView, wellnessSignals } from '../planning/wellness.ts';
+import type { IllnessView, WellnessSignals } from '../planning/wellness.ts';
 import type {
   BusyBlock,
   DailyCheckin,
@@ -61,6 +61,8 @@ export interface BriefingContext {
   /** Prompt view of `sleep` (local times, duration text, HRV vs baseline %). */
   sleepView: Record<string, unknown> | null;
   recovery: WellnessSignals;
+  /** Last night's possible-illness signal with the morning check-in answer (null = nothing to say). */
+  illness: IllnessView | null;
   todayWorkouts: Record<string, unknown>[];
   tomorrowWorkouts: Record<string, unknown>[];
   yesterday: { sessions: Record<string, unknown>[]; totalMin: number; load: number };
@@ -123,7 +125,8 @@ async function loadData(reader: BriefingReader, opts: BriefingContextOptions): P
     reader.listLifeEvents(userId, date, date),
     reader.listBusyBlocks(userId, zonedToUtc(date, '00:00', tz), zonedToUtc(tomorrow, '00:00', tz)),
     reader.listCheckins(userId, addDays(date, -7), date),
-    reader.listMetrics(userId, addDays(date, -14), date),
+    // 28 nights back for the illness baseline; sleep and recovery read their own 7-14 nights.
+    reader.listMetrics(userId, addDays(date, -ILLNESS_BASELINE_DAYS), date),
     reader.listJointSessions(userId, date, addDays(date, INVITE_HORIZON_DAYS - 1)),
     reader.listWeekPlans(userId, monday, monday),
   ]);
@@ -158,6 +161,8 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
   const race = nextRace(data.races, date);
   const view: SessionView = { thresholds: data.profile.thresholds, raceDistance: race?.distance ?? null };
   const sleep = sleepSnapshot(data.metrics, date);
+  const illness = illnessView(data.metrics, data.checkins, date);
+  const recent = data.metrics.filter((m) => m.date >= addDays(date, -14));
   return {
     date,
     weekday: WEEKDAYS_ES[weekdayOf(date)],
@@ -166,7 +171,8 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
     athlete: { name: firstName(data.profile.displayName), coachNotes: data.profile.coachNotes },
     sleep,
     sleepView: sleepForPrompt(sleep, data.tz),
-    recovery: wellnessSignals(data.metrics, data.checkins, date),
+    recovery: wellnessSignals(recent, data.checkins, date, illness),
+    illness,
     todayWorkouts: sessionsOn(data.workouts, date).map((w) => todaySession(w, view)),
     tomorrowWorkouts: sessionsOn(data.workouts, addDays(date, 1)).map((w) => tomorrowSession(w, view)),
     yesterday: yesterdayView(data, date, view),
@@ -188,6 +194,7 @@ export function promptPayload(ctx: BriefingContext): Record<string, unknown> {
     athlete: ctx.athlete,
     sleepLastNight: ctx.sleepView,
     recovery: { level: ctx.recovery.level, signals: ctx.recovery.signals },
+    ...(ctx.illness ? { illness: { outcome: ctx.illness.outcome, answer: ctx.illness.answer, message: ctx.illness.message, reasons: ctx.illness.reasons } } : {}),
     today: ctx.todayWorkouts,
     tomorrow: ctx.tomorrowWorkouts,
     yesterday: ctx.yesterday,

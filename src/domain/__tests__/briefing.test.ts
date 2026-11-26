@@ -2,6 +2,7 @@ import { composeBriefing, sleepSnapshotFrom, sleepVerdictOf, type BriefingInput 
 import { wordCount } from '../briefingSpeech';
 import { buildSession } from '../sessions';
 import { addDays } from '../dates';
+import { POSSIBLE_ILLNESS_MESSAGE, type IllnessOutcome } from '../illness';
 import type { DailyMetrics, SleepSnapshot } from '../types';
 import { makeMetrics, makeRace, makeWorkout } from './fixtures';
 
@@ -350,5 +351,40 @@ describe('composeBriefing as a coach', () => {
     expect(b.script).toContain('Tu objetivo: un esfuerzo de ocho a nueve sobre diez, por sensaciones.');
     expect(b.script).toContain('La parte principal son diez series de un minuto y quince segundos en zona cuatro.');
     expect(b.script).not.toMatch(/\d/);
+  });
+});
+
+describe('illness signal in the local briefing', () => {
+  const symptoms: IllnessOutcome = {
+    kind: 'possible_illness',
+    level: 'likely',
+    answer: 'symptoms',
+    message: POSSIBLE_ILLNESS_MESSAGE,
+    factor: 'Respiración y pulso de esta noche altos y notas síntomas',
+    reasons: [],
+  };
+
+  it('says it with tact right after the sleep and makes the focus easy', () => {
+    const plain = composeBriefing(input());
+    const b = composeBriefing(input({ illness: symptoms }));
+    expect(b.script).toContain(POSSIBLE_ILLNESS_MESSAGE);
+    // Right after the sleep: everything before it is the plain briefing's opening.
+    const before = b.script.slice(0, b.script.indexOf(POSSIBLE_ILLNESS_MESSAGE)).trim();
+    expect(plain.script.startsWith(before)).toBe(true);
+    expect(b.focus).toBe('Hoy mejor suave: cambia lo duro por algo tranquilo o descansa, y vigila cómo evoluciona.');
+    expect(b.script).not.toMatch(/\d/);
+  });
+
+  it('an explained night is one calm sentence and keeps the usual focus', () => {
+    const explained: IllnessOutcome = {
+      ...symptoms,
+      kind: 'explained',
+      answer: 'alcohol',
+      message: 'Tu respiración y tu pulso de esta noche están más altos de lo normal, seguramente por el alcohol o la cena tardía: no es para alarmarse.',
+    };
+    const b = composeBriefing(input({ illness: explained }));
+    expect(b.script).toContain('seguramente por el alcohol o la cena tardía');
+    expect(b.script).not.toMatch(/ponerte malo/);
+    expect(b.focus).toBe(composeBriefing(input()).focus);
   });
 });

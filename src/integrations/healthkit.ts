@@ -10,6 +10,7 @@ import {
   isHealthDataAvailable,
   queryCategorySamples,
   queryStatisticsCollectionForQuantity,
+  queryStatisticsForQuantity,
   queryWorkoutSamples,
   requestAuthorization,
   type QuantityTypeIdentifier,
@@ -30,9 +31,11 @@ import {
   quantityToMeters,
   quantityToMinutes,
   sleepHoursByDate,
+  sleepWindowsByDate,
   statsByDate,
   type DailyHealthSeries,
   type DailyStatLike,
+  type SleepWindow,
 } from './health/mapping';
 import { distinctSourceNames, emptyHealthResult, type HealthSyncResult } from './health/result';
 import {
@@ -49,7 +52,8 @@ export type { HealthSyncResult } from './health/result';
 /**
  * Exactly the types this file queries (App Review: ask only for what you read
  * and keep NSHealthShareUsageDescription in sync): workouts and their heart
- * rate, resting heart rate, HRV, sleep, VO2max and steps.
+ * rate, resting heart rate, HRV, sleep, breathing rate (during sleep, for the
+ * illness signal), VO2max and steps.
  */
 export const HEALTH_READ_TYPES = [
   'HKWorkoutTypeIdentifier',
@@ -57,6 +61,7 @@ export const HEALTH_READ_TYPES = [
   'HKQuantityTypeIdentifierRestingHeartRate',
   'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
   'HKCategoryTypeIdentifierSleepAnalysis',
+  'HKQuantityTypeIdentifierRespiratoryRate',
   'HKQuantityTypeIdentifierVO2Max',
   'HKQuantityTypeIdentifierStepCount',
 ] as const;
@@ -141,11 +146,13 @@ async function dailyStat<T extends QuantityTypeIdentifier>(
 
 interface SleepRead {
   hours: Record<ISODate, number>;
+  /** Main sleep of each wake-up date: where heart rate and breathing during sleep are read. */
+  windows: Record<ISODate, SleepWindow>;
   /** Apps that wrote those nights ("COROS"…). */
   sources: string[];
 }
 
-const NO_SLEEP: SleepRead = { hours: {}, sources: [] };
+const NO_SLEEP: SleepRead = { hours: {}, windows: {}, sources: [] };
 
 async function readSleep(from: Date, to: Date): Promise<SleepRead> {
   const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
@@ -153,10 +160,46 @@ async function readSleep(from: Date, to: Date): Promise<SleepRead> {
     ascending: true,
     filter: { date: { startDate: new Date(from.getTime() - SLEEP_LOOKBACK_MS), endDate: to } },
   });
+  const nights = samples.map((s) => ({ startDate: s.startDate, endDate: s.endDate, value: Number(s.value) }));
   return {
-    hours: sleepHoursByDate(samples.map((s) => ({ startDate: s.startDate, endDate: s.endDate, value: Number(s.value) }))),
+    hours: sleepHoursByDate(nights),
+    windows: sleepWindowsByDate(nights),
     sources: distinctSourceNames(samples.map((s) => s.sourceRevision?.source?.name)),
   };
+}
+
+type NightVitalId = 'HKQuantityTypeIdentifierHeartRate' | 'HKQuantityTypeIdentifierRespiratoryRate';
+
+/** Average of a per-minute quantity inside one sleep window (null when Health has none). */
+async function averageDuring(identifier: NightVitalId, window: SleepWindow): Promise<number | null> {
+  const stats = await queryStatisticsForQuantity(identifier, ['discreteAverage'], {
+    filter: { date: { startDate: window.start, endDate: window.end } },
+    unit: 'count/min',
+  });
+  const value = stats.averageQuantity?.quantity;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/** Heart rate and breathing rate during each night's sleep (illness signal, domain/illness.ts). */
+async function readNightVitals(windows: Record<ISODate, SleepWindow>): Promise<Pick<DailyHealthSeries, 'sleepAvgHr' | 'sleepRespiration'>> {
+  const nights = Object.entries(windows);
+  const rows = await Promise.all(
+    nights.map(async ([date, window]) => {
+      const [hr, breathing] = await Promise.all([
+        safely<number | null>('sleep hr', null, () => averageDuring('HKQuantityTypeIdentifierHeartRate', window)),
+        safely<number | null>('sleep respiration', null, () => averageDuring('HKQuantityTypeIdentifierRespiratoryRate', window)),
+      ]);
+      return { date, hr, breathing };
+    }),
+  );
+  const pick = (read: (row: (typeof rows)[number]) => number | null): Record<ISODate, number> =>
+    Object.fromEntries(
+      rows.flatMap((row): [ISODate, number][] => {
+        const value = read(row);
+        return value === null ? [] : [[row.date, value]];
+      }),
+    );
+  return { sleepAvgHr: pick((r) => r.hr), sleepRespiration: pick((r) => r.breathing) };
 }
 
 interface DailyRead {
@@ -172,7 +215,8 @@ async function readDailySeries(from: Date, to: Date): Promise<DailyRead> {
     safely('vo2max', {}, () => dailyStat('HKQuantityTypeIdentifierVO2Max', 'discreteAverage', 'ml/(kg*min)', from, to)),
     safely('sleep', NO_SLEEP, () => readSleep(from, to)),
   ]);
-  return { series: { restingHr, hrvMs, steps, vo2max, sleepHours: sleep.hours }, sleepSources: sleep.sources };
+  const vitals = await readNightVitals(sleep.windows);
+  return { series: { restingHr, hrvMs, steps, vo2max, sleepHours: sleep.hours, ...vitals }, sleepSources: sleep.sources };
 }
 
 async function readActivities(from: Date, to: Date): Promise<HealthActivity[]> {

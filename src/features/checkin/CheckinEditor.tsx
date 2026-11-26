@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { formatDayLabel } from '@/domain/dates';
+import type { IllnessSignal } from '@/domain/illness';
 import { computeReadiness, type Readiness } from '@/domain/readiness';
 import type { DailyMetrics, ISODate } from '@/domain/types';
 import { checkinDraftSchema, firstError } from '@/domain/validation';
@@ -13,12 +14,14 @@ import { ModalCancel } from '@/features/workouts/ModalClose';
 import { errorMessage, logger } from '@/lib/logger';
 import { Button, ScorePicker, Screen, Stepper, Text, TextField, haptics, space } from '@/ui';
 
-import { formToCheckinDraft, sleepHoursLabel, type CheckinFormState } from './checkinForm';
+import { formToCheckinDraft, missingIllnessAnswer, sleepHoursLabel, type CheckinFormState } from './checkinForm';
 import { CheckinResult } from './CheckinResult';
+import { IllnessQuestion } from './IllnessQuestion';
 import { MetricsToday } from './MetricsToday';
 import { useTodayPlan } from './useTodayPlan';
 
 export const MISSING_SCORES_ERROR = 'Responde las cinco preguntas (un toque en cada fila).';
+export const MISSING_ILLNESS_ERROR = 'Dinos cómo te encuentras (la primera pregunta).';
 
 export interface CheckinEditorProps {
   initial: CheckinFormState;
@@ -26,6 +29,8 @@ export interface CheckinEditorProps {
   today: ISODate;
   metrics: DailyMetrics[];
   todayMetrics: DailyMetrics | null;
+  /** Last night's illness signal (domain/illness.ts): the extra question shows when it is up. */
+  illness?: IllnessSignal | null;
 }
 
 /**
@@ -33,7 +38,7 @@ export interface CheckinEditorProps {
  * refetch that follows a save (which turns "new" into "edit") cannot remount
  * it and drop the result.
  */
-export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: CheckinEditorProps) {
+export function CheckinEditor({ initial, date, today, metrics, todayMetrics, illness = null }: CheckinEditorProps) {
   const [state, setState] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Readiness | null>(null);
@@ -52,7 +57,7 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
 
   const save = async () => {
     const draft = formToCheckinDraft(state);
-    if (!draft) return fail(MISSING_SCORES_ERROR);
+    if (!draft) return fail(missingIllnessAnswer(state) ? MISSING_ILLNESS_ERROR : MISSING_SCORES_ERROR);
     const parsed = checkinDraftSchema.safeParse(draft);
     if (!parsed.success) return fail(firstError(parsed) ?? 'Revisa los datos del check-in.');
     setError(null);
@@ -90,6 +95,9 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
         30 segundos. Con esto y tus datos del reloj ajustamos la carga del día.
       </Text>
       <MetricsToday metrics={todayMetrics} />
+      {state.illnessAsked ? (
+        <IllnessQuestion signal={illness} value={state.illnessAnswer} onChange={(v) => set('illnessAnswer', v)} />
+      ) : null}
       <CheckinFields state={state} set={set} />
     </FormScreen>
   );

@@ -10,6 +10,7 @@ import { validateCoaching } from './changes';
 import { diffDays, isISODate, timeToMinutes, weekdayOf } from './dates';
 import {
   BODY_AREAS,
+  ILLNESS_ANSWERS,
   INTENSITIES,
   LIFE_EVENT_KINDS,
   MEAL_SLOTS,
@@ -185,6 +186,7 @@ export const checkinDraftSchema = z.object({
   stress: score5('Estrés'),
   motivation: score5('Motivación'),
   notes: z.string().max(1000, { error: 'Notas: máximo 1000 caracteres' }).nullable(),
+  illnessAnswer: z.enum(ILLNESS_ANSWERS, { error: 'Elige cómo te encuentras' }).nullable().optional(),
 });
 
 /** What the athlete logs when completing a session (CompleteSheet, imports): sensaciones 1–5, RPE 1–10. */

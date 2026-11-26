@@ -12,7 +12,7 @@ import { nextRace } from '@/domain/periodization';
 import type { Briefing, ISODate, MealAnalysis, MealAnalysisInput, MealSlot, UUID } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../../repository';
-import { briefingAthleteFields } from '../../supabase/briefingApi';
+import { briefingAthleteFields, briefingIllness } from '../../supabase/briefingApi';
 import { cleanMealInput } from '../../supabase/mealApi';
 import type { DemoBriefing, DemoDb } from '../db';
 import { listJointFor } from '../jointOps';
@@ -47,14 +47,18 @@ function briefingFrom(db: DemoDb, me: UUID, date: ISODate, now: Date): Briefing 
     db.races.filter((r) => r.userId === me),
     date,
   );
+  // 28 nights back: the illness signal's baseline (the HRV baseline reads the last 7).
+  const metrics = db.metrics.filter((m) => m.userId === me && m.date >= addDays(date, -28) && m.date <= date);
+  const answer = db.checkins.find((c) => c.userId === me && c.date === date)?.illnessAnswer ?? null;
   return composeBriefing({
     date,
     name: profile?.displayName ?? '',
-    metrics: db.metrics.filter((m) => m.userId === me && m.date >= addDays(date, -7) && m.date <= date),
+    metrics,
     todayWorkouts: mine.filter((w) => w.date === date),
     tomorrowWorkouts: mine.filter((w) => w.date === tomorrow),
     race,
     now,
+    illness: briefingIllness(metrics, date, answer),
     ...briefingAthleteFields(profile, race),
     social: { me, jointSessions: listJointFor(db, me, { from: date, to: addDays(date, INVITE_HORIZON_DAYS - 1) }) },
   });

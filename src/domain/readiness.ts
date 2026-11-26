@@ -2,9 +2,15 @@
  * Morning readiness traffic light (docs/research/02 §11.8): Garmin / COROS /
  * HealthKit metrics + subjective check-in. Missing signals are ignored, never
  * invented. `readinessAdvice` turns it into what to do with today's session.
+ *
+ * Illness (domain/illness.ts): when last night's breathing or pulse is up, the
+ * check-in asks how the athlete feels and the answer decides: symptoms turn the
+ * day amber (red when the signal is 'likely') with "Puede que estés empezando a
+ * ponerte malo…"; alcohol, heat, stress or "bien" only add a note.
  */
 import { READINESS } from './constants';
 import { addDays } from './dates';
+import { ILLNESS_SIGNAL, illnessOutcome, illnessSignal, POSSIBLE_ILLNESS_MESSAGE, type IllnessOutcome, type IllnessSignal } from './illness';
 import type { DailyCheckin, DailyMetrics, ISODate, MetricsSource } from './types';
 
 export type ReadinessLevel = 'green' | 'amber' | 'red' | 'unknown';
@@ -16,6 +22,8 @@ export interface Readiness {
   /** Spanish, e.g. "VFC 12 % bajo tu media". */
   factors: string[];
   recommendation: string;
+  /** Last night's illness signal with the athlete's answer; absent when there is nothing to say. */
+  illness?: IllnessOutcome;
 }
 
 export interface ReadinessInput {
@@ -176,6 +184,23 @@ function checkinSignals(checkin: DailyCheckin | null): Signals {
   return { ...EMPTY, red, amber: body ? [body] : [], notes, hasData: true };
 }
 
+/**
+ * Symptoms make the day amber on their own (red with a 'likely' signal: research
+ * 02 §11.6 IL1, easy only); any other answer is a note. Without an answer yet, a
+ * note only for what the traffic light does not show already (breathing, pulse
+ * during sleep): a high resting HR is its own factor.
+ */
+function illnessSignals(outcome: IllnessOutcome | null, signal: IllnessSignal): Signals {
+  if (!outcome) return EMPTY;
+  if (outcome.kind === 'possible_illness') {
+    return outcome.level === 'likely'
+      ? { ...EMPTY, hasData: true, red: [outcome.factor] }
+      : { ...EMPTY, hasData: true, amberRules: [outcome.factor] };
+  }
+  const news = signal.breathingUp || (signal.sleepHrDelta ?? 0) >= ILLNESS_SIGNAL.heartRateRise;
+  return outcome.kind === 'unanswered' && !news ? EMPTY : { ...EMPTY, hasData: true, notes: [outcome.factor] };
+}
+
 function ownScore(s: Signals, checkin: DailyCheckin | null): number {
   let score = 82 - 15 * (s.amber.length + s.amberRules.length) - 35 * s.red.length;
   if (checkin) score += (3 - checkin.fatigue) * 3 + (checkin.sleepQuality - 3) * 3 + (checkin.motivation - 3) * 2;
@@ -212,6 +237,9 @@ export function computeReadiness(input: ReadinessInput): Readiness {
   const yesterday = addDays(today, -1);
   const useYesterday = !hasMetricsOn(metrics, today) && hasMetricsOn(metrics, yesterday);
   const metricsDay = useYesterday ? yesterday : today;
+  // Only last night counts for illness: an old high night never raises today's question.
+  const night = illnessSignal(metrics, today);
+  const illness = illnessOutcome(night, checkin?.illnessAnswer ?? null);
   const signals = [
     garminSignals(metrics, metricsDay),
     hrvSignals(metrics, metricsDay),
@@ -219,6 +247,7 @@ export function computeReadiness(input: ReadinessInput): Readiness {
     // Sleep is always last night's: yesterday's row describes the night before.
     sleepSignals(metrics, today, checkin),
     checkinSignals(checkin),
+    illnessSignals(illness, night),
     useYesterday ? { ...EMPTY, notes: [YESTERDAY_DATA_NOTE] } : EMPTY,
   ].reduce(merge, EMPTY);
   if (!signals.hasData) return { score: null, level: 'unknown', factors: [], recommendation: RECOMMENDATIONS.unknown };
@@ -234,7 +263,8 @@ export function computeReadiness(input: ReadinessInput): Readiness {
     score: clampScore(score),
     level,
     factors: [...signals.red, ...signals.amber, ...signals.amberRules, ...signals.notes],
-    recommendation: RECOMMENDATIONS[key],
+    recommendation: illness?.kind === 'possible_illness' ? POSSIBLE_ILLNESS_MESSAGE : RECOMMENDATIONS[key],
+    ...(illness ? { illness } : {}),
   };
 }
 

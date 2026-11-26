@@ -22,11 +22,17 @@ const mockQueryStats = jest.fn(async (..._args: unknown[]) => [
 ]);
 
 const mockQuerySleep = jest.fn(async (..._args: unknown[]): Promise<unknown[]> => []);
+/** One statistics query per night and type: heart rate 52, breathing 14,6 during sleep. */
+const mockNightStat = jest.fn(async (identifier: string, ..._rest: unknown[]) => ({
+  averageQuantity: { quantity: identifier === 'HKQuantityTypeIdentifierRespiratoryRate' ? 14.62 : 52.3, unit: 'count/min' },
+  sources: [],
+}));
 
 jest.mock('@kingstinct/react-native-healthkit', () => ({
   isHealthDataAvailable: () => true,
   requestAuthorization: (opts: unknown) => mockRequestAuthorization(opts),
   queryStatisticsCollectionForQuantity: (...args: unknown[]) => mockQueryStats(...args),
+  queryStatisticsForQuantity: (identifier: string, ...rest: unknown[]) => mockNightStat(identifier, ...rest),
   queryCategorySamples: (...args: unknown[]) => mockQuerySleep(...args),
   queryWorkoutSamples: async () => [],
 }));
@@ -99,6 +105,22 @@ describe('syncHealth', () => {
     expect(await getHealthSources(BEA)).toEqual([]);
   });
 
+  test('reads heart rate and breathing inside the night (illness signal)', async () => {
+    await setHealthEnabled(ANA, true);
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 30);
+    const end = new Date(start.getTime() + 6 * 3_600_000);
+    mockQuerySleep.mockResolvedValueOnce([{ startDate: start, endDate: end, value: 3 }]);
+    const { repo, upserted } = fakeRepo([ANA]);
+    await syncHealth(repo, { days: 1 });
+    expect(upserted[0]?.[0]).toMatchObject({ sleepRespiration: 14.6, sleepAvgHr: 52.3 });
+    const asked = mockNightStat.mock.calls.map((c) => c[0]).sort();
+    expect(asked).toEqual(['HKQuantityTypeIdentifierHeartRate', 'HKQuantityTypeIdentifierRespiratoryRate']);
+    const options = mockNightStat.mock.calls[0]?.[2] as { filter: { date: { startDate: Date; endDate: Date } }; unit: string };
+    expect(options.filter.date).toEqual({ startDate: start, endDate: end });
+    expect(options.unit).toBe('count/min');
+  });
+
   test('never writes when the account changed while HealthKit was being read', async () => {
     await setHealthEnabled(ANA, true);
     const { repo, upserted } = fakeRepo([ANA, BEA]);
@@ -115,6 +137,7 @@ describe('HEALTH_READ_TYPES', () => {
         'HKCategoryTypeIdentifierSleepAnalysis',
         'HKQuantityTypeIdentifierHeartRate',
         'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
+        'HKQuantityTypeIdentifierRespiratoryRate',
         'HKQuantityTypeIdentifierRestingHeartRate',
         'HKQuantityTypeIdentifierStepCount',
         'HKQuantityTypeIdentifierVO2Max',

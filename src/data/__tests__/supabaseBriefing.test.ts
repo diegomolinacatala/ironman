@@ -168,24 +168,40 @@ describe('Supabase getBriefing', () => {
 });
 
 describe('Supabase listMetrics before the v2 migration', () => {
-  it('retries without the sleep columns when they do not exist yet', async () => {
+  /** `daily_metrics` answers "column does not exist" to the first `failures` selects. */
+  function metricsClient(failures: number) {
     let attempt = 0;
     const responses = {};
     Object.defineProperty(responses, 'daily_metrics', {
       get: () => {
         attempt += 1;
-        return attempt === 1
-          ? { data: null, error: { code: '42703', message: 'column daily_metrics.sleep_deep_min does not exist', details: '', hint: '' } }
+        return attempt <= failures
+          ? { data: null, error: { code: '42703', message: 'column daily_metrics.sleep_x does not exist', details: '', hint: '' } }
           : { data: [{ ...METRICS_ROW, sleep_deep_min: undefined }], error: null };
       },
     });
-    const { client, calls } = fakeClient(responses);
+    return fakeClient(responses);
+  }
+
+  it('retries without the sleep columns when they do not exist yet', async () => {
+    const { client, calls } = metricsClient(2);
     const metrics = await createSupabaseRepository({ client, now: () => NOW }).listMetrics({ from: DATE, to: DATE });
     expect(metrics).toHaveLength(1);
     expect(metrics[0]).toMatchObject({ hrvMs: 68, sleepDeepMin: null });
     const selects = calls.filter((c) => c.target === 'daily_metrics').map((c) => String(chainArgs(c, 'select')?.[0]));
-    expect(selects[0]).toContain('sleep_deep_min');
-    expect(selects[1]).not.toContain('sleep_deep_min');
+    expect(selects[0]).toContain('sleep_respiration');
+    expect(selects[1]).toContain('sleep_deep_min');
+    expect(selects[1]).not.toContain('sleep_respiration');
+    expect(selects[2]).not.toContain('sleep_deep_min');
+  });
+
+  it('keeps the sleep stages on a database without the illness columns', async () => {
+    const { client, calls } = metricsClient(1);
+    await createSupabaseRepository({ client, now: () => NOW }).listMetrics({ from: DATE, to: DATE });
+    const selects = calls.filter((c) => c.target === 'daily_metrics').map((c) => String(chainArgs(c, 'select')?.[0]));
+    expect(selects).toHaveLength(2);
+    expect(selects[1]).toContain('sleep_deep_min');
+    expect(selects[1]).not.toContain('sleep_avg_hr');
   });
 });
 
@@ -199,7 +215,8 @@ describe('Supabase generateBriefing', () => {
     expect(briefing.headline).toBe("Dormiste 7 h 20' · Hoy rodaje suave 50'");
     expect(briefing.script).toMatch(/^Buenos días, Diego\./);
     const metricsCall = calls.find((c) => c.target === 'daily_metrics');
-    expect(chainArgs(metricsCall, 'gte')).toEqual(['date', '2026-10-20']);
+    // 28 nights before: the baseline of the illness signal (the HRV baseline uses the last 7).
+    expect(chainArgs(metricsCall, 'gte')).toEqual(['date', '2026-09-29']);
     expect(String(chainArgs(metricsCall, 'select')?.[0])).toContain('sleep_deep_min');
     expect(chainArgs(calls.find((c) => c.target === 'workouts'), 'lte')).toEqual(['date', '2026-10-28']);
   });

@@ -365,6 +365,15 @@ export interface Availability {
 /** 1 = very bad … 5 = very good (for fatigue/soreness/stress: 1 = none … 5 = extreme). */
 export type Score5 = 1 | 2 | 3 | 4 | 5;
 
+/**
+ * Answer to the extra morning question shown when last night's breathing or
+ * pulse is above the athlete's baseline (domain/illness.ts): 'fine' «Bien,
+ * normal»; 'symptoms' «Noto algo: garganta, mocos o cansancio raro»; 'alcohol'
+ * «Bebí alcohol o cené tarde»; 'heat' «Calor o mal descanso»; 'stress' «Estrés».
+ */
+export const ILLNESS_ANSWERS = ['fine', 'symptoms', 'alcohol', 'heat', 'stress'] as const;
+export type IllnessAnswer = (typeof ILLNESS_ANSWERS)[number];
+
 export interface DailyCheckin {
   userId: UUID;
   date: ISODate;
@@ -375,6 +384,8 @@ export interface DailyCheckin {
   stress: Score5;
   motivation: Score5;
   notes: string | null;
+  /** How the athlete feels when the night's signals were up; absent/null = not asked. */
+  illnessAnswer?: IllnessAnswer | null;
 }
 
 export type CheckinDraft = Omit<DailyCheckin, 'userId'>;
@@ -404,6 +415,10 @@ export interface DailyMetrics {
   /** When that night's sleep started / ended (ISO instant). */
   sleepStart?: ISODateTime | null;
   sleepEnd?: ISODateTime | null;
+  /** Average breathing rate during that night, breaths/min (illness signal, domain/illness.ts). */
+  sleepRespiration?: number | null;
+  /** Average heart rate during that night, bpm (illness signal). */
+  sleepAvgHr?: number | null;
 }
 
 export type MetricsDraft = Omit<DailyMetrics, 'userId'>;

@@ -1,14 +1,54 @@
 /**
  * Compact wellness signals for Claude (docs/research/02 §11.8): latest values
  * versus the athlete's own recent baseline. Descriptive only — never a
- * diagnosis.
+ * diagnosis. Plus the illness signal of last night with the athlete's answer
+ * in the morning check-in (mirrored domain/illness.ts, the same the app uses).
  */
-import type { DailyCheckin, DailyMetrics, ISODate } from '../types.ts';
+import type { DailyCheckin, DailyMetrics, IllnessAnswer, ISODate } from '../types.ts';
+import { illnessOutcome, illnessSignal } from './domain/illness.ts';
+import type { IllnessLevel, IllnessOutcomeKind } from './domain/illness.ts';
 
 export interface WellnessSignals {
   latestDate: ISODate | null;
   signals: string[];
   level: 'green' | 'amber' | 'red' | 'unknown';
+}
+
+/** Last night's possible-illness signal and what the athlete answered (for the coach, Claude and the briefing). */
+export interface IllnessView {
+  /** watch = breathing or pulse above their baseline; likely = both, or one with the HRV drop; none = numbers normal (but the athlete feels ill). */
+  signal: IllnessLevel;
+  /** Morning check-in answer: symptoms | alcohol | heat | stress | fine; null = not answered yet. */
+  answer: IllnessAnswer | null;
+  /** possible_illness (go easy) | explained (no alarm) | fine (keep the plan) | unanswered. */
+  outcome: IllnessOutcomeKind;
+  /** The sentence to tell the athlete, with tact. */
+  message: string;
+  /** Short line for the signals list. */
+  factor: string;
+  /** The numbers behind it ("Respiración durante el sueño 16,1 resp/min, +1,4 sobre tu media (14,7)"). */
+  reasons: string[];
+}
+
+/**
+ * `metrics` should reach 28 nights back for the baseline; `checkins` must include
+ * today's for the answer. Null when there is nothing to say.
+ */
+export function illnessView(metrics: readonly DailyMetrics[], checkins: readonly DailyCheckin[], today: ISODate): IllnessView | null {
+  const answer = checkins.find((c) => c.date === today)?.illnessAnswer ?? null;
+  const outcome = illnessOutcome(illnessSignal(metrics, today), answer);
+  if (!outcome) return null;
+  return { signal: outcome.level, answer: outcome.answer, outcome: outcome.kind, message: outcome.message, factor: outcome.factor, reasons: outcome.reasons };
+}
+
+/** Symptoms make the day amber (red with a likely signal), like the app's readiness; anything else is a note. */
+function withIllness(base: WellnessSignals, illness: IllnessView | null | undefined): WellnessSignals {
+  if (!illness) return base;
+  const signals = [...base.signals, illness.factor];
+  if (illness.outcome !== 'possible_illness') return { ...base, signals };
+  const floor = illness.signal === 'likely' ? 'red' : 'amber';
+  const level = base.level === 'red' || floor === 'red' ? 'red' : 'amber';
+  return { ...base, signals, level };
 }
 
 const mean = (values: number[]): number | null =>
@@ -57,7 +97,12 @@ export function wellnessSignals(
   metrics: readonly DailyMetrics[],
   checkins: readonly DailyCheckin[],
   today?: ISODate,
+  illness?: IllnessView | null,
 ): WellnessSignals {
+  return withIllness(baseSignals(metrics, checkins, today), illness);
+}
+
+function baseSignals(metrics: readonly DailyMetrics[], checkins: readonly DailyCheckin[], today?: ISODate): WellnessSignals {
   const fresh = (date: ISODate) => !today || (date <= today && date >= dayBefore(today));
   const merged = mergeMetricsByDate(today ? metrics.filter((m) => m.date <= today) : metrics);
   const newest = merged[merged.length - 1] ?? null;

@@ -20,7 +20,10 @@ export function wellnessDemo({ store }: DemoDeps): WellnessMethods {
     async upsertCheckin(draft: CheckinDraft): Promise<DailyCheckin> {
       const me = await requireMe(store);
       return store.update((db) => {
-        const checkin: DailyCheckin = { ...draft, userId: me };
+        const previous = db.checkins.find((c) => c.userId === me && c.date === draft.date);
+        // Like the database: a draft without the illness answer keeps the stored one.
+        const kept = draft.illnessAnswer === undefined && previous?.illnessAnswer ? { illnessAnswer: previous.illnessAnswer } : {};
+        const checkin: DailyCheckin = { ...draft, userId: me, ...kept };
         const others = db.checkins.filter((c) => !(c.userId === me && c.date === draft.date));
         return { db: { ...db, checkins: [...others, checkin] }, result: checkin };
       });

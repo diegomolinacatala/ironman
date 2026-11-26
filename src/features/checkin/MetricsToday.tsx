@@ -23,6 +23,10 @@ function metricItems(m: DailyMetrics): MetricItem[] {
     m.bodyBattery != null ? { icon: 'battery', label: 'Body Battery', value: String(Math.round(m.bodyBattery)) } : null,
     m.sleepHours != null ? { icon: 'moon', label: 'Sueño', value: `${String(Math.round(m.sleepHours * 10) / 10).replace('.', ',')} h` } : null,
     m.sleepScore != null ? { icon: 'moon', label: 'Nota sueño', value: String(Math.round(m.sleepScore)) } : null,
+    m.sleepRespiration != null
+      ? { icon: 'waveform', label: 'Respiración', value: `${String(Math.round(m.sleepRespiration * 10) / 10).replace('.', ',')} resp/min` }
+      : null,
+    m.sleepAvgHr != null ? { icon: 'pulse', label: 'FC durmiendo', value: `${Math.round(m.sleepAvgHr)} ppm` } : null,
   ];
   return items.filter((i): i is MetricItem => i != null);
 }

@@ -7,6 +7,7 @@
 export type {
   AthleteLevel,
   CompletedData,
+  IllnessAnswer,
   Intensity,
   ISODate,
   NumberRange,

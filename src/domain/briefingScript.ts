@@ -353,14 +353,17 @@ export interface ScriptInput {
   speech?: SpeechContext;
   /** The athlete's watch, for the "no sleep data" sentences (null = not chosen: "tu reloj"). */
   watchBrand?: WatchBrand | null;
+  /** Last night's possible-illness sentence (domain/illness.ts), said right after the sleep; never dropped. */
+  illness?: string | null;
 }
 
-/** The text-to-speech script: greeting, sleep, today, quedadas, focus, tomorrow, race countdown, closing. */
+/** The text-to-speech script: greeting, sleep, illness signal, today, quedadas, focus, tomorrow, race countdown, closing. */
 export function composeScript(input: ScriptInput): string {
   const { date, plan, race } = input;
   const sentences: Sentence[] = [
     { text: `${greetingOf(input.now, input.name)} Hoy es ${dateWords(date)}.` },
     ...sleepSentences(input.snapshot, input.verdict, input.hasAnyMetrics, input.watchBrand),
+    ...(input.illness ? [{ text: input.illness }] : []),
     ...todaySentences(plan, race, input.speech ?? {}),
     ...togetherSentences(input.together ?? NO_TOGETHER, date),
     { text: input.focus },

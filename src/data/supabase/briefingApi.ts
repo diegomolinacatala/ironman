@@ -9,8 +9,9 @@
 import { composeBriefing } from '@/domain/briefing';
 import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
 import { addDays, isISODate } from '@/domain/dates';
+import { illnessOutcome, illnessSignal, type IllnessOutcome } from '@/domain/illness';
 import { nextRace } from '@/domain/periodization';
-import type { Briefing, ISODate, JointSession, Profile, Race, RaceDistance, Thresholds, WatchBrand } from '@/domain/types';
+import type { Briefing, DailyMetrics, IllnessAnswer, ISODate, JointSession, Profile, Race, RaceDistance, Thresholds, WatchBrand } from '@/domain/types';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
@@ -24,13 +25,30 @@ import { asString, isRecord } from './narrow';
 import type { BriefingRow } from './rows';
 
 export const BRIEFING_TIMEOUT_MS = 60_000;
-/** Last night + the 7 previous nights (HRV baseline). */
-const METRICS_DAYS = 8;
+/** Last night + the 28 previous nights: 7 for the HRV baseline, 28 for the illness signal (domain/illness.ts). */
+const METRICS_DAYS = 29;
 const BRIEFING_COLUMNS = 'user_id,date,headline,sleep_verdict,sleep_summary,script,focus,sleep,model,created_at,updated_at';
 
 type BriefingMethods = Pick<Repository, 'getBriefing' | 'generateBriefing'>;
 export type BriefingSourceRepo = Pick<Repository, 'getMyProfile' | 'listMetrics' | 'listWorkouts' | 'listRaces'> &
-  Partial<Pick<Repository, 'listJointSessions'>>;
+  Partial<Pick<Repository, 'listJointSessions' | 'listCheckins'>>;
+
+/** The morning answer to the illness question, if the athlete already did the check-in (a bonus: never fails the briefing). */
+async function illnessAnswerFor(repo: BriefingSourceRepo, date: ISODate): Promise<IllnessAnswer | null> {
+  if (!repo.listCheckins) return null;
+  try {
+    const checkins = await repo.listCheckins({ from: date, to: date });
+    return checkins.find((c) => c.date === date)?.illnessAnswer ?? null;
+  } catch (error) {
+    logger.warn('briefing: check-in unavailable for the local template', error instanceof RepositoryError ? error.code : error);
+    return null;
+  }
+}
+
+/** Last night's illness signal with the morning answer, for the local briefing. */
+export function briefingIllness(metrics: readonly DailyMetrics[], date: ISODate, answer: IllnessAnswer | null): IllnessOutcome | null {
+  return illnessOutcome(illnessSignal(metrics, date), answer);
+}
 
 export interface BriefingDeps {
   ctx: SupabaseCtx;
@@ -68,12 +86,13 @@ export function briefingAthleteFields(profile: Profile | null, race: Race | null
 /** Composes the local ('rules') briefing from the athlete's data. */
 export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODate, now: Date): Promise<Briefing> {
   const tomorrow = addDays(date, 1);
-  const [profile, metrics, workouts, races, joint] = await Promise.all([
+  const [profile, metrics, workouts, races, joint, answer] = await Promise.all([
     repo.getMyProfile(),
     repo.listMetrics({ from: addDays(date, -(METRICS_DAYS - 1)), to: date }),
     repo.listWorkouts({ from: date, to: tomorrow }),
     repo.listRaces(),
     jointSessionsFor(repo, date),
+    illnessAnswerFor(repo, date),
   ]);
   const race = nextRace(races, date);
   return composeBriefing({
@@ -84,6 +103,7 @@ export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODa
     tomorrowWorkouts: workouts.filter((w) => w.date === tomorrow),
     race,
     now,
+    illness: briefingIllness(metrics, date, answer),
     ...briefingAthleteFields(profile, race),
     ...(profile && joint ? { social: { me: profile.id, jointSessions: joint } } : {}),
   });

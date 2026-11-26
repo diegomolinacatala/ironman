@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { addDays, todayISO } from '@/domain/dates';
+import { illnessSignal } from '@/domain/illness';
 import { useCheckins, useMetrics } from '@/data/queries';
 import { checkinToForm } from '@/features/checkin/checkinForm';
 import { CheckinEditor } from '@/features/checkin/CheckinEditor';
@@ -8,7 +9,8 @@ import { errorMessage } from '@/lib/logger';
 import { ErrorNotice, Loading, Screen } from '@/ui';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const WELLNESS_DAYS = 28;
+/** Last night plus the 28 nights of the illness baseline (domain/illness.ts). */
+const WELLNESS_DAYS = 29;
 
 export default function CheckinScreen() {
   const params = useLocalSearchParams<{ date?: string }>();
@@ -36,7 +38,19 @@ export default function CheckinScreen() {
   const existing = (checkins.data ?? []).find((c) => c.date === date) ?? null;
   const allMetrics = metrics.data ?? [];
   const todayMetrics = allMetrics.find((m) => m.date === date) ?? null;
-  const initial = checkinToForm(date, existing, todayMetrics?.sleepHours ?? null);
+  // Breathing or pulse above the athlete's baseline last night: one extra question at the top.
+  const illness = illnessSignal(allMetrics, date);
+  const initial = checkinToForm(date, existing, todayMetrics?.sleepHours ?? null, illness.level !== 'none');
   // Keyed by date only: saving refetches the day and `existing` appears, which must not remount the editor.
-  return <CheckinEditor key={date} initial={initial} date={date} today={today} metrics={allMetrics} todayMetrics={todayMetrics} />;
+  return (
+    <CheckinEditor
+      key={date}
+      initial={initial}
+      date={date}
+      today={today}
+      metrics={allMetrics}
+      todayMetrics={todayMetrics}
+      illness={illness}
+    />
+  );
 }
