@@ -11,6 +11,8 @@ import type { GarminCredential } from '../garmin/credentials.ts';
 import type { Logger } from '../log.ts';
 import { errorInfo } from '../log.ts';
 import type { Briefing, ISODate, UUID } from '../types.ts';
+import { safeForecast } from '../weather/service.ts';
+import type { WeatherReader } from '../weather/service.ts';
 import { buildBriefingContext, promptPayload } from './context.ts';
 import type { BriefingReader } from './context.ts';
 import { BRIEFING_OUTPUT_JSON_SCHEMA, parseBriefingOutput } from './output.ts';
@@ -31,6 +33,8 @@ export interface BriefingDeps {
   claude: ClaudePort;
   /** Null when Garmin is not configured on the server (no GARMIN_KEY_SECRET). */
   garmin: GarminRefresher | null;
+  /** The athlete's city forecast: one sentence when today's outdoor session falls in the rain. */
+  weather?: WeatherReader | null;
   now: () => Date;
   logger: Logger;
   garminTimeoutMs?: number;
@@ -69,8 +73,8 @@ function userMessage(payload: Record<string, unknown>): string {
  * before calling (it gets the model/tokens afterwards). Throws CoachAiError for AI failures.
  */
 export async function generateBriefing(deps: BriefingDeps, userId: UUID, date: ISODate, usageId: number): Promise<Briefing> {
-  const garmin = await refreshGarminIfStale(deps, userId);
-  const context = await buildBriefingContext(deps.reader, { userId, date, now: deps.now() });
+  const [garmin, forecast] = await Promise.all([refreshGarminIfStale(deps, userId), safeForecast(deps.weather, userId, deps.logger)]);
+  const context = await buildBriefingContext(deps.reader, { userId, date, now: deps.now(), forecast });
   const response = await callClaude(
     deps.claude,
     {
@@ -93,6 +97,12 @@ export async function generateBriefing(deps: BriefingDeps, userId: UUID, date: I
     model: response.model,
     createdAt: deps.now().toISOString(),
   });
-  deps.logger.info('briefing generated', { garmin, model: response.model, fallback: response.fallbackUsed === true, hasSleep: context.sleep !== null });
+  deps.logger.info('briefing generated', {
+    garmin,
+    model: response.model,
+    fallback: response.fallbackUsed === true,
+    hasSleep: context.sleep !== null,
+    rainToday: context.weather !== null,
+  });
   return toBriefing(stored);
 }

@@ -36,6 +36,9 @@ import type { ClaudeMessage, ClaudePort, ClaudeRequest, ClaudeResponse, CoachSto
 import { COACH_SYSTEM_PROMPT } from './prompt.ts';
 import { idLegend, resolveWorkoutId, shortenUuids, shortIdsFor } from './short-ids.ts';
 import type { ShortIds } from './short-ids.ts';
+import { weatherForCoach } from '../weather/prompt.ts';
+import { safeForecast } from '../weather/service.ts';
+import type { WeatherReader } from '../weather/service.ts';
 
 export const COACH_MAX_TOKENS = 16000;
 /** Longest first model call: a hung worker must leave time for the repair. */
@@ -59,6 +62,8 @@ export interface CoachJobDeps {
   logger: Logger;
   /** Overall budget of the job (defaults to COACH_DEADLINE_MS). */
   deadlineMs?: number;
+  /** The forecast of the athlete's city (null/absent: the coach gets no weather). */
+  weather?: WeatherReader | null;
 }
 
 const KIND: Record<CoachRequest['mode'], ProposalKind> = { plan_week: 'generate_week', replan: 'replan', chat: 'chat' };
@@ -126,16 +131,22 @@ async function prepare(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal): 
     signal,
   );
   const lifeEvent = job.request.lifeEventId ? context.lifeEvents.find((e) => e.id === job.request.lifeEventId) ?? null : null;
-  const [friends, workouts] = await withDeadline(
-    Promise.all([friendWeeks(deps, job, context), deps.reader.listWorkouts(job.userId, context.weekStart, addDays(context.weekStart, PLAN_WINDOW_DAYS - 1))]),
+  const [friends, workouts, forecast] = await withDeadline(
+    Promise.all([
+      friendWeeks(deps, job, context),
+      deps.reader.listWorkouts(job.userId, context.weekStart, addDays(context.weekStart, PLAN_WINDOW_DAYS - 1)),
+      // Best effort and bounded: the coach answers without the weather when it is not there.
+      safeForecast(deps.weather, job.userId, deps.logger),
+    ]),
     signal,
   );
   const ids = shortIdsFor(context);
   const wantsChange = chat && wantsPlanChange(job.request.message);
+  const weather = forecast ? weatherForCoach(forecast, context.today) : null;
   return {
     context,
     ids,
-    messages: buildCoachMessages(job.request, context, { lifeEvent, friends, ids }),
+    messages: buildCoachMessages(job.request, context, { lifeEvent, friends, ids, weather }),
     effort: chat && !wantsChange ? 'low' : 'medium',
     wantsChange,
     workouts,
