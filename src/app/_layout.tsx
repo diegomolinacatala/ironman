@@ -57,6 +57,7 @@ function RootNavigator() {
         <Stack.Screen name="talk" options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
         <Stack.Screen name="meal" options={{ ...modal, title: 'Comida' }} />
         <Stack.Screen name="briefing" options={{ ...modal, title: 'Informe de hoy' }} />
+        <Stack.Screen name="breathing" options={{ ...modal, title: 'Respira' }} />
 
         <Stack.Screen name="coach" options={{ ...header, title: 'Coach' }} />
         <Stack.Screen name="proposal/[id]" options={{ ...modal, title: 'Propuesta' }} />

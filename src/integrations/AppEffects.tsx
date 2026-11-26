@@ -24,6 +24,7 @@ import { useAuth, useRepository } from '@/data/context';
 import { useBriefing, useJointSessions, useProfile, useRaces, useWorkouts } from '@/data/queries';
 import { maxDate, minDate, todayISO } from '@/domain/dates';
 import type { DateRange, ISODate } from '@/domain/types';
+import { useBedtimeReminder } from '@/features/stress/useBedtimeReminder';
 import { useWeatherChecks } from '@/features/weather/useWeatherChecks';
 
 import { defaultBusyRange } from './calendar';
@@ -86,7 +87,9 @@ export function AppEffects(): null {
   useGarminForegroundSync(signedInAndOnboarded && isGarminWatch(profile), repo, userId);
   // Wake mode needs the server (push + one briefing a day); demo keeps the fixed-time one.
   const serverWake = mode !== 'demo';
-  usePlanMirrors(ready, { workouts, races, jointSessions, profile, briefing, userId, today, tick, serverWake });
+  // Stress costing sleep today: «Hoy toca acostarse antes» before the usual bedtime.
+  const bedtime = useBedtimeReminder(today);
+  usePlanMirrors(ready, { workouts, races, jointSessions, profile, briefing, userId, today, tick, serverWake, bedtime });
   useWakeBriefing(ready, repo, userId, profile?.notificationPrefs ?? null);
   useSignedOutCleanup(isLoading, userId);
   useTimezoneSync(signedInAndOnboarded, profile);

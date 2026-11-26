@@ -204,6 +204,8 @@ export function parseNotificationPrefs(value: unknown): NotificationPrefs {
     weeklyPlanReminder: asBoolean(record.weeklyPlanReminder) ?? d.weeklyPlanReminder,
     social: asBoolean(record.social) ?? d.social,
     ...parseWakePrefs(record),
+    // Absent = on (domain/stressSleep.ts: it only fires on flagged days).
+    ...compact({ bedtimeReminder: asBoolean(record.bedtimeReminder) ?? undefined }),
   };
 }
 

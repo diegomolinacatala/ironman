@@ -141,6 +141,9 @@ jest.mock('@/data/queries', () => {
     useRevokeToken: () => mutation(mockRevokeToken),
     useIntegrations: () => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() }),
     useMetrics: () => ({ data: [], isLoading: false, isError: false }),
+    // The bedtime reminder (stress costing sleep) reads the last days' check-ins and exams.
+    useCheckins: () => ({ data: [], isLoading: false, isError: false }),
+    useLifeEvents: () => ({ data: [], isLoading: false, isError: false }),
     useConnectGarmin: () => mutation(mockConnectGarmin),
     useSyncGarmin: () => mutation(jest.fn()),
     useDisconnectGarmin: () => mutation(jest.fn()),
@@ -432,6 +435,18 @@ describe('Notificaciones', () => {
     });
     // The server sends it in wake mode: the app reschedules without the fixed-time one.
     await waitFor(() => expect(mockReschedule).toHaveBeenCalledWith(expect.objectContaining({ serverWake: true })));
+  });
+
+  test('«Acuéstate antes» is on by default and can be turned off', async () => {
+    await render(<NotificationSettingsScreen />);
+    const toggle = screen.getByLabelText('Acuéstate antes');
+    expect(toggle.props.value).toBe(true);
+    await fireEvent(toggle, 'valueChange', false);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    expect(mockUpdateProfile.mock.calls[0]?.[0]).toMatchObject({ notificationPrefs: { bedtimeReminder: false } });
+    // No stress-and-sleep signal today: no bedtime reminder to keep.
+    await waitFor(() => expect(mockReschedule).toHaveBeenCalledWith(expect.objectContaining({ bedtime: null })));
   });
 
   test('back to «Usar la de mi reloj» clears your own window', async () => {

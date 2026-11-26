@@ -12,7 +12,7 @@ import { nextRace } from '@/domain/periodization';
 import type { Briefing, ISODate, MealAnalysis, MealAnalysisInput, MealSlot, UUID } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../../repository';
-import { briefingAthleteFields, briefingIllness } from '../../supabase/briefingApi';
+import { briefingAthleteFields, briefingIllness, briefingStressSleep } from '../../supabase/briefingApi';
 import { cleanMealInput } from '../../supabase/mealApi';
 import type { DemoBriefing, DemoDb } from '../db';
 import { listJointFor } from '../jointOps';
@@ -48,8 +48,10 @@ function briefingFrom(db: DemoDb, me: UUID, date: ISODate, now: Date): Briefing 
     db.races.filter((r) => r.userId === me),
     date,
   );
-  // 28 nights back: the illness signal's baseline (the HRV baseline reads the last 7).
-  const metrics = db.metrics.filter((m) => m.userId === me && m.date >= addDays(date, -28) && m.date <= date);
+  // 31 nights back: the illness and stress-and-sleep baselines (the HRV baseline reads the last 7).
+  const metrics = db.metrics.filter((m) => m.userId === me && m.date >= addDays(date, -31) && m.date <= date);
+  const checkins = db.checkins.filter((c) => c.userId === me && c.date >= addDays(date, -3) && c.date <= date);
+  const events = db.lifeEvents.filter((e) => e.userId === me && e.endDate >= addDays(date, -3) && e.startDate <= addDays(date, 3));
   const answer = db.checkins.find((c) => c.userId === me && c.date === date)?.illnessAnswer ?? null;
   return composeBriefing({
     date,
@@ -60,6 +62,7 @@ function briefingFrom(db: DemoDb, me: UUID, date: ISODate, now: Date): Briefing 
     race,
     now,
     illness: briefingIllness(metrics, date, answer),
+    stressSleep: briefingStressSleep(metrics, date, checkins, events),
     ...briefingAthleteFields(profile, race),
     social: { me, jointSessions: listJointFor(db, me, { from: date, to: addDays(date, INVITE_HORIZON_DAYS - 1) }) },
     // Like the server: with a city, one sentence when today's outdoor session falls in the (example) rain.

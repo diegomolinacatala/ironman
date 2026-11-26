@@ -303,6 +303,7 @@ export const notificationPrefsSchema = z.object({
   morningMode: z.enum(['fixed', 'wake'], { error: 'Elige cuándo te llega el informe' }).optional(),
   wakeDelayMin: z.union([z.literal(5), z.literal(10), z.literal(15), z.literal(30)], { error: 'Elige 5, 10, 15 o 30 minutos' }).optional(),
   wakeWindow: wakeWindowSchema.nullable().optional(),
+  bedtimeReminder: z.boolean().optional(),
 });
 
 const prefDays = z.array(weekdaySchema).max(7);

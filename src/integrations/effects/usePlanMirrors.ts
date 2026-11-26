@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 
 import { syncWorkoutsToCalendar } from '../calendar/trainingCalendar';
 import { rescheduleLocalNotifications } from '../notifications';
+import type { BedtimeReminder } from '../notifications/schedule';
 import { syncWidgets } from '../widgets/sync';
 
 const DEBOUNCE_MS = 1500;
@@ -34,6 +35,8 @@ export interface PlanSnapshot {
   tick: number;
   /** A backend sends "Tu informe de hoy" in wake mode (false in demo: keep the fixed time). */
   serverWake?: boolean;
+  /** Today's stress-and-sleep signal: «Hoy toca acostarse antes» (null = none). */
+  bedtime?: BedtimeReminder | null;
 }
 
 /** jointSessionId → first names of the other accepted participants ("David y Marta"). */
@@ -52,7 +55,7 @@ export function jointPartnerNames(sessions: readonly JointSession[], myId: strin
 }
 
 export function usePlanMirrors(enabled: boolean, snapshot: PlanSnapshot): void {
-  const { workouts, races, jointSessions, profile, briefing, userId, today, tick, serverWake = false } = snapshot;
+  const { workouts, races, jointSessions, profile, briefing, userId, today, tick, serverWake = false, bedtime = null } = snapshot;
   const timeZone = profile?.timezone ?? null;
   const { thresholds, raceDistance } = prescriptionContext(profile?.thresholds, races, today);
 
@@ -62,13 +65,13 @@ export function usePlanMirrors(enabled: boolean, snapshot: PlanSnapshot): void {
       // Reminder bodies name the main target: `buildSchedule` (ScheduleInput) takes the profile
       // thresholds and this race distance (what race-pace sessions mean).
       const jointPartners = jointPartnerNames(jointSessions ?? [], profile.id);
-      rescheduleLocalNotifications({ workouts, profile, today, jointPartners, raceDistance, serverWake })
+      rescheduleLocalNotifications({ workouts, profile, today, jointPartners, raceDistance, serverWake, bedtime })
         .then((count) => logger.debug(`notifications: ${count} scheduled`))
         .catch((error: unknown) => logger.warn('notifications: reschedule failed', error));
       syncWidgets({ workouts, races: races ?? [], jointSessions: jointSessions ?? [], profile, today, briefing });
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, workouts, races, jointSessions, profile, today, tick, briefing, raceDistance, serverWake]);
+  }, [enabled, workouts, races, jointSessions, profile, today, tick, briefing, raceDistance, serverWake, bedtime]);
 
   // No-op unless this account turned "Añadir mis entrenos al calendario" on.
   useEffect(() => {

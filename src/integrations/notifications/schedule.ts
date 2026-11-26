@@ -7,12 +7,13 @@
  */
 import { addDays, formatDuration, formatTime, startOfWeek } from '@/domain/dates';
 import { intensityLabel, sportLabel } from '@/domain/labels';
+import { BEDTIME, clockOf } from '@/domain/stressSleep';
 import type { ISODate, NotificationPrefs, Profile, RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { mainTargetLine } from '@/features/coach/prescriptionContext';
 
 import { atLocal, parseTimeMinutes } from '../time';
 
-export const LOCAL_NOTIFICATION_KINDS = ['workout_reminder', 'morning_summary', 'evening_checkin', 'weekly_plan'] as const;
+export const LOCAL_NOTIFICATION_KINDS = ['workout_reminder', 'morning_summary', 'evening_checkin', 'weekly_plan', 'bedtime'] as const;
 export type LocalNotificationKind = (typeof LOCAL_NOTIFICATION_KINDS)[number];
 
 /**
@@ -23,7 +24,7 @@ export type LocalNotificationKind = (typeof LOCAL_NOTIFICATION_KINDS)[number];
 export const WAKE_BRIEFING_KIND = 'wake_briefing';
 
 /** iOS category identifiers (no ':' or '-' allowed). */
-export type NotificationCategoryId = 'workout' | 'summary' | 'checkin' | 'weekly';
+export type NotificationCategoryId = 'workout' | 'summary' | 'checkin' | 'weekly' | 'calm';
 
 export type NotificationTriggerSpec =
   | { type: 'date'; date: Date }
@@ -66,6 +67,11 @@ export interface ScheduleInput {
    * unless already answered. Null/absent = off.
    */
   weekQuestions?: WeekQuestionReminders | null;
+  /**
+   * Today's stress-and-sleep signal (domain/stressSleep.ts), when there is one: one reminder
+   * `BEDTIME.reminderLeadMin` before the usual bedtime (`notificationPrefs.bedtimeReminder`).
+   */
+  bedtime?: BedtimeReminder | null;
 }
 
 export interface WeekQuestionReminders {
@@ -74,6 +80,15 @@ export interface WeekQuestionReminders {
   /** Mondays of the weeks whose Sunday / Wednesday question is already answered. */
   sundayDone: readonly ISODate[];
   wednesdayDone: readonly ISODate[];
+}
+
+/** What the bedtime reminder needs: the flagged day, the usual bedtime and the reason. */
+export interface BedtimeReminder {
+  date: ISODate;
+  /** Minutes since local midnight (00:00–05:59 = after midnight of `date`). */
+  usualBedtimeMin: number;
+  /** «Estrés alto 3 días y dormiste 1 h menos de lo habitual». */
+  headline: string;
 }
 
 /** What a workout reminder needs besides the workout. */
@@ -223,6 +238,33 @@ export function wakeBriefingSpec(date: ISODate, fireAt: Date): NotificationSpec 
   };
 }
 
+/** Opens the guided breathing (the reminder suggests it before going to bed). */
+export const BREATHING_URL = '/breathing';
+
+/** Bedtimes before 06:00 belong to the night of `date` (after midnight). */
+const AFTER_MIDNIGHT_MIN = 6 * 60;
+
+/**
+ * «Hoy toca acostarse antes», 45 min before the usual bedtime, only on a day the stress-and-sleep
+ * signal is on: the reason with its figure, the suggested bedtime (30 min earlier) and breathing.
+ */
+export function bedtimeReminderSpec(b: BedtimeReminder, now: Date): NotificationSpec | null {
+  const bed = b.usualBedtimeMin < AFTER_MIDNIGHT_MIN ? b.usualBedtimeMin + 24 * 60 : b.usualBedtimeMin;
+  const fireAt = atLocal(b.date, bed - BEDTIME.reminderLeadMin);
+  if (fireAt.getTime() <= now.getTime()) return null;
+  const suggested = clockOf(bed - BEDTIME.earlierMin);
+  return {
+    id: `rti.bedtime.${b.date}`,
+    kind: 'bedtime',
+    title: 'Hoy toca acostarse antes',
+    body: `${b.headline}. A la cama sobre las ${suggested}; antes, 3 minutos de respiración lenta.`,
+    url: BREATHING_URL,
+    categoryId: 'calm',
+    threadId: 'rti.calm',
+    trigger: { type: 'date', date: fireAt },
+  };
+}
+
 function eveningCheckin(minutes: number): NotificationSpec {
   return {
     id: 'rti.checkin.daily',
@@ -332,8 +374,10 @@ export function buildSchedule(input: ScheduleInput): NotificationSpec[] {
   // The Sunday question replaces «Planifica tu semana» (it leads to planning the week too).
   const questions = input.weekQuestions ? weekQuestionReminders(input.today, now, input.weekQuestions) : [];
   const weekly = prefs.weeklyPlanReminder && !input.weekQuestions ? weeklyPlanReminders(input.today, now, WEEKLY_REMINDERS) : [];
+  // On by default (absent = on): it only exists on days the stress-and-sleep signal is on.
+  const bedtime = input.bedtime && prefs.bedtimeReminder !== false ? [bedtimeReminderSpec(input.bedtime, now)] : [];
 
-  const dated = [...reminders, ...summaries, ...weekly, ...questions]
+  const dated = [...reminders, ...summaries, ...weekly, ...questions, ...bedtime]
     .filter((s): s is NotificationSpec => s !== null)
     .sort((a, b) => sortKey(a) - sortKey(b));
   return [...repeating, ...dated].slice(0, MAX_SCHEDULED);

@@ -1,10 +1,12 @@
-import { addDays, todayISO, weekRange } from '@/domain/dates';
+import { addDays, startOfWeek, todayISO, weekRange } from '@/domain/dates';
 import { weekSummary, type WeekSummary } from '@/domain/load';
 import type { PhaseInfo } from '@/domain/periodization';
+import type { StressSleepSignal } from '@/domain/stressSleep';
 import type { BusyBlock, ISODate, JointSession, LifeEvent, Profile, Race, UUID, WeekPlan, Workout } from '@/domain/types';
 import { useAuth } from '@/data/context';
 import { useBusyBlocks, useCheckins, useJointSessions, useLifeEvents, useProfile, useRaces, useWeekPlans, useWorkouts } from '@/data/queries';
 
+import { useStressSleep } from '../stress/useStressSleep';
 import { useFitnessMinutes } from './useFitnessMinutes';
 import { recentWeeklyMinutes, weekPhaseOf } from './weekModel';
 
@@ -33,6 +35,8 @@ export interface WeekData {
   history: Workout[];
   /** Stress (1–5) of today's check-in, null without one: ≥ 4 slows the planner's ramp. */
   checkinStress?: number | null;
+  /** Stress costing sleep today (domain/stressSleep.ts): only for this week and the next. */
+  stressSleep?: StressSleepSignal | null;
   isLoading: boolean;
   error: unknown;
   isRefreshing: boolean;
@@ -55,6 +59,8 @@ export function useWeekData(weekStart: ISODate): WeekData {
   const weekPlans = useWeekPlans(range);
   const fitnessMinutes = useFitnessMinutes(today);
   const checkins = useCheckins({ from: today, to: today });
+  const stressSleep = useStressSleep(today);
+  const nearWeek = weekStart <= addDays(startOfWeek(today), 7);
 
   const all = [workouts, history, lifeEvents, busy, joint, races, profile, weekPlans];
   const list = workouts.data ?? [];
@@ -77,6 +83,7 @@ export function useWeekData(weekStart: ISODate): WeekData {
     fitnessMinutes,
     history: (history.data ?? []).filter((w) => w.status === 'completed'),
     checkinStress: checkins.data?.find((c) => c.date === today)?.stress ?? null,
+    stressSleep: nearWeek ? stressSleep : null,
     isLoading: workouts.isLoading,
     error: workouts.error,
     isRefreshing: all.some((q) => q.isRefetching),

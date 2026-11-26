@@ -29,6 +29,8 @@ jest.mock('@/data/queries', () => {
     useProfile: () => ok(mockProfile),
     useWeekPlans: (range: DateRange) => ok(mockWeekPlans(range)),
     useCheckins: () => ok([{ date: mockToday, stress: 4 }]),
+    // No watch data: no stress-and-sleep signal.
+    useMetrics: () => ok([]),
   };
 });
 

@@ -38,6 +38,7 @@ import {
 import { reasonFor, summaryFor } from './plannerText';
 import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
+import { stressSleepWeekFactor, type StressSleepSignal } from './stressSleep';
 import { allowsSession, examVolumeFactor, NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
 import { fixedSessionsOn, lowIntensityShareFor, trainingPrefsSentence } from './trainingPrefs';
 import { athleteContextPlanSentence, lifeLoadFactor, mealRanges, preferredTrainingTime, sportFocus, wakingDayOn } from './athleteContext';
@@ -114,6 +115,12 @@ export interface PlannerInput {
    * 2:1 cadence never lifting a descarga), like stress and work events.
    */
   checkinStress?: number | null;
+  /**
+   * Stress that is costing the athlete sleep (domain/stressSleep.ts, today's signal): life stress
+   * like the above, plus the week −10 % (moderate) / −15 % (high), or a further −10 % on an exam week.
+   * Callers pass it for the current and the next week only.
+   */
+  stressSleep?: Pick<StressSleepSignal, 'level'> | null;
 }
 
 export interface PlanWeekResult {
@@ -267,6 +274,8 @@ function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: BudgetContext)
   const withoutExam = Math.max(0, Math.round(target));
   // A descarga is already lighter than the exam cut: it stays as it is (never higher, never cut twice).
   if (ctx.examFactor !== null && !info.isRecoveryWeek) target *= ctx.examFactor;
+  // Stress costing sleep: a lighter week on top (never on a descarga, already light).
+  if (input.stressSleep && !info.isRecoveryWeek) target *= stressSleepWeekFactor(input.stressSleep, ctx.examFactor !== null);
   const sportEvents = ctx.events.filter((e) => isSportEvent(e) && ctx.plannable.some((d) => d >= e.startDate && d <= e.endDate));
   const otherMin = sportEvents.reduce((s, e) => s + (e.durationMin ?? 90), 0);
   const hardOthers = sportEvents.filter((e) => e.kind === 'football' || e.kind === 'padel' || e.severity >= 3).length;
@@ -389,7 +398,7 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   const firstPlannable = maxDate(range.from, input.today ?? range.from);
   const events = input.lifeEvents.filter((e) => overlapsWeek(e, range.from, range.to));
   const stressedByCheckin = typeof input.checkinStress === 'number' && input.checkinStress >= CHECKIN_STRESS_MIN;
-  const lifeStress = stressedByCheckin || events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
+  const lifeStress = stressedByCheckin || Boolean(input.stressSleep) || events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
   const raw = stressedPhase(input, range.from, lifeStress);
   const weekPlan = activeWeekPlan(raw, input.weekPlan, range.from);
   const athlete = input.profile.athleteContext ?? null;
@@ -676,6 +685,12 @@ function examSentence(budget: Budget): string | null {
   return `${EXAM_NOTE_PREFIX}: ${amount}, sin series el día antes ni el día del examen.`;
 }
 
+/** «Estrés alto y peor sueño estos días: la semana va un 10 % más suave y la progresión se frena.» */
+function stressSleepSentence(signal: Pick<StressSleepSignal, 'level'>, examWeek: boolean): string {
+  const cut = Math.round((1 - stressSleepWeekFactor(signal, examWeek)) * 100);
+  return `Estrés alto y peor sueño estos días: la semana va un ${cut} % más suave y la progresión se frena.`;
+}
+
 const FIXED_TITLE: Readonly<Record<FixedWeeklySession['sport'], string>> = { swim: 'Natación', bike: 'Bici', run: 'Carrera', strength: 'Fuerza' };
 
 /** The workout of a fixed weekly session (easy by default: the athlete knows what it holds). */
@@ -737,6 +752,7 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
   ];
   const fatigueNote = guard.removed.length > 0 ? [`He quitado ${guard.removed.length} sesión(es) para no acumular demasiada fatiga.`] : [];
   const examNote = examSentence(budget);
+  const stressNote = input.stressSleep && !info.isRecoveryWeek ? [stressSleepSentence(input.stressSleep, ctx.exam !== null)] : [];
   const warnings = [...info.warnings, ...budget.warnings, ...runCapWarning(built), ...fatigueNote, ...(guard.warning ? [guard.warning] : [])];
   const summary = summaryFor({
     info: summaryInfo(ctx),
@@ -749,6 +765,7 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     warnings,
     notes: [
       ...(examNote ? [examNote, ...ctx.week.notes.filter((n) => !n.startsWith(EXAM_NOTE_PREFIX))] : ctx.week.notes),
+      ...stressNote,
       ...prefsNote(ctx),
       ...contextNote(ctx),
     ],
