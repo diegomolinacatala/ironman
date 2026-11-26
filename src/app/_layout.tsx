@@ -79,6 +79,7 @@ function RootNavigator() {
         <Stack.Screen name="settings/coros" options={{ ...header, title: 'Conectar COROS' }} />
         <Stack.Screen name="settings/calendar-feed" options={{ ...header, title: 'Suscripción de calendario' }} />
         <Stack.Screen name="privacy" options={{ ...header, title: 'Privacidad' }} />
+        <Stack.Screen name="plan-import" options={{ ...modal, title: 'Importar un plan' }} />
       </Stack>
     </ThemeProvider>
   );

@@ -15,7 +15,7 @@
  * 'error' and a Spanish message, so the app can say why and fall back to the
  * rules engine.
  */
-import { addDays } from '../dates.ts';
+import { addDays, startOfWeek } from '../dates.ts';
 import type { Logger } from '../log.ts';
 import { errorInfo } from '../log.ts';
 import { checkChanges, PLAN_WINDOW_DAYS, withSource } from '../planning/changes.ts';
@@ -110,6 +110,8 @@ export interface Prepared {
   wantsChange: boolean;
   /** Planned + done workouts of the 14-day window (validation, loose id matching). */
   workouts: Workout[];
+  /** Request mode (plan_week never adds on top of an imported week). */
+  mode?: CoachRequest['mode'];
 }
 
 async function prepare(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal): Promise<Prepared> {
@@ -139,6 +141,7 @@ async function prepare(deps: CoachJobDeps, job: CoachJob, signal: AbortSignal): 
     effort: chat && !wantsChange ? 'low' : 'medium',
     wantsChange,
     workouts,
+    mode: job.request.mode,
   };
 }
 
@@ -189,10 +192,19 @@ function resolveIds(output: CoachOutput, prep: Prepared): { changes: FlatChange[
   return { changes, loose };
 }
 
+/** plan_week: the plan the athlete imported (their coach) is the base of its weeks, nothing is added on top. */
+export function dropAddsInImportedWeeks(changes: readonly PlanChange[], workouts: readonly Workout[]): { changes: PlanChange[]; dropped: number } {
+  const imported = new Set(workouts.filter((w) => w.source === 'imported' && w.status !== 'skipped').map((w) => startOfWeek(w.date)));
+  const kept = changes.filter((c) => c.op !== 'add' || !imported.has(startOfWeek(c.workout.date)));
+  return { changes: kept, dropped: changes.length - kept.length };
+}
+
 export function validateOutput(output: CoachOutput, prep: Prepared): Validated {
   const resolved = resolveIds(output, prep);
   const converted = toPlanChanges(resolved.changes);
-  const checked = checkChanges(converted.changes, { weekStart: prep.context.weekStart, today: prep.context.today, workouts: prep.workouts });
+  const guarded = prep.mode === 'plan_week' ? dropAddsInImportedWeeks(converted.changes, prep.workouts) : { changes: converted.changes, dropped: 0 };
+  const checked = checkChanges(guarded.changes, { weekStart: prep.context.weekStart, today: prep.context.today, workouts: prep.workouts });
+  // Adds dropped by the imported-week guard are not issues: no repair re-prompt for them.
   const issues = [...converted.rejected, ...checked.issues].map((i) => shortenUuids(i.error, prep.ids));
   const valid = withDefaultCoaching(withSource(checked.valid, 'ai_coach'), prep.context.athlete.zones);
   return { changes: valid, dropped: issues.length + output.malformedChanges, issues, loose: resolved.loose };

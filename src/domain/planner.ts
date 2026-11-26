@@ -32,6 +32,7 @@ import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
 import { NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
 import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
+import { IMPORTED_WEEK_SUMMARY, isImportedWeek } from './planImport';
 import { applyWeekPlan } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
 import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, Sport, Weekday, WeekPlan, Workout } from './types';
@@ -476,6 +477,8 @@ export function planWeek(rawInput: PlannerInput): PlanWeekResult {
 
 /** Rules-engine week proposal: only 'add' changes, never touches existing workouts. */
 export function generateWeek(input: PlannerInput): { changes: PlanChange[]; summary: string } {
+  // An imported plan (the athlete's coach) is the base of this week: nothing is added on top.
+  if (isImportedWeek(input.existing, input.weekStart)) return { changes: [], summary: IMPORTED_WEEK_SUMMARY };
   const result = planWeek(input);
   return { changes: result.changes, summary: result.summary };
 }

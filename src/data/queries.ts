@@ -32,6 +32,8 @@ import type {
   WorkoutPatch,
 } from '@/domain/types';
 
+import type { PlanImportDraft, PlanParseInput } from '@/domain/planImport';
+
 import { useAuth, useRepository } from './context';
 import type { ChangeTopic } from './repository';
 
@@ -65,6 +67,7 @@ export const qk = {
   integrations: ['integrations'] as const,
   briefing: (date: ISODate) => ['briefing', date] as const,
   weekPlans: (r: DateRange) => ['week_plans', r.from, r.to] as const,
+  planImports: ['plan_imports'] as const,
 };
 
 /** Root keys invalidated for each change topic. */
@@ -85,6 +88,7 @@ const TOPIC_KEYS: Record<ChangeTopic, readonly string[]> = {
   integrations: ['integrations'],
   briefings: ['briefing'],
   week_plans: ['week_plans'],
+  plan_imports: ['plan_imports'],
 };
 
 function useInvalidate() {
@@ -657,4 +661,29 @@ export function useRevokeToken() {
     mutationFn: (id: UUID) => repo.revokeToken(id),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.tokens }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Imported plans (Tú › Importar un plan)
+// ---------------------------------------------------------------------------
+
+export function usePlanImports() {
+  const repo = useRepository();
+  return useQuery({ queryKey: qk.planImports, queryFn: () => repo.listPlanImports(), enabled: useSignedIn() });
+}
+
+/** AI read of a photo, PDF or pasted text (nothing is stored until the athlete applies it). */
+export function useParsePlanImport() {
+  const repo = useRepository();
+  return useMutation({ mutationFn: (input: PlanParseInput) => repo.parsePlanImport(input) });
+}
+
+export function useApplyPlanImport() {
+  const repo = useRepository();
+  return useRepoMutation((draft: PlanImportDraft) => repo.applyPlanImport(draft), ['plan_imports', 'workouts']);
+}
+
+export function useDeletePlanImport() {
+  const repo = useRepository();
+  return useRepoMutation((id: string) => repo.deletePlanImport(id), ['plan_imports', 'workouts']);
 }

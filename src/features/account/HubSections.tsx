@@ -11,12 +11,13 @@ import { GroupDivider, LinkRows, SettingsGroup } from './SettingsGroup';
 export function TrainingGroup({ profile, races }: { profile: Profile; races: readonly Race[] | undefined }) {
   const race = raceRow(races, todayISO());
   return (
-    <SettingsGroup title="Entrenamiento" icon="flag" summary="Carreras, horarios y perfil deportivo">
+    <SettingsGroup title="Entrenamiento" icon="flag" summary="Carreras, horarios, perfil e importar un plan">
       <LinkRows
         items={[
           { icon: 'flag', title: race.title, subtitle: race.subtitle, href: '/races', brand: true },
           { icon: 'clock', title: 'Tus horarios', subtitle: availabilitySubtitle(profile.availability), href: '/settings/availability' },
           { icon: 'profile', title: 'Perfil deportivo', subtitle: sportsProfileSubtitle(profile), href: '/settings/profile' },
+          { icon: 'clipboard', title: 'Importar un plan', subtitle: 'El de tu entrenador: foto, PDF, Excel o TrainingPeaks', href: '/plan-import' },
         ]}
       />
     </SettingsGroup>

@@ -10,6 +10,7 @@ crea el cliente de Supabase y conecta las piezas.
 | `briefing` (v2) | `POST /briefing` con `{ date, refresh? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `meal` (v2) | `POST /meal` con `{ date, time, imageBase64?, text? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `speech` | `POST /speech` con `{ text, voice? }` (voz natural del coach y del informe) | JWT del usuario | `false` (el JWT se verifica en el código) |
+| `plan-import` | `POST /plan-import` con `{ kind: 'text', text }`, `{ kind: 'image', imageBase64 }` o `{ kind: 'pdf', pdfBase64 }` (leer el plan de un entrenador) | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `mcp` | `POST /mcp/u/<secreto>` (conector "Conecta tu Claude") | secreto personal en la ruta (scope `mcp`) | `false` |
 | `ics` | `GET /ics/<secreto>.ics` (suscripción `webcal://`) | secreto personal en la ruta (scope `ics`) | `false` |
 | `push-dispatch` | `POST /push-dispatch` (trigger `pg_net` + barrido `pg_cron`) | clave secreta del servidor en `apikey` | `false` |
@@ -43,6 +44,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.speech]         # el JWT se verifica en el código (userIdFromJwt)
+verify_jwt = false
+
+[functions.plan-import]    # el JWT se verifica en el código (userIdFromJwt)
 verify_jwt = false
 
 [functions.mcp]
@@ -140,7 +144,14 @@ npx supabase db push                       # migraciones (RPC svc_* que usan est
 npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
 npx supabase functions deploy coach briefing meal garmin mcp --use-api    # v2 (tras db push de 20261027000100_v2.sql)
 npx supabase functions deploy speech --use-api                            # voz natural (junto con db push de 20261105000100_speech_budget.sql y 20261105000200_speech_budget_caps.sql)
+npx supabase functions deploy plan-import coach --use-api                 # importar un plan (tras db push de 20261127000500_plan_import.sql)
 ```
+
+**Importar un plan (2026-11-27).** Orden: `npx supabase db push` (crea `plan_imports`, `workouts.plan_import_id`,
+el origen `'imported'` y las RPC `apply_plan_import` / `delete_plan_import`), después
+`functions deploy plan-import coach` (el coach no añade sesiones en `plan_week` encima de una semana importada
+y ve `imported: true` en esas sesiones) y por último la app. No hace falta ningún secreto nuevo: usa
+`AI_WORKER_URL`/`AI_WORKER_SECRET` como `meal` (texto y PDF con `AI_MODEL`, fotos con `AI_VISION_MODEL`).
 
 Cada función tiene su `deno.json` (`nodeModulesDir: "none"`) para que Deno no use el
 `package.json`/`node_modules` de la app. Las dependencias van con versión fija en el propio import
@@ -158,6 +169,18 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
   modelo de Workers AI. Las salidas de los modelos abiertos se validan igual de estrictas y degradan con cuidado:
   el informe o la comida inválidos → `503` (la app usa su plantilla); el coach sin `reply` → trabajo en `error`,
   y con `reply` pero cambios mal formados → respuesta sin esos cambios (cuentan como descartados).
+- **plan-import** — `POST { kind: 'text', text }` (≤ 20.000 caracteres) | `{ kind: 'image', imageBase64 }` (JPEG/PNG/WebP,
+  ≤ 2 MB en base64) | `{ kind: 'pdf', pdfBase64 }` (≤ 6 MB en base64, ~4,5 MB de PDF) → `200 { title, confidence, warnings,
+  sessions[], engine: 'ai' }` (cada sesión: `week`+`day` (0 = lunes) o `sourceDate`, `sport`, `title`, `durationMin`,
+  `distanceM`, `intensity` en las zonas de la app, `steps`, `description`, `confidence`; sin descansos, máximo 400).
+  Fotos al modelo de visión, texto y PDF al de texto; el texto del PDF lo saca `unpdf@2.1.0` (PDF.js sin servidor, MIT;
+  30 páginas, imágenes no decodificadas) **antes** de reservar el cupo, así que un escaneado (`422 scanned_pdf`: la app
+  pide fotos de las páginas) o un PDF roto (`400`) no gastan. Consentimiento de IA, 20 lecturas / 24 h (`ai_usage`,
+  función `plan_import`). No guarda nada: la app revisa el plan y lo guarda con `apply_plan_import(p_import, p_workouts,
+  p_replace)`, que crea `plan_imports` + los entrenos (`source 'imported'`, `plan_import_id`) y, con `p_replace`, quita
+  las sesiones planificadas por la app (`rules`/`ai_coach`/`claude`, sin quedada, desde hoy) de esas semanas;
+  `delete_plan_import(p_id)` borra el plan y sus sesiones aún pendientes. CSV, Excel y el calendario de TrainingPeaks
+  se leen en el iPhone (no pasan por aquí).
 - **coach** — `POST` `CoachRequest` (v2: `channel?: 'voice' | 'text'`) → `202 { jobId }`. El resultado se escribe en `coach_jobs`
   (`status` `done` con `reply`, `proposal_id`, `engine: 'ai'` y `extras = { memory: string[], lifeEventId: uuid | null, quedada, weekPlans }`,
   o `error` con mensaje). v2: la salida de la IA incluye `memory` (0-3 hechos o preferencias duraderas, ≤ 140
@@ -326,7 +349,7 @@ aplica la misma regla y responde `already_logged`. Un `401` marca la integració
 ```bash
 npm run test:functions        # node --test "supabase/functions/**/*.test.ts" (Node 24, TS nativo)
 cd supabase/functions
-for fn in mcp ics push-dispatch garmin apple-revoke coach briefing meal; do
+for fn in mcp ics push-dispatch garmin apple-revoke coach briefing meal plan-import; do
   npx --yes deno@2.9.6 check --config "$fn/deno.json" "$fn/index.ts"
 done
 ```
@@ -344,6 +367,7 @@ _shared/
               a la IA y limpieza de texto (briefing, meal)
   briefing/   informe de la mañana: contexto de sueño y plan, prompt, salida validada, refresco de Garmin, HTTP
   meal/       análisis de fotos de comida: validación de la petición, prompt, normalización de macros, HTTP
+  plan-import/ lectura de planes externos (foto, PDF, texto): petición, prompt, salida validada, texto del PDF, HTTP
   ics/ push/ garmin/   feed iCalendar, envío a APNs, integración Garmin
   apple/      JWT ES256 con la clave .p8, client_secret y revocación de Sign in with Apple
   db/rows.ts  filas de Postgres → tipos (puro)

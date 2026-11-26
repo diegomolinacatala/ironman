@@ -42,6 +42,8 @@ const AUTHENTICATED_RPCS = [
   'revoke_personal_token',
   'integration_status',
   'delete_my_account',
+  'apply_plan_import',
+  'delete_plan_import',
 ];
 
 const SERVICE_RPCS = [

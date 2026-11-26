@@ -29,6 +29,8 @@ export interface WorkoutView {
   status: Workout['status'];
   isKey: boolean;
   jointSessionId: UUID | null;
+  /** From the plan the athlete imported (their coach): the week's base, adapt it instead of replacing it. */
+  imported?: true;
   partners?: string[];
   load: number;
   /** Main set and its numbers: "3×8' Z4 · 162–168 ppm · 4:27–4:44 /km · RPE 7–8". */
@@ -100,6 +102,7 @@ export function workoutView(w: Workout, ctx: ViewContext): WorkoutView {
     status: w.status,
     isKey: w.isKey,
     jointSessionId: w.jointSessionId,
+    ...(w.source === 'imported' ? { imported: true as const } : {}),
     ...(partners && partners.length ? { partners } : {}),
     load: workoutLoad(w),
     ...prescriptionOf(w, ctx),

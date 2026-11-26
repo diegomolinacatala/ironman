@@ -27,6 +27,7 @@ import type {
   WeekPlan,
   Workout,
 } from '@/domain/types';
+import type { PlanImport } from '@/domain/planImport';
 
 /**
  * v2: sleep stages in the seed, `briefings`, Diego not onboarded (the v2 onboarding runs once).
@@ -92,6 +93,10 @@ export interface DemoWeekPlan extends WeekPlan {
   userId: UUID;
 }
 
+export interface DemoPlanImport extends PlanImport {
+  userId: UUID;
+}
+
 export interface DemoDb {
   version: number;
   /** "Today" when the data was seeded (all seed dates are relative to it). */
@@ -119,6 +124,8 @@ export interface DemoDb {
   briefings: DemoBriefing[];
   /** Season plan overrides ("Plan → General"), one per (user, Monday). */
   weekPlans: DemoWeekPlan[];
+  /** Imported plans (Tú › Importar un plan). Optional: older stored databases have none. */
+  planImports?: DemoPlanImport[];
 }
 
 /** Clock + id factory injected into pure demo operations. */

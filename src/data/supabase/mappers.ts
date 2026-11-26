@@ -196,6 +196,7 @@ export function rowToWorkout(row: WorkoutRow): Workout {
   const coaching = parseCoaching(row.coaching);
   return {
     ...(coaching ? { coaching } : {}),
+    ...(row.plan_import_id ? { importId: row.plan_import_id } : {}),
     id: row.id,
     userId: row.user_id,
     date: row.date,

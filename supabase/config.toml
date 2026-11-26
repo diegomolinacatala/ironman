@@ -164,3 +164,8 @@ verify_jwt = false
 # verified in code (userIdFromJwt), same pattern as briefing; 503 ai_unavailable without the worker.
 [functions.speech]
 verify_jwt = false
+
+# Imported training plans (photo / PDF / pasted text → free AI): user JWT verified in code (userIdFromJwt),
+# same pattern as meal; 503 ai_unavailable without the worker.
+[functions.plan-import]
+verify_jwt = false
