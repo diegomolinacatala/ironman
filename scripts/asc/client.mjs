@@ -6,6 +6,7 @@
  */
 import { createHash, createPrivateKey, sign } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
 import { basename } from 'node:path';
 
 const BASE = 'https://api.appstoreconnect.apple.com';

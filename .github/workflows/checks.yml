@@ -34,6 +34,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Lint (ESLint; los avisos no fallan)
+        run: npm run lint
+
       - name: Tipos, Jest, base de datos y funciones
         run: npm run test:all
 

@@ -26,8 +26,8 @@ export function RacePlanSection({ view }: RacePlanSectionProps) {
     prediction ? <RacePredictionBlock outcome={prediction} /> : null,
     plan.swim ? <RacePlanLeg sport="swim" title="Natación" leg={plan.swim} /> : null,
     plan.bike ? <RacePlanLeg sport="bike" title="Bici" leg={plan.bike} /> : null,
-    <RacePlanLeg sport="run" title={plan.triathlon ? 'Carrera a pie' : 'Carrera'} leg={plan.run} note={plan.run.hrNote} />,
-    <RaceFuelBlock fuel={plan.fuel} triathlon={plan.triathlon} />,
+    <RacePlanLeg key="run" sport="run" title={plan.triathlon ? 'Carrera a pie' : 'Carrera'} leg={plan.run} note={plan.run.hrNote} />,
+    <RaceFuelBlock key="fuel" fuel={plan.fuel} triathlon={plan.triathlon} />,
     plan.transitions ? <RaceTransitions t1={plan.transitions.t1} t2={plan.transitions.t2} /> : null,
   ].filter((block) => block !== null);
 
