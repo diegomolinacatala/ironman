@@ -1,14 +1,14 @@
 import { router } from 'expo-router';
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { useProfile, useRaces } from '@/data/queries';
+import { useProfile, useRaces, useWorkouts } from '@/data/queries';
 import { todayISO } from '@/domain/dates';
 import { PriorityExplainer } from '@/features/races/PriorityExplainer';
 import { RacePlanSection } from '@/features/races/RacePlanSection';
 import { RaceRow } from '@/features/races/RaceRow';
 import { splitRaces } from '@/features/races/raceModel';
-import { racePlanView } from '@/features/races/racePlanModel';
+import { racePlanView, recentRidesRange, ridePoints } from '@/features/races/racePlanModel';
 import { errorMessage } from '@/lib/logger';
 import { Button, EmptyState, ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
 
@@ -16,8 +16,17 @@ export default function RacesScreen() {
   const races = useRaces();
   const profile = useProfile().data ?? null;
   const today = todayISO();
+  const ridesRange = useMemo(() => recentRidesRange(today), [today]);
+  // Without FTP the bike prediction comes from these rides (speed at a race-like heart rate).
+  const recentWorkouts = useWorkouts(ridesRange).data;
   const { upcoming, past } = splitRaces(races.data ?? [], today);
-  const planView = racePlanView({ races: upcoming, today, thresholds: profile?.thresholds, level: profile?.level });
+  const planView = racePlanView({
+    races: upcoming,
+    today,
+    thresholds: profile?.thresholds,
+    level: profile?.level,
+    recentRides: ridePoints(recentWorkouts),
+  });
   const add = () => router.push('/races/edit');
   const edit = (id: string) => router.push(`/races/edit?id=${encodeURIComponent(id)}`);
 

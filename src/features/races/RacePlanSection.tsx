@@ -6,24 +6,24 @@ import { Disclosure, Divider, Tag, space, useTheme } from '@/ui';
 
 import { RaceFuelBlock, RacePlanHint, RaceTransitions } from './RacePlanBlocks';
 import { RacePlanLeg } from './RacePlanLeg';
+import { RacePredictionBlock } from './RacePredictionBlock';
 import type { RacePlanView } from './racePlanModel';
 
 export interface RacePlanSectionProps {
   view: RacePlanView;
-  /** Shown first inside the fold (the finish-time prediction). */
-  header?: ReactNode;
 }
 
 /**
  * «Plan de carrera» of the next A race: folded to one line (bike · run · fuel);
- * from three weeks before it is highlighted and opens by default.
+ * from three weeks before it is highlighted and opens by default. Inside: the
+ * finish-time prediction first, then each leg, fueling and transitions.
  */
-export function RacePlanSection({ view, header }: RacePlanSectionProps) {
+export function RacePlanSection({ view }: RacePlanSectionProps) {
   const { colors } = useTheme();
-  const { plan, highlighted, badge } = view;
+  const { plan, prediction, highlighted, badge } = view;
   const hint = racePlanHint(plan);
   const blocks: ReactNode[] = [
-    header ?? null,
+    prediction ? <RacePredictionBlock outcome={prediction} /> : null,
     plan.swim ? <RacePlanLeg sport="swim" title="Natación" leg={plan.swim} /> : null,
     plan.bike ? <RacePlanLeg sport="bike" title="Bici" leg={plan.bike} /> : null,
     <RacePlanLeg sport="run" title={plan.triathlon ? 'Carrera a pie' : 'Carrera'} leg={plan.run} note={plan.run.hrNote} />,
