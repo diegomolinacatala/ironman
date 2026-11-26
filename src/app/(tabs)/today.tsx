@@ -23,6 +23,7 @@ import { easierPatch } from '@/features/workouts/coachAdapters';
 import { CompleteSheet } from '@/features/workouts/CompleteSheet';
 import { MoveSheet } from '@/features/workouts/MoveSheet';
 import { useWorkoutActions } from '@/features/workouts/useWorkoutActions';
+import { TodayQuestions } from '@/features/weekQuestions/TodayQuestions';
 import { formatDayShort } from '@/domain/dates';
 import { useBriefing } from '@/data/queries';
 import { Disclosure, GroupedList, Screen, SectionHeader, space, useTheme } from '@/ui';
@@ -78,6 +79,7 @@ export default function TodayScreen() {
       <Banners invites={data.invites} proposals={data.proposals} today={today} />
       {data.isLoading ? null : <AdaptNudgeCard today={today} checkinDone={data.checkinDone} />}
       {data.isLoading ? null : <ContextPromptCard />}
+      {data.isLoading ? null : <TodayQuestions today={today} />}
       <View style={styles.folds}>
         <SectionHeader title="Tu día en detalle" />
         <GroupedList>

@@ -972,3 +972,34 @@ checked by the database, every field by `athleteContextSchema`). Mirrored `domai
 - **Coach, briefing and Claude**: `athlete-view.ts` `athleteContextView` → `athlete.context` in the planning context
   (MCP `get_planning_context`, the AI coach): «sin contar» or `{ how, summary, sportFocus, periods }`; the briefing's
   `athlete.context` is the summary line. Deploy the migration before the functions (they select the column).
+
+## 24. «Mis sitios», the Sunday/Wednesday questions and «¿Sales con alguien?» (2026-11-27)
+
+Migration `20261127000300_week_questions_places.sql`: `profiles.places` and `profiles.week_questions` (jsonb, own row
+only, outline + size checked; PGlite tests `supabase/tests/week-questions-places.test.ts`). App only for now: the edge
+functions do not read them.
+
+- **Mis sitios** (Tú › Entrenamiento › Mis sitios, `domain/places.ts`): main city + optional city of the weekends away,
+  each with bici de carretera / rodillo / piscina / gimnasio. The athlete is at home every day except Saturday and
+  Sunday of a week they answered «Sí, vuelvo». Per day: no bike and no trainer → `blockedSports` bike + brick; no pool
+  → swim blocked; only the trainer → new bike/brick sessions titled «Rodillo · …»; only the road bike → never a rodillo
+  session; no gym → strength «con gomas y peso corporal». `weekContext.withWeekContext` merges these restrictions
+  into the planner (`weekPlanContext`) and the re-planner (`makeCtx`), like the imprevistos; `adaptChangesToPlaces`
+  retitles the planner's new sessions. `placesReplan.replanForPlaces` fits planned sessions (move, else run/strength,
+  else drop; quedadas only get a note) and is proposed after «Sí, vuelvo» for the weekend.
+- **Preguntas de la semana** (switch in Mis sitios, off by default; `domain/weekQuestions.ts`), one calm card on Hoy
+  (`features/weekQuestions/TodayQuestions`), local reminder at 19:00 (replaces «Planifica tu semana» on Sunday):
+  - Sunday (Monday while open) «Tu semana» for the next week: priority (Entrenar con gente / Un poco de todo / Cuando
+    mejor me vaya), load (Muchas cosas / Normal / Más libre), optional «¿Qué planes tienes?». Then «Planificar semana».
+    «Muchas cosas» = day restriction volume ×0.8, one quality session less, weekday sessions ≤ 75'. «Más libre» =
+    ×1.1 before the ramp cap (`weekVolumeBoost` in `computeBudget`). «Con gente» / «Un poco de todo» =
+    `features/week/socialPlan.withSocial` on «Planificar semana»: the friends' common slots (`commonSlots`) and
+    `domain/weekSocial.socialLayer` puts new bike/run/swim sessions in them on the same day (con gente: also timed
+    ones; un poco de todo: only untimed) and names the friend in the reason; the summary suggests the quedadas. The
+    plans text is stored only (not read by the coach yet).
+  - Wednesday (also Thursday), only with a second place, «¿Este fin de semana vuelves a {away}?»: «Sí» → weekend at the
+    other place + a pending `replan` proposal for Saturday/Sunday (Hoy banners). When the road bike is there and not
+    at home: «¿Quieres salir en bici?» → «¿Con quién?» (friends' chips → `/joint/new` prefilled with the weekend ride).
+- **¿Sales con alguien?** (everyone, `domain/rideCompanion.ts`): the next planned outdoor bike (`isOutdoorSession`, no
+  quedada) of today..today+2, one at a time, asked once per workout (device: `rti.rideAsk.v1`); a friend prefills
+  `/joint/new` with that workout, «Solo» closes it. Nothing is sent without the athlete.

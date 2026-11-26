@@ -65,6 +65,8 @@ import type {
 } from './types';
 import { rangesLength } from './timeRanges';
 import { buildWeekModel, type DayState, type FixedInput, type WeekModelInput } from './weekModel';
+import { adaptChangesToPlaces, withWeekContext } from './weekContext';
+import { weekVolumeBoost } from './weekQuestions';
 
 /** Share of endurance time in Z1-Z2 (kept here for the public API; lives in plannerSupport). */
 export { lowIntensityShare } from './plannerSupport';
@@ -246,7 +248,8 @@ function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: BudgetContext)
     plan: ctx.weekPlan,
   });
   // Exams take the whole week down (not only the exam days), so their day factors are left out here.
-  let target = weekMinutes * fraction * ctx.dayFactor;
+  // «Tu semana» más libre: a bit more before the ramp cap below (which still applies).
+  let target = weekMinutes * fraction * ctx.dayFactor * weekVolumeBoost(input.profile, input.weekStart);
   const readinessLevel = input.readiness?.level;
   if (readinessLevel === 'red') target *= READINESS_EFFECTS.plannerRedWeekFactor;
   if (readinessLevel === 'amber') target *= READINESS_EFFECTS.plannerAmberWeekFactor;
@@ -397,7 +400,8 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   const info = applyWeekPlan(raw, weekPlan, weeklyHours);
   const target = info.raceInWeek && info.phase === 'race_week' && info.targetRace?.id === info.raceInWeek.id ? info.targetRace : null;
   const plannable = dates.filter((d) => d >= firstPlannable && !(target !== null && d > target.date));
-  const restrictions = restrictionsForDates(dates, input.lifeEvents);
+  // «Mis sitios» and «Tu semana» (weekContext.ts) on top of the imprevistos.
+  const restrictions = withWeekContext(restrictionsForDates(dates, input.lifeEvents), input.profile);
   const inWeek = (date: ISODate) => date >= range.from && date <= range.to;
   const active = input.existing.filter((w) => w.status !== 'skipped' && inWeek(w.date));
   const existing = active.filter((w) => w.sport !== 'rest');
@@ -411,7 +415,7 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   ];
   const exam = examOf(events, range.from, range.to);
   const week = summarizeRestrictions(plannable, restrictions);
-  const dayFactor = exam ? summarizeRestrictions(plannable, restrictionsForDates(dates, input.lifeEvents.filter((e) => e.kind !== 'exam'))).factor : week.factor;
+  const dayFactor = exam ? summarizeRestrictions(plannable, withWeekContext(restrictionsForDates(dates, input.lifeEvents.filter((e) => e.kind !== 'exam')), input.profile)).factor : week.factor;
   return {
     exam,
     dayFactor,
@@ -784,7 +788,9 @@ export function planWeek(rawInput: PlannerInput): PlanWeekResult {
     dayFactor: ctx.dayFactor,
   });
   const built = buildSpecs(input, ctx, budget);
-  return finalize(input, ctx, budget, placeWeek(input, ctx, budget, built.specs, draftDays), built);
+  const result = finalize(input, ctx, budget, placeWeek(input, ctx, budget, built.specs, draftDays), built);
+  // «Mis sitios»: rodillo where there is only the trainer, outside where there is only the road bike.
+  return { ...result, changes: adaptChangesToPlaces(result.changes, input.profile) };
 }
 
 /** Rules-engine week proposal: only 'add' changes, never touches existing workouts. */

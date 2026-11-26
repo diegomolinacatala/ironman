@@ -49,6 +49,8 @@ jest.mock('@/data/queries', () => {
     useProfile: () => ok(mockProfile),
     useWeekPlans: () => ok([]),
     useWeather: () => ok(mockForecast),
+    useFriends: () => ok([]),
+    useFetchFriendWeeks: () => async () => [],
   };
 });
 

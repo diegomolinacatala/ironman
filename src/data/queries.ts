@@ -13,6 +13,7 @@ import type {
   CompletedData,
   DailyCheckin,
   DateRange,
+  FriendWeekItem,
   ISODate,
   JointSessionDraft,
   JointSessionPatch,
@@ -571,6 +572,25 @@ export function useFriendWeek(friendId: UUID | undefined, range: DateRange) {
     queryFn: () => repo.getFriendWeek(friendId as UUID, range),
     enabled: useSignedIn() && Boolean(friendId),
   });
+}
+
+/**
+ * Loads friends' weeks on demand (same cache entries as useFriendWeek): the planner's
+ * «Entrenar con gente» layer asks only when the athlete plans a week. A friend whose week
+ * fails to load is left out (empty list).
+ */
+export function useFetchFriendWeeks(): (friendIds: readonly UUID[], range: DateRange) => Promise<FriendWeekItem[][]> {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useCallback(
+    (friendIds, range) =>
+      Promise.all(
+        friendIds.map((id) =>
+          client.fetchQuery({ queryKey: qk.friendWeek(id, range), queryFn: () => repo.getFriendWeek(id, range) }).catch(() => [] as FriendWeekItem[]),
+        ),
+      ),
+    [client, repo],
+  );
 }
 
 export function useJointSessions(range: DateRange) {

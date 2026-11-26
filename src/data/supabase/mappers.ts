@@ -7,8 +7,10 @@
  * sent to PostgREST.
  */
 import { normalizeCoaching } from '@/domain/changes';
+import { parsePlaces } from '@/domain/places';
 import { parseTrainingPrefs } from '@/domain/trainingPrefs';
 import { parseAthleteContext } from '@/domain/athleteContext';
+import { parseWeekQuestions } from '@/domain/weekQuestions';
 import {
   ILLNESS_ANSWERS,
   INTENSITIES,
@@ -121,11 +123,15 @@ export function rowToProfile(row: ProfileRow): Profile {
   // «Tu forma de entrenar»: absent when nothing is stored (everything automático) or the column is not deployed yet.
   const trainingPrefs = parseTrainingPrefs(row.training_prefs);
   const weatherPlace = weatherPlaceOf(row);
-  // «Tu contexto»: absent when nothing is stored or the column is not deployed yet.
+  // «Tu contexto», «Mis sitios» and the week questions: absent when not set or the columns are not deployed yet.
   const athleteContext = parseAthleteContext(row.athlete_context);
+  const places = parsePlaces(row.places);
+  const weekQuestions = parseWeekQuestions(row.week_questions);
   return {
     ...(watchBrand ? { watchBrand } : {}),
     ...(athleteContext ? { athleteContext } : {}),
+    ...(places ? { places } : {}),
+    ...(weekQuestions ? { weekQuestions } : {}),
     ...(weatherPlace ? { weatherPlace } : {}),
     ...(trainingPrefs ? { trainingPrefs } : {}),
     id: row.id,
@@ -168,6 +174,8 @@ export function profileToRow(profile: Profile): ProfileRow {
     weather_place: profile.weatherPlace?.name ?? null,
     weather_lat: profile.weatherPlace?.lat ?? null,
     weather_lon: profile.weatherPlace?.lon ?? null,
+    places: profile.places ?? null,
+    week_questions: profile.weekQuestions ?? null,
     created_at: profile.createdAt,
   };
 }
@@ -197,6 +205,8 @@ export function profilePatchToRow(patch: ProfilePatch): Row {
     watch_brand: patch.watchBrand,
     training_prefs: patch.trainingPrefs,
     athlete_context: patch.athleteContext,
+    places: patch.places,
+    week_questions: patch.weekQuestions,
     ...weatherPlaceColumns(patch.weatherPlace),
   });
 }

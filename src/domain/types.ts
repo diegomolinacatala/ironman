@@ -717,6 +717,60 @@ export interface AthleteContext {
   promptDismissed: boolean;
 }
 
+/** What the athlete has at one of their places («Mis sitios»). */
+export interface PlaceGear {
+  roadBike: boolean;
+  trainer: boolean;
+  pool: boolean;
+  gym: boolean;
+}
+
+export interface TrainingPlace {
+  /** "Valencia". */
+  name: string;
+  gear: PlaceGear;
+}
+
+/**
+ * «Mis sitios» (`profiles.places`, domain/places.ts): the main city and, optionally, the city
+ * the athlete goes back to at weekends (Castellón). The planner honours the gear of the place
+ * where the athlete is each day.
+ */
+export interface TrainingPlaces {
+  home: TrainingPlace;
+  away: TrainingPlace | null;
+}
+
+/** «Tu semana» (Sunday): train with more people, when it suits me best, or a mix. */
+export type WeekPriority = 'together' | 'mix' | 'flexible';
+/** «Tu semana» (Sunday): how busy the coming week is. */
+export type WeekLoad = 'busy' | 'normal' | 'free';
+
+/** Answers of the Sunday and Wednesday questions for one week (domain/weekQuestions.ts). */
+export interface WeekAnswers {
+  /** Monday of the week the answers are about. */
+  weekStart: ISODate;
+  priority?: WeekPriority;
+  load?: WeekLoad;
+  /** «¿Qué planes tienes?» (free text, optional). */
+  plans?: string;
+  /** The Sunday question was answered or dismissed. */
+  sundayDone?: boolean;
+  /** «¿Este fin de semana vuelves a {away}?» */
+  awayWeekend?: boolean;
+  /** «¿Quieres salir en bici?» (asked when the road bike is at the other place). */
+  awayRide?: boolean;
+  /** The Wednesday question was answered or dismissed. */
+  wednesdayDone?: boolean;
+}
+
+/** `profiles.week_questions`: the Sunday/Wednesday questions (off by default) and the recent answers. */
+export interface WeekQuestions {
+  enabled: boolean;
+  /** Most recent weeks first, at most `WEEK_ANSWERS_KEPT`. */
+  weeks: WeekAnswers[];
+}
+
 export interface Profile {
   id: UUID;
   username: string;
@@ -742,6 +796,10 @@ export interface Profile {
   weatherPlace?: WeatherPlace | null;
   /** «Tu contexto» (guided interview + free notes); null/absent = not told yet. */
   athleteContext?: AthleteContext | null;
+  /** «Mis sitios»; null/absent = not set (the planner ignores places). */
+  places?: TrainingPlaces | null;
+  /** Sunday/Wednesday questions; null/absent = off. */
+  weekQuestions?: WeekQuestions | null;
   createdAt: ISODateTime;
 }
 
