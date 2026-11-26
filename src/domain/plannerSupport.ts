@@ -243,12 +243,27 @@ export interface TsbGuardResult {
   warning: string | null;
 }
 
+/** Days of history whose mean daily load seeds fitness and fatigue (same rule as Progreso's cold start). */
+const PMC_SEED_WINDOW_DAYS = 28;
+
 function pmcSeed(input: TsbGuardInput): { ctl: number; atl: number } | null {
   const completed = input.history.filter((w) => w.status === 'completed' && w.date < input.range.from);
   if (completed.length > 0) {
-    const from = addDays(input.range.from, -60);
-    const loads = dailyLoads(completed, [], { from, to: addDays(input.range.from, -1) });
-    const last = computePmc(loads, { from, to: addDays(input.range.from, -1) }).at(-1);
+    const to = addDays(input.range.from, -1);
+    const earliest = completed.reduce((min, w) => (w.date < min ? w.date : min), to);
+    const from = earliest > addDays(input.range.from, -60) ? earliest : addDays(input.range.from, -60);
+    const loads = dailyLoads(completed, [], { from, to });
+    // Seed CTL = ATL = the mean daily load of the first weeks of data. Starting both at 0 (the app
+    // reads only 4 weeks) made steady training look like heavy fatigue (TSB around −25) and the
+    // guard then dropped half of the week. The shorter the history, the less of that mean is taken
+    // as the athlete's norm: one hard week alone still reads as fatigue.
+    const seedTo = addDays(from, PMC_SEED_WINDOW_DAYS - 1) < to ? addDays(from, PMC_SEED_WINDOW_DAYS - 1) : to;
+    const seedDays = diffDays(seedTo, from) + 1;
+    let seedSum = 0;
+    for (let d = from; d <= seedTo; d = addDays(d, 1)) seedSum += loads[d] ?? 0;
+    const trust = Math.min(1, (diffDays(to, from) + 1) / PMC_SEED_WINDOW_DAYS);
+    const seed = seedDays > 0 ? (seedSum / seedDays) * trust : 0;
+    const last = computePmc(loads, { from, to }, { ctl: seed, atl: seed }).at(-1);
     return last ? { ctl: last.ctl, atl: last.atl } : null;
   }
   const weeks = (input.recentWeeklyMinutes ?? []).filter((m) => Number.isFinite(m) && m > 0);

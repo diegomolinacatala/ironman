@@ -135,6 +135,20 @@ describe('tsbGuard (L11)', () => {
     expect(r.removed).toEqual([]);
   });
 
+  test('four steady weeks of history are the norm, not fatigue: nothing is dropped', () => {
+    // 8 h a week for the 4 weeks the app reads (a session most days).
+    const history = Array.from({ length: 28 }, (_, i) => i)
+      .filter((i) => i % 7 !== 0)
+      .map((i) =>
+        makeWorkout({ id: `s${i}`, date: addDays(NEXT_MONDAY, -(i + 1)), sport: 'bike', status: 'completed', durationMin: 80, completed: { durationMin: 80 } }),
+      );
+    const week = [placed('BK_END', 80, 1), placed('BK_END', 80, 2), placed('BK_END', 80, 3), placed('BK_END', 80, 4), placed('BK_LONG', 160, 5, 1)];
+    const r = tsbGuard({ range, history, fixedLoads: {}, placed: week });
+    expect(r.removed).toEqual([]);
+    expect(r.warning).toBeNull();
+    expect(r.minTsb).toBeGreaterThan(-10);
+  });
+
   test('planWeek reports projected freshness when history exists', () => {
     const history = [makeWorkout({ id: 'h', date: '2026-10-20', sport: 'run', status: 'completed', durationMin: 60, distanceM: 10000, completed: { durationMin: 60, distanceM: 10000, tss: 60 } })];
     const r = planWeek({ weekStart: NEXT_MONDAY, profile: makeProfile(), races: [makeRace()], existing: [], lifeEvents: [], busyBlocks: [], jointSessions: [], history });
