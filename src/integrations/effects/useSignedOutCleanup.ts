@@ -16,13 +16,15 @@ import { logger } from '@/lib/logger';
 
 import { clearTrainingCalendarData } from '../calendar/trainingCalendarSync';
 import { clearMealPhotos } from '../camera/mealPhoto';
+import { stopSleepWatch } from '../health/sleepWatch';
 import { cancelLocalNotifications } from '../notifications';
 import { clearWidgets } from '../widgets/sync';
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
 async function clearDeviceData(previousUserId: string | null): Promise<void> {
-  const results = await Promise.allSettled([clearMealPhotos(), clearTrainingCalendarData(previousUserId)]);
+  // stopSleepWatch: no more background wakes for the wake-up briefing of an account that left.
+  const results = await Promise.allSettled([clearMealPhotos(), clearTrainingCalendarData(previousUserId), stopSleepWatch()]);
   results.forEach((r) => {
     if (r.status === 'rejected') logger.warn('sign-out: device cleanup failed', r.reason);
   });

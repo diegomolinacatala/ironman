@@ -118,4 +118,24 @@ describe('v4 schemas: steps, coaching, completed data, week plans, watch', () =>
     expect(profilePatchSchema.safeParse({ watchBrand: null }).success).toBe(true);
     expect(firstError(profilePatchSchema.safeParse({ watchBrand: 'polar' }))).toMatch(/Garmin o COROS/);
   });
+
+  test('morning briefing when you wake up: mode, delay and your own window (all optional)', () => {
+    const base = {
+      workoutReminders: true,
+      reminderMinutesBefore: 30,
+      morningSummary: true,
+      morningTime: '07:30',
+      eveningCheckin: true,
+      eveningTime: '21:30',
+      weeklyPlanReminder: true,
+      social: true,
+    };
+    expect(profilePatchSchema.safeParse({ notificationPrefs: base }).success).toBe(true);
+    const wake = { ...base, morningMode: 'wake', wakeDelayMin: 10, wakeWindow: { from: '06:30', to: '08:30' } };
+    expect(profilePatchSchema.safeParse({ notificationPrefs: wake }).data?.notificationPrefs).toEqual(wake);
+    expect(profilePatchSchema.safeParse({ notificationPrefs: { ...wake, wakeWindow: null } }).success).toBe(true);
+    expect(firstError(profilePatchSchema.safeParse({ notificationPrefs: { ...wake, wakeDelayMin: 20 } }))).toMatch(/5, 10, 15 o 30/);
+    expect(firstError(profilePatchSchema.safeParse({ notificationPrefs: { ...wake, morningMode: 'sunrise' } }))).toMatch(/cuándo te llega/);
+    expect(firstError(profilePatchSchema.safeParse({ notificationPrefs: { ...wake, wakeWindow: { from: '09:00', to: '08:00' } } }))).toMatch(/anterior/);
+  });
 });

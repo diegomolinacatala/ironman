@@ -411,6 +411,42 @@ describe('Notificaciones', () => {
     await waitFor(() => expect(mockReschedule).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalled());
   });
+
+  test('«Al despertar»: delay, the usual window (or your own) and the fallback; saved as wake mode', async () => {
+    await render(<NotificationSettingsScreen />);
+    expect(screen.getByRole('tab', { name: 'A una hora fija' }).props.accessibilityState).toMatchObject({ selected: true });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Al despertar' }));
+    expect(screen.getByText(/Necesita que tu reloj sincronice el sueño/)).toBeTruthy();
+    // No nights yet: the two hours before the fixed time (07:30), and the fallback at 07:30.
+    expect(screen.getByText('Aún no conocemos tu franja de despertar: miramos entre 05:30 y 07:30.')).toBeTruthy();
+    expect(screen.getByText('Si tu reloj no dice nada, te llega a las 07:30.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: '10 min' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Elegir mi franja' }));
+    expect(screen.getByText('Tu franja de despertar: entre 05:30 y 07:30.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Sumar: Desde' }));
+    expect(screen.getByText('Tu franja de despertar: entre 05:45 y 07:30.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    expect(mockUpdateProfile.mock.calls[0]?.[0]).toMatchObject({
+      notificationPrefs: { morningMode: 'wake', wakeDelayMin: 10, wakeWindow: { from: '05:45', to: '07:30' } },
+    });
+    // The server sends it in wake mode: the app reschedules without the fixed-time one.
+    await waitFor(() => expect(mockReschedule).toHaveBeenCalledWith(expect.objectContaining({ serverWake: true })));
+  });
+
+  test('back to «Usar la de mi reloj» clears your own window', async () => {
+    mockState.profile = {
+      ...mockProfile,
+      notificationPrefs: { ...mockProfile.notificationPrefs, morningMode: 'wake', wakeWindow: { from: '06:00', to: '08:00' } },
+    };
+    await render(<NotificationSettingsScreen />);
+    expect(screen.getByText('Tu franja de despertar: entre 06:00 y 08:00.')).toBeTruthy();
+    expect(screen.getByText('Si tu reloj no dice nada, te llega a las 08:00.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Usar la de mi reloj' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    expect(mockUpdateProfile.mock.calls[0]?.[0]).toMatchObject({ notificationPrefs: { morningMode: 'wake', wakeWindow: null } });
+  });
 });
 
 describe('Disponibilidad', () => {

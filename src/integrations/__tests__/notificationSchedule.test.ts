@@ -5,9 +5,12 @@ import { addDays } from '@/domain/dates';
 import {
   buildSchedule,
   isLocalNotificationKind,
+  isOwnNotificationKind,
   leadLabel,
   MAX_SCHEDULED,
   urlFromNotificationData,
+  wakeBriefingSpec,
+  WAKE_BRIEFING_KIND,
   type NotificationSpec,
 } from '../notifications/schedule';
 import { prefs, workout } from './fixtures';
@@ -106,6 +109,29 @@ describe('buildSchedule', () => {
     expect(dateOf(late.find((s) => s.kind === 'morning_summary'))).toEqual(new Date(2026, 9, 26, 8, 15));
     const off = buildSchedule({ workouts: [], prefs: { ...prefs, morningSummary: false }, today: TODAY, now: NOW });
     expect(off.some((s) => s.kind === 'morning_summary')).toBe(false);
+  });
+
+  test('wake mode: the server sends the briefing, so no fixed-time one (kept without a server)', () => {
+    const wake = { ...prefs, morningMode: 'wake' as const, wakeDelayMin: 15 };
+    const untimed = workout({ id: 'u', date: TODAY, startTime: null, title: 'Rodaje' });
+    const server = buildSchedule({ workouts: [untimed], prefs: wake, today: TODAY, now: NOW, serverWake: true });
+    expect(server.some((s) => s.kind === 'morning_summary')).toBe(false);
+    // The briefing still covers untimed sessions: no 07:30 "Hoy toca" either.
+    expect(server.some((s) => s.kind === 'workout_reminder')).toBe(false);
+    const demo = buildSchedule({ workouts: [], prefs: wake, today: TODAY, now: NOW, serverWake: false, days: 1 });
+    expect(demo.filter((s) => s.kind === 'morning_summary')).toHaveLength(1);
+    const fixed = buildSchedule({ workouts: [], prefs, today: TODAY, now: NOW, serverWake: true, days: 1 });
+    expect(fixed.filter((s) => s.kind === 'morning_summary')).toHaveLength(1);
+  });
+
+  test('the wake-up briefing the app schedules itself is the same notification, outside the rolling window', () => {
+    const spec = wakeBriefingSpec(TODAY, new Date(2026, 9, 26, 7, 5));
+    expect(spec).toMatchObject({ id: `rti.wake.${TODAY}`, kind: WAKE_BRIEFING_KIND, title: 'Tu informe de hoy', url: '/briefing?play=1', categoryId: 'summary' });
+    expect(dateOf(spec)).toEqual(new Date(2026, 9, 26, 7, 5));
+    expect(isLocalNotificationKind(WAKE_BRIEFING_KIND)).toBe(false);
+    expect(isOwnNotificationKind(WAKE_BRIEFING_KIND)).toBe(true);
+    expect(isOwnNotificationKind('morning_summary')).toBe(true);
+    expect(isOwnNotificationKind('kudos')).toBe(false);
   });
 
   test('evening check-in is one daily repeating notification', () => {

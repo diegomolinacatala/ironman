@@ -163,11 +163,8 @@ function unionMs(intervals: readonly Interval[]): number {
   return current ? total + (current.end - current.start) : total;
 }
 
-/**
- * Hours asleep per "wake-up" date. Overlapping samples from several sources
- * (iPhone + Garmin + Watch) are merged so the same night is not counted twice.
- */
-export function sleepHoursByDate(samples: readonly SleepSampleLike[]): Record<ISODate, number> {
+/** Asleep intervals per "wake-up" date (samples ending before 18:00 belong to that day). */
+function asleepByDate(samples: readonly SleepSampleLike[]): Map<ISODate, Interval[]> {
   const byDate = new Map<ISODate, Interval[]>();
   for (const s of samples) {
     if (!ASLEEP_VALUES.includes(s.value)) continue;
@@ -177,10 +174,59 @@ export function sleepHoursByDate(samples: readonly SleepSampleLike[]): Record<IS
     const date = localDate(new Date(end + SLEEP_DAY_SHIFT_MS));
     byDate.set(date, [...(byDate.get(date) ?? []), { start, end }]);
   }
+  return byDate;
+}
+
+/**
+ * Hours asleep per "wake-up" date. Overlapping samples from several sources
+ * (iPhone + Garmin + Watch) are merged so the same night is not counted twice.
+ */
+export function sleepHoursByDate(samples: readonly SleepSampleLike[]): Record<ISODate, number> {
   const result: Record<ISODate, number> = {};
-  for (const [date, intervals] of byDate) {
+  for (const [date, intervals] of asleepByDate(samples)) {
     const hours = Math.min(MAX_SLEEP_HOURS, unionMs(intervals) / HOUR_MS);
     result[date] = Math.round(hours * 100) / 100;
+  }
+  return result;
+}
+
+/** Start and end (ISO instants) of a night's main sleep. */
+export interface SleepWindow {
+  start: string;
+  end: string;
+}
+
+/** Asleep intervals closer than this are one session (a night with awakenings). */
+const SESSION_GAP_MS = 90 * MINUTE_MS;
+
+interface Session extends Interval {
+  asleepMs: number;
+}
+
+/** Sessions of merged asleep intervals, split where nothing was recorded for more than 90 min. */
+function sessionsOf(intervals: readonly Interval[]): Session[] {
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  const sessions: Session[] = [];
+  for (const iv of sorted) {
+    const last = sessions[sessions.length - 1];
+    if (last && iv.start - last.end <= SESSION_GAP_MS) {
+      sessions[sessions.length - 1] = { ...last, end: Math.max(last.end, iv.end), asleepMs: 0 };
+    } else {
+      sessions.push({ start: iv.start, end: iv.end, asleepMs: 0 });
+    }
+  }
+  return sessions.map((s) => ({ ...s, asleepMs: unionMs(sorted.filter((iv) => iv.start >= s.start && iv.end <= s.end)) }));
+}
+
+/**
+ * Start and end of the main sleep (the longest session) per wake-up date, so an afternoon
+ * nap does not move the time the athlete woke up (wake-up briefing, usual wake-up window).
+ */
+export function sleepWindowsByDate(samples: readonly SleepSampleLike[]): Record<ISODate, SleepWindow> {
+  const result: Record<ISODate, SleepWindow> = {};
+  for (const [date, intervals] of asleepByDate(samples)) {
+    const main = sessionsOf(intervals).reduce<Session | null>((best, s) => (best === null || s.asleepMs > best.asleepMs ? s : best), null);
+    if (main) result[date] = { start: new Date(main.start).toISOString(), end: new Date(main.end).toISOString() };
   }
   return result;
 }
@@ -210,6 +256,8 @@ export interface DailyHealthSeries {
   hrvMs: Record<ISODate, number>;
   steps: Record<ISODate, number>;
   vo2max: Record<ISODate, number>;
+  /** Main sleep start/end per wake-up date (the usual wake-up window and the wake-up briefing). */
+  sleepWindows?: Record<ISODate, SleepWindow>;
 }
 
 function round1(value: number | undefined): number | null {
@@ -220,6 +268,7 @@ function round1(value: number | undefined): number | null {
 export function buildMetricsDrafts(dates: readonly ISODate[], series: DailyHealthSeries): MetricsDraft[] {
   return dates.flatMap((date): MetricsDraft[] => {
     const steps = series.steps[date];
+    const window = series.sleepWindows?.[date];
     const draft: MetricsDraft = {
       date,
       source: 'healthkit',
@@ -233,6 +282,7 @@ export function buildMetricsDrafts(dates: readonly ISODate[], series: DailyHealt
       steps: isFiniteNumber(steps) && steps > 0 ? Math.round(steps) : null,
       stressAvg: null,
       trainingStatus: null,
+      ...(window ? { sleepStart: window.start, sleepEnd: window.end } : {}),
     };
     const hasValue =
       draft.hrvMs != null || draft.restingHr != null || draft.sleepHours != null || draft.vo2max != null || draft.steps != null;

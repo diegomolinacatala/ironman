@@ -24,6 +24,8 @@ const SCOPED_ONLY_KEYS = {
   trainingCalendar: 'rti.trainingCalendar.v1',
   /** Apps seen writing workouts or sleep to Apple Salud ("COROS"…), to tell COROS users their data arrives. */
   healthSources: 'rti.health.sources.v1',
+  /** Last local date the wake-up briefing was settled from this iPhone (Apple Salud path). */
+  wakeBriefingDay: 'rti.health.wakeBriefingDay.v1',
 } as const;
 
 type ScopedOnlyKey = keyof typeof SCOPED_ONLY_KEYS;

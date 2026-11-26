@@ -32,6 +32,8 @@ export interface PlanSnapshot {
   today: ISODate;
   /** Bumped when the app becomes active so time-dependent output is refreshed. */
   tick: number;
+  /** A backend sends "Tu informe de hoy" in wake mode (false in demo: keep the fixed time). */
+  serverWake?: boolean;
 }
 
 /** jointSessionId → first names of the other accepted participants ("David y Marta"). */
@@ -50,7 +52,7 @@ export function jointPartnerNames(sessions: readonly JointSession[], myId: strin
 }
 
 export function usePlanMirrors(enabled: boolean, snapshot: PlanSnapshot): void {
-  const { workouts, races, jointSessions, profile, briefing, userId, today, tick } = snapshot;
+  const { workouts, races, jointSessions, profile, briefing, userId, today, tick, serverWake = false } = snapshot;
   const timeZone = profile?.timezone ?? null;
   const { thresholds, raceDistance } = prescriptionContext(profile?.thresholds, races, today);
 
@@ -59,14 +61,14 @@ export function usePlanMirrors(enabled: boolean, snapshot: PlanSnapshot): void {
     const timer = setTimeout(() => {
       // Reminder bodies name the main target: `buildSchedule` (ScheduleInput) takes the profile
       // thresholds and this race distance (what race-pace sessions mean).
-      const reminders = { workouts, profile, today, jointPartners: jointPartnerNames(jointSessions ?? [], profile.id), raceDistance };
-      rescheduleLocalNotifications(reminders)
+      const jointPartners = jointPartnerNames(jointSessions ?? [], profile.id);
+      rescheduleLocalNotifications({ workouts, profile, today, jointPartners, raceDistance, serverWake })
         .then((count) => logger.debug(`notifications: ${count} scheduled`))
         .catch((error: unknown) => logger.warn('notifications: reschedule failed', error));
       syncWidgets({ workouts, races: races ?? [], jointSessions: jointSessions ?? [], profile, today, briefing });
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, workouts, races, jointSessions, profile, today, tick, briefing, raceDistance]);
+  }, [enabled, workouts, races, jointSessions, profile, today, tick, briefing, raceDistance, serverWake]);
 
   // No-op unless this account turned "Añadir mis entrenos al calendario" on.
   useEffect(() => {

@@ -79,7 +79,7 @@ npx supabase secrets set GARMIN_KEY_SECRET="$(openssl rand -base64 48)"
 8. **Desplegar las funciones del servidor** (sin Docker):
 
 ```bash
-npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke coach briefing meal --use-api
+npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke coach briefing meal morning --use-api
 ```
 
 9. *Recomendado:* *Authentication → Emails → SMTP* con un proveedor propio (p. ej. Resend, gratis): el
@@ -107,6 +107,37 @@ npx supabase secrets set AI_WORKER_URL=https://ironman-ai.TU-SUBDOMINIO.workers.
 ```
 
 Si se agota la cuota del día, la app sigue funcionando con su informe y su motor de reglas locales.
+
+### 1.11 Informe al despertar (opcional para cada atleta)
+
+En *Tú › Informe de cada mañana* (o *Notificaciones*), «Aviso del informe: A una hora fija | Al
+despertar». Al despertar, «Tu informe de hoy» llega 5, 10, 15 (por defecto) o 30 minutos después de que el
+reloj registre que se ha despertado; si el reloj no dice nada, al final de su franja habitual (o a su hora
+fija si es más tarde). El servidor lo envía con push, así que necesita las push de Apple configuradas
+(`APNS_*`, sección 3) y, para mirar el sueño de Garmin durante la franja, `GARMIN_KEY_SECRET` (el mismo del
+paso 7). Para ponerlo en marcha:
+
+1. Base de datos: `npx supabase db push` (aplica `20261126000300_wake_notification.sql` y
+   `20261126000301_wake_notification_platform.sql`).
+2. Función: `npx supabase functions deploy morning --use-api`.
+3. Tareas programadas, **una vez** en el SQL Editor (añade `rti-morning-wake`, cada 5 minutos, a las que ya
+   había):
+
+```sql
+select private.schedule_platform_jobs();
+select jobname, schedule from cron.job;   -- rti-garmin-sync, rti-push-sweep, rti-morning-wake
+```
+
+4. App: una build nueva (push a `main` → TestFlight). Activa la entrega en segundo plano de Apple Salud
+   (entitlement `com.apple.developer.healthkit.background-delivery`), con la que el iPhone se entera del
+   sueño de COROS, Garmin Connect o el Apple Watch sin abrir la app. iOS decide cuándo despierta a la app:
+   es un camino «si se puede»; el aviso de respaldo del servidor siempre está. Si la exportación de la
+   build se queja de ese entitlement, revisa en developer.apple.com › *Identifiers* › la app que
+   **HealthKit** siga marcado (la entrega en segundo plano va dentro de esa capacidad).
+
+Coste en Garmin: solo para quien tiene este modo y Garmin, como mucho una consulta cada 10 minutos dentro de
+su franja (2 llamadas: canjear la clave y el sueño de ese día), es decir ≈ 4–12 llamadas en un día normal y
+36 como máximo con una franja de 3 h. Se para en cuanto aparece la noche.
 
 ---
 

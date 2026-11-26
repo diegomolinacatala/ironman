@@ -13,6 +13,7 @@ crea el cliente de Supabase y conecta las piezas.
 | `mcp` | `POST /mcp/u/<secreto>` (conector "Conecta tu Claude") | secreto personal en la ruta (scope `mcp`) | `false` |
 | `ics` | `GET /ics/<secreto>.ics` (suscripción `webcal://`) | secreto personal en la ruta (scope `ics`) | `false` |
 | `push-dispatch` | `POST /push-dispatch` (trigger `pg_net` + barrido `pg_cron`) | clave secreta del servidor en `apikey` | `false` |
+| `morning` | `POST /morning` con `{ action: 'sweep' }` (informe al despertar, `pg_cron` cada 5 min) | clave secreta del servidor en `apikey` | `false` |
 | `garmin` | `POST /garmin` con `{ action }` | JWT del usuario (`connect`, `disconnect`, `sync`) · clave secreta en `apikey` (`sync_all`) | `false` (el JWT se verifica en el código) |
 | `apple-revoke` | `POST /apple-revoke` con `{ authorizationCode }` | JWT del usuario | `false` (el JWT se verifica en el código) |
 
@@ -141,6 +142,7 @@ npx supabase db push                       # migraciones (RPC svc_* que usan est
 npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
 npx supabase functions deploy coach briefing meal garmin mcp --use-api    # v2 (tras db push de 20261027000100_v2.sql)
 npx supabase functions deploy speech --use-api                            # voz natural (junto con db push de 20261105000100_speech_budget.sql y 20261105000200_speech_budget_caps.sql)
+npx supabase functions deploy morning --use-api                           # informe al despertar (tras db push de 20261126000300/000301_wake_notification*)
 ```
 
 Cada función tiene su `deno.json` (`nodeModulesDir: "none"`) para que Deno no use el
@@ -307,6 +309,34 @@ curl -s -X POST "https://<ref>.supabase.co/functions/v1/mcp/u/<secreto>" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
 ```
 
+## Informe al despertar (`morning`)
+
+Opcional por usuario (`notification_prefs.morningMode = 'wake'`; por defecto la hora fija). `pg_cron`
+llama a `private.morning_wake_tick()` cada 5 minutos, que solo invoca `POST /morning {"action":"sweep"}`
+mientras haya alguien en modo despertar con su mañana empezada (≥ 03:00 local) y el día sin resolver. Por
+cada atleta de `svc_wake_candidates(now)` (`_shared/morning/plan.ts`, con el módulo de dominio espejado
+`planning/domain/wakeWindow.ts`, el mismo que usa la app):
+
+- **ventana habitual**: de las noches de las últimas 3 semanas (`daily_metrics.sleep_end`, prioridad
+  garmin > coros > healthkit > manual), de la más temprana − 30 min a la más tardía + 60 min, separando
+  laborables y fin de semana si hay noches suficientes (con 7 o más se descartan la más temprana y la más
+  tardía); la del usuario (`wakeWindow`) manda; sin historial, las 2 h antes de la hora fija;
+- **despertar conocido** → «Tu informe de hoy» a `despertar + wakeDelayMin` (5/10/15/30, por defecto 15;
+  si ya pasó, al momento) con `svc_send_morning_briefing` (fila en `notifications` tipo
+  `morning_briefing`, ya leída, que el trigger de `push-dispatch` envía en el acto);
+- **dentro de la ventana sin despertar** → con Garmin conectado, una consulta ligera del sueño de hoy
+  como mucho cada 10 min (`_shared/garmin/sleep-pull.ts`: 2 llamadas, canje del token +
+  `dailySleepSummariesByDate` de un día; como mucho ~36 llamadas/usuario/día con una ventana de 3 h, lo
+  normal 4–12) que guarda la noche en `daily_metrics` y vuelve a decidir;
+- **sin noticias al acabar la ventana** (o a la hora fija si es más tarde) → el informe igualmente; si se
+  sabe que la noche sigue (inicio sin fin), espera hasta 3 h; más de 3 h tarde → día resuelto sin aviso
+  (`svc_skip_morning_briefing`).
+
+Nunca dos al día: `briefing_notices` (una fila por usuario y día local) pasa una sola vez de `watching` a
+`push` (servidor), `device` (la app lo reclamó con `claim_wake_briefing` tras leer Apple Salud y programó
+su notificación local) o `skipped`. Necesita `APNS_*` (como `push-dispatch`) y, para consultar Garmin,
+`GARMIN_KEY_SECRET` (sin él solo decide con lo que ya hay en `daily_metrics`).
+
 ## Garmin Personal API
 
 Cada usuario crea su clave en `connect.garmin.com/app/settings/personalApiToken` (30 días a 1 año) y la
@@ -327,7 +357,7 @@ aplica la misma regla y responde `already_logged`. Un `401` marca la integració
 ```bash
 npm run test:functions        # node --test "supabase/functions/**/*.test.ts" (Node 24, TS nativo)
 cd supabase/functions
-for fn in mcp ics push-dispatch garmin apple-revoke coach briefing meal; do
+for fn in mcp ics push-dispatch garmin apple-revoke coach briefing meal morning; do
   npx --yes deno@2.9.6 check --config "$fn/deno.json" "$fn/index.ts"
 done
 ```
@@ -345,7 +375,8 @@ _shared/
               a la IA y limpieza de texto (briefing, meal)
   briefing/   informe de la mañana: contexto de sueño y plan, prompt, salida validada, refresco de Garmin, HTTP
   meal/       análisis de fotos de comida: validación de la petición, prompt, normalización de macros, HTTP
-  ics/ push/ garmin/   feed iCalendar, envío a APNs, integración Garmin
+  ics/ push/ garmin/   feed iCalendar, envío a APNs, integración Garmin (y la consulta ligera del sueño de hoy)
+  morning/    informe al despertar: decisión por atleta (ventana, retraso, respaldo), barrido y HTTP
   apple/      JWT ES256 con la clave .p8, client_secret y revocación de Sign in with Apple
   db/rows.ts  filas de Postgres → tipos (puro)
   platform/   adaptadores supabase-js, SDK de Anthropic (no se cargan en los tests) y Workers AI (fetch inyectado, con pruebas)

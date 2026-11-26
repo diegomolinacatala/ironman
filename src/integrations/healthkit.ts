@@ -29,9 +29,12 @@ import {
   quantityToMeters,
   quantityToMinutes,
   sleepHoursByDate,
+  sleepWindowsByDate,
   statsByDate,
   type DailyHealthSeries,
   type DailyStatLike,
+  type SleepSampleLike,
+  type SleepWindow,
 } from './health/mapping';
 import { distinctSourceNames, emptyHealthResult, type HealthSyncResult } from './health/result';
 import {
@@ -140,22 +143,29 @@ async function dailyStat<T extends QuantityTypeIdentifier>(
 
 interface SleepRead {
   hours: Record<ISODate, number>;
+  /** Main sleep start/end per wake-up date. */
+  windows: Record<ISODate, SleepWindow>;
   /** Apps that wrote those nights ("COROS"…). */
   sources: string[];
 }
 
-const NO_SLEEP: SleepRead = { hours: {}, sources: [] };
+const NO_SLEEP: SleepRead = { hours: {}, windows: {}, sources: [] };
 
-async function readSleep(from: Date, to: Date): Promise<SleepRead> {
+async function sleepSamples(from: Date, to: Date): Promise<{ samples: SleepSampleLike[]; sources: string[] }> {
   const samples = await queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
     limit: 0,
     ascending: true,
-    filter: { date: { startDate: new Date(from.getTime() - SLEEP_LOOKBACK_MS), endDate: to } },
+    filter: { date: { startDate: from, endDate: to } },
   });
   return {
-    hours: sleepHoursByDate(samples.map((s) => ({ startDate: s.startDate, endDate: s.endDate, value: Number(s.value) }))),
+    samples: samples.map((s) => ({ startDate: s.startDate, endDate: s.endDate, value: Number(s.value) })),
     sources: distinctSourceNames(samples.map((s) => s.sourceRevision?.source?.name)),
   };
+}
+
+async function readSleep(from: Date, to: Date): Promise<SleepRead> {
+  const { samples, sources } = await sleepSamples(new Date(from.getTime() - SLEEP_LOOKBACK_MS), to);
+  return { hours: sleepHoursByDate(samples), windows: sleepWindowsByDate(samples), sources };
 }
 
 interface DailyRead {
@@ -171,7 +181,32 @@ async function readDailySeries(from: Date, to: Date): Promise<DailyRead> {
     safely('vo2max', {}, () => dailyStat('HKQuantityTypeIdentifierVO2Max', 'discreteAverage', 'ml/(kg*min)', from, to)),
     safely('sleep', NO_SLEEP, () => readSleep(from, to)),
   ]);
-  return { series: { restingHr, hrvMs, steps, vo2max, sleepHours: sleep.hours }, sleepSources: sleep.sources };
+  return {
+    series: { restingHr, hrvMs, steps, vo2max, sleepHours: sleep.hours, sleepWindows: sleep.windows },
+    sleepSources: sleep.sources,
+  };
+}
+
+/** Looking back this far finds the night that ended this morning. */
+const LAST_NIGHT_LOOKBACK_MS = 18 * HOUR_MS;
+
+/**
+ * The main sleep that ended today (device local date), read straight from Apple Salud — the
+ * wake-up briefing's on-device path. Null when Salud is off for this account, the night is not
+ * written yet (watches write it after the athlete wakes up and their app syncs) or on errors.
+ */
+export async function readLastNight(repo: Repository, now: Date = new Date()): Promise<SleepWindow | null> {
+  if (!isHealthAvailable()) return null;
+  try {
+    const userId = await sessionUserId(repo);
+    if (!userId || !(await isHealthEnabled(userId))) return null;
+    await ensureAuthorized();
+    const { samples } = await sleepSamples(new Date(now.getTime() - LAST_NIGHT_LOOKBACK_MS), now);
+    return sleepWindowsByDate(samples)[localDate(now)] ?? null;
+  } catch (error) {
+    logger.warn('healthkit: last night read failed', error);
+    return null;
+  }
 }
 
 async function readActivities(from: Date, to: Date): Promise<HealthActivity[]> {

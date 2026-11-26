@@ -42,6 +42,7 @@ const AUTHENTICATED_RPCS = [
   'revoke_personal_token',
   'integration_status',
   'delete_my_account',
+  'claim_wake_briefing',
 ];
 
 const SERVICE_RPCS = [
@@ -53,6 +54,10 @@ const SERVICE_RPCS = [
   'svc_reserve_ai_call',
   'svc_reserve_speech',
   'svc_propose_joint_session',
+  'svc_wake_candidates',
+  'svc_record_wake_check',
+  'svc_send_morning_briefing',
+  'svc_skip_morning_briefing',
 ];
 
 describe('schema, privileges and sign-up', () => {

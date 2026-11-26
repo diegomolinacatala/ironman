@@ -87,6 +87,42 @@ function roundTo5(n: number): number {
   return Math.round(n / 5) * 5;
 }
 
+export interface IntakeOptions {
+  /** Carbohydrate target, g/h (0 = water only → no schedule). */
+  carbsPerHour: number;
+  /** Carbs per serving (default a 25 g gel). */
+  gramsPerServing?: number;
+  /** Fluid target, ml/h (default 500). */
+  fluidMlPerHour?: number;
+}
+
+/**
+ * Intakes for `durationMin` of `sport` at an explicit g/h (the race plan uses the
+ * race-day targets): total carbs split into servings, spread between the first
+ * intake and 15 min before the end, never closer than 15 min. Null without carbs.
+ */
+export function intakeSchedule(sport: Sport, durationMin: number, opts: IntakeOptions): FuelingSchedule | null {
+  const gramsPerServing = opts.gramsPerServing ?? DEFAULT_SERVING_G;
+  if (sport === 'rest' || sport === 'strength' || sport === 'mobility' || durationMin <= 0) return null;
+  if (opts.carbsPerHour <= 0 || gramsPerServing <= 0) return null;
+  const totalCarbsG = Math.round((opts.carbsPerHour * durationMin) / 60);
+  const first = FIRST_INTAKE_MIN[sport] ?? 20;
+  const last = Math.max(first, roundTo5(durationMin - LAST_INTAKE_MARGIN_MIN));
+  const wanted = Math.max(1, Math.round(totalCarbsG / gramsPerServing));
+  const fits = Math.floor((last - first) / MIN_GAP_MIN) + 1;
+  const count = Math.min(wanted, fits);
+  const minutes =
+    count === 1 ? [first] : Array.from({ length: count }, (_, i) => roundTo5(first + ((last - first) * i) / (count - 1)));
+  const fluidPerHour = opts.fluidMlPerHour ?? FLUID_ML_PER_HOUR;
+  return {
+    minutes,
+    gramsPerServing,
+    totalCarbsG,
+    drinkCarbsG: Math.max(0, totalCarbsG - count * gramsPerServing),
+    fluidMl: Math.round((fluidPerHour * durationMin) / 60 / 100) * 100,
+  };
+}
+
 /**
  * Concrete intakes for a session: total carbs from the band, split into servings
  * (gels of `gramsPerServing` by default), spread between the first intake and
@@ -94,23 +130,7 @@ function roundTo5(n: number): number {
  */
 export function fuelingSchedule(w: FuelingInput, gramsPerServing = DEFAULT_SERVING_G): FuelingSchedule | null {
   if (w.sport === 'rest' || w.sport === 'strength' || w.sport === 'mobility' || w.durationMin <= 0) return null;
-  const carbsPerHour = CARBS_BY_BAND[bandFor(w)];
-  if (carbsPerHour === 0 || gramsPerServing <= 0) return null;
-  const totalCarbsG = Math.round((carbsPerHour * w.durationMin) / 60);
-  const first = FIRST_INTAKE_MIN[w.sport] ?? 20;
-  const last = Math.max(first, roundTo5(w.durationMin - LAST_INTAKE_MARGIN_MIN));
-  const wanted = Math.max(1, Math.round(totalCarbsG / gramsPerServing));
-  const fits = Math.floor((last - first) / MIN_GAP_MIN) + 1;
-  const count = Math.min(wanted, fits);
-  const minutes =
-    count === 1 ? [first] : Array.from({ length: count }, (_, i) => roundTo5(first + ((last - first) * i) / (count - 1)));
-  return {
-    minutes,
-    gramsPerServing,
-    totalCarbsG,
-    drinkCarbsG: Math.max(0, totalCarbsG - count * gramsPerServing),
-    fluidMl: Math.round((FLUID_ML_PER_HOUR * w.durationMin) / 60 / 100) * 100,
-  };
+  return intakeSchedule(w.sport, w.durationMin, { carbsPerHour: CARBS_BY_BAND[bandFor(w)], gramsPerServing });
 }
 
 function minutesList(minutes: readonly number[]): string {

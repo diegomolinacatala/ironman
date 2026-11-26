@@ -48,7 +48,16 @@ import {
   rowToToken,
   tokenUrl,
 } from '../supabase/mappersRpc';
-import { DEFAULT_AVAILABILITY, parseAvailability, parseCoaching, parseJointSession, parsePlanChanges, parseSteps } from '../supabase/parsers';
+import {
+  DEFAULT_AVAILABILITY,
+  DEFAULT_NOTIFICATION_PREFS,
+  parseAvailability,
+  parseCoaching,
+  parseJointSession,
+  parseNotificationPrefs,
+  parsePlanChanges,
+  parseSteps,
+} from '../supabase/parsers';
 import type { ProposalRow, WorkoutRow } from '../supabase/rows';
 import { rowToWeekPlan, weekPlanToRow } from '../supabase/weekPlansApi';
 
@@ -111,6 +120,20 @@ const workout: Workout = {
   createdAt: NOW,
   updatedAt: NOW,
 };
+
+describe('notification prefs: the wake-up briefing settings', () => {
+  it('absent stays absent (fixed time, 15 min, learned window)', () => {
+    expect(parseNotificationPrefs({})).toEqual(DEFAULT_NOTIFICATION_PREFS);
+  });
+
+  it('keeps valid values and drops the rest', () => {
+    const parsed = parseNotificationPrefs({ morningMode: 'wake', wakeDelayMin: 10, wakeWindow: { from: '06:30:00', to: '08:30' } });
+    expect(parsed).toMatchObject({ morningMode: 'wake', wakeDelayMin: 10, wakeWindow: { from: '06:30', to: '08:30' } });
+    const bad = parseNotificationPrefs({ morningMode: 'sunrise', wakeDelayMin: 20, wakeWindow: { from: '09:00', to: '08:00' } });
+    expect(bad).toEqual(DEFAULT_NOTIFICATION_PREFS);
+    expect(parseNotificationPrefs({ wakeWindow: null }).wakeWindow).toBeNull();
+  });
+});
 
 describe('table mappers round-trip (domain → row → domain)', () => {
   it('profile', () => {

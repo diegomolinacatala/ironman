@@ -543,6 +543,17 @@ export interface NotificationPrefs {
   eveningTime: ISOTime;
   weeklyPlanReminder: boolean;
   social: boolean;
+  /**
+   * How "Tu informe de hoy" is timed (domain/wakeWindow.ts): 'fixed' at `morningTime` (default,
+   * absent = fixed) or 'wake', `wakeDelayMin` after the watch reports the wake-up (server push,
+   * or the app's own notification from Apple Salud), falling back to the end of the usual
+   * wake-up window or `morningTime`, whichever is later.
+   */
+  morningMode?: 'fixed' | 'wake';
+  /** 'wake' mode: minutes after waking up (5, 10, 15 or 30; absent = 15). */
+  wakeDelayMin?: number;
+  /** 'wake' mode: the athlete's own usual wake-up window; absent/null = learned from the watch's sleep. */
+  wakeWindow?: { from: ISOTime; to: ISOTime } | null;
 }
 
 export interface Profile {
@@ -729,6 +740,8 @@ export const NOTIFICATION_TYPES = [
   'joint_updated',
   'joint_comment',
   'joint_open',
+  /** "Tu informe de hoy" sent by the wake-up sweep (wake mode), arrives already read. */
+  'morning_briefing',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
