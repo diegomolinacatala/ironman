@@ -31,6 +31,7 @@ import type {
   Workout,
 } from '../types.ts';
 import type { WeatherForecast } from '../planning/domain/weather.ts';
+import { athleteContextSummary } from '../planning/domain/athleteContext.ts';
 import { weatherForBriefing } from '../weather/prompt.ts';
 import { todaySession, tomorrowSession, yesterdaySession } from './sessions.ts';
 import type { SessionView } from './sessions.ts';
@@ -57,7 +58,8 @@ export interface BriefingContext {
   /** The athlete's "today" (the app may ask for tomorrow's briefing the evening before). */
   today: ISODate;
   timezone: string;
-  athlete: { name: string; coachNotes: string | null };
+  /** context: «Tu contexto» in one line (null = not told yet). */
+  athlete: { name: string; coachNotes: string | null; context: string | null };
   /** Exact snapshot stored with the briefing and returned to the app. */
   sleep: SleepSnapshot | null;
   /** Prompt view of `sleep` (local times, duration text, HRV vs baseline %). */
@@ -180,7 +182,7 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
     weekday: WEEKDAYS_ES[weekdayOf(date)],
     today,
     timezone: data.tz,
-    athlete: { name: firstName(data.profile.displayName), coachNotes: data.profile.coachNotes },
+    athlete: { name: firstName(data.profile.displayName), coachNotes: data.profile.coachNotes, context: athleteContextSummary(data.profile.athleteContext, today) },
     sleep,
     sleepView: sleepForPrompt(sleep, data.tz),
     recovery: wellnessSignals(recent, data.checkins, date, illness),

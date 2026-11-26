@@ -301,6 +301,58 @@ export interface Profile {
   watchBrand?: WatchBrand | null;
   /** «Tu forma de entrenar» (`profiles.training_prefs`); null = everything automático. */
   trainingPrefs?: TrainingPrefs | null;
+  /** «Tu contexto» (`profiles.athlete_context`); null = not told yet. */
+  athleteContext?: AthleteContext | null;
+}
+
+/** «Tu contexto» (src/domain/types.ts): the endurance sports the coach asks about. */
+export type ContextSport = 'swim' | 'bike' | 'run';
+export type SportBackground = 'new' | 'some' | 'years' | 'lifelong';
+export type SportGoal = 'maintain' | 'improve' | 'improve_lot';
+export type Occupation = 'study' | 'work' | 'both' | 'none';
+export type LifeLoad = 'light' | 'medium' | 'high';
+export type WorkSchedule = 'morning' | 'afternoon' | 'full_day' | 'shifts' | 'flexible';
+export type TrainingTimeOfDay = 'morning' | 'midday' | 'evening' | 'any';
+
+export interface SportContext {
+  background?: SportBackground;
+  goal?: SportGoal;
+}
+
+export interface ContextPeriod {
+  kind: 'exams' | 'busy';
+  from: string;
+  to: string;
+  label: string;
+  eventId: string | null;
+}
+
+export interface ContextHabits {
+  breakfast: string | null;
+  lunch: string | null;
+  dinner: string | null;
+  wake: string | null;
+  bed: string | null;
+  weekendsDiffer: boolean;
+  weekendWake: string | null;
+  weekendBed: string | null;
+  preferredTime: TrainingTimeOfDay | null;
+}
+
+/** «Tu contexto» (`profiles.athlete_context`), same shape as the app's. */
+export interface AthleteContext {
+  sports: Partial<Record<ContextSport, SportContext>>;
+  limitations: string | null;
+  previousRaces: string | null;
+  occupation: Occupation | null;
+  load: LifeLoad | null;
+  schedule: WorkSchedule | null;
+  periods: ContextPeriod[];
+  habits: ContextHabits;
+  notes: string[];
+  answered: string[];
+  completedAt: string | null;
+  promptDismissed: boolean;
 }
 
 /** Answer to the morning question shown when the night's breathing or pulse is up (domain/illness.ts). */
@@ -482,6 +534,8 @@ export interface CoachRequest {
   friendIds?: UUID[];
   /** 'voice' when `message` is a speech transcript (may contain recognition errors). */
   channel?: 'voice' | 'text';
+  /** 'context': «Tu contexto» › «¿Algo más que deba saber?» (chat): only listen, remember and ask; never changes. */
+  topic?: 'context';
 }
 
 /** Quedada the coach suggests with a friend (camelCase, validated). Never sent: the app opens a prefilled form. */

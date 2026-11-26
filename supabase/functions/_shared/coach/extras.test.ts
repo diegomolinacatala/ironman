@@ -236,3 +236,33 @@ test('memory and imprevistos are written only from a chat message of the athlete
     assert.deepEqual(rec.lifeEvents, []);
   }
 });
+
+test('«Tu contexto» chat (topic context): memory is saved, but changes, imprevistos, quedadas and week plans are dropped', async () => {
+  assert.ok((() => {
+    const parsed = parseCoachRequest({ mode: 'chat', weekStart: '2026-10-26', message: 'Tengo dos hijos', topic: 'context' });
+    return parsed.ok && parsed.value.topic === 'context';
+  })());
+  const notChat = parseCoachRequest({ mode: 'plan_week', weekStart: '2026-10-26', topic: 'context' });
+  assert.ok(notChat.ok && notChat.value.topic === undefined, 'only a chat turn can be about the context');
+  assert.equal(parseCoachRequest({ mode: 'chat', weekStart: '2026-10-26', topic: 'gossip' }).ok, false);
+
+  const rec = runningRecorder();
+  const seen: ClaudeRequest[] = [];
+  const change = { op: 'delete', workoutId: 'w1', reason: 'x', date: null, startTime: null, sport: null, title: null, durationMin: null, intensity: null, prescription: null };
+  await runCoachJob(
+    {
+      reader: fakeStore(stateWithNotes(null)),
+      store: rec.store,
+      claude: claudeReturning({ text: output({ reply: 'Gracias, lo tendré en cuenta.', memory: ['Tiene dos hijos pequeños'], life_event: KNEE, changes: [change] }) }, seen),
+      now: fixedNow,
+      logger: silentLogger,
+    },
+    job({ mode: 'chat', message: 'Tengo dos hijos y no puedo entrenar los martes', topic: 'context' }),
+  );
+  assert.equal(rec.jobs[0].status, 'done');
+  assert.equal(rec.proposals.length, 0, 'no proposal');
+  assert.equal(rec.lifeEvents.length, 0, 'no imprevisto');
+  assert.deepEqual(rec.coachNotes, ['- Tiene dos hijos pequeños']);
+  assert.equal(seen.length, 1, 'no repair asking for changes');
+  assert.match(messageText(seen[0].messages[0]), /Modo chat de «Tu contexto»/);
+});

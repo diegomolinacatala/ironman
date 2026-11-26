@@ -11,6 +11,7 @@ import { addDays } from '@/domain/dates';
 import type { BodyArea, CoachRequest, CoachResponse, ISODate, LifeEvent } from '@/domain/types';
 
 import type { Repository } from '../../repository';
+import { contextRulesResponse, isContextRequest } from '../coachContext';
 import { chatPlanRequest, runRulesCoach, type RulesCoachRepo } from '../rulesCoach';
 import { requireMe, type DemoDeps } from './common';
 import { demoQuedadaFor, quedadaReplyLine, type QuedadaDemoRepo } from './quedadaDemo';
@@ -113,6 +114,8 @@ function noticeOf(lifeEvent: LifeEvent | null, preference: PreferenceMention | n
 export function createDemoCoach({ store }: DemoDeps, repo: CoachDemoRepo): (request: CoachRequest) => Promise<CoachResponse> {
   return async (request) => {
     await requireMe(store);
+    // «Tu contexto» › «¿Algo más?»: no plan, no imprevisto; the screen keeps the text as a note.
+    if (isContextRequest(request)) return contextRulesResponse();
     const today = store.clock().today;
     const message = request.message?.trim() ?? '';
     const injury = request.lifeEventId ? null : detectInjury(message);

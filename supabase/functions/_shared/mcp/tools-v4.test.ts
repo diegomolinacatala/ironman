@@ -204,3 +204,33 @@ test('get_planning_context: «Tu forma de entrenar» is "automático" until chos
   assert.deepEqual(prefs.fixedSessions, [{ day: 'martes', start: '20:00', durationMin: 60, sport: 'swim', title: 'Natación del club' }]);
   assert.match(String(prefs.how), /no las dupliques/);
 });
+
+test('get_planning_context: «Tu contexto» is "sin contar" until told, then the summary, the sport focus and the periods', async () => {
+  const state = seasonState();
+  const before = data<{ athlete: { context: unknown } }>(await run(state, 'get_planning_context', { week_start: '2026-10-26' }));
+  assert.equal(before.athlete.context, 'sin contar');
+  state.profiles = [
+    profile({
+      athleteContext: {
+        sports: { swim: { background: 'lifelong', goal: 'maintain' } },
+        limitations: null,
+        previousRaces: null,
+        occupation: 'study',
+        load: 'high',
+        schedule: null,
+        periods: [{ kind: 'exams', from: '2027-01-12', to: '2027-01-30', label: 'Exámenes', eventId: 'e1' }],
+        habits: { breakfast: null, lunch: '14:00', dinner: null, wake: null, bed: null, weekendsDiffer: false, weekendWake: null, weekendBed: null, preferredTime: 'morning' },
+        notes: [],
+        answered: [],
+        completedAt: null,
+        promptDismissed: false,
+      },
+    }),
+  ];
+  const after = data<{ athlete: { context: Record<string, unknown> } }>(await run(state, 'get_planning_context', { week_start: '2026-10-26' }));
+  const ctx = after.athlete.context;
+  assert.equal(ctx.summary, 'natación: desde pequeño, quiere mantener · estudia (carga alta) · exámenes 12-30 ene · come 14:00 · prefiere entrenar por la mañana');
+  assert.deepEqual(ctx.sportFocus, { swim: 'less' });
+  assert.deepEqual(ctx.periods, [{ kind: 'exams', from: '2027-01-12', to: '2027-01-30', label: 'Exámenes' }]);
+  assert.match(String(ctx.how), /justo después de sus comidas/);
+});

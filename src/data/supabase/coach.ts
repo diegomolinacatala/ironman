@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger';
 
 import { RepositoryError, type Repository } from '../repository';
 import { runRulesCoach, runRulesFirst, type RulesCoachRepo } from '../demo/rulesCoach';
+import { contextRulesResponse, isContextRequest } from '../demo/coachContext';
 import { run, type SupabaseCtx } from './base';
 import { functionErrorInfo, isNetworkError } from './errors';
 import { rowToLifeEvent } from './mappers';
@@ -175,13 +176,13 @@ async function jobToResponse(deps: CoachDeps, job: CoachJobRow): Promise<CoachRe
 
 export function createCoachRequester(deps: CoachDeps): (request: CoachRequest) => Promise<CoachResponse> {
   const fallback = (request: CoachRequest, notice: string): Promise<CoachResponse> =>
-    runRulesCoach(deps.repo, request, { today: deps.today(), notice });
+    isContextRequest(request) ? Promise.resolve(contextRulesResponse()) : runRulesCoach(deps.repo, request, { today: deps.today(), notice });
 
   return async (request) => {
     // AI off (EXPO_PUBLIC_AI_COACH=0): the rules engine IS the coach, so no notice.
-    if (!env.aiCoachEnabled) return runRulesCoach(deps.repo, request, { today: deps.today() });
-    // Concrete plan changes the rules engine is sure about: exact and instant, no AI quota.
-    if (env.coachRulesFirst) {
+    if (!env.aiCoachEnabled) return isContextRequest(request) ? contextRulesResponse() : runRulesCoach(deps.repo, request, { today: deps.today() });
+    // Concrete plan changes the rules engine is sure about: exact and instant, no AI quota («Tu contexto» never changes the plan).
+    if (env.coachRulesFirst && !isContextRequest(request)) {
       try {
         const instant = await runRulesFirst(deps.repo, request, { today: deps.today() });
         if (instant) return instant;

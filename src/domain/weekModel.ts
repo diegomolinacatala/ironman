@@ -42,6 +42,8 @@ export interface DayState {
   restriction: DayRestriction;
   /** Max total minutes on the day (fixed + new), e.g. the L05 easy day; null/undefined = no cap. */
   dayCapMin?: number | null;
+  /** «Tu contexto»: when the athlete prefers to train (days without training windows); absent = morning or evening. */
+  preferredTime?: 'morning' | 'midday' | 'evening';
 }
 
 export interface FixedInput {
@@ -67,6 +69,12 @@ export interface WeekModelInput {
   /** Today's date and local clock (minutes since midnight): time already gone is not free. */
   today?: ISODate;
   nowMinutes?: number;
+  /** «Tu contexto»: the athlete's waking day per weekday, instead of 07:00–22:00 on days without training windows. */
+  wakingDay?: Partial<Record<Weekday, { start: ISOTime; end: ISOTime }>>;
+  /** «Tu contexto»: daily ranges kept free of sessions (meals and digestion). */
+  habitBlocks?: readonly MinuteRange[];
+  /** «Tu contexto»: preferred time of day to train. */
+  preferredTime?: 'morning' | 'midday' | 'evening' | null;
 }
 
 /** Time already gone on today's date (plus a buffer to get ready), as a range to subtract. */
@@ -133,11 +141,14 @@ export function buildWeekModel(input: WeekModelInput): DayState[] {
       ...input.fixed.filter((f) => f.date === date).map(fixedFromWorkout),
       ...input.lifeEvents.filter((e) => isSportEvent(e) && e.startDate <= date && e.endDate >= date).map(fixedFromEvent),
     ];
-    const { ranges, isDefault } = windowRangesOn(date, input.windows);
+    const waking = input.wakingDay?.[weekday];
+    const { ranges, isDefault } = windowRangesOn(date, input.windows, waking?.start, waking?.end);
     const timed = fixed.map(timedRange).filter((r): r is MinuteRange => r !== null);
     const eventBlocks = input.lifeEvents.map((e) => eventBusyRange(e, date)).filter((r): r is MinuteRange => r !== null);
     const busy = busyRangesOn(date, input.busyBlocks);
-    const free = subtractRanges(ranges, mergeRanges([...busy, ...timed, ...eventBlocks, ...pastRange(date, input)]));
+    // Meals only shape the default day: the athlete's own training windows stay as they set them.
+    const habits = isDefault ? (input.habitBlocks ?? []) : [];
+    const free = subtractRanges(ranges, mergeRanges([...busy, ...timed, ...eventBlocks, ...habits, ...pastRange(date, input)]));
     const restriction = input.restrictions[date] ?? NO_RESTRICTION;
     const isRestDay = input.restDay !== null && weekday === input.restDay;
     return {
@@ -152,6 +163,7 @@ export function buildWeekModel(input: WeekModelInput): DayState[] {
       untimedMin: fixed.filter((f) => !f.startTime).reduce((s, f) => s + f.durationMin, 0),
       fixed,
       restriction,
+      ...(input.preferredTime && isDefault ? { preferredTime: input.preferredTime } : {}),
     };
   });
 }

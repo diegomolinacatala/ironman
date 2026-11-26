@@ -5,6 +5,7 @@ import type { Workout } from '@/domain/types';
 import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { BriefingCard } from '@/features/briefing/BriefingCard';
 import { AdaptNudgeCard } from '@/features/today/AdaptNudgeCard';
+import { ContextPromptCard } from '@/features/context/ContextPromptCard';
 import { OfflineNotice } from '@/features/offline/OfflineNotice';
 import { Appear } from '@/features/today/Appear';
 import { Banners } from '@/features/today/Banners';
@@ -76,6 +77,7 @@ export default function TodayScreen() {
       <QuickActions checkinDone={data.checkinDone} />
       <Banners invites={data.invites} proposals={data.proposals} today={today} />
       {data.isLoading ? null : <AdaptNudgeCard today={today} checkinDone={data.checkinDone} />}
+      {data.isLoading ? null : <ContextPromptCard />}
       <View style={styles.folds}>
         <SectionHeader title="Tu día en detalle" />
         <GroupedList>
