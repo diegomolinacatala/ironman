@@ -397,10 +397,22 @@ function tryPlace(s: State, ctx: PlacementContext, spec: SessionSpec, pendingBik
   return null;
 }
 
+/** Long sessions and bricks anchor the week: they choose their day before the quality sessions. */
+function isAnchor(spec: SessionSpec): boolean {
+  const cls = specClass(spec);
+  return !spec.allowedDates && (cls === 'LONG' || cls === 'BRICK');
+}
+
+function queueRank(spec: SessionSpec): number {
+  return isAnchor(spec) ? Math.min(spec.priority, 1) : spec.priority;
+}
+
 function queueOrder(a: SessionSpec, b: SessionSpec): number {
   const fixedA = a.allowedDates ? 0 : 1;
   const fixedB = b.allowedDates ? 0 : 1;
-  return a.priority - b.priority || fixedA - fixedB || b.durationMin - a.durationMin || a.code.localeCompare(b.code);
+  const anchorA = isAnchor(a) ? 0 : 1;
+  const anchorB = isAnchor(b) ? 0 : 1;
+  return queueRank(a) - queueRank(b) || fixedA - fixedB || anchorA - anchorB || b.durationMin - a.durationMin || a.code.localeCompare(b.code);
 }
 
 /** Places sessions on the week; never touches fixed items. */

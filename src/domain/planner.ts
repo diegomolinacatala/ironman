@@ -38,10 +38,10 @@ import {
 import { reasonFor, summaryFor } from './plannerText';
 import type { Readiness } from './readiness';
 import { planRestDays, type RestDayPlan } from './restDays';
-import { NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
+import { examVolumeFactor, NO_RESTRICTION, restrictionsForDates, type DayRestriction } from './restrictions';
 import { recentRunMinutes, runWeekCapMinutes, workoutRunMinutes } from './runVolume';
 import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
-import { applyWeekPlan } from './season';
+import { applyWeekPlan, weekMinutesFor } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
 import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, RacePrep, Sport, Weekday, WeekPlan, Workout } from './types';
 import { rangesLength } from './timeRanges';
@@ -88,6 +88,11 @@ export interface PlannerInput {
    * race, transition…) and when its Monday is not this week's.
    */
   weekPlan?: WeekPlan | null;
+  /**
+   * Stress (1–5) of today's check-in: ≥ 4 counts as life stress (slower ramp,
+   * 2:1 cadence never lifting a descarga), like stress and work events.
+   */
+  checkinStress?: number | null;
 }
 
 export interface PlanWeekResult {
@@ -110,6 +115,8 @@ export interface PlanWeekResult {
 
 const DEFAULT_LONG_DAYS: Weekday[] = [5, 6];
 const STRESS_KINDS: readonly LifeEvent['kind'][] = ['stress', 'work', 'exam'];
+/** Check-in stress (1–5) that counts as life stress. */
+const CHECKIN_STRESS_MIN = 4;
 
 function overlapsWeek(e: LifeEvent, from: ISODate, to: ISODate): boolean {
   return e.startDate <= to && e.endDate >= from;
@@ -166,6 +173,8 @@ function summarizeRestrictions(dates: readonly ISODate[], restrictions: Record<I
 
 interface Budget {
   targetMinutes: number;
+  /** Exam week: the target without the exam cut (summary «… en vez de …»), else null. */
+  withoutExamMinutes: number | null;
   budgetMinutes: number;
   allocMinutes: number;
   warnings: string[];
@@ -198,12 +207,27 @@ interface BudgetContext {
   /** Automatic availability: the week never asks for more than the free time (`freeMinutes`). */
   auto: boolean;
   freeMinutes: number;
+  /** The week's override (Plan → General): explicit minutes or a semana libre skip the habitual floor. */
+  weekPlan: WeekPlan | null;
+  /** Exam week: the factor of the whole week (`examVolumeFactor`), else null. */
+  examFactor: number | null;
+  /** Mean volume factor of the plannable days from the other events (injury, travel, stress…). */
+  dayFactor: number;
 }
 
 function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: BudgetContext): Budget {
   const warnings: string[] = [];
   const fraction = ctx.plannable.length / 7;
-  let target = ctx.weeklyHours * 60 * info.volumeFactor * fraction * ctx.week.factor;
+  const weekMinutes = weekMinutesFor({
+    weeklyHours: ctx.weeklyHours,
+    info,
+    auto: ctx.auto,
+    // The habitual volume is the one before the current week (future weeks have no completed minutes yet).
+    recentWeeklyMinutes: input.fitnessWeeklyMinutes ?? input.recentWeeklyMinutes,
+    plan: ctx.weekPlan,
+  });
+  // Exams take the whole week down (not only the exam days), so their day factors are left out here.
+  let target = weekMinutes * fraction * ctx.dayFactor;
   const readinessLevel = input.readiness?.level;
   if (readinessLevel === 'red') target *= READINESS_EFFECTS.plannerRedWeekFactor;
   if (readinessLevel === 'amber') target *= READINESS_EFFECTS.plannerAmberWeekFactor;
@@ -218,6 +242,9 @@ function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: BudgetContext)
     target = ctx.freeMinutes + existingMin;
     warnings.push('Tu calendario va lleno esta semana: he ajustado el volumen a tus huecos libres.');
   }
+  const withoutExam = Math.max(0, Math.round(target));
+  // A descarga is already lighter than the exam cut: it stays as it is (never higher, never cut twice).
+  if (ctx.examFactor !== null && !info.isRecoveryWeek) target *= ctx.examFactor;
   const sportEvents = ctx.events.filter((e) => isSportEvent(e) && ctx.plannable.some((d) => d >= e.startDate && d <= e.endDate));
   const otherMin = sportEvents.reduce((s, e) => s + (e.durationMin ?? 90), 0);
   const hardOthers = sportEvents.filter((e) => e.kind === 'football' || e.kind === 'padel' || e.severity >= 3).length;
@@ -225,6 +252,7 @@ function computeBudget(input: PlannerInput, info: PhaseInfo, ctx: BudgetContext)
   const trainMin = Math.max(0, targetMinutes - otherMin);
   return {
     targetMinutes,
+    withoutExamMinutes: ctx.examFactor === null ? null : withoutExam,
     budgetMinutes: Math.max(0, trainMin - existingMin),
     allocMinutes: trainMin,
     warnings,
@@ -269,6 +297,10 @@ interface WeekContext {
   /** Hours of a normal week: the manual target, else the automatic one (level × race distance). */
   weeklyHours: number;
   auto: boolean;
+  /** Exams this week: the whole week's volume factor and the exam days; null without exams. */
+  exam: { factor: number; days: ISODate[] } | null;
+  /** Mean day volume factor of the plannable days without the exams (they cut the whole week instead). */
+  dayFactor: number;
 }
 
 /** Periodization options of the planned week: level, life stress and the athlete's recent volume. */
@@ -276,13 +308,35 @@ function phaseOptions(input: PlannerInput, lifeStress: boolean): PhaseOptions {
   return { level: input.profile.level, lifeStress, recentWeeklyMinutes: input.fitnessWeeklyMinutes ?? input.recentWeeklyMinutes };
 }
 
+/**
+ * Life stress moves the recovery cadence to 2:1, which can shift the descarga
+ * to another week. Stress never makes a week bigger: when the calm cadence
+ * gives this week less (a descarga), that one stays.
+ */
+function stressedPhase(input: PlannerInput, from: ISODate, lifeStress: boolean): PhaseInfo {
+  const stressed = phaseFor(from, input.races, phaseOptions(input, lifeStress));
+  if (!lifeStress) return stressed;
+  const calm = phaseFor(from, input.races, phaseOptions(input, false));
+  const calmIsLighter = (calm.isRecoveryWeek && !stressed.isRecoveryWeek) || calm.volumeFactor < stressed.volumeFactor;
+  return calmIsLighter ? calm : stressed;
+}
+
+/** Exams overlapping the week: the strongest cut and the exam days inside the week. */
+function examOf(events: readonly LifeEvent[], from: ISODate, to: ISODate): { factor: number; days: ISODate[] } | null {
+  const exams = events.filter((e) => e.kind === 'exam');
+  if (exams.length === 0) return null;
+  const days = [...new Set(exams.flatMap((e) => daysInRange({ from: maxDate(e.startDate, from), to: e.endDate < to ? e.endDate : to })))].sort();
+  return { factor: Math.min(...exams.map((e) => examVolumeFactor(e.severity))), days };
+}
+
 function weekPlanContext(input: PlannerInput): WeekContext {
   const range = weekRange(input.weekStart);
   const dates = daysInRange(range);
   const firstPlannable = maxDate(range.from, input.today ?? range.from);
   const events = input.lifeEvents.filter((e) => overlapsWeek(e, range.from, range.to));
-  const lifeStress = events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
-  const raw = phaseFor(range.from, input.races, phaseOptions(input, lifeStress));
+  const stressedByCheckin = typeof input.checkinStress === 'number' && input.checkinStress >= CHECKIN_STRESS_MIN;
+  const lifeStress = stressedByCheckin || events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
+  const raw = stressedPhase(input, range.from, lifeStress);
   const weekPlan = activeWeekPlan(raw, input.weekPlan, range.from);
   const weeklyHours = normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null);
   const info = applyWeekPlan(raw, weekPlan, weeklyHours);
@@ -293,7 +347,12 @@ function weekPlanContext(input: PlannerInput): WeekContext {
   const active = input.existing.filter((w) => w.status !== 'skipped' && inWeek(w.date));
   const existing = active.filter((w) => w.sport !== 'rest');
   const fixed = [...existing.map(workoutFixed), ...jointExtras(input.jointSessions, input.existing, input.profile.id).filter((f) => inWeek(f.date))];
+  const exam = examOf(events, range.from, range.to);
+  const week = summarizeRestrictions(plannable, restrictions);
+  const dayFactor = exam ? summarizeRestrictions(plannable, restrictionsForDates(dates, input.lifeEvents.filter((e) => e.kind !== 'exam'))).factor : week.factor;
   return {
+    exam,
+    dayFactor,
     ownRestDates: [...new Set(active.filter((w) => w.sport === 'rest').map((w) => w.date))].sort(),
     raceDates: input.races.filter((r) => inWeek(r.date)).map((r) => r.date),
     range,
@@ -306,7 +365,7 @@ function weekPlanContext(input: PlannerInput): WeekContext {
     plannable,
     restrictions,
     kind: distanceKindOf(info.targetRace?.distance ?? null, input.profile.sports),
-    week: summarizeRestrictions(plannable, restrictions),
+    week,
     existing,
     fixed,
     weeklyHours,
@@ -382,6 +441,9 @@ function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): Week
     // Existing workouts on the plannable days consume the ideal week: only what is already gone is outside it.
     caps: { runLongMax: caps.runLongMax, bikeLongMax: caps.bikeLongMax, runWeekMax: runCap === null ? null : Math.max(0, runCap - ran.outside - pinnedRun) },
     freeWeek: ctx.weekPlan?.kind === 'rest',
+    level: input.profile.level,
+    // Exams: maintenance strength instead of heavy lifting.
+    lightStrength: ctx.exam !== null,
   });
   const existingPlannable = ctx.fixed.filter((f) => ctx.plannable.includes(f.date));
   const remaining = trimToBudget(consumeExisting(ideal.specs, existingPlannable), Math.max(0, budget.budgetMinutes - specialMin));
@@ -496,6 +558,21 @@ function summaryInfo(ctx: WeekContext): PhaseInfo {
   return weekPlan ? { ...info, isRecoveryWeek: false, focus: `${weekPlanSentence(weekPlan)} ${info.focus}` } : info;
 }
 
+const EXAM_NOTE_PREFIX = 'Semana de exámenes';
+
+function round5(n: number): number {
+  return Math.round(n / 5) * 5;
+}
+
+/** «Semana de exámenes: 4h 10' en vez de 6h, sin series el día antes ni el día del examen.» */
+function examSentence(budget: Budget): string | null {
+  if (budget.withoutExamMinutes === null) return null;
+  const now = round5(budget.targetMinutes);
+  const before = round5(budget.withoutExamMinutes);
+  const amount = before > now ? `${formatDuration(now)} en vez de ${formatDuration(before)}` : `coincide con la descarga (${formatDuration(now)})`;
+  return `${EXAM_NOTE_PREFIX}: ${amount}, sin series el día antes ni el día del examen.`;
+}
+
 function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed: WeekPlacement, built: WeekSpecs): PlanWeekResult {
   const { info } = ctx;
   const { runCapped } = built;
@@ -514,6 +591,7 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     reason: reasonFor(p.spec, info, p.adjusted, runCapped && p.spec.code === 'RN_LONG'),
   }));
   const fatigueNote = guard.removed.length > 0 ? [`He quitado ${guard.removed.length} sesión(es) para no acumular demasiada fatiga.`] : [];
+  const examNote = examSentence(budget);
   const warnings = [...info.warnings, ...budget.warnings, ...runCapWarning(built), ...fatigueNote, ...(guard.warning ? [guard.warning] : [])];
   const summary = summaryFor({
     info: summaryInfo(ctx),
@@ -524,7 +602,7 @@ function finalize(input: PlannerInput, ctx: WeekContext, budget: Budget, placed:
     easyDay: placed.rest.easyDay,
     existingCount: ctx.existing.filter((w) => ctx.plannable.includes(w.date)).length,
     warnings,
-    notes: ctx.week.notes,
+    notes: examNote ? [examNote, ...ctx.week.notes.filter((n) => !n.startsWith(EXAM_NOTE_PREFIX))] : ctx.week.notes,
   });
   return {
     changes,
@@ -556,6 +634,9 @@ export function planWeek(rawInput: PlannerInput): PlanWeekResult {
     weeklyHours: ctx.weeklyHours,
     auto: ctx.auto,
     freeMinutes: freeTrainingMinutes(draftDays),
+    weekPlan: ctx.weekPlan,
+    examFactor: ctx.exam?.factor ?? null,
+    dayFactor: ctx.dayFactor,
   });
   const built = buildSpecs(input, ctx, budget);
   return finalize(input, ctx, budget, placeWeek(input, ctx, budget, built.specs, draftDays), built);

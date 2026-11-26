@@ -12,7 +12,7 @@ import type { AthleteLevel, ISODate, Race, WeekPlan } from '../types.ts';
 import type { Subphase } from './domain/constants.ts';
 import { phaseFor as domainPhaseFor } from './domain/periodization.ts';
 import type { Phase } from './domain/periodization.ts';
-import { applyWeekPlan, buildSeason, canOverride, weeklyHoursFor } from './domain/season.ts';
+import { applyWeekPlan, buildSeason, canOverride, weekMinutesFor, weeklyHoursFor } from './domain/season.ts';
 import type { SeasonOverview, SeasonWeek, SeasonWeekKind } from './domain/season.ts';
 
 export { nextRace } from './domain/periodization.ts';
@@ -142,7 +142,10 @@ export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptio
     subphase: info.subphase,
     weekKind: week?.kind ?? (info.isRecoveryWeek ? 'recovery' : 'load'),
     weekLabel: week?.label ?? (info.isRecoveryWeek ? 'Descarga' : 'Carga'),
-    targetMinutes: hours > 0 ? Math.max(0, Math.round((hours * 60 * info.volumeFactor) / 5) * 5) : null,
+    targetMinutes:
+      hours > 0
+        ? Math.max(0, Math.round(weekMinutesFor({ weeklyHours: hours, info, auto: manualOf(opts.weeklyHoursTarget) === null, recentWeeklyMinutes: opts.recentWeeklyMinutes, plan }) / 5) * 5)
+        : null,
     adjusted: plan !== null,
     raceInWeek: raceRef(info.raceInWeek),
     warnings: info.warnings,

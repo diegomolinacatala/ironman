@@ -51,6 +51,8 @@ export function usePlanWeek(): { plan: (weekStart: ISODate, data: WeekData) => P
         history: data.history,
         // Plan → General: carga / más volumen / descarga / semana libre and its hours.
         weekPlan: data.weekPlan,
+        // A stressful day (check-in stress ≥ 4) slows the ramp like a stress event.
+        checkinStress: data.checkinStress ?? null,
       });
       if (result.changes.length === 0) {
         notify('Tu semana ya está completa', result.summary || 'No quedan huecos libres en tu calendario que rellenar.');
