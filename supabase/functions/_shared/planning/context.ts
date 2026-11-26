@@ -10,7 +10,7 @@ import { addDays, DEFAULT_TZ, localParts, startOfWeek, todayIn, weekdayOf, WEEKD
 import type { BusyBlock, ISODate, JointSession, LifeEvent, Profile, Race, UUID, WeekPlan, Workout } from '../types.ts';
 import { athleteView } from './athlete-view.ts';
 import { lifeEventLabel, raceDistanceLabel } from './labels.ts';
-import { weeklyLoadHistory, weekTotals } from './load.ts';
+import { fitnessWeeklyMinutesOf, weeklyLoadHistory, weekTotals } from './load.ts';
 import type { WeeklyLoad, WeekTotals } from './load.ts';
 import { recentRunMinutes, runWeekCapMinutes } from './domain/runVolume.ts';
 import { manualWeeklyHours, weeklyHoursFor } from './domain/season.ts';
@@ -242,10 +242,19 @@ export async function buildPlanningContext(reader: PlanningReader, opts: Context
   const nextStart = addDays(raw.weekStart, 7);
   // null = automatic availability: the hours come from the level and the race distance (like the app).
   const hours = manualWeeklyHours(raw.profile.availability);
-  const season = seasonOf({ today: raw.today, races: raw.races, level: raw.profile.level, weeklyHoursTarget: hours, weekPlans: raw.weekPlans });
+  // The athlete's volume before this week: a short-notice plan shows the same base and build weeks as the app.
+  const fitness = fitnessWeeklyMinutesOf(raw.workouts, raw.today);
+  const season = seasonOf({ today: raw.today, races: raw.races, level: raw.profile.level, weeklyHoursTarget: hours, weekPlans: raw.weekPlans, recentWeeklyMinutes: fitness });
   const raceDistance = season.targetRace?.distance ?? null;
   const view = viewContext(raw, opts.detail, raceDistance);
-  const phase = phaseFor(raw.weekStart, raw.races, { level: raw.profile.level, weeklyHoursTarget: hours, weekPlans: raw.weekPlans, today: raw.today, season });
+  const phase = phaseFor(raw.weekStart, raw.races, {
+    level: raw.profile.level,
+    weeklyHoursTarget: hours,
+    weekPlans: raw.weekPlans,
+    today: raw.today,
+    season,
+    recentWeeklyMinutes: fitness,
+  });
   // The same weekly run cap as the app's planner (history from weekStart − 42 days covers its 3 weeks).
   const runMaxMinutes = runWeekCapMinutes(recentRunMinutes(raw.workouts, raw.weekStart));
   const availabilityPlan = {

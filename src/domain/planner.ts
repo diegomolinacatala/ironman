@@ -17,7 +17,7 @@
 import { READINESS_EFFECTS, maxHardDays, type DistanceKind } from './constants';
 import { allocateWeek } from './allocation';
 import { addDays, daysInRange, formatDuration, maxDate, weekRange } from './dates';
-import { distanceKindOf, phaseFor, type PhaseInfo } from './periodization';
+import { distanceKindOf, phaseFor, type PhaseInfo, type PhaseOptions } from './periodization';
 import { placeSessions, type Dropped, type Placed, type PlacementResult } from './placement';
 import { dailyLoads } from './load';
 import {
@@ -61,6 +61,13 @@ export interface PlannerInput {
   readiness?: Readiness | null;
   /** Completed minutes of the last 4 weeks (ramp control). */
   recentWeeklyMinutes?: number[];
+  /**
+   * Completed minutes of the 4 weeks before the current week (oldest first):
+   * the athlete's volume today, which can turn a short-notice plan into base +
+   * build (periodization). Plan → General gets the same; defaults to
+   * `recentWeeklyMinutes` (the same weeks when planning the current week).
+   */
+  fitnessWeeklyMinutes?: number[];
   /** Extension: first date that can still be planned (default weekStart). Pass when planning the current week. */
   today?: ISODate;
   /**
@@ -263,13 +270,18 @@ interface WeekContext {
   auto: boolean;
 }
 
+/** Periodization options of the planned week: level, life stress and the athlete's recent volume. */
+function phaseOptions(input: PlannerInput, lifeStress: boolean): PhaseOptions {
+  return { level: input.profile.level, lifeStress, recentWeeklyMinutes: input.fitnessWeeklyMinutes ?? input.recentWeeklyMinutes };
+}
+
 function weekPlanContext(input: PlannerInput): WeekContext {
   const range = weekRange(input.weekStart);
   const dates = daysInRange(range);
   const firstPlannable = maxDate(range.from, input.today ?? range.from);
   const events = input.lifeEvents.filter((e) => overlapsWeek(e, range.from, range.to));
   const lifeStress = events.some((e) => STRESS_KINDS.includes(e.kind) && e.severity >= 2);
-  const raw = phaseFor(range.from, input.races, { level: input.profile.level, lifeStress });
+  const raw = phaseFor(range.from, input.races, phaseOptions(input, lifeStress));
   const weekPlan = activeWeekPlan(raw, input.weekPlan, range.from);
   const weeklyHours = normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null);
   const info = applyWeekPlan(raw, weekPlan, weeklyHours);
@@ -306,7 +318,7 @@ function raceSpecsFor(input: PlannerInput, ctx: WeekContext): SessionSpec[] {
   const { info } = ctx;
   return pinnedRaceSessions({
     info,
-    next: phaseFor(addDays(ctx.range.from, 7), input.races, { level: input.profile.level, lifeStress: ctx.lifeStress }),
+    next: phaseFor(addDays(ctx.range.from, 7), input.races, phaseOptions(input, ctx.lifeStress)),
     kind: ctx.kind,
     firstPlannable: ctx.firstPlannable,
     weekEnd: ctx.range.to,

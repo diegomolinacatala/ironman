@@ -6,16 +6,21 @@
  * Plan length: from the previous A race's transition, else from the week the
  * A race was added (`race.createdAt`), so the layout is stable week to week.
  * Shorter than the minimum viable length → "survival" plan (base + taper) and
- * a PLAN_TOO_SHORT warning. Recovery weeks close each base/build subphase
- * (recoveryLayout.ts).
+ * a PLAN_TOO_SHORT warning, unless the athlete (not a beginner) already trains
+ * the base volume of the distance (`recentWeeklyMinutes` ≥ BASE_READY_HOURS):
+ * then a short base and a build block with the same race and taper weeks.
+ * Recovery weeks close each base/build subphase (recoveryLayout.ts).
  */
 import {
+  BASE_READY_HOURS,
   BLOCK_PROGRESSION_21,
   BLOCK_PROGRESSION_31,
   B_RACE_WEEK_FACTOR,
   C_RACE_WEEK_FACTOR,
+  FITNESS_WEEKS,
   PHASE_TABLE,
   POST_B_RECOVERY_FACTOR,
+  READY_BASE_SHARE,
   RECOVERY_FACTOR_21,
   RECOVERY_FACTOR_31,
   TAPER_FACTORS,
@@ -54,6 +59,13 @@ export interface PhaseOptions {
   level?: AthleteLevel;
   /** High life stress recently → 2:1 cadence. */
   lifeStress?: boolean;
+  /**
+   * Completed minutes of the athlete's latest weeks (oldest first; the last
+   * FITNESS_WEEKS count): when the A race is too close for a full plan, a
+   * non-beginner who already trains the base volume of the distance gets base
+   * + build instead of the survival plan. Absent or too little history = no change.
+   */
+  recentWeeklyMinutes?: readonly number[];
 }
 
 interface WeekSlot {
@@ -105,19 +117,60 @@ function tooShortWarning(distance: RaceDistance, minViable: number): string {
   return distance === 'full' ? `${base} Para una distancia completa es muy poco: plantéate una distancia menor o ir a terminarla, no a competirla.` : base;
 }
 
+/** Race week + 1 taper week when there are 2 weeks or more: the short plans (survival or not) share them. */
+function shortTaperWeeks(available: number): number {
+  return available >= 2 ? 1 : 0;
+}
+
 /** Below the minimum viable length: race week + 1 taper week + base (no build). §5.2 */
 function survival(distance: RaceDistance, available: number): Allocation {
-  const taperWeeks = available >= 2 ? 1 : 0;
+  const taperWeeks = shortTaperWeeks(available);
   const base = Math.max(0, available - 1 - taperWeeks);
   return { prep: 0, base, build: 0, taperWeeks, warnings: [tooShortWarning(distance, PHASE_TABLE[distance].minViable)] };
 }
 
-/** Doc §5.2 allocation; `available` = weeks from plan start to race week inclusive (null = open). */
-function allocate(distance: RaceDistance, available: number | null, withTaper: boolean): Allocation {
+/**
+ * Below the minimum viable length, but the athlete already trains the base
+ * volume of the distance: the survival plan's race and taper weeks (so the
+ * weeks a WeekPlan cannot change are the same), then a short base (a third of
+ * the training weeks) and build for the rest, up to its ideal length.
+ */
+function readyShortPlan(distance: RaceDistance, available: number): Allocation {
+  const D = PHASE_TABLE[distance];
+  const taperWeeks = shortTaperWeeks(available);
+  const training = Math.max(0, available - 1 - taperWeeks);
+  const build = Math.min(D.build.ideal, training - Math.round(training * READY_BASE_SHARE));
+  const warning = `Quedan menos de ${D.minViable} semanas hasta la carrera, pero tu volumen de las últimas semanas ya cubre la base: hacemos una base corta y un bloque específico comprimido.`;
+  return { prep: 0, base: training - build, build, taperWeeks, warnings: [warning] };
+}
+
+/**
+ * The athlete's current volume: the average completed minutes of the last
+ * FITNESS_WEEKS weeks given (oldest first), or null with fewer than 2 weeks
+ * with training (not enough history to judge).
+ */
+export function fitnessWeeklyMinutes(weeks: readonly number[] | undefined): number | null {
+  const last = (weeks ?? []).filter((m) => Number.isFinite(m) && m >= 0).slice(-FITNESS_WEEKS);
+  if (last.filter((m) => m > 0).length < 2) return null;
+  return last.reduce((sum, m) => sum + m, 0) / last.length;
+}
+
+/** A non-beginner whose recent volume already covers the base of the distance (BASE_READY_HOURS). */
+function baseCovered(distance: RaceDistance, opts: PhaseOptions): boolean {
+  if (opts.level !== 'intermediate' && opts.level !== 'advanced') return false;
+  const minutes = fitnessWeeklyMinutes(opts.recentWeeklyMinutes);
+  return minutes !== null && minutes >= BASE_READY_HOURS[distance] * 60;
+}
+
+/**
+ * Doc §5.2 allocation; `available` = weeks from plan start to race week
+ * inclusive (null = open). `covered`: the base is already trained (see readyShortPlan).
+ */
+function allocate(distance: RaceDistance, available: number | null, withTaper: boolean, covered: boolean): Allocation {
   const D = PHASE_TABLE[distance];
   const taperWeeks = withTaper ? (TAPER_FACTORS[distance].minus2 !== null ? 2 : 1) : 0;
   if (available === null) return { prep: 0, base: D.base.max, build: D.build.ideal, taperWeeks, warnings: [] };
-  if (withTaper && available < D.minViable) return survival(distance, available);
+  if (withTaper && available < D.minViable) return covered ? readyShortPlan(distance, available) : survival(distance, available);
   const alloc = { prep: D.prep.ideal, base: D.base.ideal, build: D.build.ideal, taperWeeks };
   const total = () => 1 + alloc.taperWeeks + alloc.build + alloc.base + alloc.prep;
   if (total() <= available) {
@@ -321,7 +374,7 @@ export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptio
   if (!target || k === null) return maintenanceInfo(date, null, cadence, []);
 
   const avail = availableWeeks(sorted, target);
-  const alloc = allocate(target.distance, avail.weeks, target.priority === 'A');
+  const alloc = allocate(target.distance, avail.weeks, target.priority === 'A', baseCovered(target.distance, opts));
   const slots = layout(target.distance, alloc, cadence);
   const warnings = [...avail.warnings, ...alloc.warnings];
   const slot = slots[k];

@@ -16,6 +16,7 @@ import {
   useWorkouts,
 } from '@/data/queries';
 import { garminState } from '@/features/briefing/briefingModel';
+import { useFitnessMinutes } from '@/features/week/useFitnessMinutes';
 import { useHealthIntegration } from '@/integrations/hooks';
 import { logger } from '@/lib/logger';
 
@@ -83,6 +84,8 @@ export function useTodayData(): TodayData {
   const checkins = useCheckins({ from: today, to: today });
   const syncGarmin = useSyncGarmin();
   const health = useHealthIntegration();
+  // The phase on the race chip: the same short-notice plan as Plan → General.
+  const fitness = useFitnessMinutes(today);
 
   const all = [workouts, races, profile, nutrition, proposals, joint, notifications, integrations, briefing, checkins];
   const raceList = races.data ?? [];
@@ -108,7 +111,7 @@ export function useTodayData(): TodayData {
     proposals: proposals.data ?? [],
     race,
     racesReady: !races.isLoading,
-    phase: raceList.length > 0 ? phaseFor(today, raceList) : null,
+    phase: raceList.length > 0 ? phaseFor(today, raceList, { level: profile.data?.level, recentWeeklyMinutes: fitness }) : null,
     meals: mealsOfDay(nutrition.data, today),
     checkinDone: checkinFor(checkins.data, today) != null,
     unread: unreadCount(notifications.data),

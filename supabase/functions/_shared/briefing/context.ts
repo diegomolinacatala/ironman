@@ -11,7 +11,7 @@
 import { addDays, DEFAULT_TZ, diffDays, startOfWeek, todayIn, weekdayOf, WEEKDAYS_ES, zonedToUtc } from '../dates.ts';
 import { busyView, NotFoundError } from '../planning/context.ts';
 import { lifeEventLabel, raceDistanceLabel } from '../planning/labels.ts';
-import { workoutLoad } from '../planning/load.ts';
+import { fitnessWeeklyMinutesOf, workoutLoad } from '../planning/load.ts';
 import { nextRace, phaseFor } from '../planning/phase.ts';
 import type { PlanningReader } from '../planning/store.ts';
 import { wellnessSignals } from '../planning/wellness.ts';
@@ -118,7 +118,8 @@ async function loadData(reader: BriefingReader, opts: BriefingContextOptions): P
   const tomorrow = addDays(date, 1);
   const monday = startOfWeek(date);
   const [workouts, races, events, busy, checkins, metrics, joint, weekPlans] = await Promise.all([
-    reader.listWorkouts(userId, addDays(date, -1), tomorrow),
+    // From 4 weeks before this week: yesterday's sessions and the athlete's volume (phase of a short-notice plan).
+    reader.listWorkouts(userId, addDays(monday, -28), tomorrow),
     reader.listRaces(userId),
     reader.listLifeEvents(userId, date, date),
     reader.listBusyBlocks(userId, zonedToUtc(date, '00:00', tz), zonedToUtc(tomorrow, '00:00', tz)),
@@ -137,6 +138,7 @@ function phaseView(data: BriefingData, date: ISODate, today: ISODate): BriefingC
     weeklyHoursTarget: data.profile.availability.weeklyHoursTarget,
     weekPlans: data.weekPlans,
     today: today <= date ? today : date,
+    recentWeeklyMinutes: fitnessWeeklyMinutesOf(data.workouts, date),
   });
   return { phase: info.phase, label: info.label, weekLabel: info.weekLabel, focus: info.focus };
 }

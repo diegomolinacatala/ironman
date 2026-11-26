@@ -156,6 +156,17 @@ phaseFor(date: ISODate, races: Race[]): PhaseInfo
 nextRace(races: Race[], today: ISODate): Race | null   // next A, else next any
 ```
 
+Short-notice plans (2026-11-26): `phaseFor(date, races, { level, recentWeeklyMinutes })`. When the A
+race is closer than the minimum viable length (PLAN_TOO_SHORT), an intermediate or advanced athlete
+whose last 4 weeks average at least `BASE_READY_HOURS` of the distance (`fitnessWeeklyMinutes`; full 10 h,
+half 7,5 h, olympic 6 h…; null with < 2 weeks of training) gets a short base (⅓ of the training weeks)
+and build weeks instead of the base-only survival plan; the race and taper weeks stay the same, so
+week plans apply to the same weeks. Beginners and athletes without that history are unchanged. The
+volume is the 4 weeks before the **current** week and every surface passes the same numbers: the
+planner (`PlannerInput.fitnessWeeklyMinutes`, default `recentWeeklyMinutes`), the replanner, Plan →
+General (`buildSeason`/`seasonWeekDetail`, `useFitnessMinutes`), the week view, Hoy, Progreso, the rules
+coach and the server (planning context, briefing, `set_week_plans`).
+
 ### `readiness.ts`
 ```ts
 computeReadiness(input: { today: ISODate; checkin: DailyCheckin | null; metrics: DailyMetrics[] /* last ~28 days */ }): Readiness

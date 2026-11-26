@@ -5,6 +5,7 @@ import type { BusyBlock, ISODate, JointSession, LifeEvent, Profile, Race, UUID, 
 import { useAuth } from '@/data/context';
 import { useBusyBlocks, useJointSessions, useLifeEvents, useProfile, useRaces, useWeekPlans, useWorkouts } from '@/data/queries';
 
+import { useFitnessMinutes } from './useFitnessMinutes';
 import { recentWeeklyMinutes, weekPhaseOf } from './weekModel';
 
 const RECENT_WEEKS = 4;
@@ -26,6 +27,8 @@ export interface WeekData {
   /** Weekly hours × the adjusted volume factor ("Objetivo"). */
   targetHours: number | null;
   recentMinutes: number[];
+  /** Completed minutes of the 4 weeks before the current week: the athlete's volume for a short-notice plan. */
+  fitnessMinutes: number[];
   /** Completed workouts of the 4 weeks before this one (planner ramp control). */
   history: Workout[];
   isLoading: boolean;
@@ -48,10 +51,11 @@ export function useWeekData(weekStart: ISODate): WeekData {
   const races = useRaces();
   const profile = useProfile();
   const weekPlans = useWeekPlans(range);
+  const fitnessMinutes = useFitnessMinutes(today);
 
   const all = [workouts, history, lifeEvents, busy, joint, races, profile, weekPlans];
   const list = workouts.data ?? [];
-  const week = weekPhaseOf(weekStart, races.data, profile.data ?? null, weekPlans.data);
+  const week = weekPhaseOf(weekStart, races.data, profile.data ?? null, weekPlans.data, fitnessMinutes);
 
   return {
     today,
@@ -67,6 +71,7 @@ export function useWeekData(weekStart: ISODate): WeekData {
     weekPlan: week.plan,
     targetHours: week.targetHours,
     recentMinutes: recentWeeklyMinutes(history.data ?? [], weekStart, RECENT_WEEKS, addDays),
+    fitnessMinutes,
     history: (history.data ?? []).filter((w) => w.status === 'completed'),
     isLoading: workouts.isLoading,
     error: workouts.error,

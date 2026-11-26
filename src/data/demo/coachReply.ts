@@ -70,7 +70,7 @@ function weekLine(ctx: CoachContext): string {
 function raceLine(ctx: CoachContext): string | null {
   const race = nextRace(ctx.races, ctx.today);
   if (!race) return null;
-  const phase = phaseFor(ctx.today, ctx.races);
+  const phase = phaseFor(ctx.today, ctx.races, { level: ctx.profile.level, recentWeeklyMinutes: ctx.fitnessWeeklyMinutes });
   const days = diffDays(race.date, ctx.today);
   return `Faltan ${days} días para «${race.name}» (fase de ${phaseLabel(phase.phase).toLowerCase()}). ${phase.focus}`;
 }

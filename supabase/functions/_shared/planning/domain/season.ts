@@ -81,6 +81,11 @@ export interface SeasonInput {
   weekPlans?: readonly WeekPlan[];
   /** Weeks to show without a target race (default 8). */
   horizonWeeks?: number;
+  /**
+   * Completed minutes of the weeks before this one (oldest first): a short-notice
+   * plan gets base + build when they already cover the base (periodization `PhaseOptions`).
+   */
+  recentWeeklyMinutes?: readonly number[];
 }
 
 /** The part of the athlete's availability that decides the weekly hours (client and server shapes). */
@@ -360,14 +365,15 @@ function summaryOf(weeks: readonly SeasonWeek[], target: Race | null): string {
 export function buildSeason(input: SeasonInput): SeasonOverview {
   const current = startOfWeek(input.today);
   const plans = new Map((input.weekPlans ?? []).map((p) => [p.weekStart, p] as const));
-  const first = phaseFor(current, input.races, { level: input.level });
+  const opts = { level: input.level, recentWeeklyMinutes: input.recentWeeklyMinutes };
+  const first = phaseFor(current, input.races, opts);
   const target = first.targetRace;
   const count = weekCount(current, target, input.horizonWeeks);
   const weeks: SeasonWeek[] = [];
   const warnings = new Set<string>();
   for (let i = 0; i < count; i += 1) {
     const weekStart = addDays(current, i * 7);
-    const raw = i === 0 ? first : phaseFor(weekStart, input.races, { level: input.level });
+    const raw = i === 0 ? first : phaseFor(weekStart, input.races, opts);
     raw.warnings.forEach((w) => warnings.add(w));
     const editable = canOverride(raw);
     const plan = editable ? (plans.get(weekStart) ?? null) : null;

@@ -25,6 +25,8 @@ export interface AdjustContext {
   level?: AthleteLevel;
   /** Manual weekly hours; null = automatic availability (level × race distance). */
   weeklyHoursTarget: number | null;
+  /** The athlete's volume before the current week, as given to `buildSeason` (short-notice plans). */
+  recentWeeklyMinutes?: readonly number[];
 }
 
 export interface AdjustOption {
@@ -87,7 +89,7 @@ export function toWeekPlanDraft(form: AdjustForm, weekStart: ISODate): WeekPlanD
 
 /** Target minutes the plan gives the week with this option and no explicit hours (as `buildSeason`). */
 export function autoMinutes(weekStart: ISODate, kind: WeekPlanKind, ctx: AdjustContext): number {
-  const raw = phaseFor(weekStart, ctx.races, { level: ctx.level });
+  const raw = phaseFor(weekStart, ctx.races, { level: ctx.level, recentWeeklyMinutes: ctx.recentWeeklyMinutes });
   const hours = weeklyHoursFor(ctx.weeklyHoursTarget, ctx.level, raw.targetRace?.distance ?? null);
   const info = applyWeekPlan(raw, { weekStart, kind, targetMinutes: null }, hours);
   return Math.max(0, Math.round((hours * 60 * info.volumeFactor) / 5) * 5);

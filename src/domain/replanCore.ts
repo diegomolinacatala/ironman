@@ -40,6 +40,8 @@ export interface ReplanInput {
   jointSessions?: JointSession[];
   /** Extension: races (warnings close to an A race). */
   races?: Race[];
+  /** Extension: completed minutes of the 4 weeks before the current week (a short-notice plan's phases, periodization). */
+  fitnessWeeklyMinutes?: number[];
 }
 
 /** A change the engine prepared but could not apply to its working copy (left out, logged by the caller). */

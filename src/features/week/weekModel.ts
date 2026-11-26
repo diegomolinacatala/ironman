@@ -116,16 +116,21 @@ export interface WeekPhase {
   targetHours: number | null;
 }
 
-/** The week's phase with the athlete's override applied: the same week Plan → General and the planner see. */
+/**
+ * The week's phase with the athlete's override applied: the same week Plan →
+ * General and the planner see. `recentWeeklyMinutes` = the athlete's volume
+ * before the current week (`useFitnessMinutes`), for short-notice plans.
+ */
 export function weekPhaseOf(
   weekStart: ISODate,
   races: readonly Race[] | undefined,
   profile: Pick<Profile, 'level' | 'availability'> | null,
   plans: readonly WeekPlan[] | undefined,
+  recentWeeklyMinutes?: readonly number[],
 ): WeekPhase {
   const manual = profile ? manualWeeklyHours(profile.availability) : null;
   if (!races) return { phase: null, plan: null, targetHours: manual };
-  const raw = phaseFor(weekStart, races, { level: profile?.level });
+  const raw = phaseFor(weekStart, races, { level: profile?.level, recentWeeklyMinutes });
   const stored = plans?.find((p) => p.weekStart === weekStart) ?? null;
   const plan = stored && canOverride(raw) ? stored : null;
   const weekly = profile ? weeklyHoursFor(manual, profile.level, raw.targetRace?.distance ?? null) : null;

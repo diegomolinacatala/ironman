@@ -143,6 +143,31 @@ export interface TaperFactors {
   raceWeek: number;
 }
 
+/**
+ * Weekly hours that already cover the aerobic base for a distance: about the
+ * end-of-base volume of a lower-intermediate plan (§6.2: the intermediate
+ * build week's lower bound × 0.85). A non-beginner who averaged at least this
+ * over the last weeks gets a short base and a build block when the race is too
+ * close for a full plan, instead of a base-only survival plan. [H] §5.2
+ */
+export const BASE_READY_HOURS: Readonly<Record<RaceDistance, number>> = {
+  sprint: 4,
+  olympic: 6,
+  half: 7.5,
+  full: 10,
+  run_5k: 3,
+  run_10k: 3.5,
+  run_half: 4,
+  run_marathon: 5,
+  other: 5,
+};
+
+/** Recent weeks (completed minutes) that measure the athlete's current volume. [H] */
+export const FITNESS_WEEKS = 4;
+
+/** Short-notice plan with the base covered: share of the training weeks left as base (the rest is build). [H] */
+export const READY_BASE_SHARE = 1 / 3;
+
 /** Weekly volume relative to the average build week. [H] inside the [C] 41-60 % range §5.4 */
 export const TAPER_FACTORS: Readonly<Record<RaceDistance, TaperFactors>> = {
   sprint: { minus2: null, minus1: 0.85, raceWeek: 0.55 },

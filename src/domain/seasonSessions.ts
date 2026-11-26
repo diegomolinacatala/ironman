@@ -30,6 +30,8 @@ export interface SeasonWeekDetail {
 export interface SeasonDetailInput {
   profile: Profile;
   races: readonly Race[];
+  /** Completed minutes of the weeks before this one (oldest first), as given to `buildSeason`. */
+  recentWeeklyMinutes?: readonly number[];
 }
 
 const MAX_KEY_SESSIONS = 3;
@@ -55,7 +57,7 @@ const QUALITY_NAMES: Partial<Record<SessionCode, string>> = {
 
 /** The week's phase as the planner sees it: periodization plus the athlete's override. */
 function weekPhase(week: SeasonWeek, input: SeasonDetailInput): { info: PhaseInfo; freeWeek: boolean } {
-  const raw = phaseFor(week.weekStart, input.races, { level: input.profile.level });
+  const raw = phaseFor(week.weekStart, input.races, { level: input.profile.level, recentWeeklyMinutes: input.recentWeeklyMinutes });
   const plan = activeWeekPlan(raw, week.plan, week.weekStart);
   return { info: applyWeekPlan(raw, plan, normalWeekHours(input.profile.availability, input.profile.level, raw.targetRace?.distance ?? null)), freeWeek: plan?.kind === 'rest' };
 }
@@ -68,7 +70,7 @@ function weekSpecs(week: SeasonWeek, input: SeasonDetailInput): SessionSpec[] {
   const kind = distanceKindOf(distance, profile.sports);
   const pinned = pinnedRaceSessions({
     info,
-    next: phaseFor(addDays(week.weekStart, 7), races, { level: profile.level }),
+    next: phaseFor(addDays(week.weekStart, 7), races, { level: profile.level, recentWeeklyMinutes: input.recentWeeklyMinutes }),
     kind,
     firstPlannable: week.weekStart,
     weekEnd: addDays(week.weekStart, 6),

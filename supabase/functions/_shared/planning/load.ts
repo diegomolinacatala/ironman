@@ -3,7 +3,7 @@
  * Same heuristics as the app's domain/load (docs/research/02 §3): completed TSS
  * → session RPE → planned TSS → duration × IF² table.
  */
-import { addDays, diffDays } from '../dates.ts';
+import { addDays, diffDays, startOfWeek } from '../dates.ts';
 import type { ISODate, Intensity, LifeEvent, Sport, Workout } from '../types.ts';
 
 export const INTENSITY_IF: Record<Intensity, number> = {
@@ -138,6 +138,15 @@ export function weeklyLoadHistory(
       load: round1(done.reduce((sum, w) => sum + workoutLoad(w), 0) + otherLoad),
     };
   });
+}
+
+/**
+ * Completed minutes of each of the 4 weeks before the athlete's current week
+ * (oldest first): their volume today, which can turn a short-notice plan into
+ * base + build (mirrored periodization), like the app's Plan → General.
+ */
+export function fitnessWeeklyMinutesOf(workouts: readonly Workout[], today: ISODate): number[] {
+  return weeklyLoadHistory(workouts, [], startOfWeek(today), 4).map((w) => w.completedMin);
 }
 
 /** Best-effort intensity of an executed activity from RPE, else TSS per hour. */
