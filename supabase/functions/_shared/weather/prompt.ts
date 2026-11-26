@@ -3,12 +3,14 @@
  * - coach: one row per day of the next week (summary, dry stretches, rainy
  *   hours, temperatures, wind), so «¿cuándo salgo a correr esta semana?» has a
  *   real answer;
- * - briefing: only when one of today's outdoor sessions falls in the rain,
- *   with its dry gap (or none) and the sentence the app would show.
+ * - briefing: only when one of today's outdoor sessions falls in the rain or
+ *   in strong wind for its sport, with its gap (or none) and the sentence the
+ *   app would show. A wind notice (just breezy) stays out: low wind = silent.
+ *   Rain and wind make one entry per session.
  * Pure (the mirrored `weather.ts` rules).
  */
 import { addDays, weekdayOf, WEEKDAYS_ES } from '../dates.ts';
-import { dayOutlook, freeDaytime, gapAdvice, rainySessionsOn, whenLabel } from '../planning/domain/weather.ts';
+import { dayOutlook, freeDaytime, issueAdvice, troubleOf, weatherIssuesOn, whenLabel, windLabel } from '../planning/domain/weather.ts';
 import type { WeatherForecast, WeatherSession } from '../planning/domain/weather.ts';
 import type { ISODate, Workout } from '../types.ts';
 
@@ -29,6 +31,8 @@ export function weatherForCoach(forecast: WeatherForecast, today: ISODate): Reco
       tempMin: d.tempMin,
       tempMax: d.tempMax,
       windMaxKmh: d.windMaxKmh,
+      ...(d.gustMaxKmh !== null ? { gustMaxKmh: d.gustMaxKmh } : {}),
+      ...(d.windyHours > 0 ? { strongWindHours: d.windyHours } : {}),
       ...(d.coarse ? { approx: true } : {}),
     }));
   return days.length === 0 ? null : { place: forecast.place, source: WEATHER_CREDIT, days };
@@ -57,21 +61,27 @@ export interface BriefingWeatherInput {
   timezone: string;
 }
 
-/** Today's outdoor sessions in the rain with their dry gap; null when the weather does not matter today. */
+/** Today's outdoor sessions in the rain or in strong wind with their gap; null when the weather does not matter today. */
 export function weatherForBriefing(input: BriefingWeatherInput): Record<string, unknown> | null {
   const afterMin = input.date === input.today ? minutesNow(input.now, input.timezone) : undefined;
   const sessions: (WeatherSession & { status: string; isKey: boolean; title: string })[] = input.workouts.filter((w) => w.date === input.date);
-  const rainy = rainySessionsOn(input.forecast.hours, sessions, input.date, { allowed: freeDaytime(input.busy), ...(afterMin === undefined ? {} : { afterMin }) });
-  if (rainy.length === 0) return null;
+  const issues = weatherIssuesOn(input.forecast.hours, sessions, input.date, { allowed: freeDaytime(input.busy), ...(afterMin === undefined ? {} : { afterMin }) });
+  if (issues.length === 0) return null;
   return {
     place: input.forecast.place,
     source: WEATHER_CREDIT,
-    sessions: rainy.map(({ session, weather }) => ({
-      title: session.title,
-      startTime: session.startTime,
-      rain: whenLabel(weather.rain),
-      dryGap: weather.gap ? whenLabel(weather.gap) : null,
-      advice: weather.gap ? gapAdvice(session.sport, weather.gap) : 'Llueve y no hay un hueco seco: mejor rodillo o piscina',
-    })),
+    sessions: issues.map(({ session, weather }) => {
+      const wind = weather.wind?.level === 'strong' ? weather.wind : null;
+      const rain = weather.kind === 'rain' ? weather.rain : null;
+      return {
+        title: session.title,
+        startTime: session.startTime,
+        trouble: troubleOf(weather),
+        rain: rain ? whenLabel(rain) : null,
+        ...(wind ? { wind: `${windLabel(wind)} ${whenLabel(wind.at)}` } : {}),
+        dryGap: weather.gap ? whenLabel(weather.gap) : null,
+        advice: issueAdvice(weather, session.sport),
+      };
+    }),
   };
 }

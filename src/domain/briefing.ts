@@ -28,7 +28,7 @@ import {
 } from './briefingScript';
 import { diffDays, formatDuration, toISODate } from './dates';
 import type { IllnessOutcome } from './illness';
-import { rainySessionsOn, type WeatherForecast } from './weather';
+import { troubleOf, troubleSpan, weatherIssuesOn, type WeatherForecast } from './weather';
 import type {
   Briefing,
   DailyMetrics,
@@ -77,7 +77,7 @@ export interface BriefingInput {
   illness?: IllnessOutcome | null;
 }
 
-/** Today's outdoor session in the rain (key session first) and its dry gap, for the script; null otherwise. */
+/** Today's outdoor session in the rain or in strong wind (key session first) and its gap, for the script; null otherwise. */
 export function briefingWeatherOf(
   forecast: WeatherForecast | null | undefined,
   workouts: readonly Workout[],
@@ -86,8 +86,9 @@ export function briefingWeatherOf(
 ): BriefingWeather | null {
   if (!forecast) return null;
   const afterMin = toISODate(now) === date ? now.getHours() * 60 + now.getMinutes() : undefined;
-  const [first] = rainySessionsOn(forecast.hours, workouts, date, afterMin === undefined ? {} : { afterMin });
-  return first ? { sport: first.session.sport, rain: first.weather.rain, gap: first.weather.gap } : null;
+  const [first] = weatherIssuesOn(forecast.hours, workouts, date, afterMin === undefined ? {} : { afterMin });
+  if (!first) return null;
+  return { sport: first.session.sport, rain: troubleSpan(first.weather), gap: first.weather.gap, trouble: troubleOf(first.weather) };
 }
 
 const ILLNESS_FOCUS = 'Hoy mejor suave: cambia lo duro por algo tranquilo o descansa, y vigila cómo evoluciona.';

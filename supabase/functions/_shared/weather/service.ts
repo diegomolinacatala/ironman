@@ -83,6 +83,7 @@ export function localHours(points: readonly ForecastPoint[], tz: string, from: D
         hour: Number(local.time.slice(0, 2)),
         tempC: p.h > 1 ? interpolate(p.temp, next?.temp, k / p.h) : p.temp,
         windKmh: p.wind,
+        ...(typeof p.gust === 'number' ? { gustKmh: p.gust } : {}),
         precipMm: Math.round((p.mm / p.h) * 100) / 100,
         precipProb: p.prob,
         symbol: p.sym,

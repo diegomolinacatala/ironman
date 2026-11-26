@@ -295,13 +295,15 @@ function togetherSentences(t: BriefingTogether, date: ISODate): Sentence[] {
   return [...t.today.map(todayJointSentence), ...inviteSentences(t.invitations, t.invitationCount, date)];
 }
 
-/** Today's outdoor session that falls in the rain (`weather.ts`), for one spoken sentence. */
+/** Today's outdoor session that falls in the rain or in strong wind (`weather.ts`), for one spoken sentence. */
 export interface BriefingWeather {
   sport: Sport;
-  /** Minutes since midnight. */
+  /** When it rains (or the strong wind blows), minutes since midnight. */
   rain: { start: number; end: number };
-  /** Dry stretch of the day long enough for the session, or null. */
+  /** Dry (and calmer) stretch of the day long enough for the session, or null. */
   gap: { start: number; end: number } | null;
+  /** What the problem is (absent: rain). */
+  trouble?: 'rain' | 'wind' | 'both';
 }
 
 /** "a las seis de la tarde" (an hour) or "entre las cuatro y las seis de la tarde". */
@@ -310,11 +312,21 @@ function spokenRange(range: { start: number; end: number }): string {
   return `entre ${clockWords(range.start)} y ${clockWords(range.end, true)}`;
 }
 
-/** «Ojo, a las seis de la tarde llueve: sal a correr entre las cuatro y las seis de la tarde, que no llueve.» */
+const SPOKEN_TROUBLE = {
+  rain: { verb: 'llueve', good: 'no llueve', none: 'un hueco seco' },
+  wind: { verb: 'hay viento fuerte', good: 'hay menos viento', none: 'un rato más tranquilo' },
+  both: { verb: 'llueve y hay viento fuerte', good: 'no llueve y hay menos viento', none: 'un hueco seco y sin viento' },
+} as const;
+
+/** «Ojo, a las seis de la tarde llueve: sal a correr entre las cuatro y las seis de la tarde, que no llueve.» (or «hay viento fuerte»). */
 function weatherSentence(w: BriefingWeather): Sentence {
-  if (!w.gap) return { text: `Ojo, ${spokenRange(w.rain)} llueve y no hay un hueco seco: mejor en rodillo o en la piscina.` };
+  const t = SPOKEN_TROUBLE[w.trouble ?? 'rain'];
+  if (!w.gap) {
+    const indoors = w.trouble === 'wind' && w.sport !== 'run' ? 'mejor en rodillo' : 'mejor en rodillo o en la piscina';
+    return { text: `Ojo, ${spokenRange(w.rain)} ${t.verb} y no hay ${t.none}: ${indoors}.` };
+  }
   const go = w.sport === 'run' ? 'sal a correr' : 'sal en bici';
-  return { text: `Ojo, ${spokenRange(w.rain)} llueve: ${go} ${spokenRange(w.gap)}, que no llueve.` };
+  return { text: `Ojo, ${spokenRange(w.rain)} ${t.verb}: ${go} ${spokenRange(w.gap)}, que ${t.good}.` };
 }
 
 function tomorrowSentence(workouts: readonly Workout[]): Sentence {

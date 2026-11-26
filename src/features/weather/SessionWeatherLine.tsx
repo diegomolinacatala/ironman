@@ -12,8 +12,8 @@ export function SessionWeatherLine({ view }: { view: SessionWeatherView }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.row} accessible accessibilityLabel={`El tiempo: ${view.line}`}>
-        <Icon name={view.rainy ? 'rain' : 'cloudSun'} size={16} color={colors.textMuted} />
-        <Text variant="callout" color={view.rainy ? 'text' : 'textMuted'} style={styles.flex}>
+        <Icon name={view.icon} size={16} color={colors.textMuted} />
+        <Text variant="callout" color={view.onCard ? 'text' : 'textMuted'} style={styles.flex}>
           {view.line}
         </Text>
       </View>

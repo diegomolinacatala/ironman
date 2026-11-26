@@ -187,6 +187,24 @@ describe('Hoy · the weather of the outdoor session', () => {
     await render(<TodayScreen />);
     expect(screen.queryByText(/Lluvia|MET Norway/)).toBeNull();
   });
+
+  test('wind: a strong one proposes the trainer in the line, a breeze is only a warning, a calm day says nothing', async () => {
+    const ride = () => makeWorkout({ id: 'h', sport: 'bike', title: 'Rodaje en bici', startTime: '18:00', durationMin: 60 });
+    const windy = (kmh: number): WeatherForecast => {
+      const fc = dayForecast(false);
+      return { ...fc, hours: fc.hours.map((h) => ({ ...h, windKmh: kmh })) };
+    };
+    mockForecast = windy(40);
+    mockData = data({ todayWorkouts: [ride()] });
+    await render(<TodayScreen />);
+    expect(screen.getByText('Viento fuerte (40 km/h) a las 18 y ningún rato más tranquilo hoy: mejor rodillo.')).toBeTruthy();
+    mockForecast = windy(28);
+    await render(<TodayScreen />);
+    expect(screen.getByText('Viento (28 km/h) a las 18 · 14 °C')).toBeTruthy();
+    mockForecast = windy(12);
+    await render(<TodayScreen />);
+    expect(screen.queryByText(/Viento|viento/)).toBeNull();
+  });
 });
 
 describe('Hoy · the session card', () => {

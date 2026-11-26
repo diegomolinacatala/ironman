@@ -382,6 +382,28 @@ describe('composeBriefing · the weather (city set)', () => {
     const swim = makeWorkout({ date: TODAY, sport: 'swim', title: 'Técnica', durationMin: 45, startTime: '07:30' });
     expect(composeBriefing(input({ todayWorkouts: [swim], forecast: rainToday(0, 24) })).script).not.toMatch(/llueve/);
   });
+
+  /** Today dry, with `wind(hour)` km/h. */
+  function windToday(wind: (hour: number) => number): WeatherForecast {
+    const fc = rainToday(0, 0);
+    return { ...fc, hours: fc.hours.map((h) => ({ ...h, windKmh: wind(h.hour) })) };
+  }
+  const ride = makeWorkout({ date: TODAY, sport: 'bike', title: 'Rodaje en bici', durationMin: 90, startTime: '07:30', intensity: 'endurance' });
+
+  it('strong wind on the ride: one sentence with the calmer hours, like the rain', () => {
+    const b = composeBriefing(input({ todayWorkouts: [ride], forecast: windToday((h) => (h < 11 ? 40 : 12)) }));
+    expect(b.script).toMatch(/Ojo, entre .+ hay viento fuerte: sal en bici entre .+, que hay menos viento\./);
+    expect(b.script).not.toMatch(/\d/);
+  });
+
+  it('strong wind all day: the trainer', () => {
+    expect(composeBriefing(input({ todayWorkouts: [ride], forecast: windToday(() => 45) })).script).toContain('hay viento fuerte y no hay un rato más tranquilo: mejor en rodillo.');
+  });
+
+  it('a breeze, or the same wind on a run, says nothing', () => {
+    expect(composeBriefing(input({ todayWorkouts: [ride], forecast: windToday(() => 28) })).script).not.toMatch(/viento|Ojo/);
+    expect(composeBriefing(input({ forecast: windToday(() => 38) })).script).not.toMatch(/viento|Ojo/);
+  });
 });
 
 describe('illness signal in the local briefing', () => {

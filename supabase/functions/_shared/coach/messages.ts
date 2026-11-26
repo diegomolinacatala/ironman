@@ -8,6 +8,7 @@
  */
 import { addDays } from '../dates.ts';
 import type { PlanningContext } from '../planning/context.ts';
+import { WIND_RULES } from '../planning/domain/weather.ts';
 import type { CoachMode, CoachRequest, FriendWeekItem } from '../types.ts';
 import { mentionsNextWeek, wantsPlanChange } from './intent.ts';
 import type { ClaudeMessage } from './ports.ts';
@@ -64,7 +65,7 @@ export interface CoachMessageExtras {
 
 function weatherBlock(weather: Record<string, unknown> | null | undefined): string {
   if (!weather) return '';
-  return `\n\nEl tiempo en su ciudad (MET Norway; dryGaps = tramos secos de al menos 1 h 30 entre las 07:00 y las 22:00; approx = previsión por bloques de 6 h, menos precisa):\n${JSON.stringify(weather)}`;
+  return `\n\nEl tiempo en su ciudad (MET Norway; dryGaps = tramos secos de al menos 1 h 30 entre las 07:00 y las 22:00; windMaxKmh = viento medio máximo y gustMaxKmh = rachas, en km/h; strongWindHours = horas con viento fuerte para la bici, ≥ ${WIND_RULES.bike.strongKmh} km/h o rachas ≥ ${WIND_RULES.bike.strongGustKmh}: para correr molesta pero solo es un problema desde ${WIND_RULES.run.strongKmh} km/h o rachas de ${WIND_RULES.run.strongGustKmh}; el viento es sobre todo un aviso: solo propón cambiar la sesión si es fuerte, y siempre como propuesta; approx = previsión por bloques de 6 h, menos precisa):\n${JSON.stringify(weather)}`;
 }
 
 function taskText(request: CoachRequest): string {

@@ -46,7 +46,7 @@ test('briefing context: weather only when today’s outdoor session falls in the
   assert.deepEqual(promptPayload(ctx).weather, {
     place: 'Valencia',
     source: 'MET Norway',
-    sessions: [{ title: 'Rodaje suave', startTime: '18:00', rain: 'a las 18', dryGap: 'entre las 12 y las 17', advice: 'Sal a correr entre las 12 y las 17: no llueve' }],
+    sessions: [{ title: 'Rodaje suave', startTime: '18:00', trouble: 'rain', rain: 'a las 18', dryGap: 'entre las 12 y las 17', advice: 'Sal a correr entre las 12 y las 17: no llueve' }],
   });
   const dry = await buildBriefingContext(fakeStore(stateWithRun('13:00')), { userId: USER, date: DATE, now: fixedNow(), forecast });
   assert.equal('weather' in promptPayload(dry), false);

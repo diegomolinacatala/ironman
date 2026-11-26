@@ -9,6 +9,10 @@
  *   updated every few hours);
  * - only on demand (the athlete opens the app, a briefing or the coach), never on a schedule.
  * Outside the Nordic area there is no chance of rain: only amounts and symbols.
+ * Gusts (`wind_speed_of_gust`) only come in `/complete` and only in the Nordic
+ * area (checked 2026-11: Madrid none, Oslo the hourly steps): `/compact`
+ * never has them, so `gust` is parsed when present and null otherwise, and
+ * the wind rules lean on the 10-minute mean.
  */
 import type { CachedForecast, FetchLike, ForecastPoint } from './ports.ts';
 import { WEATHER_USER_AGENT, WeatherError } from './ports.ts';
@@ -54,10 +58,12 @@ function pointOf(raw: unknown): ForecastPoint | null {
   const period = hourly ?? block;
   if (!period) return null;
   const wind = num(instant.wind_speed);
+  const gust = num(instant.wind_speed_of_gust);
   return {
     t: new Date(raw.time).toISOString(),
     temp: num(instant.air_temperature),
     wind: wind === null ? null : Math.round(wind * 3.6),
+    ...(gust === null ? {} : { gust: Math.round(gust * 3.6) }),
     mm: period.mm,
     prob: period.prob,
     sym: period.sym,
