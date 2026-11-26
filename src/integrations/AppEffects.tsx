@@ -11,6 +11,8 @@
  *   "Road to Ironman" device calendar in sync with the plan,
  * - wake mode of "Tu informe de hoy" with Apple Salud: watches last night's sleep (also in
  *   the background) to notify at wake-up + delay (`useWakeBriefing`).
+ * - with a city set, checks the weather (weekly and each morning) and leaves a
+ *   proposal to review when an outdoor session falls in the rain (any platform).
  * Widget deep links (roadtoironman://workout/<id>, roadtoironman://today) are handled by
  * Expo Router itself. Whenever there is no session (sign-out, deletion, revoked
  * session at launch) it clears local notifications and widgets.
@@ -22,6 +24,7 @@ import { useAuth, useRepository } from '@/data/context';
 import { useBriefing, useJointSessions, useProfile, useRaces, useWorkouts } from '@/data/queries';
 import { maxDate, minDate, todayISO } from '@/domain/dates';
 import type { DateRange, ISODate } from '@/domain/types';
+import { useWeatherChecks } from '@/features/weather/useWeatherChecks';
 
 import { defaultBusyRange } from './calendar';
 import { trainingCalendarWindow } from './calendar/trainingEvents';
@@ -87,6 +90,8 @@ export function AppEffects(): null {
   useWakeBriefing(ready, repo, userId, profile?.notificationPrefs ?? null);
   useSignedOutCleanup(isLoading, userId);
   useTimezoneSync(signedInAndOnboarded, profile);
+  // Weekly (Monday / Sunday evening) and morning weather checks: a proposal to review, never applied.
+  useWeatherChecks(signedInAndOnboarded, userId, profile, tick);
 
   return null;
 }

@@ -549,6 +549,24 @@ export interface Thresholds {
   restingHr?: number;
 }
 
+/**
+ * The athlete's city for the weather forecast (Tú › Ajustes › Tu ciudad para el
+ * tiempo): a geocoded place, never the device location. Its coordinates go to
+ * the weather provider (MET Norway) through our server.
+ */
+export interface WeatherPlace {
+  /** "Valencia". */
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+/** A city found by the search, to pick as the weather place. */
+export interface WeatherPlaceOption extends WeatherPlace {
+  /** Region and country ("Comunidad Valenciana, España"). */
+  detail: string;
+}
+
 export interface NotificationPrefs {
   workoutReminders: boolean;
   reminderMinutesBefore: number;
@@ -590,6 +608,8 @@ export interface Profile {
   aiConsentAt: ISODateTime | null;
   /** The athlete's watch; null/absent = not chosen yet (treated as Garmin). */
   watchBrand?: WatchBrand | null;
+  /** City for the weather forecast; null/absent = none (nothing about the weather is shown). */
+  weatherPlace?: WeatherPlace | null;
   createdAt: ISODateTime;
 }
 

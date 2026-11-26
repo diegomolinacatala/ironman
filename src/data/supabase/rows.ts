@@ -27,6 +27,10 @@ export interface ProfileRow {
   ai_consent_at?: string | null;
   /** v4 (`20261109000100_coach_v4.sql`): 'garmin' | 'coros' | null (not chosen yet). */
   watch_brand?: string | null;
+  /** `20261126000500_weather.sql`: the city for the forecast (all three or none). */
+  weather_place?: string | null;
+  weather_lat?: number | string | null;
+  weather_lon?: number | string | null;
   created_at: string;
   updated_at?: string;
 }

@@ -7,6 +7,7 @@ import { act, renderHook } from '@testing-library/react-native';
 
 import { addDays, startOfWeek, todayISO, weekRange } from '@/domain/dates';
 import type { LifeEvent, PlanProposal, ProposalDraft, Workout } from '@/domain/types';
+import type { WeatherForecast } from '@/domain/weather';
 import { useAdjustToday } from '@/features/checkin/useAdjustToday';
 import { useReplanForEvent } from '@/features/events/useReplanForEvent';
 import { makeEvent, makeProfile, makeRace, makeWorkout } from '@/features/workouts/__tests__/fixtures';
@@ -27,6 +28,7 @@ const mockCreateProposal = jest.fn(
 );
 let mockWorkouts: Workout[] = [];
 let mockEvents: LifeEvent[] = [];
+let mockForecast: WeatherForecast | null = null;
 const mockProfile = makeProfile();
 const mockRaces = [makeRace()];
 
@@ -46,6 +48,7 @@ jest.mock('@/data/queries', () => {
     useRaces: () => ok(mockRaces),
     useProfile: () => ok(mockProfile),
     useWeekPlans: () => ok([]),
+    useWeather: () => ok(mockForecast),
   };
 });
 
@@ -58,6 +61,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockWorkouts = [];
   mockEvents = [];
+  mockForecast = null;
 });
 
 function weekData(overrides: Partial<WeekData> = {}): WeekData {
@@ -110,6 +114,30 @@ describe('Planificar semana', () => {
       if (c.op === 'add') expect(c.workout.date >= range.from && c.workout.date <= range.to).toBe(true);
     }
     expect(mockRouter.push).toHaveBeenCalledWith('/proposal/proposal-1');
+  });
+
+  test('with a city and rain all week, the outdoor sessions it adds go indoors (one proposal, marked as weather)', async () => {
+    const days = Array.from({ length: 7 }, (_, i) => addDays(nextWeek, i));
+    mockForecast = {
+      place: 'Bilbao',
+      source: 'met_norway',
+      updatedAt: `${nextWeek}T05:00:00Z`,
+      hours: days.flatMap((date) =>
+        Array.from({ length: 24 }, (_, hour) => ({ date, hour, tempC: 11, windKmh: 20, precipMm: 2, precipProb: null, symbol: 'rain', coarse: false })),
+      ),
+    };
+    const profile = makeProfile({ weatherPlace: { name: 'Bilbao', lat: 43.26, lon: -2.93 } });
+    const { result } = await renderHook(() => usePlanWeek());
+    await act(async () => {
+      await result.current.plan(nextWeek, weekData({ profile }));
+    });
+    const draft = mockCreateProposal.mock.calls[0]?.[0];
+    expect(draft?.model).toMatch(/^weather:plan:w1-/);
+    const added = (draft?.changes ?? []).flatMap((c) => (c.op === 'add' ? [c.workout] : []));
+    const outdoors = added.filter((w) => (w.sport === 'run' || w.sport === 'bike' || w.sport === 'brick') && !/rodillo/i.test(w.title));
+    expect(added.length).toBeGreaterThan(0);
+    expect(outdoors).toEqual([]);
+    expect(draft?.summary).toMatch(/rodillo|piscina|cubierto/);
   });
 
   test('refuses past weeks without calling the engine', async () => {

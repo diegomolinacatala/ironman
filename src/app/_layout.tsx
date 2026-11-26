@@ -73,6 +73,7 @@ function RootNavigator() {
         <Stack.Screen name="settings/availability" options={{ ...header, title: 'Tus horarios' }} />
         <Stack.Screen name="settings/notifications" options={{ ...header, title: 'Notificaciones' }} />
         <Stack.Screen name="settings/voice" options={{ ...header, title: 'Voz del coach' }} />
+        <Stack.Screen name="settings/weather" options={{ ...header, title: 'Tu ciudad' }} />
         <Stack.Screen name="settings/integrations" options={{ ...header, title: 'Conexiones' }} />
         <Stack.Screen name="settings/claude" options={{ ...header, title: 'Conecta tu Claude' }} />
         <Stack.Screen name="settings/coros" options={{ ...header, title: 'Conectar COROS' }} />

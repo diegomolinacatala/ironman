@@ -58,6 +58,13 @@ export interface CoachMessageExtras {
   friends?: FriendWeek[];
   /** Short ids of the context's workouts (computed from the context when missing). */
   ids?: ShortIds;
+  /** The coming week's weather in the athlete's city (`weather/prompt.ts`), when they set one. */
+  weather?: Record<string, unknown> | null;
+}
+
+function weatherBlock(weather: Record<string, unknown> | null | undefined): string {
+  if (!weather) return '';
+  return `\n\nEl tiempo en su ciudad (MET Norway; dryGaps = tramos secos de al menos 1 h 30 entre las 07:00 y las 22:00; approx = previsión por bloques de 6 h, menos precisa):\n${JSON.stringify(weather)}`;
 }
 
 function taskText(request: CoachRequest): string {
@@ -75,6 +82,7 @@ export function buildCoachMessages(request: CoachRequest, context: PlanningConte
     taskText(request),
     extras.lifeEvent ? `\n\nImprevisto que motiva el cambio:\n${JSON.stringify(extras.lifeEvent)}` : '',
     friendsBlock(extras.friends ?? []),
+    weatherBlock(extras.weather),
     `\n\nContexto del atleta (JSON):\n${JSON.stringify(promptContext(context, ids))}`,
   ];
   const contextMessage: ClaudeMessage = { role: 'user', content: parts.join('') };

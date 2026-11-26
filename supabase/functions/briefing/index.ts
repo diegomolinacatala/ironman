@@ -15,6 +15,9 @@ import { userIdFromJwt } from '../_shared/platform/db.ts';
 import { createPlanningStore } from '../_shared/platform/planning-store.ts';
 import { edgeContext, misconfigured, systemNow } from '../_shared/platform/runtime.ts';
 import { createAiUsageStore, createCredentialStore } from '../_shared/platform/service-stores.ts';
+import { createForecastCache, createPlaceStore } from '../_shared/platform/weather-store.ts';
+import { MET_FORECAST_URL } from '../_shared/weather/met.ts';
+import { createWeatherReader } from '../_shared/weather/service.ts';
 
 const env = (name: string): string | undefined => Deno.env.get(name);
 const { db, logger } = edgeContext('briefing', env);
@@ -23,6 +26,17 @@ const claude = createAiPort(env, 'text', logger);
 const reader = db ? createPlanningStore(db, systemNow) : null;
 const briefings = db ? createBriefingStore(db) : null;
 const usage = db ? createAiUsageStore(db) : null;
+// The athlete's city forecast (MET Norway, cached): one sentence when today's outdoor session falls in the rain.
+const weather = db
+  ? createWeatherReader({
+      places: createPlaceStore(db),
+      cache: createForecastCache(db),
+      fetch: (input, init) => fetch(input, init),
+      now: systemNow,
+      logger,
+      baseUrl: env('MET_FORECAST_URL') || MET_FORECAST_URL,
+    })
+  : null;
 
 function garminRefresher(): GarminRefresher | null {
   const keySecret = env('GARMIN_KEY_SECRET');
@@ -45,6 +59,7 @@ Deno.serve((req: Request) => {
     usage,
     claude,
     garmin,
+    weather,
     authenticate: (r) => userIdFromJwt(db, bearerToken(r)),
     now: systemNow,
     logger,

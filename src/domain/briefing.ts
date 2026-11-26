@@ -5,7 +5,9 @@
  * the widget, a one-sentence sleep summary, a focus tip (the key session's
  * coaching when it has one) and a warm Spanish (Spain, tú) `script` for
  * text-to-speech (`briefingScript.ts`) that names the key session's target,
- * sensation and success criterion (`briefingCoach.ts`). Pure.
+ * sensation and success criterion (`briefingCoach.ts`) and, with a city set,
+ * says when today's outdoor session falls in the rain and when it is dry
+ * (`weather.ts`). Pure.
  */
 import { coachTip } from './briefingCoach';
 import { HRV_HIGH_RATIO, HRV_LOW_RATIO, hrvRatio, isNum, sleepSnapshotFrom, sleepVerdictOf } from './briefingSleep';
@@ -21,9 +23,11 @@ import {
   lowerFirst,
   noSleepYetText,
   noWatchText,
+  type BriefingWeather,
   type DayPlan,
 } from './briefingScript';
-import { diffDays, formatDuration } from './dates';
+import { diffDays, formatDuration, toISODate } from './dates';
+import { rainySessionsOn, type WeatherForecast } from './weather';
 import type {
   Briefing,
   DailyMetrics,
@@ -63,6 +67,21 @@ export interface BriefingInput {
   raceDistance?: RaceDistance | null;
   /** The athlete's watch, for the "no sleep data yet" texts (absent/null: "tu reloj"). */
   watchBrand?: WatchBrand | null;
+  /** Forecast of the athlete's city: one sentence when today's outdoor session falls in the rain. */
+  forecast?: WeatherForecast | null;
+}
+
+/** Today's outdoor session in the rain (key session first) and its dry gap, for the script; null otherwise. */
+export function briefingWeatherOf(
+  forecast: WeatherForecast | null | undefined,
+  workouts: readonly Workout[],
+  date: ISODate,
+  now: Date,
+): BriefingWeather | null {
+  if (!forecast) return null;
+  const afterMin = toISODate(now) === date ? now.getHours() * 60 + now.getMinutes() : undefined;
+  const [first] = rainySessionsOn(forecast.hours, workouts, date, afterMin === undefined ? {} : { afterMin });
+  return first ? { sport: first.session.sport, rain: first.weather.rain, gap: first.weather.gap } : null;
 }
 
 const HEADLINE_MAX = 90;
@@ -202,6 +221,7 @@ export function composeBriefing(input: BriefingInput): Briefing {
     together: input.social ? togetherOf(input.social.jointSessions, input.social.me, date) : NO_TOGETHER,
     speech: { thresholds: input.thresholds ?? null, raceDistance: input.raceDistance ?? race?.distance ?? null },
     watchBrand: input.watchBrand ?? null,
+    weather: briefingWeatherOf(input.forecast, input.todayWorkouts, date, now),
   });
   return {
     date,

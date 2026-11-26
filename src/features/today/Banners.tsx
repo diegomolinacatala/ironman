@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { formatDayLabel, formatTime } from '@/domain/dates';
 import type { ISODate, JointSession, PlanProposal } from '@/domain/types';
+import { isWeatherOnlyProposal } from '@/features/weather/weatherChecks';
 import { Icon, Text, haptics, iconSize, radius, space, useTheme, type IconName } from '@/ui';
 
 import { organizerName } from './selectors';
@@ -46,9 +47,9 @@ export function Banners({ invites, proposals, today }: { invites: JointSession[]
       {newestProposals(proposals).map((p) => (
         <Banner
           key={p.id}
-          icon="sparkles"
+          icon={isWeatherOnlyProposal(p) ? 'rain' : 'sparkles'}
           tone="neutral"
-          overline={`${SOURCE_LABEL[p.source]} · ${changesLabel(p.changes.length)}`}
+          overline={`${isWeatherOnlyProposal(p) ? 'El tiempo' : SOURCE_LABEL[p.source]} · ${changesLabel(p.changes.length)}`}
           title={p.summary || 'Propuesta para tu semana'}
           detail="Revisar cambios"
           onPress={() => router.push(`/proposal/${p.id}`)}
