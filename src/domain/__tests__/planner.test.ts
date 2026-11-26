@@ -281,7 +281,10 @@ describe('planner invariants (property-style)', () => {
     const drafts = adds(result.changes);
     const sessions = drafts.filter((d) => d.intensity !== 'race' || d.durationMin < 150);
     const lifeStress = input.lifeEvents.some((e) => e.kind === 'stress' && e.severity >= 2);
-    const info = phaseFor(input.weekStart, input.races, { level: input.profile.level, lifeStress });
+    const stressed = phaseFor(input.weekStart, input.races, { level: input.profile.level, lifeStress });
+    const calm = phaseFor(input.weekStart, input.races, { level: input.profile.level });
+    // Stress never lifts a week: the calm cadence wins when it gives a descarga or less volume.
+    const info = (calm.isRecoveryWeek && !stressed.isRecoveryWeek) || calm.volumeFactor < stressed.volumeFactor ? calm : stressed;
     expect(result.phase).toEqual(info);
 
     // Never exceeds the weekly target × phase factor by more than 10 %.

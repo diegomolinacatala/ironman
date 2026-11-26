@@ -306,6 +306,7 @@ of the tabs), never `router.push`, which would stack a second tab navigator. Fiv
 | `notifications` | ui-together | **Avisos** inbox (bell on Hoy and Juntos); tap → `data.url` (tab paths via `dismissTo`) |
 | `settings/profile` | ui-account | name, username, level, sports, thresholds, coach notes |
 | `settings/availability` | ui-account | weekly hours, rest/long/pool days, windows |
+| `settings/training` | ui-account | **Tu forma de entrenar**: sessions per sport, preferred days, long ride/run days, intensity model, fixed weekly sessions |
 | `settings/notifications` | ui-account | **Notificaciones** prefs (stored in profile) |
 | `settings/integrations` | ui-account | Garmin Personal API, Apple Salud, Calendario |
 | `settings/claude` | ui-account | "Conecta tu Claude" (MCP URL generator + guide) |
@@ -870,3 +871,60 @@ without the athlete reviewing a proposal.
   forecast and a fixed list of cities, labelled «Tiempo de ejemplo».
 - **Deploy:** `supabase db push` (`20261126000500_weather.sql`), then deploy `weather`, `briefing` and
   `coach`, then ship the app. No secrets needed (`GEOCODER_URL` / `MET_FORECAST_URL` optional overrides).
+
+## 21. Planner for real athletes: habitual volume, long sessions, exams, beginners (2026-11-26)
+
+Found with an evaluation harness (`planWeek` for realistic athletes, automatic availability, a month of history);
+tests in `src/domain/__tests__/plannerRealistic.test.ts`.
+
+- **Habitual volume (automatic availability only).** Mirrored `season.ts`: `habitualWeeklyMinutes(recent)` (average
+  of the recent weeks, null with < 2 or all zero), `habitualFloorMinutes(info, weeklyHours, recent, plan?)` and
+  `weekMinutesFor({ weeklyHours, info, auto, recentWeeklyMinutes, plan })`. A normal prep/base/build week never asks
+  for less than the habitual volume, a descarga never for less than `HABITUAL_RECOVERY_SHARE` (60 %) of it; both are
+  capped by the automatic peak hours, and the planner's ramp cap still applies on top. No floor for taper, race and
+  post-race weeks, a «Semana libre» or a week with explicit minutes. The planner uses the 4 weeks before the current
+  week (`fitnessWeeklyMinutes`, default `recentWeeklyMinutes`); Plan → General (`buildSeason` with
+  `recentWeeklyMinutes`), the week view (`weekPhaseOf`) and the server (`planning/phase.ts` `targetMinutes`) show the
+  same number.
+- **Long sessions first.** Half/full distance in prep/base/build: with few minutes a sport gets fewer sessions rather
+  than losing its long one (`SportPlanInput.keepLong`). Placement queues long sessions and bricks before quality
+  sessions (`queueRank`), so they take the weekend and the quality goes on weekdays (this also fixes a long run on a
+  Wednesday in maintenance weeks). A sport's only session is never a quality one.
+- **Exams** (`restrictions.ts` `examEffects`): on exam days only easy sessions of ≤ 45' (`EXAM_DAY_MAX_MIN`), no
+  quality the day before, at most one quality session in the week (swim CSS included). The planner cuts the whole
+  week by `examVolumeFactor` (−30 %, −40 % at severity 3; not applied to a descarga, already lighter), swaps heavy
+  strength for maintenance and says it in the summary: «Semana de exámenes: 5h 35' en vez de 8h, sin series el día
+  antes ni el día del examen.» (or «coincide con la descarga»).
+- **Stress never lifts a week.** Life stress (stress/work/exam events of severity ≥ 2, or `PlannerInput.checkinStress`
+  ≥ 4 from today's check-in, passed by `useWeekData`) moves the cadence to 2:1 and slows the ramp; when the calm
+  cadence gives the week a descarga or less volume, that phase stays (`stressedPhase`).
+- **Beginners:** at most 1 quality session in base and 2 in build (`BEGINNER_QUALITY_MAX`, swim CSS counted) and
+  maintenance strength instead of heavy.
+
+## 22. «Tu forma de entrenar»: the athlete's own distribution (2026-11-26)
+
+Tú › Entrenamiento › **Tu forma de entrenar** (`settings/training`, `TrainingPrefsEditor`, `trainingPrefsModel.ts`;
+the row shows the summary or «Automático»). Stored in `profiles.training_prefs jsonb` (nullable = everything
+automático; `20261126000600_training_prefs.sql`: own row, client-writable, outline + 8 KB checked by the database,
+every field by `trainingPrefsSchema` in `validation.ts`). Mirrored `domain/trainingPrefs.ts`: `parseTrainingPrefs`
+(lenient reader used by the app mappers and `db/rows.ts` `mapProfile`), `trainingPrefsSummary` /
+`trainingPrefsSentence`, `fixedSessionsOn`, `lowIntensityShareFor`. Everything optional:
+
+- **Sessions per week per sport** (`sessionsPerWeek`, swim/bike/run 0-7, strength 0-3). `allocateWeek` uses the
+  number instead of the table and weights the sport's share of the week (×½-×2, 0 = no time), so sessions stay
+  above the minimum length; the week's minutes, the run cap and the minimum session lengths still apply. No strength
+  in race and post-race weeks whatever the number.
+- **Preferred days** (`preferredDays` per sport, `longRideDays`, `longRunDays`, 0 = Monday). Soft: placement adds
+  `OFF_PREFERENCE_PENALTY` on other days and `RESERVED_DAY_PENALTY` when a session without a preference takes a day
+  another sport prefers; long ride/run days become the week's long-session days; the rest day avoids preferred days.
+- **Intensity model** (`intensityModel`): «Automático» (Z1-Z2 ≥ 75 %), «Polarizado 80/20» (≥ 80 %, at most 2 hard
+  sessions, tempo/sweet spot → threshold), «Piramidal» (≥ 70 %, threshold/VO2 → tempo/sweet spot, one more quality
+  in base). `enforceIntensityDistribution(…, minShare)` checks the share.
+- **Fixed weekly sessions** (`fixedSessions`, ≤ 10: sport, weekday, optional time, 10-360', title). Each planned week
+  proposes them as new workouts (easy, `source: 'rules'`) unless that day already has a session of that sport, a race
+  or a restriction that forbids it; they count as existing sessions (volume, sport sessions, the day's load) so the
+  planner plans around them, and their day is never the rest day.
+- The week summary ends with «Según tu forma de entrenar: piscina L y X, larga S.».
+- Server: `athlete-view.ts` `trainingPrefsView` → MCP `get_planning_context` `athlete.trainingPrefs` («automático» or
+  the choices with `summary`, `how`, `intensity.lowIntensityShare`); the coach and the briefing read the same view.
+  Safety (injuries, illness, load ramp) always wins over the preferences.

@@ -260,9 +260,42 @@ function stressEffects(e: LifeEvent): DayEffects {
     const factor = e.severity >= 3 ? 0.7 : LIFE_STRESS.stressVolumeFactor;
     return span(e.startDate, e.endDate).map((date) => ({ date, r: { volumeFactor: factor, qualityCut: 1, codes: ['LIFE_STRESS'], notes: ['Estrés alto: menos volumen y una sesión de calidad menos.'] } }));
   }
+  if (e.kind === 'exam') return examEffects(e);
   const factor = LIFE_STRESS.workVolumeFactor[Math.min(Math.max(e.severity, 1), 3) - 1] ?? 0.7;
-  const label = e.kind === 'exam' ? 'Semana de exámenes' : 'Pico de trabajo';
-  return span(e.startDate, e.endDate).map((date) => ({ date, r: { volumeFactor: factor, weekQualityCap: 1, codes: ['LIFE_STRESS'], notes: [`${label}: dejamos solo lo esencial.`] } }));
+  return span(e.startDate, e.endDate).map((date) => ({ date, r: { volumeFactor: factor, weekQualityCap: 1, codes: ['LIFE_STRESS'], notes: ['Pico de trabajo: dejamos solo lo esencial.'] } }));
+}
+
+/** Exams: −30 % of the week's volume (−40 % at severity 3). [H] */
+export function examVolumeFactor(severity: number): number {
+  return severity >= 3 ? 0.6 : 0.7;
+}
+
+/** Longest session on an exam day (easy only). [H] */
+export const EXAM_DAY_MAX_MIN = 45;
+
+/**
+ * Exams (startDate..endDate = the exam days): at most one quality session in
+ * the week, none on an exam day or the day before; on exam days only easy
+ * sessions of ≤ 45'. The planner also takes the week's volume down
+ * (`examVolumeFactor`) and swaps heavy strength for maintenance.
+ */
+function examEffects(e: LifeEvent): DayEffects {
+  const note = 'Semana de exámenes: dejamos solo lo esencial.';
+  const eve: DayEffects = [{ date: addDays(e.startDate, -1), r: { noQuality: true, codes: ['EXAM_EVE'], notes: [note] } }];
+  const days = span(e.startDate, e.endDate).map((date) => ({
+    date,
+    r: {
+      volumeFactor: examVolumeFactor(e.severity),
+      weekQualityCap: 1,
+      noQuality: true,
+      noLong: true,
+      maxIntensity: 'endurance' as Intensity,
+      maxDurationMin: EXAM_DAY_MAX_MIN,
+      codes: ['LIFE_STRESS', 'EXAM_DAY'],
+      notes: [note],
+    },
+  }));
+  return [...eve, ...days];
 }
 
 function overloadEffects(e: LifeEvent): DayEffects {

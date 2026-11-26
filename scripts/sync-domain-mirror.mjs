@@ -23,6 +23,7 @@ export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planni
 /**
  * Modules copied whole (their imports must stay inside this list, `dates` or `types`).
  * `wakeWindow`: the usual wake-up window and the wake-up briefing decision (app settings + `morning` sweep).
+ * `trainingPrefs`: «Tu forma de entrenar» (parsing, summary) for the planning context.
  */
 const WHOLE = [
   'constants',
@@ -36,6 +37,7 @@ const WHOLE = [
   'weather',
   'watchCompletion',
   'illness',
+  'trainingPrefs',
 ];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
@@ -102,9 +104,12 @@ export type {
   AthleteLevel,
   CompletedData,
   IllnessAnswer,
+  FixedWeeklySession,
   Intensity,
+  IntensityModel,
   ISODate,
   NumberRange,
+  PrefSport,
   Race,
   RaceDistance,
   RacePrep,
@@ -112,6 +117,7 @@ export type {
   StepTarget,
   Thresholds,
   TrainableSport,
+  TrainingPrefs,
   WeekPlan,
   WeekPlanDraft,
   WeekPlanKind,

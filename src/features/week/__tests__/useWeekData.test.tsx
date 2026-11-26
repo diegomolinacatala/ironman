@@ -8,7 +8,8 @@ import { makeProfile, makeRace } from '@/features/workouts/__tests__/fixtures';
 import { useWeekData } from '../useWeekData';
 import { weekPhaseOf } from '../weekModel';
 
-const monday = startOfWeek(todayISO());
+const mockToday = todayISO();
+const monday = startOfWeek(mockToday);
 const mockRaces = [makeRace({ date: addDays(monday, 7 * 20 + 6) })];
 const mockProfile = makeProfile();
 const mockPlans: WeekPlan[] = [
@@ -27,6 +28,7 @@ jest.mock('@/data/queries', () => {
     useRaces: () => ok(mockRaces),
     useProfile: () => ok(mockProfile),
     useWeekPlans: (range: DateRange) => ok(mockWeekPlans(range)),
+    useCheckins: () => ok([{ date: mockToday, stress: 4 }]),
   };
 });
 
@@ -40,5 +42,7 @@ describe('useWeekData', () => {
     expect(result.current.phase?.focus).toContain('más volumen');
     expect(result.current.targetHours).toBe(expected.targetHours);
     expect(result.current.targetHours).toBeGreaterThan(weekPhaseOf(monday, mockRaces, mockProfile, []).targetHours ?? 0);
+    // Today's check-in stress reaches the planner (≥ 4 slows the ramp).
+    expect(result.current.checkinStress).toBe(4);
   });
 });

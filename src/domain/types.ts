@@ -618,6 +618,39 @@ export interface NotificationPrefs {
   wakeWindow?: { from: ISOTime; to: ISOTime } | null;
 }
 
+/** «Tu forma de entrenar»: how the intensity of the week is distributed. */
+export type IntensityModel = 'auto' | 'polarized' | 'pyramidal';
+
+/** Sports the athlete can set sessions and days for in «Tu forma de entrenar». */
+export type PrefSport = 'swim' | 'bike' | 'run' | 'strength';
+
+/** A session the athlete does every week (club swim on Tuesdays at 20:00…): the planner plans around it. */
+export interface FixedWeeklySession {
+  sport: PrefSport;
+  /** 0 = Monday … 6 = Sunday. */
+  weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  /** 'HH:MM', null = any time of the day. */
+  startTime: ISOTime | null;
+  durationMin: number;
+  title: string;
+}
+
+/**
+ * «Tu forma de entrenar» (`profiles.training_prefs`): everything optional,
+ * absent = «Automático» (the planner's own choice).
+ */
+export interface TrainingPrefs {
+  /** Sessions per week per sport; a missing sport = automático. */
+  sessionsPerWeek: Partial<Record<PrefSport, number>>;
+  /** Preferred weekdays per sport (0 = Monday); missing or empty = any day. */
+  preferredDays: Partial<Record<PrefSport, (0 | 1 | 2 | 3 | 4 | 5 | 6)[]>>;
+  /** Days for the long ride / the long run; empty = automático (the long-session days). */
+  longRideDays: (0 | 1 | 2 | 3 | 4 | 5 | 6)[];
+  longRunDays: (0 | 1 | 2 | 3 | 4 | 5 | 6)[];
+  intensityModel: IntensityModel;
+  fixedSessions: FixedWeeklySession[];
+}
+
 export interface Profile {
   id: UUID;
   username: string;
@@ -637,6 +670,8 @@ export interface Profile {
   aiConsentAt: ISODateTime | null;
   /** The athlete's watch; null/absent = not chosen yet (treated as Garmin). */
   watchBrand?: WatchBrand | null;
+  /** «Tu forma de entrenar»; null/absent = everything automático. */
+  trainingPrefs?: TrainingPrefs | null;
   /** City for the weather forecast; null/absent = none (nothing about the weather is shown). */
   weatherPlace?: WeatherPlace | null;
   createdAt: ISODateTime;

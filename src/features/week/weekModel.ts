@@ -1,6 +1,6 @@
 /** Pure helpers for the Semana screen (unit-tested). */
 import { phaseFor, type PhaseInfo } from '@/domain/periodization';
-import { applyWeekPlan, canOverride, manualWeeklyHours, weeklyHoursFor } from '@/domain/season';
+import { applyWeekPlan, canOverride, manualWeeklyHours, weekMinutesFor, weeklyHoursFor } from '@/domain/season';
 import type { BusyBlock, ISODate, LifeEvent, Profile, Race, WeekPlan, Workout } from '@/domain/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -135,7 +135,8 @@ export function weekPhaseOf(
   const plan = stored && canOverride(raw) ? stored : null;
   const weekly = profile ? weeklyHoursFor(manual, profile.level, raw.targetRace?.distance ?? null) : null;
   const phase = applyWeekPlan(raw, plan, weekly ?? 0);
-  const targetHours = weekly === null ? null : Math.max(0, Math.round((weekly * 60 * phase.volumeFactor) / 5) * 5) / 60;
+  const minutes = weekly === null ? null : weekMinutesFor({ weeklyHours: weekly, info: phase, auto: manual === null, recentWeeklyMinutes, plan });
+  const targetHours = minutes === null ? null : Math.max(0, Math.round(minutes / 5) * 5) / 60;
   return { phase, plan, targetHours };
 }
 

@@ -24,7 +24,7 @@ import {
 } from './constants';
 import type { PhaseInfo } from './periodization';
 import type { SessionCode, SessionSpec } from './sessions';
-import type { RaceDistance, Sport, TrainableSport } from './types';
+import type { AthleteLevel, IntensityModel, RaceDistance, Sport, TrainableSport, TrainingPrefs } from './types';
 
 export interface AllocationCaps {
   /** Max run-long minutes (Frandsen-derived), null = no data. */
@@ -68,6 +68,15 @@ export interface AllocationInput {
    * only, no quality and no long sessions, like a transition week.
    */
   freeWeek?: boolean;
+  /** Beginners: at most one quality session in base (two in build), maintenance strength only. */
+  level?: AthleteLevel;
+  /** Maintenance strength instead of heavy lifting (exam weeks). */
+  lightStrength?: boolean;
+  /**
+   * «Tu forma de entrenar»: sessions per sport (within the week's minutes and
+   * never below the minimum session length) and the intensity model.
+   */
+  prefs?: TrainingPrefs | null;
 }
 
 type Endurance = 'swim' | 'bike' | 'run';
@@ -102,12 +111,13 @@ function countsFor(hours: number, kind: DistanceKind): Record<Endurance | 'stren
   return { swim: row?.swim ?? 2, bike: row?.bike ?? 2, run: row?.run ?? 2, strength: row?.strength ?? 1 };
 }
 
-function strengthPlan(info: PhaseInfo, tableCount: number, minutes: number, freeWeek: boolean): SessionSpec[] {
+function strengthPlan(info: PhaseInfo, tableCount: number, minutes: number, freeWeek: boolean, light: boolean, wanted?: number): SessionSpec[] {
   const byPhase: Record<PhaseInfo['phase'], number> = { prep: 2, base: 2, build: 1, peak: 1, taper: 1, race_week: 0, recovery: 0, transition: 0 };
   const easy = info.isRecoveryWeek || freeWeek;
-  let count = Math.min(byPhase[info.phase], tableCount, minutes < 300 ? 1 : 2);
+  // The athlete's own number, except in race and post-race weeks (no strength there).
+  let count = wanted !== undefined && byPhase[info.phase] > 0 ? wanted : Math.min(byPhase[info.phase], tableCount, minutes < 300 ? 1 : 2);
   if (easy && count > 0) count = 1;
-  const heavy = info.phase === 'base' && !easy;
+  const heavy = info.phase === 'base' && !easy && !light;
   return Array.from({ length: count }, () => ({
     code: heavy ? 'ST_HEAVY' : 'ST_MAINT',
     durationMin: heavy ? 45 : 30,
@@ -115,8 +125,31 @@ function strengthPlan(info: PhaseInfo, tableCount: number, minutes: number, free
   }));
 }
 
+/** Most quality sessions a beginner gets per week by phase (swim CSS included). [H] */
+const BEGINNER_QUALITY_MAX: Readonly<Record<PhaseInfo['phase'], number>> = {
+  prep: 0,
+  base: 1,
+  build: 2,
+  peak: 1,
+  taper: 1,
+  race_week: 1,
+  recovery: 0,
+  transition: 0,
+};
+
+/**
+ * Quality budget by intensity model: polarizado = at most 2 hard sessions (the
+ * rest really easy); piramidal = one more tempo session in base. [H]
+ */
+function modelBudget(model: IntensityModel, info: PhaseInfo, budget: number): number {
+  if (model === 'polarized') return Math.min(budget, 2);
+  if (model === 'pyramidal' && info.phase === 'base') return budget + 1;
+  return budget;
+}
+
 function qualityBudget(info: PhaseInfo, input: AllocationInput): number {
-  let budget: number = QUALITY_BUDGET[info.phase];
+  let budget: number = modelBudget(input.prefs?.intensityModel ?? 'auto', info, QUALITY_BUDGET[info.phase]);
+  if (input.level === 'beginner') budget = Math.min(budget, BEGINNER_QUALITY_MAX[info.phase]);
   // Recovery week inside a block: 1 short quality (2 in build at half work, §5.5); after a race or in a free week: none.
   if (info.phase === 'recovery' || info.phase === 'transition' || input.freeWeek) budget = 0;
   else if (info.isRecoveryWeek) budget = info.phase === 'build' ? 2 : 1;
@@ -140,6 +173,17 @@ function qualityCode(sport: 'bike' | 'run', info: PhaseInfo, kind: DistanceKind,
     return sport === 'bike' ? 'BK_THR' : 'RN_THR';
   }
   return sport === 'bike' ? 'BK_THR' : 'RN_THR';
+}
+
+/** Polarizado: no middle zone (tempo, sweet spot → threshold). Piramidal: the middle zone instead of the top (threshold, VO2 → tempo, sweet spot). */
+const MODEL_CODE: Readonly<Record<Exclude<IntensityModel, 'auto'>, Partial<Record<SessionCode, SessionCode>>>> = {
+  polarized: { BK_TEMPO: 'BK_THR', BK_SST: 'BK_THR', RN_TEMPO: 'RN_THR' },
+  pyramidal: { BK_THR: 'BK_SST', BK_VO2: 'BK_SST', RN_THR: 'RN_TEMPO', RN_VO2: 'RN_TEMPO' },
+};
+
+function modelCode(model: IntensityModel | undefined, code: SessionCode): SessionCode {
+  if (!model || model === 'auto') return code;
+  return MODEL_CODE[model][code] ?? code;
 }
 
 function qualityMinutes(sport: Sport, hours: number, info: PhaseInfo): number {
@@ -174,6 +218,11 @@ interface SportPlanInput {
   priorities: { long: number; quality: readonly number[]; filler: number };
   info: PhaseInfo;
   kind: DistanceKind;
+  /**
+   * Half/full distance in prep/base/build: the long session is the key of the
+   * week, so with few minutes the sport gets fewer sessions rather than no long one.
+   */
+  keepLong?: boolean;
 }
 
 const FILLER: Record<Endurance, { code: SessionCode; max: number }> = {
@@ -206,9 +255,14 @@ function longDuration(p: SportPlanInput, count: number): number {
 function sportSessions(p: SportPlanInput): SessionSpec[] {
   const min = MIN_SESSION_MIN[p.sport];
   if (p.count <= 0 || p.minutes < min * 0.8) return [];
-  const count = sessionCount(p, min);
-  const longDur = longDuration(p, count);
-  const qualities = p.easyOnly ? [] : p.qualities.slice(0, Math.max(0, count - (longDur > 0 ? 1 : 0)));
+  let count = sessionCount(p, min);
+  let longDur = longDuration(p, count);
+  while (p.keepLong && longDur === 0 && count > 1) {
+    count -= 1;
+    longDur = longDuration(p, count);
+  }
+  // A sport's only session is never a quality one: at least one easy or long session stays.
+  const qualities = p.easyOnly ? [] : p.qualities.slice(0, Math.max(0, count - 1));
   let qDur = qualities.map(() => qualityMinutes(p.sport, p.hours, p.info));
   const qTotal = qDur.reduce((s, d) => s + d, 0);
   if (qTotal > 0 && longDur + qTotal > p.minutes) {
@@ -249,8 +303,8 @@ function sportSessions(p: SportPlanInput): SessionSpec[] {
   return out;
 }
 
-function swimCodes(info: PhaseInfo, count: number, freeWeek: boolean): SessionCode[] {
-  const cssAllowed = !freeWeek && !info.isRecoveryWeek && info.subphase !== 'base1' && info.phase !== 'prep' && info.phase !== 'transition' && info.phase !== 'recovery' && info.phase !== 'race_week';
+function swimCodes(info: PhaseInfo, count: number, freeWeek: boolean, roomLeft: boolean): SessionCode[] {
+  const cssAllowed = roomLeft && !freeWeek && !info.isRecoveryWeek && info.subphase !== 'base1' && info.phase !== 'prep' && info.phase !== 'transition' && info.phase !== 'recovery' && info.phase !== 'race_week';
   return count >= 2 && cssAllowed ? ['SW_CSS'] : [];
 }
 
@@ -265,12 +319,14 @@ interface QualityAssignment {
   run: SessionCode[];
   shortBrick: boolean;
   longBrick: boolean;
+  /** Quality sessions the budget still allows after bike, run and bricks. */
+  left: number;
 }
 
 function assignQualities(input: AllocationInput, counts: Record<Endurance, number>): QualityAssignment {
   const { phase: info, kind, distance } = input;
   let budget = qualityBudget(info, input);
-  const result: QualityAssignment = { bike: [], run: [], shortBrick: false, longBrick: false };
+  const result: QualityAssignment = { bike: [], run: [], shortBrick: false, longBrick: false, left: 0 };
   const tri = kind !== 'run' && counts.bike > 0 && counts.run > 0;
   const brickPhase = (info.phase === 'build' || info.phase === 'peak') && !info.isRecoveryWeek;
   if (tri && brickPhase && kind === 'tri_long' && budget > 0) {
@@ -290,10 +346,25 @@ function assignQualities(input: AllocationInput, counts: Record<Endurance, numbe
     }
     if (counts[slot] === 0) continue;
     const list = result[slot];
-    list.push(qualityCode(slot, info, kind, distance, list.length));
+    list.push(modelCode(input.prefs?.intensityModel, qualityCode(slot, info, kind, distance, list.length)));
     budget -= 1;
   }
-  return result;
+  return { ...result, left: Math.max(0, budget) };
+}
+
+/**
+ * «Tu forma de entrenar»: a sport the athlete wants more (or fewer) sessions of
+ * gets more (or less) of the week's time, so the sessions keep a useful length:
+ * the phase's share × wanted / usual sessions (between ½ and 2×); 0 sessions = no time.
+ */
+function weightedSplit(split: SportSplit, usual: Record<Endurance, number>, wanted: Partial<Record<Endurance | 'strength', number>>): SportSplit {
+  const weight = (sport: Endurance): number => {
+    const n = wanted[sport];
+    if (n === undefined) return 1;
+    if (n === 0) return 0;
+    return Math.min(2, Math.max(0.5, n / Math.max(1, usual[sport])));
+  };
+  return { ...split, swim: split.swim * weight('swim'), bike: split.bike * weight('bike'), run: split.run * weight('run') };
 }
 
 function normalizeSplit(split: SportSplit, sports: readonly TrainableSport[]): Record<Endurance, number> {
@@ -391,18 +462,23 @@ export function allocateWeek(input: AllocationInput): AllocationResult {
   const hours = input.minutes / 60;
   const counts = countsFor(hours, kind);
   const free = input.freeWeek === true;
-  const strength = input.sports.includes('strength') && !input.blockedAllWeek.includes('strength') ? strengthPlan(info, counts.strength, input.minutes, free) : [];
+  const light = input.lightStrength === true || input.level === 'beginner';
+  const wanted = input.prefs?.sessionsPerWeek ?? {};
+  const strength = input.sports.includes('strength') && !input.blockedAllWeek.includes('strength') ? strengthPlan(info, counts.strength, input.minutes, free, light, wanted.strength) : [];
   const strengthMin = strength.reduce((s, x) => s + x.durationMin, 0);
   const enduranceMin = Math.max(0, input.minutes - strengthMin);
-  const shares = normalizeSplit(splitFor(info, kind, distance), input.sports);
+  const shares = normalizeSplit(weightedSplit(splitFor(info, kind, distance), counts, wanted), input.sports);
   const base: Record<Endurance, number> = { swim: enduranceMin * shares.swim, bike: enduranceMin * shares.bike, run: enduranceMin * shares.run };
   const { minutes: split, easyOnly } = applySubstitutes(base, input);
   const sportCounts: Record<Endurance, number> = {
-    swim: split.swim > 0 ? Math.max(counts.swim, input.blockedAllWeek.length > 0 ? 2 : 0) : 0,
-    bike: split.bike > 0 ? Math.max(counts.bike, 1) : 0,
-    run: split.run > 0 ? Math.max(counts.run, 1) : 0,
+    swim: split.swim > 0 ? (wanted.swim ?? Math.max(counts.swim, input.blockedAllWeek.length > 0 ? 2 : 0)) : 0,
+    bike: split.bike > 0 ? (wanted.bike ?? Math.max(counts.bike, 1)) : 0,
+    run: split.run > 0 ? (wanted.run ?? Math.max(counts.run, 1)) : 0,
   };
-  const q: QualityAssignment = info.phase === 'race_week' ? { bike: [], run: [], shortBrick: false, longBrick: false } : assignQualities(input, sportCounts);
+  const q: QualityAssignment = info.phase === 'race_week' ? { bike: [], run: [], shortBrick: false, longBrick: false, left: 0 } : assignQualities(input, sportCounts);
+  // Swim CSS is extra quality for most athletes; beginners and capped weeks (exams, work) count it in the budget.
+  const cssRoom = (input.level !== 'beginner' && input.qualityCap === null) || q.left > 0;
+  const keepLong = kind === 'tri_long' && (info.phase === 'prep' || info.phase === 'base' || info.phase === 'build');
   const pr = PRIORITIES[kind];
   const bp = brickPlan(q, info, distance, hours);
   const planInput = (sport: Endurance, qualities: SessionCode[], wantLong: boolean, minutesFor: number, longPriority: number): SportPlanInput => ({
@@ -417,6 +493,7 @@ export function allocateWeek(input: AllocationInput): AllocationResult {
     priorities: { long: longPriority, quality: pr.q, filler: 5 },
     info,
     kind,
+    keepLong: keepLong && sport !== 'swim',
   });
   const plan = (sport: Endurance, qualities: SessionCode[], wantLong: boolean, minutesFor: number, longPriority: number): SessionSpec[] =>
     sportSessions(planInput(sport, qualities, wantLong, minutesFor, longPriority));
@@ -424,7 +501,7 @@ export function allocateWeek(input: AllocationInput): AllocationResult {
   const capped = capRunPlan(runInput, sportSessions(runInput), input.caps.runWeekMax, bp.runMin);
   const run = capped.run;
   const minutes = withFreedRunMinutes(split, capped.freed, kind);
-  const swim = plan('swim', swimCodes(info, sportCounts.swim, free), false, minutes.swim, pr.swimMain).map((s) =>
+  const swim = plan('swim', swimCodes(info, sportCounts.swim, free, cssRoom), false, minutes.swim, pr.swimMain).map((s) =>
     s.code === 'SW_CSS' || s.code === 'SW_END' ? { ...s, priority: Math.min(s.priority, pr.swimMain) } : s,
   );
   const bikeRaw = plan('bike', q.bike, !free && longAllowed('bike', info, distance) && kind !== 'run', minutes.bike - bp.shortBikeMin, pr.bikeLong);

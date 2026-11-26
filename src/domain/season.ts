@@ -146,6 +146,59 @@ export function weeklyTargetMinutes(
   return round5(weeklyHoursFor(manual, level, info.targetRace?.distance ?? null) * 60 * info.volumeFactor);
 }
 
+/** A descarga with automatic availability keeps at least this share of the athlete's habitual volume. [H] */
+export const HABITUAL_RECOVERY_SHARE = 0.6;
+
+/** Weeks whose volume follows the race (taper, race, after the race): the habitual volume does not lift them. */
+const NO_HABITUAL_FLOOR: readonly Phase[] = ['peak', 'taper', 'race_week', 'recovery', 'transition'];
+
+/** Average completed minutes of the recent weeks (oldest first); null with < 2 weeks or no training. */
+export function habitualWeeklyMinutes(recent: readonly number[] | null | undefined): number | null {
+  const weeks = (recent ?? []).filter((m) => Number.isFinite(m) && m >= 0);
+  if (weeks.length < 2 || weeks.every((m) => m === 0)) return null;
+  return weeks.reduce((s, m) => s + m, 0) / weeks.length;
+}
+
+/**
+ * Automatic availability: a normal prep/base/build week never asks for less
+ * than the athlete's habitual volume (the average of the recent weeks) and a
+ * descarga never for less than 60 % of it, both capped by the automatic peak
+ * hours (`weeklyHours`). 0 = no floor: no history, taper/race/post-race weeks,
+ * or a week the athlete set to «Semana libre» or to explicit minutes. The
+ * planner's ramp cap still applies on top.
+ */
+export function habitualFloorMinutes(
+  info: Pick<PhaseInfo, 'phase' | 'isRecoveryWeek'>,
+  weeklyHours: number,
+  recent: readonly number[] | null | undefined,
+  plan?: Pick<WeekPlan, 'kind' | 'targetMinutes'> | null,
+): number {
+  const habitual = habitualWeeklyMinutes(recent);
+  if (habitual === null || NO_HABITUAL_FLOOR.includes(info.phase)) return 0;
+  if (plan && (plan.kind === 'rest' || (typeof plan.targetMinutes === 'number' && Number.isFinite(plan.targetMinutes)))) return 0;
+  const floor = info.isRecoveryWeek ? habitual * HABITUAL_RECOVERY_SHARE : habitual;
+  return Math.max(0, Math.min(floor, weeklyHours * 60));
+}
+
+export interface WeekMinutesInput {
+  /** Hours of a normal week (manual or automatic). */
+  weeklyHours: number;
+  /** The week's phase with its override applied. */
+  info: Pick<PhaseInfo, 'phase' | 'isRecoveryWeek' | 'volumeFactor'>;
+  /** Automatic availability: the habitual volume sets a floor. */
+  auto: boolean;
+  /** Completed minutes of the weeks before the current one (oldest first). */
+  recentWeeklyMinutes?: readonly number[] | null;
+  plan?: Pick<WeekPlan, 'kind' | 'targetMinutes'> | null;
+}
+
+/** Target minutes of a week before rounding: weekly hours × factor, lifted to the habitual floor in automatic mode. */
+export function weekMinutesFor(input: WeekMinutesInput): number {
+  const curve = input.weeklyHours * 60 * input.info.volumeFactor;
+  if (!input.auto) return curve;
+  return Math.max(curve, habitualFloorMinutes(input.info, input.weeklyHours, input.recentWeeklyMinutes, input.plan));
+}
+
 /** Labels and help for the override picker. */
 export const WEEK_PLAN_OPTIONS: Readonly<Record<WeekPlanKind, { label: string; help: string }>> = {
   load: { label: 'Carga', help: 'Semana normal de entrenamiento.' },
@@ -392,7 +445,9 @@ export function buildSeason(input: SeasonInput): SeasonOverview {
     const plan = editable ? (plans.get(weekStart) ?? null) : null;
     const hours = weeklyHoursFor(input.weeklyHoursTarget, input.level, raw.targetRace?.distance ?? null);
     const info = applyWeekPlan(raw, plan, hours);
-    const targetMinutes = round5(hours * 60 * info.volumeFactor);
+    const targetMinutes = round5(
+      weekMinutesFor({ weeklyHours: hours, info, auto: input.weeklyHoursTarget === null, recentWeeklyMinutes: input.recentWeeklyMinutes, plan }),
+    );
     const prev = weeks[weeks.length - 1] ?? null;
     const trend = prev && prev.targetMinutes > 0 ? round2((targetMinutes - prev.targetMinutes) / prev.targetMinutes) : null;
     const kind = kindOf(raw, plan);

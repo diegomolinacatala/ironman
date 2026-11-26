@@ -7,6 +7,7 @@
  * sent to PostgREST.
  */
 import { normalizeCoaching } from '@/domain/changes';
+import { parseTrainingPrefs } from '@/domain/trainingPrefs';
 import {
   ILLNESS_ANSWERS,
   INTENSITIES,
@@ -116,10 +117,13 @@ export function weatherPlaceOf(row: Pick<ProfileRow, 'weather_place' | 'weather_
 export function rowToProfile(row: ProfileRow): Profile {
   // Not chosen yet (null) or a server without the v4 column: the key stays absent (treated as Garmin).
   const watchBrand = oneOf(row.watch_brand, WATCH_BRANDS);
+  // «Tu forma de entrenar»: absent when nothing is stored (everything automático) or the column is not deployed yet.
+  const trainingPrefs = parseTrainingPrefs(row.training_prefs);
   const weatherPlace = weatherPlaceOf(row);
   return {
     ...(watchBrand ? { watchBrand } : {}),
     ...(weatherPlace ? { weatherPlace } : {}),
+    ...(trainingPrefs ? { trainingPrefs } : {}),
     id: row.id,
     username: row.username,
     displayName: row.display_name,
@@ -155,6 +159,7 @@ export function profileToRow(profile: Profile): ProfileRow {
     onboarded_at: profile.onboardedAt,
     ai_consent_at: profile.aiConsentAt,
     watch_brand: profile.watchBrand ?? null,
+    training_prefs: profile.trainingPrefs ?? null,
     weather_place: profile.weatherPlace?.name ?? null,
     weather_lat: profile.weatherPlace?.lat ?? null,
     weather_lon: profile.weatherPlace?.lon ?? null,
@@ -185,6 +190,7 @@ export function profilePatchToRow(patch: ProfilePatch): Row {
     onboarded_at: patch.onboardedAt,
     ai_consent_at: patch.aiConsentAt,
     watch_brand: patch.watchBrand,
+    training_prefs: patch.trainingPrefs,
     ...weatherPlaceColumns(patch.weatherPlace),
   });
 }
