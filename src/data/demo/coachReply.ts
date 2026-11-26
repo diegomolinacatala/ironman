@@ -139,6 +139,42 @@ function todayParagraphs(ctx: CoachContext): (string | null)[] {
 }
 
 // ---------------------------------------------------------------------------
+// Why this session / how am I doing
+// ---------------------------------------------------------------------------
+
+const TOMORROW_RE = /ma[ñn]ana(?! por)/i;
+
+/** "¿Por qué hoy toca esto?": the session's objective, target, feel and success, and the week it belongs to. */
+function whyParagraphs(ctx: CoachContext, message: string): (string | null)[] {
+  const upcoming = [...ctx.weekWorkouts, ...ctx.upcoming].filter((w) => w.status === 'planned' && w.sport !== 'rest').sort((a, b) => a.date.localeCompare(b.date) || byStartTime(a, b));
+  const tomorrow = TOMORROW_RE.test(message) ? upcoming.find((w) => diffDays(w.date, ctx.today) === 1) : undefined;
+  const session = tomorrow ?? plannedToday(ctx)[0] ?? nextWorkout(ctx);
+  if (!session) return ['No tienes sesiones planificadas en los próximos días: dime «planifícame la semana» y te explico cada una.'];
+  const why = session.coaching?.objective ? null : 'Es una sesión de la semana para sumar trabajo sin pasarte de carga.';
+  return [sessionBrief(session, ctx), why, raceLine(ctx)];
+}
+
+/** "¿Voy bien?": the last four weeks, this week so far and where the season stands. */
+function progressParagraphs(ctx: CoachContext): (string | null)[] {
+  const weeks = ctx.recentWeeklyMinutes.filter((m) => Number.isFinite(m));
+  const trained = weeks.filter((m) => m > 0);
+  if (trained.length === 0) return ['Aún no tengo entrenos tuyos de las últimas semanas para valorarlo: marca lo que hagas (o conecta tu reloj) y te digo cómo vas.', raceLine(ctx)];
+  const average = Math.round(weeks.reduce((s, m) => s + m, 0) / weeks.length);
+  const [a = 0, b = 0, c = 0, d = 0] = weeks;
+  const before = (a + b) / 2;
+  const recent = (c + d) / 2;
+  const trend =
+    before > 0 && recent >= before * 1.05
+      ? 'Vas en progresión: las dos últimas semanas has entrenado más que las anteriores.'
+      : before > 0 && recent < before * 0.85
+        ? 'Las dos últimas semanas has bajado un poco: si ha sido por cansancio o por la vida, perfecto; si no, lo que más suma es la constancia.'
+        : 'Vas constante, que es lo que más suma.';
+  const s = weekSummary(ctx.weekWorkouts, ctx.weekStart, ctx.today);
+  const thisWeek = s.plannedMin > 0 ? `Esta semana llevas ${formatDuration(s.completedMin)} de ${formatDuration(s.plannedMin)} planificadas.` : null;
+  return [`En las últimas 4 semanas has entrenado ${formatDuration(average)} de media (${weeks.map((m) => formatDuration(m)).join(', ')}).`, trend, thisWeek, raceLine(ctx)];
+}
+
+// ---------------------------------------------------------------------------
 // Tired, sore or slept badly
 // ---------------------------------------------------------------------------
 
@@ -203,6 +239,10 @@ function intentParagraphs(intent: Intent, input: ChatReplyInput): (string | null
       return [injuryParagraph(input.injuryLogged === true), readinessLine(ctx), nextWorkoutLine(ctx)];
     case 'fatigue':
       return fatigueParagraphs(ctx, message);
+    case 'why':
+      return whyParagraphs(ctx, message);
+    case 'progress':
+      return progressParagraphs(ctx);
     case 'today':
       return todayParagraphs(ctx);
     case 'zones':

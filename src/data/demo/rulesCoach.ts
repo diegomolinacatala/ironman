@@ -24,6 +24,7 @@ import type {
   ISODate,
   JointSession,
   LifeEvent,
+  LifeEventDraft,
   PlanChange,
   ProposalKind,
   Profile,
@@ -53,6 +54,7 @@ export type RulesCoachRepo = Pick<
   | 'listMetrics'
   | 'listWeekPlans'
   | 'createProposal'
+  | 'createLifeEvent'
 >;
 
 export interface RulesCoachOptions {
@@ -323,7 +325,7 @@ function chatResponse(request: CoachRequest, ctx: CoachContext, options: RulesCo
 function editContext(ctx: CoachContext): EditContext {
   const byId = new Map([...ctx.weekWorkouts, ...ctx.upcoming].map((w) => [w.id, w] as const));
   const workouts = [...byId.values()];
-  return { today: ctx.today, workouts, replanInput: { ...replanInput(ctx), today: ctx.today, weekWorkouts: workouts } };
+  return { today: ctx.today, workouts, readiness: ctx.readiness, replanInput: { ...replanInput(ctx), today: ctx.today, weekWorkouts: workouts } };
 }
 
 /** A plan edit asked for in the chat (not a season-plan request), or null. */
@@ -333,11 +335,31 @@ export function chatEditFor(request: CoachRequest, ctx: CoachContext, options: P
   return chatEdit(message, editContext(ctx), { injury: options.injuryLogged || detectIntent(message) === 'injury' });
 }
 
+/**
+ * The imprevisto the athlete told in the message (exams, a trip, a match…), logged once: an
+ * existing one of the same kind over the same days is reused. Logging never blocks the reply.
+ */
+async function logToldEvent(repo: RulesCoachRepo, ctx: CoachContext, draft: LifeEventDraft): Promise<LifeEvent | null> {
+  const end = draft.endDate ?? draft.startDate;
+  const same = ctx.lifeEvents.find((e) => e.kind === draft.kind && e.startDate <= end && e.endDate >= draft.startDate);
+  if (same) return same;
+  try {
+    return await repo.createLifeEvent(draft);
+  } catch (error) {
+    logger.warn('rules coach could not log the imprevisto', error);
+    return null;
+  }
+}
+
 async function editResponse(repo: RulesCoachRepo, ctx: CoachContext, edit: EditResult, notice: string | undefined): Promise<CoachResponse> {
-  if (edit.changes.length === 0) return { reply: withNotice(notice, edit.summary), proposal: null, engine: 'rules', ...NOTHING_REMEMBERED };
+  const lifeEvent = edit.logEvent ? await logToldEvent(repo, ctx, edit.logEvent) : null;
+  const isNew = lifeEvent !== null && !ctx.lifeEvents.some((e) => e.id === lifeEvent.id);
+  const summary = [edit.summary, isNew ? `Lo apunto en tus imprevistos: «${lifeEvent.title}».` : null].filter(Boolean).join(' ');
+  const told = { memory: [], lifeEvent };
+  if (edit.changes.length === 0) return { reply: withNotice(notice, summary), proposal: null, engine: 'rules', ...told };
   const proposal = await repo.createProposal({ kind: 'chat', source: 'rules', weekStart: ctx.weekStart, summary: edit.summary, changes: edit.changes, model: null });
-  const reply = `${edit.summary}\n\n${changesSentence(edit.changes.length)}`;
-  return { reply: withNotice(notice, reply), proposal, engine: 'rules', ...NOTHING_REMEMBERED };
+  const reply = `${summary}\n\n${changesSentence(edit.changes.length)}`;
+  return { reply: withNotice(notice, reply), proposal, engine: 'rules', ...told };
 }
 
 /** Runs the rules engine for a coach request and stores the proposal (if any). */

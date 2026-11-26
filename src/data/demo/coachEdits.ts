@@ -1,159 +1,52 @@
 /**
  * Plan edits the rules coach (no AI) understands in the chat, so asking to
  * change the plan works even when the AI coach is off, out of quota or fails:
- * - "mueve el rodaje del martes al jueves", "pasa las series al sábado" → move
+ * - "mueve el rodaje del martes al jueves", "pasa las series al sábado",
+ *   "pon la natación el jueves por la mañana" → move (with a time of day)
  * - "quita / borra el entreno de mañana" → delete
  * - "cambia las series del jueves por un rodaje suave" → update (easy session
  *   with the athlete's targets, `easyPatch`)
  * - "hoy no puedo (entrenar)" → key sessions re-placed (`replanMissed`), the
  *   easy ones dropped
  * - "tengo pádel el jueves (a las 19)" → `replanForEvent` with that imprevisto
+ * - situations the athlete tells (a dinner, exams, a trip, no pool, little
+ *   time, a softer week, more of one sport, tired today) → `coachSituations`
  * Days are resolved inside the editable window today..today+6 (hoy, mañana,
- * pasado mañana, lunes…domingo). A request the coach understands but cannot
- * map to one session gets an explanation instead of a proposal. Pure.
+ * pasado mañana, lunes…domingo); a weekday asked as the destination of a move
+ * is the one after the session ("pasa la bici del sábado al domingo"). A
+ * request the coach understands but cannot map to one session gets an
+ * explanation instead of a proposal. Pure.
  */
-import { addDays, formatDayMedium, weekdayOf } from '@/domain/dates';
+import { addDays, diffDays, weekdayOf } from '@/domain/dates';
 import { easyPatch } from '@/domain/replanCore';
-import { replanForEvent, replanMissed, type ReplanInput } from '@/domain/replanner';
-import type { ISODate, ISOTime, Intensity, LifeEvent, LifeEventKind, PlanChange, Sport, Workout } from '@/domain/types';
+import { replanForEvent, replanMissed } from '@/domain/replanner';
+import type { ISODate, Intensity, LifeEvent, LifeEventKind, PlanChange } from '@/domain/types';
 
-export interface EditResult {
-  changes: PlanChange[];
-  summary: string;
-}
+import { situationEdit } from './coachSituations';
+import {
+  dateOfWord,
+  dayLabel,
+  dayRefs,
+  editable,
+  findSession,
+  isWeekdayWord,
+  nextOfSport,
+  notFound,
+  plain,
+  quoted,
+  sportIn,
+  timeIn,
+  timeOfDay,
+  type EditContext,
+  type EditResult,
+} from './coachWords';
 
-export interface EditContext {
-  today: ISODate;
-  /** Workouts of today..today+6 at least (planned and done). */
-  workouts: readonly Workout[];
-  /** Base re-planner input (profile, busy blocks, events, quedadas, races, week plan). */
-  replanInput: ReplanInput;
-}
+export { dayLabel, dayRefs, sportIn, type EditContext, type EditResult } from './coachWords';
 
-/** Editable window (same as the re-planner): today..today+6. */
-const WINDOW_DAYS = 7;
 const TITLE_MAX = 120;
 const DEFAULT_EVENT_MIN = 90;
-
-const WEEKDAYS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-
-/** Lowercase without accents ("miércoles" → "miercoles"), so the patterns stay simple. */
-function plain(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-}
-
-// ---------------------------------------------------------------------------
-// Days
-// ---------------------------------------------------------------------------
-
-interface DayRef {
-  date: ISODate;
-  /** Index in the (plain) message. */
-  index: number;
-  /** Preceded by "al", "a", "para" (a destination). */
-  destination: boolean;
-  /** Preceded by "del", "de" (where the session is now). */
-  source: boolean;
-}
-
-const DAY_RE = /\b(pasado manana|hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/g;
-
-function dateOfWord(word: string, today: ISODate): ISODate | null {
-  if (word === 'hoy') return today;
-  if (word === 'manana') return addDays(today, 1);
-  if (word === 'pasado manana') return addDays(today, 2);
-  const weekday = WEEKDAYS.indexOf(word);
-  if (weekday < 0) return null;
-  for (let i = 0; i < WINDOW_DAYS; i += 1) {
-    const d = addDays(today, i);
-    if (weekdayOf(d) === weekday) return d;
-  }
-  return null;
-}
-
-/** Day references in order ("por la mañana" / "esta mañana" are times of day, not tomorrow). */
-export function dayRefs(message: string, today: ISODate): DayRef[] {
-  const text = plain(message);
-  const refs: DayRef[] = [];
-  for (const match of text.matchAll(DAY_RE)) {
-    const word = match[1] ?? '';
-    const index = match.index ?? 0;
-    const before = text.slice(Math.max(0, index - 10), index);
-    if (word === 'manana' && /(?:la|esta)\s+$/.test(before)) continue;
-    const date = dateOfWord(word, today);
-    if (date) refs.push({ date, index, destination: /(?:\bal|\ba|\bpara(?: el)?|\bhasta el)\s+$/.test(before), source: /\bdel?\s+$/.test(before) });
-  }
-  return refs;
-}
-
-export function dayLabel(date: ISODate, today: ISODate): string {
-  if (date === today) return 'hoy';
-  if (date === addDays(today, 1)) return 'mañana';
-  return `el ${formatDayMedium(date)}`;
-}
-
-// ---------------------------------------------------------------------------
-// Sessions
-// ---------------------------------------------------------------------------
-
-const SPORT_WORDS: readonly [Sport, RegExp][] = [
-  ['brick', /\bbrick|transicion/],
-  ['swim', /\bnata|\bnadar|piscina|\bnado\b/],
-  ['bike', /\bbici|rodillo|ciclismo/],
-  ['run', /rodaje|correr|\bcarrera\b|tirada|footing|trote|\brun\b/],
-  ['strength', /fuerza|gimnasio|\bgym\b|pesas/],
-  ['mobility', /movilidad|estiramientos|\byoga\b/],
-];
-
-export function sportIn(text: string): Sport | null {
-  const p = plain(text);
-  return SPORT_WORDS.find(([, re]) => re.test(p))?.[0] ?? null;
-}
-
-/** Words of 5+ letters of the message that appear in the title ("series", "umbral", "tirada"…). */
-function titleScore(w: Workout, text: string): number {
-  const title = plain(w.title);
-  return plain(text)
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length >= 5 && title.includes(word)).length;
-}
-
-function editable(ctx: EditContext): Workout[] {
-  const last = addDays(ctx.today, WINDOW_DAYS - 1);
-  return ctx.workouts
-    .filter((w) => w.status === 'planned' && w.sport !== 'rest' && w.date >= ctx.today && w.date <= last)
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''));
-}
-
-/** The one session the words point to (day, sport, title words), or null when none or ambiguous. */
-function findSession(ctx: EditContext, text: string, date: ISODate | null): Workout | null {
-  let candidates = editable(ctx);
-  if (date) candidates = candidates.filter((w) => w.date === date);
-  const sport = sportIn(text);
-  if (sport) {
-    const bySport = candidates.filter((w) => w.sport === sport || (sport === 'run' && w.sport === 'brick'));
-    if (bySport.length > 0) candidates = bySport;
-    else if (!date) return null;
-  }
-  if (candidates.length <= 1) return candidates[0] ?? null;
-  const scored = candidates.map((w) => ({ w, score: titleScore(w, text) }));
-  const best = Math.max(...scored.map((s) => s.score));
-  const top = scored.filter((s) => s.score === best);
-  return best > 0 && top.length === 1 ? top[0]!.w : null;
-}
-
-function notFound(what: string, date: ISODate | null, today: ISODate): EditResult {
-  const when = date ? ` ${dayLabel(date, today)}` : ' en los próximos 7 días';
-  return {
-    changes: [],
-    summary: `No encuentro ${what}${when} que pueda cambiar. Dime el día y el deporte (por ejemplo, «mueve el rodaje del martes al jueves») y te lo preparo.`,
-  };
-}
-
-const quoted = (w: Workout): string => `«${w.title}»`;
+/** A weekday asked as a destination this many days before the session means the one after it. */
+const FORWARD_MOVE_MIN_DAYS = 4;
 
 // ---------------------------------------------------------------------------
 // Intents
@@ -168,7 +61,6 @@ const RECOVERY_RE = /recuperaci|muy suave|\bz1\b|regenerativ/;
 const EASY_RE = /suave|tranquil|facil|\bz2\b|liger|rodaje|relajad/;
 const HARD_RE = /series|calidad|intens|fuerte|umbral|tempo|\bz[345]\b/;
 const MINUTES_RE = /(\d{2,3})\s*(?:min|minutos|')/;
-const TIME_RE = /\ba las (\d{1,2})(?:[:.](\d{2}))?/;
 
 function eventKind(word: string): LifeEventKind {
   if (word === 'padel' || word === 'tenis') return 'padel';
@@ -177,16 +69,6 @@ function eventKind(word: string): LifeEventKind {
 }
 
 const EVENT_TITLES: Record<string, string> = { padel: 'Pádel', tenis: 'Tenis', futbol: 'Fútbol', futbito: 'Fútbol', partido: 'Partido', baloncesto: 'Baloncesto' };
-
-function timeIn(text: string): ISOTime | null {
-  const m = TIME_RE.exec(text);
-  if (!m) return null;
-  let hour = Number(m[1]);
-  // "a las 7 de la tarde", "a las 8" in the evening context of a match.
-  if (hour < 12 && /tarde|noche/.test(text)) hour += 12;
-  if (hour > 23) return null;
-  return `${String(hour).padStart(2, '0')}:${m[2] ?? '00'}`;
-}
 
 function otherSport(text: string, ctx: EditContext): EditResult | null {
   const m = OTHER_SPORT_RE.exec(text);
@@ -210,8 +92,9 @@ function otherSport(text: string, ctx: EditContext): EditResult | null {
     createdAt: `${ctx.today}T00:00:00.000Z`,
   };
   const result = replanForEvent({ ...ctx.replanInput, today: ctx.today, weekWorkouts: [...ctx.workouts], event });
-  const tip = 'Apúntalo también como imprevisto para que cuente en tu carga.';
-  return { changes: result.changes, summary: `${result.summary} ${tip}` };
+  // Logged as an imprevisto too, so the match counts in the week's load.
+  const logEvent = { kind: event.kind, title: event.title, startDate: date, endDate: date, startTime, durationMin: event.durationMin, severity: 2 as const };
+  return { changes: result.changes, summary: result.summary, logEvent };
 }
 
 function cantTrain(text: string, ctx: EditContext): EditResult | null {
@@ -237,7 +120,7 @@ function deleteSession(text: string, ctx: EditContext): EditResult | null {
   if (!DELETE_RE.test(text)) return null;
   const date = dayRefs(text, ctx.today)[0]?.date ?? null;
   const target = findSession(ctx, text, date);
-  if (!target) return notFound('ese entreno', date, ctx.today);
+  if (!target) return notFound('ese entreno', date, ctx);
   const warning = target.isKey ? ' Era una sesión clave: si prefieres moverla, dime «mueve… al jueves».' : '';
   return {
     changes: [{ op: 'delete', workoutId: target.id, reason: `Me pides quitar ${quoted(target)} (${dayLabel(target.date, ctx.today)}).` }],
@@ -259,7 +142,7 @@ function replaceSession(text: string, ctx: EditContext): EditResult | null {
   if (!intensity) return null;
   const date = dayRefs(from, ctx.today)[0]?.date ?? dayRefs(text, ctx.today)[0]?.date ?? null;
   const target = findSession(ctx, from, date);
-  if (!target) return notFound('esa sesión', date, ctx.today);
+  if (!target) return notFound('esa sesión', date, ctx);
   const minutes = MINUTES_RE.exec(to);
   const durationMin = minutes ? Number(minutes[1]) : target.durationMin;
   const sport = sportIn(to) ?? undefined;
@@ -271,6 +154,17 @@ function replaceSession(text: string, ctx: EditContext): EditResult | null {
   };
 }
 
+/** "Pasa la bici del sábado al domingo": a weekday well before the session means the one after it. */
+function destinationFor(word: string, date: ISODate, sessionDate: ISODate, today: ISODate): ISODate {
+  if (!isWeekdayWord(word) || date >= sessionDate || diffDays(sessionDate, date) < FORWARD_MOVE_MIN_DAYS) return date;
+  return dateOfWord(word, today, addDays(sessionDate, 1)) ?? date;
+}
+
+/** "a las 7", "por la mañana"… said after the destination day ("el jueves por la mañana"). */
+function hourWords(text: string, destIndex: number): string {
+  return text.slice(destIndex);
+}
+
 function moveSession(text: string, ctx: EditContext): EditResult | null {
   if (!MOVE_RE.test(text)) return null;
   const refs = dayRefs(text, ctx.today);
@@ -278,34 +172,63 @@ function moveSession(text: string, ctx: EditContext): EditResult | null {
   const dest = refs.find((r) => r.destination) ?? (refs.length >= 2 ? refs[refs.length - 1] : refs.find((r) => !r.source));
   if (!dest || dest === from) return null;
   const source = from?.date ?? null;
-  const target = findSession(ctx, text.slice(0, dest.index) || text, source);
-  if (!target) return notFound('ese entreno', source, ctx.today);
-  if (target.date === dest.date) return { changes: [], summary: `${quoted(target)} ya está ${dayLabel(dest.date, ctx.today)}.` };
-  const busy = editable(ctx).filter((w) => w.date === dest.date && w.id !== target.id);
+  const words = text.slice(0, dest.index) || text;
+  const toStartTime = timeOfDay(hourWords(text, dest.index));
+  const sport = sportIn(words);
+  // "Pon la natación el jueves por la mañana" with a swim already that day: a time change.
+  const sameDay = !source && toStartTime && sport ? editable(ctx).find((w) => w.date === dest.date && w.sport === sport) : undefined;
+  // Several sessions of the sport and no day saying which: the next one that is not already there.
+  const target = sameDay ?? findSession(ctx, words, source) ?? (source ? null : nextOfSport(ctx, words, dest.date));
+  if (!target) return notFound('ese entreno', source, ctx);
+  const toDate = destinationFor(dest.word, dest.date, target.date, ctx.today);
+  const when = `${dayLabel(toDate, ctx.today)}${toStartTime ? ` a las ${toStartTime}` : ''}`;
+  if (target.date === toDate && (!toStartTime || toStartTime === target.startTime)) {
+    return { changes: [], summary: `${quoted(target)} ya está ${dayLabel(toDate, ctx.today)}.` };
+  }
+  const busy = ctx.workouts.filter((w) => w.status === 'planned' && w.sport !== 'rest' && w.date === toDate && w.id !== target.id);
   const restDay = ctx.replanInput.profile.availability.restDay;
   const notes = [
-    busy.length > 0 ? `Ojo: ${dayLabel(dest.date, ctx.today)} ya tienes ${busy.map(quoted).join(' y ')}.` : '',
-    restDay !== null && weekdayOf(dest.date) === restDay ? 'Es tu día de descanso: si puedes, busca otro.' : '',
+    busy.length > 0 ? `Ojo: ${dayLabel(toDate, ctx.today)} ya tienes ${busy.map(quoted).join(' y ')}.` : '',
+    restDay !== null && weekdayOf(toDate) === restDay ? 'Es tu día de descanso: si puedes, busca otro.' : '',
     target.jointSessionId ? 'Es una quedada: avisa a tu compañero desde Juntos.' : '',
   ].filter(Boolean);
-  return {
-    changes: [{ op: 'move', workoutId: target.id, toDate: dest.date, reason: `Me pides pasar ${quoted(target)} de ${dayLabel(target.date, ctx.today)} a ${dayLabel(dest.date, ctx.today)}.` }],
-    summary: [`Paso ${quoted(target)} de ${dayLabel(target.date, ctx.today)} a ${dayLabel(dest.date, ctx.today)}.`, ...notes].join(' '),
+  const move: PlanChange = {
+    op: 'move',
+    workoutId: target.id,
+    toDate,
+    ...(toStartTime ? { toStartTime } : {}),
+    reason: `Me pides pasar ${quoted(target)} de ${dayLabel(target.date, ctx.today)} a ${when}.`,
   };
+  return { changes: [move], summary: [`Paso ${quoted(target)} de ${dayLabel(target.date, ctx.today)} a ${when}.`, ...notes].join(' ') };
+}
+
+/** A move with an explicit destination ("…mueve la sesión al jueves"): the athlete said where, so it wins. */
+function explicitMove(text: string, ctx: EditContext): boolean {
+  return MOVE_RE.test(text) && dayRefs(text, ctx.today).some((r) => r.destination);
 }
 
 /**
  * The plan edit asked for in a chat message: a result with changes (a
  * proposal), a result without changes (explained), or null when the message
- * asks for no edit. `injury` skips the "no puedo" / other-sport handling (the
- * injury advice comes first); explicit edits still work.
+ * asks for no edit. `injury` skips the situations (the injury advice comes
+ * first); explicit edits still work. Order: a match, then what the athlete
+ * tells (unless a move says where), explicit edits, "no puedo", and the softer
+ * requests (a softer week, more of a sport, tired today).
  */
 export function chatEdit(message: string, ctx: EditContext, opts: { injury?: boolean } = {}): EditResult | null {
   const text = plain(message);
   if (!text.trim()) return null;
   const explicit = [replaceSession, deleteSession, moveSession];
-  const situational = opts.injury ? [] : [otherSport, cantTrain];
-  for (const handler of [...situational.slice(0, 1), ...explicit, ...situational.slice(1)]) {
+  if (opts.injury) {
+    for (const handler of explicit) {
+      const result = handler(text, ctx);
+      if (result) return result;
+    }
+    return null;
+  }
+  const told = explicitMove(text, ctx) ? null : situationEdit(text, ctx, 'told');
+  const handlers = [otherSport, () => told, ...explicit, cantTrain, (t: string, c: EditContext) => situationEdit(t, c, 'asked')];
+  for (const handler of handlers) {
     const result = handler(text, ctx);
     if (result) return result;
   }

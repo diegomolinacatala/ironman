@@ -55,7 +55,7 @@ describe('rules coach chat edits', () => {
     expect(ops(chatEdit('Quita la natación de mañana', ctx())?.changes ?? [])).toEqual(['delete:wed-swim']);
     const ambiguous = chatEdit('Quita el entreno de mañana', ctx());
     expect(ambiguous?.changes).toEqual([]);
-    expect(ambiguous?.summary).toMatch(/No encuentro ese entreno mañana/);
+    expect(ambiguous?.summary).toBe('No sé a cuál te refieres: mañana tienes «Rodillo» y «Técnica». Dime cuál.');
     expect(chatEdit('borra la tirada', ctx())?.summary).toMatch(/sesión clave/);
   });
 
@@ -79,7 +79,9 @@ describe('rules coach chat edits', () => {
   test('"tengo pádel el jueves a las 19" re-plans around the match', () => {
     const edit = chatEdit('Tengo pádel el jueves a las 19', ctx());
     expect(edit).not.toBeNull();
-    expect(edit?.summary).toMatch(/Apúntalo también como imprevisto/);
+    expect(edit?.summary).toMatch(/Pádel cuenta como sesión dura/);
+    // Logged as an imprevisto by the coach, so it counts in the load.
+    expect(edit?.logEvent).toMatchObject({ kind: 'padel', startDate: '2026-10-29', startTime: '19:00' });
     expect(edit?.changes.every((c) => c.op === 'add' || WORKOUTS.some((w) => w.id === c.workoutId))).toBe(true);
   });
 
@@ -107,6 +109,23 @@ describe('runRulesCoach with a chat edit', () => {
       createProposal: async (draft) => {
         created.push(draft);
         return { ...draft, id: 'p1', userId: 'me', status: 'pending', model: null, createdAt: '2026-10-27T10:00:00' };
+      },
+      createLifeEvent: async (draft) => {
+        created.push(draft);
+        return {
+          id: 'e1',
+          userId: 'me',
+          kind: draft.kind,
+          title: draft.title,
+          startDate: draft.startDate,
+          endDate: draft.endDate ?? draft.startDate,
+          startTime: draft.startTime ?? null,
+          durationMin: draft.durationMin ?? null,
+          severity: draft.severity,
+          bodyArea: draft.bodyArea ?? null,
+          notes: draft.notes ?? null,
+          createdAt: '2026-10-27T10:00:00',
+        };
       },
     };
   }

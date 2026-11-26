@@ -246,8 +246,9 @@ function illnessEffects(e: LifeEvent): DayEffects {
 
 function travelEffects(e: LifeEvent): DayEffects {
   const t = text(e);
-  const hasBike = /bici|rodillo|bike/.test(t);
-  const hasPool = /piscina|pool/.test(t);
+  // "Viaje sin bici" names the bike too: only a mention without "sin" means it is there.
+  const hasBike = /bici|rodillo|bike/.test(t) && !/\bsin\s+(?:la\s+|mi\s+)?(?:bici|rodillo|bike)/.test(t);
+  const hasPool = /piscina|pool/.test(t) && !/\bsin\s+(?:la\s+)?(?:piscina|pool)/.test(t);
   const travelDay: Partial<DayRestriction> = { maxDurationMin: TRAVEL.travelDayMaxMin, maxIntensity: 'endurance', noQuality: true, noLong: true, codes: ['TRAVEL_DAY'], notes: ['Día de viaje: como mucho 45 min suaves.'] };
   const blocked: Sport[] = [...(hasBike ? [] : (['bike', 'brick'] as Sport[])), ...(hasPool ? [] : (['swim'] as Sport[]))];
   const away: Partial<DayRestriction> = { blockedSports: blocked, codes: ['TRAVEL_AWAY'], notes: ['Fuera de casa: sin bici ni piscina salvo que lo indiques.'] };

@@ -10,6 +10,8 @@ import type { CoachMode, ISODate, WeekPlanKind } from '@/domain/types';
 export type Intent =
   | 'injury'
   | 'fatigue'
+  | 'why'
+  | 'progress'
   | 'today'
   | 'zones'
   | 'season'
@@ -31,6 +33,10 @@ const INTENT_PATTERNS: readonly [Intent, RegExp][] = [
   ['fatigue', SORENESS_RE],
   ['injury', /dolor|duele|lesi[oó]n|molest|tendin|esguince|contractura|sobrecarga/i],
   ['fatigue', FATIGUE_RE],
+  // "¿Por qué hoy toca esto?", "¿para qué sirven las series?" before "¿qué toca hoy?".
+  // No \b after "qué": "é" is not a word character for the regex engine.
+  ['why', /\bpor ?qu[eé]\s.*\b(?:toca|hago|hacemos|sesi[oó]n|entreno|series|tirada|hoy|ma[ñn]ana)\b|\bpara qu[eé] (?:sirve|sirven|es|vale)\b/i],
+  ['progress', /\bvoy bien\b|\bc[oó]mo voy\b|\bestoy (?:preparad|en forma|mejorando)|\bllego bien\b|\bprogres|\bc[oó]mo me ves\b/i],
   ['season', /plan general|pr[oó]ximas semanas|temporada|c[oó]mo llego|llegar? (bien )?a la carrera|semanas (que )?(faltan|quedan)|descarga|periodizaci|largo plazo/i],
   ['today', /qu[eé] toca|toca hoy|(entreno|entrenamiento|sesi[oó]n|plan) de hoy|qu[eé] (hago|entreno|tengo) hoy|hoy qu[eé]/i],
   ['zones', /pulsaciones|\bppm\b|frecuencia card|\bfc\b|\bpulso\b|\bzonas?\b|\britmos?\b|vatios|potencia|\bftp\b|\bcss\b|umbral|\bz[1-5]\b/i],
@@ -65,8 +71,13 @@ const PLAN_WEEK_RE = new RegExp(
 );
 const NEXT_WEEK_RE = /semana que viene|pr[oó]xima semana|semana siguiente|siguiente semana/i;
 
+/** "Hazme la semana más suave", "quiero hacer más bici esta semana": a change to the week, not a new plan. */
+const MODIFY_WEEK_RE =
+  /\bm[aá]s (?:suave|tranquil|liger|f[aá]cil|flojo|floja)|\bmenos (?:dur|intens|carga)|\b(?:m[aá]s|menos)\s+(?:de\s+)?(?:bici|ciclismo|nataci[oó]n|nadar|piscina|carrera|correr|fuerza)\b|\bsin piscina\b|\bex[aá]menes\b|\bde viaje\b/i;
+
 /** "Planifícame la semana" → plan_week; "reorganiza la semana" → replan; anything else → null. */
 export function detectPlanAction(message: string): PlanAction | null {
+  if (MODIFY_WEEK_RE.test(message)) return null;
   if (REPLAN_RE.test(message)) return 'replan';
   if (PLAN_WEEK_RE.test(message)) return 'plan_week';
   return null;

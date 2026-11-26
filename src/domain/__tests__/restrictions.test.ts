@@ -122,6 +122,11 @@ describe('restrictionsForDates', () => {
     expect(r[MON]?.maxDurationMin).toBe(45);
     expect(r[addDays(MON, 1)]?.blockedSports).toEqual(['bike', 'brick']);
     expect(r[addDays(MON, 3)]?.maxDurationMin).toBe(45);
+    // "Sin bici" names the bike, but it is not there.
+    const noBike = restrictionsForDates(week, [makeEvent({ kind: 'travel', title: 'Viaje sin bici', startDate: MON, endDate: addDays(MON, 3), notes: null })]);
+    expect(noBike[addDays(MON, 1)]?.blockedSports).toEqual(['bike', 'brick', 'swim']);
+    const withBike = restrictionsForDates(week, [makeEvent({ kind: 'travel', title: 'Viaje', startDate: MON, endDate: addDays(MON, 3), notes: 'Con bici.' })]);
+    expect(withBike[addDays(MON, 1)]?.blockedSports).toEqual(['swim']);
   });
 
   test('stress, exams, overload and social', () => {
