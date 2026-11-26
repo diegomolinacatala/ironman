@@ -151,12 +151,14 @@ describe('composeBriefing with full data', () => {
     const words = wordCount(briefing.script);
     expect(words).toBeLessThanOrEqual(180);
     expect(briefing.script).not.toMatch(/constancia gana|Bebe agua durante el día/);
-    // HRV in line with the baseline, a normal pulse and battery and the sleep stages stay on screen.
-    expect(briefing.script).not.toMatch(/variabilidad|pulso en reposo|batería|sueño profundo/);
+    // Every figure is named, but the normal ones together and without numbers.
+    expect(briefing.script).toContain('La variabilidad cardiaca, el pulso en reposo, la batería corporal y las fases del sueño, todo en su sitio.');
+    expect(briefing.script).not.toMatch(/milisegundos|pulsaciones|por ciento/);
     expect(briefing.script).not.toMatch(/\d|'|\bkm\b|\bh\b|\bZ\d/);
     expect(briefing.script).toContain('Buenos días, Diego. Hoy es martes veintisiete de octubre.');
     expect(briefing.script).toContain('siete horas y veinte minutos');
-    expect(briefing.script).toContain('desde las once y media de la noche hasta las siete menos diez de la mañana');
+    // Bed and wake-up times stay on screen: the spoken line is hours, score and verdict.
+    expect(briefing.script).not.toContain('desde las once y media');
     expect(briefing.script).toContain('Hoy toca rodaje suave de cincuenta minutos en zona dos, a las siete y media de la mañana.');
     expect(briefing.script).toContain('Mañana toca técnica de cuarenta y cinco minutos.');
     expect(briefing.script).toContain('Quedan cuarenta y tres días para Medio de Valencia');
@@ -267,7 +269,7 @@ describe('composeBriefing on special days', () => {
     const long = composeBriefing(input({ todayWorkouts: many }));
     expect(wordCount(long.script)).toBeLessThanOrEqual(180);
     expect(long.script).toContain('y tres más.');
-    expect(long.script).not.toContain('pulso en reposo');
+    expect(long.script).toContain('La variabilidad cardiaca, el pulso en reposo, la batería corporal y las fases del sueño, todo en su sitio.');
 
     const sparse = composeBriefing(
       input({ metrics: [makeMetrics(TODAY, { sleepScore: null, sleepHours: null, hrvMs: null, bodyBattery: null })], race: null }),
@@ -276,10 +278,25 @@ describe('composeBriefing on special days', () => {
     expect(wordCount(sparse.script)).toBeLessThan(80);
   });
 
-  it('reads HRV and body battery aloud only when they are out of the ordinary', () => {
+  it('names every watch figure: the normal ones together, the odd ones with their number', () => {
+    const normal = composeBriefing(input());
+    expect(normal.script).toContain('Has dormido siete horas y veinte minutos, con una puntuación de ochenta y dos: una buena noche.');
+    expect(normal.script).toContain('La variabilidad cardiaca, el pulso en reposo, la batería corporal y las fases del sueño, todo en su sitio.');
+
     const low = composeBriefing(input({ metrics: week({ hrvMs: 45, bodyBattery: 25 }) }));
-    expect(low.script).toMatch(/variabilidad cardiaca está en cuarenta y cinco milisegundos, por debajo de tu media/);
-    expect(low.script).toContain('batería corporal baja, al veinticinco por ciento');
+    expect(low.script).toContain(
+      'El pulso en reposo y las fases del sueño, bien; pero tu variabilidad cardiaca está baja, cuarenta y cinco milisegundos frente a tu media de sesenta y ocho; y la batería corporal está baja, al veinticinco por ciento.',
+    );
+
+    const heart = composeBriefing(input({ metrics: week({ restingHr: 56, sleepDeepMin: 30, sleepAwakeMin: 60 }) }));
+    expect(heart.script).toContain('el pulso en reposo está alto, cincuenta y seis pulsaciones frente a tu media de cuarenta y nueve');
+    expect(heart.script).toContain('has tenido poco sueño profundo, treinta minutos; y has estado despierto una hora.');
+
+    const firstNight = composeBriefing(input({ metrics: [night(TODAY)] }));
+    expect(firstNight.script).toContain(
+      'Aún sin media para comparar, tu variabilidad cardiaca está en sesenta y ocho milisegundos y tu pulso en reposo está en cuarenta y nueve pulsaciones.',
+    );
+    expect(firstNight.script).toContain('La batería corporal y las fases del sueño, todo en su sitio.');
   });
 
   it('truncates long headlines to 90 characters', () => {

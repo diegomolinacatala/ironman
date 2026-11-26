@@ -329,6 +329,8 @@ export function mapSleepSnapshot(raw: unknown): SleepSnapshot | null {
     hrvMs: numOrNull(r.hrvMs),
     hrvBaselineMs: numOrNull(r.hrvBaselineMs),
     restingHr: numOrNull(r.restingHr),
+    // Only in briefings written from 26-11-2026 on.
+    ...(numOrNull(r.restingHrBaseline) !== null ? { restingHrBaseline: numOrNull(r.restingHrBaseline) } : {}),
     bodyBattery: numOrNull(r.bodyBattery),
   };
 }

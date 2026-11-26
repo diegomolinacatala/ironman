@@ -8,10 +8,10 @@
  * texts in `briefing.ts`. Pure.
  */
 import { keySessionSentences, lowerFirst, ZONE_SPOKEN, type SpeechContext } from './briefingCoach';
-import { atTimeWords, clockWords, countWords, dateWords, durationWords, numberToWords, wordCount } from './briefingSpeech';
-import { HRV_HIGH_RATIO, HRV_LOW_RATIO, hrvRatio, isNum } from './briefingSleep';
+import { atTimeWords, countWords, dateWords, durationWords, numberToWords, wordCount } from './briefingSpeech';
+import { HRV_LOW_RATIO, hrvRatio, isNum } from './briefingSleep';
 import { NO_TOGETHER, type BriefingTogether, type PendingInvite, type TodayJoint } from './briefingSocial';
-import { dateTimeParts, diffDays } from './dates';
+import { diffDays } from './dates';
 import { estimateTss } from './load';
 import { phaseFor, type Phase } from './periodization';
 import type { Intensity, ISODate, Race, SleepSnapshot, SleepVerdict, Sport, WatchBrand, Workout } from './types';
@@ -151,53 +151,92 @@ function greetingOf(now: Date, name: string): string {
   return name ? `${hello}, ${name}.` : `${hello}.`;
 }
 
-/** Local clock minutes of an instant, rounded to 5' ("las once menos veinte", not "menos diecinueve"). */
-function clockOf(iso: string | null): number | null {
-  const minutes = iso ? (dateTimeParts(iso)?.minutes ?? null) : null;
-  return minutes === null ? null : Math.round(minutes / 5) * 5;
+/** Hours, score and verdict in one sentence: "Has dormido siete horas y veinte minutos, con una puntuación de ochenta y uno: una buena noche." */
+function nightSentence(s: SleepSnapshot, verdict: SleepVerdict): Sentence | null {
+  const said = verdict === 'unknown' ? '' : `: ${VERDICT_SPOKEN[verdict]}`;
+  const score = isNum(s.score) ? Math.round(s.score) : null;
+  if (isNum(s.hours)) {
+    const scored = score !== null ? `, con una puntuación de ${numberToWords(score)}` : '';
+    return { text: `Has dormido ${durationWords(s.hours * 60)}${scored}${said}.` };
+  }
+  if (score !== null) return { text: `Tu puntuación de sueño es de ${numberToWords(score)}${said}.` };
+  return verdict === 'unknown' ? null : { text: `En conjunto, ${VERDICT_SPOKEN[verdict]}.` };
 }
 
-function hoursSentence(s: SleepSnapshot): Sentence | null {
-  if (!isNum(s.hours)) return null;
-  const start = clockOf(s.start);
-  const end = clockOf(s.end);
-  const span = start !== null && end !== null ? `, desde ${clockWords(start, true)} hasta ${clockWords(end, true)}` : '';
-  return { text: `Esta noche has dormido ${durationWords(s.hours * 60)}${span}.` };
+/** Body battery below this is said with its number. */
+export const LOW_BODY_BATTERY = 40;
+/** Resting HR this many beats over the athlete's mean is said with its number. */
+export const HIGH_RESTING_HR_DELTA = 5;
+/** Deep sleep under this share of the night is said with its minutes. */
+export const LOW_DEEP_SLEEP_SHARE = 0.12;
+/** More minutes awake than this is said with its minutes. */
+export const LONG_AWAKE_MIN = 45;
+
+/** Each watch figure of the night: in order (`ok`), out of the ordinary (`out`, with its number) or without a mean to compare (`raw`). */
+interface NightSignals {
+  ok: string[];
+  out: string[];
+  raw: string[];
 }
 
-function verdictSentence(s: SleepSnapshot, verdict: SleepVerdict): Sentence | null {
-  if (verdict === 'unknown') return null;
-  if (isNum(s.score)) return { text: `Tu puntuación de sueño es de ${numberToWords(Math.round(s.score))}: ${VERDICT_SPOKEN[verdict]}.` };
-  return { text: `En conjunto, ${VERDICT_SPOKEN[verdict]}.` };
+function nightSignals(s: SleepSnapshot): NightSignals {
+  const signals: NightSignals = { ok: [], out: [], raw: [] };
+  if (isNum(s.hrvMs)) {
+    const ms = countWords(s.hrvMs, 'milisegundo', 'milisegundos', 'masculine');
+    const ratio = hrvRatio(s);
+    if (ratio === null || !isNum(s.hrvBaselineMs)) signals.raw.push(`tu variabilidad cardiaca está en ${ms}`);
+    else if (ratio < HRV_LOW_RATIO) signals.out.push(`tu variabilidad cardiaca está baja, ${ms} frente a tu media de ${numberToWords(Math.round(s.hrvBaselineMs))}`);
+    else signals.ok.push('la variabilidad cardiaca');
+  }
+  if (isNum(s.restingHr)) {
+    const bpm = countWords(Math.round(s.restingHr), 'pulsación', 'pulsaciones', 'feminine');
+    const base = s.restingHrBaseline;
+    if (!isNum(base)) signals.raw.push(`tu pulso en reposo está en ${bpm}`);
+    else if (s.restingHr >= base + HIGH_RESTING_HR_DELTA) signals.out.push(`el pulso en reposo está alto, ${bpm} frente a tu media de ${numberToWords(Math.round(base))}`);
+    else signals.ok.push('el pulso en reposo');
+  }
+  if (isNum(s.bodyBattery)) {
+    if (s.bodyBattery < LOW_BODY_BATTERY) signals.out.push(`la batería corporal está baja, al ${numberToWords(Math.round(s.bodyBattery))} por ciento`);
+    else signals.ok.push('la batería corporal');
+  }
+  if (isNum(s.deepMin) && isNum(s.hours) && s.hours > 0) {
+    const deepLow = s.deepMin / (s.hours * 60) < LOW_DEEP_SLEEP_SHARE;
+    const awakeLong = isNum(s.awakeMin) && s.awakeMin > LONG_AWAKE_MIN;
+    if (deepLow) signals.out.push(`has tenido poco sueño profundo, ${durationWords(s.deepMin)}`);
+    if (awakeLong && isNum(s.awakeMin)) signals.out.push(`has estado despierto ${durationWords(s.awakeMin)}`);
+    if (!deepLow && !awakeLong) signals.ok.push('las fases del sueño');
+  }
+  return signals;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /**
- * Said only when it tells something: away from the athlete's baseline. A value in
- * line with the baseline (or without one to compare) is on screen, not read aloud.
+ * Every watch figure, said briefly: the ones in order grouped without numbers
+ * ("La variabilidad cardiaca, el pulso en reposo y la batería corporal, todo en su sitio."),
+ * the ones out of the ordinary with their number, and the ones without a mean yet with their value.
  */
-function hrvSentence(s: SleepSnapshot): Sentence | null {
-  if (!isNum(s.hrvMs)) return null;
-  const ratio = hrvRatio(s);
-  if (ratio === null || !isNum(s.hrvBaselineMs) || (ratio >= HRV_LOW_RATIO && ratio <= HRV_HIGH_RATIO)) return null;
-  const value = `Tu variabilidad cardiaca está en ${countWords(s.hrvMs, 'milisegundo', 'milisegundos', 'masculine')}`;
-  const relation = ratio < HRV_LOW_RATIO ? 'por debajo de' : 'por encima de';
-  return { text: `${value}, ${relation} tu media de ${numberToWords(Math.round(s.hrvBaselineMs))}.` };
+function signalSentences(s: SleepSnapshot): Sentence[] {
+  const { ok, out, raw } = nightSignals(s);
+  const sentences: Sentence[] = [];
+  // Odd figures carry numbers ("sesenta y ocho"): a pause between them reads better than another "y".
+  const odd = out.length <= 1 ? out.join('') : `${out.slice(0, -1).join('; ')}; y ${out[out.length - 1]}`;
+  if (ok.length > 0 && out.length > 0) sentences.push({ text: `${capitalize(joinEs(ok))}, bien; pero ${odd}.` });
+  else if (ok.length > 0) sentences.push({ text: `${capitalize(joinEs(ok))}, todo en su sitio.` });
+  else if (out.length > 0) sentences.push({ text: `Ojo: ${odd}.` });
+  if (raw.length > 0) sentences.push({ text: `Aún sin media para comparar, ${joinEs(raw)}.`, drop: 2 });
+  return sentences;
 }
 
-/** Body battery below this is worth saying; a normal morning is not news. */
-const LOW_BODY_BATTERY = 40;
-
 /**
- * Last night by exception: hours and verdict always, HRV and body battery only
- * when out of the ordinary. Sleep stages and resting HR stay on screen.
+ * Last night, short but complete: hours, score and verdict in one sentence, then every
+ * other figure of the watch grouped (the normal ones together, the odd ones with their number).
  */
 function sleepSentences(s: SleepSnapshot | null, verdict: SleepVerdict, hasAnyMetrics: boolean, brand?: WatchBrand | null): Sentence[] {
   if (!s) return [{ text: hasAnyMetrics ? noSleepYetText(brand) : noWatchText(brand) }];
-  const battery =
-    isNum(s.bodyBattery) && s.bodyBattery < LOW_BODY_BATTERY
-      ? { text: `Empiezas el día con la batería corporal baja, al ${numberToWords(Math.round(s.bodyBattery))} por ciento.`, drop: 3 }
-      : null;
-  return [hoursSentence(s), verdictSentence(s, verdict), hrvSentence(s), battery].filter((x): x is Sentence => x !== null);
+  return [nightSentence(s, verdict), ...signalSentences(s)].filter((x): x is Sentence => x !== null);
 }
 
 function todaySentences(plan: DayPlan, race: Race | null, speech: SpeechContext): Sentence[] {

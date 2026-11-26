@@ -304,6 +304,8 @@ export interface SleepSnapshot {
   /** Average HRV of the previous 7 nights (baseline), when known. */
   hrvBaselineMs: number | null;
   restingHr: number | null;
+  /** Mean resting HR of the 7 previous nights, when known. */
+  restingHrBaseline?: number | null;
   bodyBattery: number | null;
 }
 

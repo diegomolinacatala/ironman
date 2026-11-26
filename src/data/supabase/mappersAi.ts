@@ -68,6 +68,7 @@ function timestamp(value: unknown): ISODateTime | null {
 export function parseSleepSnapshot(value: unknown): SleepSnapshot | null {
   const r = asJsonRecord(value);
   if (!r) return null;
+  const restingBaseline = nonNegative(pick(r, 'restingHrBaseline', 'resting_hr_baseline'), 1);
   return {
     hours: nonNegative(pick(r, 'hours'), 2),
     score: nonNegative(pick(r, 'score')),
@@ -80,6 +81,8 @@ export function parseSleepSnapshot(value: unknown): SleepSnapshot | null {
     hrvMs: nonNegative(pick(r, 'hrvMs', 'hrv_ms'), 1),
     hrvBaselineMs: nonNegative(pick(r, 'hrvBaselineMs', 'hrv_baseline_ms'), 1),
     restingHr: nonNegative(pick(r, 'restingHr', 'resting_hr')),
+    // Only in briefings written from 26-11-2026 on.
+    ...(restingBaseline !== null ? { restingHrBaseline: restingBaseline } : {}),
     bodyBattery: nonNegative(pick(r, 'bodyBattery', 'body_battery')),
   };
 }

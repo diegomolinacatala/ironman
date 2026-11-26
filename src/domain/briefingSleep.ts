@@ -39,15 +39,20 @@ function merged<T>(rows: readonly DailyMetrics[], read: (m: DailyMetrics) => T |
   return found ?? null;
 }
 
-function hrvBaseline(metrics: readonly DailyMetrics[], date: ISODate): number | null {
+/** Mean of a field over the last 7 nights with a value before `date` (28-day lookback); null with fewer than 3. */
+function baselineOf(metrics: readonly DailyMetrics[], date: ISODate, read: (m: DailyMetrics) => number | null | undefined): number | null {
   const from = addDays(date, -BASELINE_LOOKBACK_DAYS);
   const dates = [...new Set(metrics.filter((m) => m.date < date && m.date >= from).map((m) => m.date))].sort().reverse();
   const values = dates
-    .map((d) => merged(rowsOf(metrics, d), (m) => m.hrvMs))
+    .map((d) => merged(rowsOf(metrics, d), read))
     .filter(isNum)
     .slice(0, BASELINE_NIGHTS);
   if (values.length < BASELINE_MIN_NIGHTS) return null;
   return round(values.reduce((sum, v) => sum + v, 0) / values.length, 1);
+}
+
+function hrvBaseline(metrics: readonly DailyMetrics[], date: ISODate): number | null {
+  return baselineOf(metrics, date, (m) => m.hrvMs);
 }
 
 function hoursFrom(rows: readonly DailyMetrics[]): number | null {
@@ -77,6 +82,9 @@ export function sleepSnapshotFrom(metrics: readonly DailyMetrics[], date: ISODat
     restingHr: merged(rows, (m) => m.restingHr),
     bodyBattery: merged(rows, (m) => m.bodyBattery),
   };
+  const restingHrBaseline = baselineOf(metrics, date, (m) => m.restingHr);
+  // Only with a mean to compare (≥ 3 nights): stored briefings keep their shape otherwise.
+  if (restingHrBaseline !== null) snapshot.restingHrBaseline = restingHrBaseline;
   const { hours, score, deepMin, hrvMs, restingHr, bodyBattery } = snapshot;
   return [hours, score, deepMin, hrvMs, restingHr, bodyBattery].some(isNum) ? snapshot : null;
 }

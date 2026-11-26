@@ -414,6 +414,8 @@ export interface SleepSnapshot {
   /** Average HRV of the previous 7 nights (baseline), when known. */
   hrvBaselineMs: number | null;
   restingHr: number | null;
+  /** Average resting HR of the previous 7 nights (baseline), when known. Absent in briefings stored before 26-11-2026. */
+  restingHrBaseline?: number | null;
   bodyBattery: number | null;
 }
 

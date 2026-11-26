@@ -20,8 +20,17 @@ const round = (v: number | null | undefined, decimals = 0): number | null => {
 
 /** Mean HRV (ms, rounded) of the 7 nights before `date`, or null with fewer than 3 nights. */
 export function hrvBaseline(merged: readonly DailyMetrics[], date: ISODate): number | null {
+  return baselineOf(merged, date, (m) => m.hrvMs);
+}
+
+/** Mean resting HR (bpm, rounded) of the 7 nights before `date`, or null with fewer than 3 nights. */
+export function restingHrBaseline(merged: readonly DailyMetrics[], date: ISODate): number | null {
+  return baselineOf(merged, date, (m) => m.restingHr);
+}
+
+function baselineOf(merged: readonly DailyMetrics[], date: ISODate, read: (m: DailyMetrics) => number | null | undefined): number | null {
   const from = addDays(date, -7);
-  const values = merged.filter((m) => m.date >= from && m.date < date).map((m) => m.hrvMs).filter(isNum);
+  const values = merged.filter((m) => m.date >= from && m.date < date).map(read).filter(isNum);
   if (values.length < MIN_BASELINE_NIGHTS) return null;
   return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 }
@@ -45,7 +54,10 @@ export function sleepSnapshot(metrics: readonly DailyMetrics[], date: ISODate): 
     restingHr: round(night.restingHr),
     bodyBattery: round(night.bodyBattery),
   };
-  const { hrvBaselineMs: _baseline, ...measured } = snapshot;
+  const restingBaseline = restingHrBaseline(merged, date);
+  // Only with a mean to compare (≥ 3 nights): stored briefings keep their shape otherwise.
+  if (restingBaseline !== null) snapshot.restingHrBaseline = restingBaseline;
+  const { hrvBaselineMs: _baseline, restingHrBaseline: _restingBaseline, ...measured } = snapshot;
   return Object.values(measured).some((v) => v !== null) ? snapshot : null;
 }
 
@@ -73,6 +85,7 @@ export function sleepForPrompt(s: SleepSnapshot | null, tz: string): Record<stri
     hrvBaseline7NightsMs: s.hrvBaselineMs,
     hrvVsBaselinePct: hrvDeltaPct,
     restingHr: s.restingHr,
+    restingHrBaseline7Nights: s.restingHrBaseline ?? null,
     bodyBattery: s.bodyBattery,
   };
 }
