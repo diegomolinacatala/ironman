@@ -168,6 +168,41 @@ test('log_completed_activity does not duplicate an activity already imported fro
   assert.equal((different.structuredContent as { status: string }).status, 'created_unplanned');
 });
 
+test('log_completed_activity completes a session marked done by hand with the activity data, once', async () => {
+  const state = emptyState();
+  state.workouts.push(
+    workout({
+      id: PLANNED_ID,
+      date: '2026-10-24',
+      sport: 'run',
+      durationMin: 45,
+      startTime: '19:00',
+      status: 'completed',
+      completed: { source: 'manual', durationMin: 45, rpe: 6, feel: 2, notes: 'Mucho calor', completedAt: '2026-10-24T18:00:00.000Z' },
+    }),
+  );
+  const args = { date: '2026-10-24', sport: 'run', duration_min: 47, start_time: '19:02', distance_m: 9100, avg_hr: 152, max_hr: 176, calories: 540, rpe: 8, garmin_activity_id: '777' };
+  const r = await run(state, 'log_completed_activity', args);
+  assert.equal(r.isError, undefined, text(r));
+  assert.equal((r.structuredContent as { status: string }).status, 'enriched_manual');
+  assert.equal(state.workouts.length, 1, 'no second workout');
+  assert.deepEqual(state.workouts[0].completed, {
+    source: 'claude',
+    externalId: '777',
+    durationMin: 47,
+    distanceM: 9100,
+    avgHr: 152,
+    maxHr: 176,
+    kcal: 540,
+    rpe: 6,
+    feel: 2,
+    notes: 'Mucho calor',
+    completedAt: '2026-10-24T18:00:00.000Z',
+  });
+  const again = await run(state, 'log_completed_activity', args);
+  assert.equal((again.structuredContent as { status: string }).status, 'already_logged', 'the activity id is stored now');
+});
+
 test('get_plan_for_device returns planned workouts with Garmin JSON', async () => {
   const state = withWeek();
   const r = await run(state, 'get_plan_for_device', { from: '2026-10-26', days: 7 });

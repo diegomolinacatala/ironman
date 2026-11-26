@@ -130,6 +130,21 @@ export function quantityToMeters(q: QuantityLike | null | undefined): number | n
   return factor === undefined ? null : q.quantity * factor;
 }
 
+const ENERGY_UNIT_TO_KCAL: Readonly<Record<string, number>> = {
+  kcal: 1,
+  Cal: 1,
+  cal: 0.001,
+  kJ: 1 / 4.184,
+  J: 1 / 4184,
+};
+
+/** Converts a HealthKit energy quantity (a workout's `totalEnergyBurned`) to kcal; null when unknown/invalid. */
+export function quantityToKcal(q: QuantityLike | null | undefined): number | null {
+  if (!q || !isFiniteNumber(q.quantity) || q.quantity <= 0) return null;
+  const factor = ENERGY_UNIT_TO_KCAL[q.unit];
+  return factor === undefined ? null : q.quantity * factor;
+}
+
 // ---------------------------------------------------------------------------
 // Sleep
 // ---------------------------------------------------------------------------

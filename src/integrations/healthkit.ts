@@ -26,6 +26,7 @@ import { importActivities, toImportCandidate, type HealthActivity, type ImportCa
 import {
   buildMetricsDrafts,
   localDate,
+  quantityToKcal,
   quantityToMeters,
   quantityToMinutes,
   sleepHoursByDate,
@@ -191,6 +192,9 @@ async function readActivities(from: Date, to: Date): Promise<HealthActivity[]> {
           durationMin,
           distanceM: quantityToMeters(json.totalDistance),
           avgHr: hr?.averageQuantity?.quantity ?? null,
+          maxHr: hr?.maximumQuantity?.quantity ?? null,
+          // Part of the workout itself: no extra Health permission (active energy is not requested).
+          kcal: quantityToKcal(json.totalEnergyBurned),
           sourceName: json.sourceRevision?.source?.name ?? null,
         };
       }),
@@ -220,6 +224,7 @@ function summarize({ drafts, candidates, imported, sources }: SyncFindings): Hea
     activitiesFound: candidates.length,
     workoutsCompleted: imported.workoutsCompleted,
     activitiesImported: imported.activitiesImported,
+    workoutsEnriched: imported.workoutsEnriched,
     sources,
   };
 }

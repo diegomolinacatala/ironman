@@ -307,6 +307,21 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
       );
       return rows.length > 0;
     },
+    async enrichCompletedWorkout(userId, workoutId, completed) {
+      const rows = rowsOf(
+        await db
+          .from('workouts')
+          .update({ completed })
+          .eq('id', workoutId)
+          .eq('user_id', userId)
+          .eq('status', 'completed')
+          // Still no activity linked: a concurrent import (Apple Salud on the phone) may have won.
+          .is('completed->>externalId', null)
+          .select('id'),
+        'enrich workout',
+      );
+      return rows.length > 0;
+    },
     findByExternalId,
     async insertCompletedWorkout(userId, w) {
       if (w.externalId && (await findByExternalId(userId, w.externalId, w.externalId.replace(/^garmin:/, '')))) return null;

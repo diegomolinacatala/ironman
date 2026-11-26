@@ -35,7 +35,16 @@ export interface GarminActivity {
   durationMin: number;
   distanceM: number | null;
   avgHr: number | null;
+  /** `maxHR`, ppm. */
+  maxHr: number | null;
   tss: number | null;
+  /** `calories` of the activity, kcal. */
+  kcal: number | null;
+  /** `avgPower` (power meter or running power), W. */
+  avgPowerW: number | null;
+  /** Best 1-minute (`maxAvgPower_60`) and 20-minute (`max20MinPower` / `maxAvgPower_1200`) power, W. */
+  bestPower1MinW: number | null;
+  bestPower20MinW: number | null;
 }
 
 type Obj = Record<string, unknown>;
@@ -228,6 +237,30 @@ function activityStart(row: Obj, tz: string): { date: ISODate; time: string | nu
   return { date: parts.date, time: parts.time };
 }
 
+/** Rounded value of the first path found when it lies in [min, max], else null. */
+function roundedIn(row: Obj, paths: readonly string[], min: number, max: number): number | null {
+  const n = pickNumber(row, paths);
+  return n !== null && n >= min && n <= max ? Math.round(n) : null;
+}
+
+const MAX_POWER_W = 2500;
+
+/** What the activity list says about the effort: distance, heart rate, load, energy and power. */
+function activityNumbers(row: Obj): Pick<GarminActivity, 'distanceM' | 'avgHr' | 'maxHr' | 'tss' | 'kcal' | 'avgPowerW' | 'bestPower1MinW' | 'bestPower20MinW'> {
+  const distance = pickNumber(row, ['distance']);
+  const tss = pickNumber(row, ['trainingStressScore']);
+  return {
+    distanceM: distance !== null && distance > 0 ? Math.round(distance) : null,
+    avgHr: roundedIn(row, ['averageHR', 'avgHr', 'averageHeartRate'], 30, 230),
+    maxHr: roundedIn(row, ['maxHR', 'maxHr', 'maxHeartRate'], 30, 240),
+    tss: tss !== null && tss >= 0 && tss <= 1000 ? Math.round(tss * 10) / 10 : null,
+    kcal: roundedIn(row, ['calories'], 1, 20000),
+    avgPowerW: roundedIn(row, ['avgPower', 'averagePower'], 1, MAX_POWER_W),
+    bestPower1MinW: roundedIn(row, ['maxAvgPower_60'], 1, MAX_POWER_W),
+    bestPower20MinW: roundedIn(row, ['max20MinPower', 'maxAvgPower_1200'], 1, MAX_POWER_W),
+  };
+}
+
 export function parseActivities(payload: unknown, tz: string): GarminActivity[] {
   return asRecords(payload, ['activityList', 'activities', 'data']).flatMap((row): GarminActivity[] => {
     const idRaw = at(row, 'activityId');
@@ -249,18 +282,7 @@ export function parseActivities(payload: unknown, tz: string): GarminActivity[] 
         date: start.date,
         startTime: start.time,
         durationMin: Math.min(720, Math.round(seconds / 60)),
-        distanceM: (() => {
-          const d = pickNumber(row, ['distance']);
-          return d !== null && d > 0 ? Math.round(d) : null;
-        })(),
-        avgHr: (() => {
-          const hr = pickNumber(row, ['averageHR', 'avgHr', 'averageHeartRate']);
-          return hr !== null && hr >= 30 && hr <= 230 ? Math.round(hr) : null;
-        })(),
-        tss: (() => {
-          const t = pickNumber(row, ['trainingStressScore']);
-          return t !== null && t >= 0 && t <= 1000 ? Math.round(t * 10) / 10 : null;
-        })(),
+        ...activityNumbers(row),
       },
     ];
   });

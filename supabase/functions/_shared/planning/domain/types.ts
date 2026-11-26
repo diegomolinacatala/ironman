@@ -6,6 +6,7 @@
  */
 export type {
   AthleteLevel,
+  CompletedData,
   Intensity,
   ISODate,
   NumberRange,
@@ -18,6 +19,7 @@ export type {
   WeekPlan,
   WeekPlanDraft,
   WeekPlanKind,
+  Workout,
   WorkoutCoaching,
   WorkoutStep,
   WorkoutStepKind,

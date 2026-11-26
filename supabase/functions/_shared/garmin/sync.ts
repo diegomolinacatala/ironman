@@ -4,14 +4,17 @@
  * (source 'garmin', merge per field), activities → complete matching planned
  * workouts or insert completed unplanned ones (external_id 'garmin:<id>').
  * Activities already recorded by another source (Garmin Connect → Apple
- * Health → app) are skipped so load and totals are not counted twice.
+ * Health → app) are skipped so load and totals are not counted twice. A
+ * session the athlete marked done by hand gets the activity's numbers instead
+ * (heart rate, load, distance…), keeping their RPE, sensaciones and notes.
  */
 import { addDays, todayIn } from '../dates.ts';
 import type { Logger } from '../log.ts';
 import { errorInfo } from '../log.ts';
+import { enrichManualCompletion } from '../planning/domain/watchCompletion.ts';
 import { sportLabel } from '../planning/labels.ts';
 import { intensityFromEffort } from '../planning/load.ts';
-import { findCompletedLookalike, matchActivity } from '../planning/match.ts';
+import { findCompletedLookalikes, matchActivity } from '../planning/match.ts';
 import type { CompletedWorkoutInsert, MetricsUpsert, PlanningStore } from '../planning/store.ts';
 import type { CompletedData, SyncResult, UUID, Workout } from '../types.ts';
 import { GarminApiError } from './api.ts';
@@ -24,7 +27,7 @@ export const SYNC_DAYS = 14;
 export const FIRST_SYNC_DAYS = 28;
 const MAX_SYNC_DAYS = 28;
 
-export type GarminSyncStore = Pick<PlanningStore, 'listWorkouts' | 'completeWorkout' | 'insertCompletedWorkout' | 'upsertMetrics'>;
+export type GarminSyncStore = Pick<PlanningStore, 'listWorkouts' | 'completeWorkout' | 'enrichCompletedWorkout' | 'insertCompletedWorkout' | 'upsertMetrics'>;
 
 export interface GarminSyncDeps {
   api: GarminApi;
@@ -35,20 +38,29 @@ export interface GarminSyncDeps {
 
 export interface ImportPlan {
   completions: { workoutId: UUID; completed: CompletedData }[];
+  /** Sessions marked done by hand that take the activity's numbers (RPE, feel and notes kept). */
+  enrichments: { workoutId: UUID; completed: CompletedData }[];
   inserts: CompletedWorkoutInsert[];
   skipped: number;
 }
 
-function completedFor(a: GarminActivity, nowIso: string): CompletedData {
-  return {
-    source: 'garmin',
-    externalId: a.id,
-    durationMin: a.durationMin,
-    ...(a.distanceM !== null ? { distanceM: a.distanceM } : {}),
-    ...(a.avgHr !== null ? { avgHr: a.avgHr } : {}),
-    ...(a.tss !== null ? { tss: a.tss } : {}),
-    completedAt: nowIso,
+/** Only the numbers the activity has. */
+function activityData(a: GarminActivity): Partial<CompletedData> {
+  const values: Partial<CompletedData> = {
+    distanceM: a.distanceM ?? undefined,
+    avgHr: a.avgHr ?? undefined,
+    maxHr: a.maxHr ?? undefined,
+    tss: a.tss ?? undefined,
+    kcal: a.kcal ?? undefined,
+    avgPowerW: a.avgPowerW ?? undefined,
+    bestPower1MinW: a.bestPower1MinW ?? undefined,
+    bestPower20MinW: a.bestPower20MinW ?? undefined,
   };
+  return Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined));
+}
+
+function completedFor(a: GarminActivity, nowIso: string): CompletedData {
+  return { source: 'garmin', externalId: a.id, durationMin: a.durationMin, ...activityData(a), completedAt: nowIso };
 }
 
 /** Pure: decides what to do with each activity given the user's workouts in the window. */
@@ -59,7 +71,9 @@ export function planActivityImport(activities: readonly GarminActivity[], workou
     if (w.completed?.externalId) known.add(`garmin:${w.completed.externalId}`);
   }
   const used = new Set<UUID>();
-  const plan: ImportPlan = { completions: [], inserts: [], skipped: 0 };
+  const plan: ImportPlan = { completions: [], enrichments: [], inserts: [], skipped: 0 };
+  // Enriched sessions are linked to their activity from then on (a second activity is not a duplicate of them).
+  let current: readonly Workout[] = workouts;
   const ordered = [...activities].sort((a, b) => (a.date + (a.startTime ?? '')).localeCompare(b.date + (b.startTime ?? '')));
   for (const a of ordered) {
     if (known.has(`garmin:${a.id}`)) {
@@ -67,12 +81,20 @@ export function planActivityImport(activities: readonly GarminActivity[], workou
       continue;
     }
     known.add(`garmin:${a.id}`);
-    if (findCompletedLookalike(a, workouts, { garminId: a.id })) {
+    const completed = completedFor(a, nowIso);
+    const lookalike = findCompletedLookalikes(a, current, { garminId: a.id });
+    if (lookalike.linked) {
       plan.skipped += 1;
       continue;
     }
-    const completed = completedFor(a, nowIso);
-    const match = matchActivity(a, workouts, used);
+    if (lookalike.manual) {
+      const manual = lookalike.manual;
+      const enriched = enrichManualCompletion(manual.completed, completed);
+      plan.enrichments.push({ workoutId: manual.id, completed: enriched });
+      current = current.map((w) => (w.id === manual.id ? { ...w, completed: enriched } : w));
+      continue;
+    }
+    const match = matchActivity(a, current, used);
     if (match) {
       used.add(match.id);
       plan.completions.push({ workoutId: match.id, completed });
@@ -127,16 +149,32 @@ async function fetchAll(deps: GarminSyncDeps, token: GarminToken, from: string, 
   return { dailies: value(0), sleep: value(1), hrv: value(2), bodyBattery: value(3), activities: value(4) };
 }
 
-async function applyImport(deps: GarminSyncDeps, userId: UUID, plan: ImportPlan): Promise<{ completed: number; inserted: number }> {
-  let completed = 0;
-  let inserted = 0;
+interface ImportCounts {
+  completed: number;
+  enriched: number;
+  inserted: number;
+}
+
+async function applyImport(deps: GarminSyncDeps, userId: UUID, plan: ImportPlan): Promise<ImportCounts> {
+  const counts: ImportCounts = { completed: 0, enriched: 0, inserted: 0 };
   for (const c of plan.completions) {
-    if (await deps.store.completeWorkout(userId, c.workoutId, c.completed)) completed += 1;
+    if (await deps.store.completeWorkout(userId, c.workoutId, c.completed)) counts.completed += 1;
+  }
+  for (const e of plan.enrichments) {
+    if (await deps.store.enrichCompletedWorkout(userId, e.workoutId, e.completed)) counts.enriched += 1;
   }
   for (const row of plan.inserts) {
-    if (await deps.store.insertCompletedWorkout(userId, row)) inserted += 1;
+    if (await deps.store.insertCompletedWorkout(userId, row)) counts.inserted += 1;
   }
-  return { completed, inserted };
+  return counts;
+}
+
+function syncMessage(metricsDays: number, counts: ImportCounts): string {
+  const base = `Garmin sincronizado: ${metricsDays} días de métricas, ${counts.completed} entrenos completados y ${counts.inserted} actividades nuevas.`;
+  if (counts.enriched === 0) return base;
+  const enriched =
+    counts.enriched === 1 ? 'Una sesión que marcaste a mano ya tiene los datos del reloj.' : `${counts.enriched} sesiones que marcaste a mano ya tienen los datos del reloj.`;
+  return `${base} ${enriched}`;
 }
 
 export interface SyncUserInput {
@@ -169,11 +207,11 @@ export async function syncGarminUser(deps: GarminSyncDeps, input: SyncUserInput)
   const metricsDays = parts.length ? await deps.store.upsertMetrics(input.userId, 'garmin', toMetricRows(parts, nowIso)) : 0;
   const activities = parseActivities(data.activities, input.timezone).filter((a) => a.date >= from && a.date <= to);
   const workouts = await deps.store.listWorkouts(input.userId, from, to);
-  const { completed, inserted } = await applyImport(deps, input.userId, planActivityImport(activities, workouts, nowIso));
+  const counts = await applyImport(deps, input.userId, planActivityImport(activities, workouts, nowIso));
   return {
     metricsDays,
-    activitiesImported: inserted,
-    workoutsCompleted: completed,
-    message: `Garmin sincronizado: ${metricsDays} días de métricas, ${completed} entrenos completados y ${inserted} actividades nuevas.`,
+    activitiesImported: counts.inserted,
+    workoutsCompleted: counts.completed,
+    message: syncMessage(metricsDays, counts),
   };
 }

@@ -320,7 +320,11 @@ entrenos (completa el planificado que encaja o crea uno completado con `external
 pádel, tenis o fútbol entran como `other`). Si la actividad ya está como entreno completado desde otra
 fuente (Garmin Connect → Apple Salud → app: mismo día, deporte compatible, duración ±max(10 min, 15 %)
 e inicio ±45 min) se omite para no contarla dos veces; `log_completed_activity` (puente de Claude)
-aplica la misma regla y responde `already_logged`. Un `401` marca la integración como `expired`.
+aplica la misma regla y responde `already_logged`. Si ese entreno lo marcó el atleta a mano («Hecho», sin id de
+actividad en `completed`), no se omite: recibe la duración, distancia, FC media y máxima, carga, kcal, potencia,
+el origen y el id de la actividad, y conserva su RPE, sensaciones y notas (`domain/watchCompletion.ts`,
+`enrichCompletedWorkout` solo mientras `completed->>externalId` sea nulo; `log_completed_activity` responde
+`enriched_manual` y acepta `max_hr`, `calories` y `avg_power_w`). Un `401` marca la integración como `expired`.
 
 ## Pruebas y comprobación de tipos
 

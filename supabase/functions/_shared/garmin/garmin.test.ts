@@ -26,7 +26,7 @@ const FIXTURES = {
   hrv: { hrvSummaries: [{ calendarDate: '2026-10-23', lastNightAvg: 59, weeklyAvg: 61, status: 'BALANCED' }, { calendarDate: '2026-10-24', lastNightAvg: 62 }] },
   bodyBattery: [{ date: '2026-10-24', charged: 60, drained: 40, bodyBatteryValuesArray: [[1761292800000, 35], [1761300000000, 'MEASURED', 88, 2.0], [1761310000000, 70]] }],
   activities: [
-    { activityId: 9001, activityName: 'Rodaje matinal', startTimeLocal: '2026-10-24 08:05:00', activityType: { typeKey: 'running' }, duration: 3120.5, distance: 9800.2, averageHR: 148.6, trainingStressScore: 55.2 },
+    { activityId: 9001, activityName: 'Rodaje matinal', startTimeLocal: '2026-10-24 08:05:00', activityType: { typeKey: 'running' }, duration: 3120.5, distance: 9800.2, averageHR: 148.6, maxHR: 171.2, calories: 612.4, trainingStressScore: 55.2 },
     { activityId: 9002, activityName: 'Pádel', startTimeLocal: '2026-10-23 19:00:00', activityType: { typeKey: 'padel' }, duration: 5400 },
     { activityId: 9003, activityName: 'Paseo', startTimeLocal: '2026-10-23 12:00:00', activityType: { typeKey: 'walking' }, duration: 1800 },
     { activityId: 9004, startTimeGMT: '2026-10-22 17:00:00', activityType: { typeKey: 'lap_swimming' }, duration: 2700, distance: 2000 },
@@ -69,9 +69,126 @@ test('parsers read several payload shapes defensively', () => {
 test('activities parse ids, local start, sport and units; skip walks and bad rows', () => {
   const acts = parseActivities(FIXTURES.activities, 'Europe/Madrid');
   assert.deepEqual(acts.map((a) => a.id), ['9001', '9002', '9004']);
-  assert.deepEqual(acts[0], { id: '9001', name: 'Rodaje matinal', typeKey: 'running', sport: 'run', date: '2026-10-24', startTime: '08:05', durationMin: 52, distanceM: 9800, avgHr: 149, tss: 55.2 });
+  assert.deepEqual(acts[0], {
+    id: '9001',
+    name: 'Rodaje matinal',
+    typeKey: 'running',
+    sport: 'run',
+    date: '2026-10-24',
+    startTime: '08:05',
+    durationMin: 52,
+    distanceM: 9800,
+    avgHr: 149,
+    maxHr: 171,
+    tss: 55.2,
+    kcal: 612,
+    avgPowerW: null,
+    bestPower1MinW: null,
+    bestPower20MinW: null,
+  });
   assert.equal(acts[1].sport, 'other');
   assert.equal(acts[2].startTime, '19:00', 'GMT converted to Madrid (CEST)');
+});
+
+test('activities read power: average, best minute and best 20 minutes (FTP tests)', () => {
+  const [ride] = parseActivities(
+    [{ activityId: 9100, startTimeLocal: '2026-10-22 18:00:00', activityType: { typeKey: 'virtual_ride' }, duration: 3600, avgPower: 212.4, maxAvgPower_60: 388, maxAvgPower_1200: 271.6, maxHR: 900 }],
+    'Europe/Madrid',
+  );
+  assert.equal(ride.avgPowerW, 212);
+  assert.equal(ride.bestPower1MinW, 388);
+  assert.equal(ride.bestPower20MinW, 272, 'maxAvgPower_1200 when there is no max20MinPower');
+  assert.equal(ride.maxHr, null, 'absurd values are dropped');
+  const [test20] = parseActivities([{ activityId: 9101, startTimeLocal: '2026-10-23 18:00:00', activityType: { typeKey: 'cycling' }, duration: 3000, max20MinPower: 280, maxAvgPower_1200: 279 }], 'Europe/Madrid');
+  assert.equal(test20.bestPower20MinW, 280, 'max20MinPower first');
+});
+
+/** A run the athlete marked done by hand («Hecho») before the watch synced. */
+function manualRun(overrides: Partial<Parameters<typeof workout>[0]> = {}) {
+  return workout({
+    id: 'w-manual',
+    date: '2026-10-24',
+    sport: 'run',
+    durationMin: 50,
+    startTime: '08:00',
+    status: 'completed',
+    completed: { source: 'manual', durationMin: 50, rpe: 4, feel: 4, notes: 'Piernas sueltas', completedAt: '2026-10-24T07:00:00.000Z' },
+    ...overrides,
+  });
+}
+
+test('planActivityImport completes a session marked done by hand with the watch numbers, keeping RPE, feel and notes', () => {
+  const plan = planActivityImport(parseActivities(FIXTURES.activities, 'Europe/Madrid'), [manualRun()], '2026-10-24T10:00:00.000Z');
+  assert.deepEqual(plan.completions, []);
+  assert.deepEqual(plan.enrichments, [
+    {
+      workoutId: 'w-manual',
+      completed: {
+        source: 'garmin',
+        externalId: '9001',
+        durationMin: 52,
+        distanceM: 9800,
+        avgHr: 149,
+        maxHr: 171,
+        tss: 55.2,
+        kcal: 612,
+        rpe: 4,
+        feel: 4,
+        notes: 'Piernas sueltas',
+        completedAt: '2026-10-24T07:00:00.000Z',
+      },
+    },
+  ]);
+  assert.ok(!plan.inserts.some((i) => i.externalId === 'garmin:9001'), 'not imported a second time');
+});
+
+test('planActivityImport fills RPE and notes only when the athlete left them empty', () => {
+  const bare = manualRun({ completed: { source: 'manual', durationMin: 50 } });
+  const plan = planActivityImport(parseActivities(FIXTURES.activities, 'Europe/Madrid'), [bare], '2026-10-24T10:00:00.000Z');
+  const completed = plan.enrichments[0]?.completed;
+  assert.equal(completed?.rpe, undefined);
+  assert.equal(completed?.notes, undefined);
+  assert.equal(completed?.completedAt, '2026-10-24T10:00:00.000Z', 'no manual time: the sync time');
+});
+
+test('planActivityImport keeps skipping a look-alike linked to another activity, even next to a manual one', () => {
+  const hk = manualRun({ id: 'w-hk', completed: { source: 'healthkit', externalId: 'HK-1', durationMin: 51 } });
+  const plan = planActivityImport(parseActivities(FIXTURES.activities, 'Europe/Madrid'), [manualRun(), hk], '2026-10-24T10:00:00.000Z');
+  assert.deepEqual(plan.enrichments, [], 'the activity is already imported (Apple Salud): nothing to enrich');
+  assert.ok(!plan.inserts.some((i) => i.externalId === 'garmin:9001'));
+});
+
+test('planActivityImport enriches one manual session per activity: a second real run is imported', () => {
+  const second = { activityId: 9005, activityName: 'Segundo rodaje', startTimeLocal: '2026-10-24 08:30:00', activityType: { typeKey: 'running' }, duration: 3000, averageHR: 140 };
+  const plan = planActivityImport(parseActivities([...FIXTURES.activities, second], 'Europe/Madrid'), [manualRun()], '2026-10-24T10:00:00.000Z');
+  assert.deepEqual(plan.enrichments.map((e) => e.completed.externalId), ['9001']);
+  assert.ok(plan.inserts.some((i) => i.externalId === 'garmin:9005'), 'not a duplicate of the session the first run enriched');
+});
+
+test('syncGarminUser enriches the manual session once: the next sync does nothing', async () => {
+  const state = emptyState();
+  state.workouts.push(manualRun());
+  const deps = { api: createGarminApi(fakeFetch(okGarmin), 'https://garmin.test'), store: fakeStore(state), now: fixedNow, logger: silentLogger };
+  const first = await syncGarminUser(deps, { userId: USER, apiKey: KEY, timezone: 'Europe/Madrid' });
+  assert.match(first.message, /Una sesión que marcaste a mano ya tiene los datos del reloj/);
+  const enriched = state.workouts.find((w) => w.id === 'w-manual');
+  assert.equal(enriched?.status, 'completed');
+  assert.deepEqual(
+    { externalId: enriched?.completed?.externalId, avgHr: enriched?.completed?.avgHr, rpe: enriched?.completed?.rpe, notes: enriched?.completed?.notes },
+    { externalId: '9001', avgHr: 149, rpe: 4, notes: 'Piernas sueltas' },
+  );
+  const before = JSON.stringify(state.workouts);
+  const again = await syncGarminUser(deps, { userId: USER, apiKey: KEY, timezone: 'Europe/Madrid' });
+  assert.doesNotMatch(again.message, /marcaste a mano/);
+  assert.equal(JSON.stringify(state.workouts), before, 'idempotent');
+});
+
+test('the store refuses to enrich a session another import linked meanwhile', async () => {
+  const state = emptyState();
+  state.workouts.push(manualRun({ completed: { source: 'healthkit', externalId: 'HK-2', durationMin: 50 } }));
+  const ok = await fakeStore(state).enrichCompletedWorkout(USER, 'w-manual', { source: 'garmin', externalId: '9001', durationMin: 52 });
+  assert.equal(ok, false);
+  assert.equal(state.workouts[0].completed?.externalId, 'HK-2');
 });
 
 test('planActivityImport completes matches, inserts the rest and skips known activities', () => {

@@ -223,7 +223,8 @@ export function parseSteps(value: unknown): WorkoutStep[] {
 
 export function parseCompleted(value: unknown): CompletedData | null {
   if (!isRecord(value)) return null;
-  const numbers = (['durationMin', 'distanceM', 'avgHr', 'rpe', 'tss'] as const).reduce<CompletedData>((acc, key) => {
+  const keys = ['durationMin', 'distanceM', 'avgHr', 'maxHr', 'rpe', 'tss', 'kcal', 'avgPowerW', 'bestPower1MinW', 'bestPower20MinW'] as const;
+  const numbers = keys.reduce<CompletedData>((acc, key) => {
     const n = asNumber(value[key]);
     return n === null ? acc : { ...acc, [key]: n };
   }, {});

@@ -116,12 +116,26 @@ export interface CompletedData {
   durationMin?: number;
   distanceM?: number;
   avgHr?: number;
+  /** Highest heart rate of the session (watch), ppm. */
+  maxHr?: number;
   /** Rate of perceived exertion 1–10. */
   rpe?: number;
   /** Sensaciones after the session: 1 = muy mal … 5 = genial. */
   feel?: Score5;
   tss?: number;
+  /** Energy spent in the session (watch), kcal. */
+  kcal?: number;
+  /** Average power of the session (power meter), W. */
+  avgPowerW?: number;
+  /** Best 1-minute / 20-minute average power of the session (watch), W: what an FTP test reads. */
+  bestPower1MinW?: number;
+  bestPower20MinW?: number;
   notes?: string;
+  /**
+   * Who wrote the data. A session marked done by hand ('manual', no `externalId`) is completed
+   * later with the watch's numbers when the same activity arrives (domain/watchCompletion.ts):
+   * it then takes the watch's source and id, and keeps the athlete's RPE, feel and notes.
+   */
   source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
   /** Id of the matched activity in the source system (e.g. HealthKit UUID). */
   externalId?: string;

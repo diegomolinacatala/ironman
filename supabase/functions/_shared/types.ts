@@ -71,11 +71,21 @@ export interface CompletedData {
   durationMin?: number;
   distanceM?: number;
   avgHr?: number;
+  /** Highest heart rate of the session (watch), ppm. */
+  maxHr?: number;
   rpe?: number;
   /** Sensaciones after the session, 1 (muy mal) … 5 (genial). */
   feel?: number;
   tss?: number;
+  /** Energy spent (watch), kcal. */
+  kcal?: number;
+  /** Average power (power meter), W. */
+  avgPowerW?: number;
+  /** Best 1-minute / 20-minute average power of the session (watch), W. */
+  bestPower1MinW?: number;
+  bestPower20MinW?: number;
   notes?: string;
+  /** A manual completion takes the watch's source and id when the activity arrives (domain/watchCompletion.ts). */
   source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
   externalId?: string;
   completedAt?: ISODateTime;

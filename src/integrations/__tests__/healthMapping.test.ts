@@ -3,6 +3,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   buildMetricsDrafts,
   mapHealthActivity,
+  quantityToKcal,
   quantityToMeters,
   quantityToMinutes,
   sleepHoursByDate,
@@ -46,6 +47,14 @@ describe('quantity conversions', () => {
     expect(quantityToMeters({ quantity: 1500, unit: 'm' })).toBe(1500);
     expect(quantityToMeters({ quantity: 1, unit: 'mi' })).toBeCloseTo(1609.344);
     expect(quantityToMeters({ quantity: Number.NaN, unit: 'm' })).toBeNull();
+  });
+
+  test('energy units to kcal (a workout total)', () => {
+    expect(quantityToKcal({ quantity: 612, unit: 'kcal' })).toBe(612);
+    expect(quantityToKcal({ quantity: 2510, unit: 'kJ' })).toBeCloseTo(599.9, 1);
+    expect(quantityToKcal({ quantity: 0, unit: 'kcal' })).toBeNull();
+    expect(quantityToKcal({ quantity: 10, unit: 'lb' })).toBeNull();
+    expect(quantityToKcal(undefined)).toBeNull();
   });
 });
 

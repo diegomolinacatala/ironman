@@ -167,6 +167,13 @@ export interface PlanningWriter {
   upsertMetrics(userId: UUID, source: ServerMetricsSource, rows: MetricsUpsert[]): Promise<number>;
   /** Marks a planned workout completed. Returns false when it was not planned/owned. */
   completeWorkout(userId: UUID, workoutId: UUID, completed: CompletedData): Promise<boolean>;
+  /**
+   * Replaces the completed data of a workout marked done by hand with the version
+   * enriched by the watch's activity (domain/watchCompletion.ts). Only while it is
+   * completed and no activity is linked yet (`completed.externalId` empty), so a
+   * concurrent import cannot overwrite another; false otherwise.
+   */
+  enrichCompletedWorkout(userId: UUID, workoutId: UUID, completed: CompletedData): Promise<boolean>;
   /** Finds a workout already linked to an external activity (external_id or completed.externalId). */
   findByExternalId(userId: UUID, externalId: string, rawId: string): Promise<Workout | null>;
   /** Inserts a completed (unplanned) workout; returns null if the external id already exists. */

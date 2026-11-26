@@ -459,6 +459,14 @@ describe('v4: coaching, step targets, sensations, watch and season plan', () => 
     expect(rowToWorkout(workoutToRow(coached))).toEqual(coached);
   });
 
+  it('keeps the watch numbers of a completed session (max HR, kcal and power)', () => {
+    const watched: Workout = {
+      ...coached,
+      completed: { source: 'garmin', externalId: '9001', durationMin: 60, avgHr: 150, maxHr: 176, kcal: 720, avgPowerW: 212, bestPower1MinW: 390, bestPower20MinW: 268, rpe: 6 },
+    };
+    expect(rowToWorkout(workoutToRow(watched)).completed).toEqual(watched.completed);
+  });
+
   it('a workout without coaching keeps its pre-v4 shape (null or missing column)', () => {
     const row = workoutToRow(workout);
     expect(row.coaching).toBeNull();
