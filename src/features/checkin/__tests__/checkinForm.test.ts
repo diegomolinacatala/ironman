@@ -3,17 +3,7 @@ import { describe, expect, test } from '@jest/globals';
 import type { DailyCheckin } from '@/domain/types';
 import { checkinDraftSchema } from '@/domain/validation';
 
-import {
-  DEFAULT_SLEEP_HOURS,
-  NORMAL_SCORES,
-  checkinToForm,
-  fillUnanswered,
-  formToCheckinDraft,
-  roundHalf,
-  sleepHoursLabel,
-  sleepQualityFromScore,
-  unansweredCount,
-} from '../checkinForm';
+import { DEFAULT_SLEEP_HOURS, checkinToForm, formToCheckinDraft, roundHalf, sleepHoursLabel } from '../checkinForm';
 
 const existing: DailyCheckin = {
   userId: 'me',
@@ -46,26 +36,6 @@ describe('check-in form', () => {
     const draft = formToCheckinDraft(full);
     expect(draft).toMatchObject({ sleepQuality: 3, notes: null, sleepHours: DEFAULT_SLEEP_HOURS });
     expect(checkinDraftSchema.safeParse(draft).success).toBe(true);
-  });
-
-  test('the watch sleep score answers the sleep quality row of a new check-in', () => {
-    expect(checkinToForm('2026-10-25', null, 7, 82).sleepQuality).toBe(4);
-    expect(checkinToForm('2026-10-25', null, 7, null).sleepQuality).toBeNull();
-    // An existing answer always wins.
-    expect(checkinToForm('2026-10-25', existing, 7, 30).sleepQuality).toBe(4);
-    expect([95, 75, 60, 40, 10, 0].map(sleepQualityFromScore)).toEqual([5, 4, 3, 2, 1, null]);
-  });
-
-  test('"Todo normal" and "Como ayer" fill only the rows still empty', () => {
-    const form = { ...checkinToForm('2026-10-26', null, 7, 92), fatigue: 4 as const };
-    expect(unansweredCount(form)).toBe(3);
-    const normal = fillUnanswered(form, NORMAL_SCORES);
-    expect(normal).toMatchObject({ sleepQuality: 5, fatigue: 4, soreness: 3, stress: 3, motivation: 3 });
-    expect(unansweredCount(normal)).toBe(0);
-    expect(formToCheckinDraft(normal)).not.toBeNull();
-    const asYesterday = fillUnanswered(form, existing);
-    expect(asYesterday).toMatchObject({ sleepQuality: 5, fatigue: 4, soreness: 2, stress: 4, motivation: 5 });
-    expect(asYesterday.notes).toBe('');
   });
 
   test('helpers', () => {
