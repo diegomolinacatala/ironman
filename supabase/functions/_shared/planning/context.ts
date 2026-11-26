@@ -12,6 +12,7 @@ import { athleteView } from './athlete-view.ts';
 import { lifeEventLabel, raceDistanceLabel } from './labels.ts';
 import { weeklyLoadHistory, weekTotals } from './load.ts';
 import type { WeeklyLoad, WeekTotals } from './load.ts';
+import { recentRunMinutes, runWeekCapMinutes } from './domain/runVolume.ts';
 import { manualWeeklyHours, weeklyHoursFor } from './domain/season.ts';
 import { athleteLevel, phaseFor } from './phase.ts';
 import type { PhaseInfo } from './phase.ts';
@@ -48,6 +49,16 @@ export interface BusyView {
   end: string;
 }
 
+/** The week as the app shows it, plus the weekly run cap the app's planner applies. */
+export type WeekPhase = PhaseInfo & {
+  /**
+   * Most run minutes for the week (bricks count their run leg): +15 % over the
+   * biggest run week of the last 3, at least +10' and never below 50'
+   * (mirrored domain/runVolume.ts); null without history.
+   */
+  runMaxMinutes: number | null;
+};
+
 export interface PlanningContext {
   generatedAt: string;
   timezone: string;
@@ -57,7 +68,7 @@ export interface PlanningContext {
   weekEnd: ISODate;
   units: string;
   athlete: Record<string, unknown>;
-  phase: PhaseInfo;
+  phase: WeekPhase;
   /** The weeks ahead at a glance (Plan → General). */
   season: SeasonView;
   races: Record<string, unknown>[];
@@ -207,6 +218,7 @@ const NOTES = [
   'Las quedadas (jointSessionId / partners) son compromisos con otra persona: muévelas solo si es imprescindible y explica por qué.',
   'Las sesiones isKey=true son las clave de la semana: protégelas y ajusta antes las accesorias.',
   'athlete.availability.mode=auto (lo normal): no hay horas ni día de descanso fijados; entrena todo lo que permita el tiempo libre de busy hasta phase.targetMinutes, con hora en cada sesión. mode=manual: respeta sus horas, descanso y franjas.',
+  'phase.runMaxMinutes es el tope de minutos de carrera a pie de la semana (+15 % sobre la semana con más carrera de las 3 últimas; los bricks cuentan su parte a pie): entre lo ya planificado y lo que propongas no lo superes; si sobra tiempo, a la bici o a la piscina. null = sin historial.',
   'Las métricas del reloj (Garmin o COROS) guardadas aquí pueden ir con retraso respecto a sus conectores.',
   'Ante dolor, lesión o enfermedad: prioriza la seguridad y recomienda consultar a un profesional sanitario.',
 ];
@@ -234,6 +246,8 @@ export async function buildPlanningContext(reader: PlanningReader, opts: Context
   const raceDistance = season.targetRace?.distance ?? null;
   const view = viewContext(raw, opts.detail, raceDistance);
   const phase = phaseFor(raw.weekStart, raw.races, { level: raw.profile.level, weeklyHoursTarget: hours, weekPlans: raw.weekPlans, today: raw.today, season });
+  // The same weekly run cap as the app's planner (history from weekStart − 42 days covers its 3 weeks).
+  const runMaxMinutes = runWeekCapMinutes(recentRunMinutes(raw.workouts, raw.weekStart));
   const availabilityPlan = {
     normalWeekHours: weeklyHoursFor(hours, athleteLevel(raw.profile.level), phase.targetRace?.distance ?? null),
     weekTargetMinutes: phase.targetMinutes,
@@ -247,7 +261,7 @@ export async function buildPlanningContext(reader: PlanningReader, opts: Context
     weekEnd,
     units: UNITS,
     athlete: athleteView(raw.profile, raceDistance, availabilityPlan),
-    phase,
+    phase: { ...phase, runMaxMinutes },
     season: seasonView(season, SEASON_ROWS[opts.detail]),
     races: raw.races.filter((r) => r.date >= addDays(raw.today, -14)).map((r) => raceView(r, raw.today)),
     week: weekBlock(raw, view, raw.weekStart, weekEnd),

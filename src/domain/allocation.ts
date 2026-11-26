@@ -31,6 +31,19 @@ export interface AllocationCaps {
   runLongMax: number | null;
   /** Max bike-long minutes (+15 % rule), null = no data. */
   bikeLongMax: number | null;
+  /**
+   * Most run minutes this allocation may hold, the run legs of bricks included
+   * (the weekly run cap of runVolume.ts minus the running already done or
+   * pinned this week); null or absent = no cap. Triathletes get the minutes
+   * over it on the bike and in the pool; run-only plans just get a shorter week.
+   */
+  runWeekMax?: number | null;
+}
+
+export interface AllocationResult {
+  specs: SessionSpec[];
+  /** Run minutes the weekly run cap took out of the week (0 = the cap did not bind). */
+  runCappedMin: number;
 }
 
 export interface AllocationInput {
@@ -310,6 +323,38 @@ function applySubstitutes(minutes: Record<Endurance, number>, input: AllocationI
   return { minutes: out, easyOnly };
 }
 
+function totalMinutes(specs: readonly SessionSpec[]): number {
+  return specs.reduce((sum, s) => sum + s.durationMin, 0);
+}
+
+/** Long and quality sessions of a sport plan: what the week cannot lose. */
+function keyCodes(specs: readonly SessionSpec[]): SessionCode[] {
+  return specs.filter((s) => s.priority < 5).map((s) => s.code);
+}
+
+/**
+ * Weekly run cap: when the runs (plus the bricks' run leg) go over `max`, the
+ * run sessions are planned again with the minutes left and as few sessions
+ * as needed for the long run and the quality run of the full plan to survive
+ * (easy runs go first). `freed` = the run minutes taken out.
+ */
+function capRunPlan(p: SportPlanInput, full: SessionSpec[], max: number | null | undefined, brickRunMin: number): { run: SessionSpec[]; freed: number } {
+  const room = max === null || max === undefined ? null : Math.max(0, max - brickRunMin);
+  const before = totalMinutes(full);
+  if (room === null || before <= room) return { run: full, freed: 0 };
+  const keys = keyCodes(full);
+  const plans = Array.from({ length: Math.max(1, p.count) }, (_, i) => sportSessions({ ...p, minutes: room, count: Math.max(1, p.count) - i }));
+  const run = plans.find((plan) => keys.every((code) => plan.some((s) => s.code === code))) ?? plans[plans.length - 1] ?? [];
+  return { run, freed: Math.max(0, before - totalMinutes(run)) };
+}
+
+/** Triathletes get the freed run minutes on the bike and in the pool (aerobic volume without the impact); run-only plans just lose them. */
+function withFreedRunMinutes(minutes: Record<Endurance, number>, freed: number, kind: DistanceKind): Record<Endurance, number> {
+  const others = kind === 'run' ? 0 : minutes.swim + minutes.bike;
+  if (freed <= 0 || others <= 0) return minutes;
+  return { ...minutes, swim: minutes.swim + (freed * minutes.swim) / others, bike: minutes.bike + (freed * minutes.bike) / others };
+}
+
 interface BrickPlan {
   runMin: number;
   shortBikeMin: number;
@@ -336,8 +381,13 @@ function brickSessions(q: QualityAssignment, bp: BrickPlan, bike: SessionSpec[],
 
 /** Ideal (unplaced) sessions of the week. */
 export function allocateSessions(input: AllocationInput): SessionSpec[] {
+  return allocateWeek(input).specs;
+}
+
+/** Ideal (unplaced) sessions of the week and how much the weekly run cap took out. */
+export function allocateWeek(input: AllocationInput): AllocationResult {
   const { phase: info, kind, distance } = input;
-  if (input.minutes <= 0) return [];
+  if (input.minutes <= 0) return { specs: [], runCappedMin: 0 };
   const hours = input.minutes / 60;
   const counts = countsFor(hours, kind);
   const free = input.freeWeek === true;
@@ -346,38 +396,42 @@ export function allocateSessions(input: AllocationInput): SessionSpec[] {
   const enduranceMin = Math.max(0, input.minutes - strengthMin);
   const shares = normalizeSplit(splitFor(info, kind, distance), input.sports);
   const base: Record<Endurance, number> = { swim: enduranceMin * shares.swim, bike: enduranceMin * shares.bike, run: enduranceMin * shares.run };
-  const { minutes, easyOnly } = applySubstitutes(base, input);
+  const { minutes: split, easyOnly } = applySubstitutes(base, input);
   const sportCounts: Record<Endurance, number> = {
-    swim: minutes.swim > 0 ? Math.max(counts.swim, input.blockedAllWeek.length > 0 ? 2 : 0) : 0,
-    bike: minutes.bike > 0 ? Math.max(counts.bike, 1) : 0,
-    run: minutes.run > 0 ? Math.max(counts.run, 1) : 0,
+    swim: split.swim > 0 ? Math.max(counts.swim, input.blockedAllWeek.length > 0 ? 2 : 0) : 0,
+    bike: split.bike > 0 ? Math.max(counts.bike, 1) : 0,
+    run: split.run > 0 ? Math.max(counts.run, 1) : 0,
   };
   const q: QualityAssignment = info.phase === 'race_week' ? { bike: [], run: [], shortBrick: false, longBrick: false } : assignQualities(input, sportCounts);
   const pr = PRIORITIES[kind];
   const bp = brickPlan(q, info, distance, hours);
+  const planInput = (sport: Endurance, qualities: SessionCode[], wantLong: boolean, minutesFor: number, longPriority: number): SportPlanInput => ({
+    sport,
+    minutes: minutesFor,
+    count: sportCounts[sport],
+    qualities,
+    wantLong,
+    longCapMin: sport === 'swim' ? 75 : longCap(sport, input),
+    hours,
+    easyOnly: easyOnly.has(sport),
+    priorities: { long: longPriority, quality: pr.q, filler: 5 },
+    info,
+    kind,
+  });
   const plan = (sport: Endurance, qualities: SessionCode[], wantLong: boolean, minutesFor: number, longPriority: number): SessionSpec[] =>
-    sportSessions({
-      sport,
-      minutes: minutesFor,
-      count: sportCounts[sport],
-      qualities,
-      wantLong,
-      longCapMin: sport === 'swim' ? 75 : longCap(sport, input),
-      hours,
-      easyOnly: easyOnly.has(sport),
-      priorities: { long: longPriority, quality: pr.q, filler: 5 },
-      info,
-      kind,
-    });
+    sportSessions(planInput(sport, qualities, wantLong, minutesFor, longPriority));
+  const runInput = planInput('run', q.run, !free && longAllowed('run', info, distance), split.run - bp.runMin, pr.runLong);
+  const capped = capRunPlan(runInput, sportSessions(runInput), input.caps.runWeekMax, bp.runMin);
+  const run = capped.run;
+  const minutes = withFreedRunMinutes(split, capped.freed, kind);
   const swim = plan('swim', swimCodes(info, sportCounts.swim, free), false, minutes.swim, pr.swimMain).map((s) =>
     s.code === 'SW_CSS' || s.code === 'SW_END' ? { ...s, priority: Math.min(s.priority, pr.swimMain) } : s,
   );
   const bikeRaw = plan('bike', q.bike, !free && longAllowed('bike', info, distance) && kind !== 'run', minutes.bike - bp.shortBikeMin, pr.bikeLong);
-  const run = plan('run', q.run, !free && longAllowed('run', info, distance), minutes.run - bp.runMin, pr.runLong);
   const { bike, bricks } = brickSessions(q, bp, bikeRaw, pr.brick);
   const racePhase = info.phase === 'build' || info.phase === 'peak';
   const decorated = [...bike, ...run].map((s): SessionSpec => {
-    if (s.code === 'BK_LONG' && info.phase === 'base' && kind !== 'run' && minutes.run > 0) {
+    if (s.code === 'BK_LONG' && info.phase === 'base' && kind !== 'run' && split.run > 0) {
       return { ...s, note: "Opcional: 10-15' de carrera suave al bajarte de la bici." };
     }
     if (s.code === 'BK_LONG') return { ...s, racePace: racePhase };
@@ -385,5 +439,5 @@ export function allocateSessions(input: AllocationInput): SessionSpec[] {
     if (s.code === 'RN_LONG') return { ...s, racePace: racePhase && kind !== 'tri_long' };
     return s;
   });
-  return [...bricks, ...decorated, ...swim, ...strength];
+  return { specs: [...bricks, ...decorated, ...swim, ...strength], runCappedMin: Math.round(capped.freed) };
 }

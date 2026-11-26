@@ -19,6 +19,7 @@ export type {
   WeekPlanDraft,
   WeekPlanKind,
   WorkoutCoaching,
+  WorkoutStatus,
   WorkoutStep,
   WorkoutStepKind,
 } from '../../types.ts';

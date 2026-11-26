@@ -75,6 +75,23 @@ test('automatic availability: the coach and Claude read the mode and the target 
   assert.ok(ctx.notes.some((n) => n.includes('mode=auto')));
 });
 
+test('the week carries the app planner run cap: +15 % over the biggest run week of the last 3', async () => {
+  const state = seeded();
+  state.workouts.push(
+    workout({ id: 'r-1', date: '2026-10-06', status: 'completed', durationMin: 40, completed: { durationMin: 40 } }),
+    workout({ id: 'r-2', date: '2026-10-08', status: 'completed', durationMin: 60, completed: { durationMin: 60 } }),
+    workout({ id: 'r-3', date: '2026-10-14', sport: 'bike', status: 'completed', durationMin: 120, completed: { durationMin: 120 } }),
+  );
+  // Week of 5 oct: 100' of running (the 20 oct run is 62'): 100 × 1.15 = 115.
+  const ctx = await buildPlanningContext(fakeStore(state), { userId: USER, weekStart: '2026-10-26', now: NOW, detail: 'concise' });
+  assert.equal(ctx.phase.runMaxMinutes, 115);
+  assert.ok(ctx.notes.some((n) => n.includes('phase.runMaxMinutes')));
+
+  const empty = emptyState();
+  const none = await buildPlanningContext(fakeStore(empty), { userId: USER, weekStart: '2026-10-26', now: NOW, detail: 'concise' });
+  assert.equal(none.phase.runMaxMinutes, null, 'no history, no cap');
+});
+
 test('detailed mode adds descriptions, next week and recent sessions', async () => {
   const ctx = await buildPlanningContext(fakeStore(seeded()), { userId: USER, now: NOW, detail: 'detailed', includeNextWeek: true });
   assert.equal(ctx.weekStart, '2026-10-19');

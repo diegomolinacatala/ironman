@@ -1,7 +1,7 @@
 /**
  * Helpers for the weekly planner: progression caps from history (Frandsen
  * run rule, long-ride growth), ramp-rate cap, matching existing workouts to
- * the ideal week, trimming to the minutes budget, the Z1-Z2 share, race-week
+ * the ideal week, trimming to the minutes budget and to the weekly run cap, the Z1-Z2 share, race-week
  * sessions and the week-level override (Plan → General). Shared with the
  * season overview (seasonSessions.ts) so both show the same weeks.
  */
@@ -10,7 +10,6 @@ import {
   BIKE_LONG_GROWTH_MIN,
   GENERIC_TSS_PER_HOUR,
   MIN_LOW_INTENSITY_SHARE,
-  MIN_SESSION_MIN,
   PRE_RACE_LOOKAHEAD_DAYS,
   RAMP_HARD_CAP,
   RAMP_LIFE_STRESS_PENALTY,
@@ -27,9 +26,13 @@ import { computePmc, dailyLoads, estimateTss, weeklyLoadForRamp } from './load';
 import type { PhaseInfo } from './periodization';
 import type { Placed } from './placement';
 import { canOverride } from './season';
-import { hardMinutes, isQualitySpec, specClass, specIntensity, specSport, type SessionSpec } from './sessions';
+import { buildSession, hardMinutes, isQualitySpec, specClass, specIntensity, specSport, type SessionSpec } from './sessions';
+import { trimSelected } from './trim';
 import type { AthleteLevel, ISODate, Race, RaceDistance, Sport, Thresholds, WeekPlan, WeekPlanKind, Workout } from './types';
 import type { FixedInput } from './weekModel';
+
+/** Fits the sessions into the minutes budget (easy first, then key ones to 75 %, then drops); lives in trim.ts. */
+export { trimToBudget } from './trim';
 
 export interface HistoryCaps {
   runLongMax: number | null;
@@ -143,39 +146,35 @@ export function consumeExisting(specs: readonly SessionSpec[], existing: readonl
   return remaining;
 }
 
-function total(specs: readonly SessionSpec[]): number {
-  return specs.reduce((s, x) => s + x.durationMin, 0);
-}
-
-function canShorten(s: SessionSpec, floor: number): boolean {
-  return !s.allowedDates && s.durationMin - 5 >= Math.max(MIN_SESSION_MIN[specSport(s)] ?? 20, floor);
+/** Run minutes of a session: a whole run, a brick's run leg (from its steps), 0 for other sports. */
+export function specRunMinutes(spec: SessionSpec): number {
+  const sport = specSport(spec);
+  if (sport === 'run') return spec.durationMin;
+  if (sport !== 'brick') return 0;
+  return buildSession(spec)
+    .steps.filter((s) => s.leg === 'run')
+    .reduce((sum, s) => sum + (s.durationMin ?? 0) * (s.repeat ?? 1), 0);
 }
 
 /**
- * Fits the sessions into the minutes budget: shortens easy sessions to their
- * minimum, then key sessions down to 75 %, and only then drops the least
- * important ones.
+ * Weekly run cap on the new sessions (runVolume.ts). `room` = the run minutes
+ * the week still allows after the running already done, planned or pinned
+ * (race week); null = no cap. Over it, runs get shorter (easy ones to their
+ * minimum first, then long and quality ones down to 75 %) and the least
+ * important are dropped; distance estimates follow the new durations. Bricks
+ * and pinned sessions stay as they are. `trimmed` = run minutes taken out.
  */
-export function trimToBudget(specs: readonly SessionSpec[], budget: number): SessionSpec[] {
-  let items = specs.map((spec) => ({ spec, original: spec.durationMin }));
-  const sum = () => total(items.map((x) => x.spec));
-  for (let guard = 0; sum() > budget && guard < 400; guard += 1) {
-    const easy = items
-      .filter((x) => x.spec.priority >= 5 && canShorten(x.spec, 0))
-      .sort((a, b) => b.spec.durationMin - a.spec.durationMin || b.spec.priority - a.spec.priority)[0];
-    const key = items
-      .filter((x) => x.spec.priority < 5 && canShorten(x.spec, x.original * 0.75))
-      .sort((a, b) => b.spec.priority - a.spec.priority || b.spec.durationMin - a.spec.durationMin)[0];
-    const target = easy ?? key;
-    if (target) {
-      items = items.map((x) => (x === target ? { ...x, spec: { ...x.spec, durationMin: x.spec.durationMin - 5 } } : x));
-      continue;
-    }
-    const victim = items.filter((x) => !x.spec.allowedDates).sort((a, b) => b.spec.priority - a.spec.priority || a.spec.durationMin - b.spec.durationMin)[0];
-    if (!victim) break;
-    items = items.filter((x) => x !== victim);
-  }
-  return items.map((x) => x.spec);
+export function capRunSpecs(specs: readonly SessionSpec[], room: number | null): { specs: SessionSpec[]; trimmed: number } {
+  if (room === null) return { specs: [...specs], trimmed: 0 };
+  const trimmable = (s: SessionSpec) => specSport(s) === 'run' && !s.allowedDates;
+  const others = specs.filter((s) => !trimmable(s)).reduce((sum, s) => sum + specRunMinutes(s), 0);
+  return trimSelected(specs, trimmable, room - others, withDistanceOf);
+}
+
+/** A shortened run keeps its pace: the distance estimate follows the new duration. */
+function withDistanceOf(next: SessionSpec, original: SessionSpec): SessionSpec {
+  if (!original.distanceM || original.durationMin <= 0) return next;
+  return { ...next, distanceM: Math.round((original.distanceM * next.durationMin) / original.durationMin / 100) * 100 };
 }
 
 const ENDURANCE_SPORTS: readonly Sport[] = ['swim', 'bike', 'run', 'brick'];

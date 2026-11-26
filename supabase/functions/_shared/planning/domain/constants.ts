@@ -302,7 +302,18 @@ export const LONG_SHARE = { bike: 0.4, run: 0.35 } as const;
 export const RUN_SPIKE_MAX = 1.1;
 export const RUN_SPIKE_FLOOR_KM = 5;
 export const RUN_LOOKBACK_DAYS = 30;
-export const RUN_WEEKLY_MINUTES_GROWTH = 1.15; // [H] soft warning
+/**
+ * Weekly run minutes (bricks count their run leg) ≤ 1.15 × the biggest run week
+ * of the last RUN_PEAK_WEEKS weeks: running causes most triathlon overuse
+ * injuries. A cap in the weekly planner (runVolume.ts), not just a warning. [H] §6.3
+ */
+export const RUN_WEEKLY_MINUTES_GROWTH = 1.15;
+/** At very low run volumes a percentage is too tight: always allow this many extra minutes. [H] */
+export const RUN_WEEKLY_MIN_EXTRA = 10;
+/** Never cap the week's running below two short runs (2 × 25'), so an athlete who stopped running can start again. [H] */
+export const RUN_WEEKLY_FLOOR_MIN = 50;
+/** Weeks (most recent) whose biggest run week the cap grows from. [H] */
+export const RUN_PEAK_WEEKS = 3;
 /** Bike long-ride growth. [H] §6.3 */
 export const BIKE_LONG_GROWTH = 1.15;
 export const BIKE_LONG_GROWTH_MIN = 20;

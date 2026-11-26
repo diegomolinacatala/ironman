@@ -176,7 +176,12 @@ generateWeek(input: PlannerInput): { changes: PlanChange[]; summary: string }
 ```
 
 Additive inputs (implemented): `PlannerInput.today?` (first plannable day) and `history?` (completed
-workouts of the last ~30 days: run cap 1.10×, long-ride +15 % cap, form guard). In race weeks the
+workouts of the last ~30 days: run cap 1.10×, long-ride +15 % cap, form guard, and the **weekly run
+cap**: the week's run minutes, bricks' run leg included, ≤ max(1.15 × the biggest run week of the
+last 3, +10', 50') — mirrored `runVolume.ts`; the allocation re-plans the runs keeping the long and
+quality ones and gives the freed minutes to bike/swim (run-only plans just lose them); new runs are
+trimmed when existing ones fill the week; `PlanWeekResult.runCapMinutes`; the server context shows
+the same number as `phase.runMaxMinutes` for the coach and Claude). In race weeks the
 planner adds a key 'Carrera: <nombre>' workout on the race date. `PhaseInfo` also has `subphase`,
 `cadence` ('3:1' | '2:1'), `raceInWeek`, `warnings`; `phaseFor(date, races, opts?)`.
 WorkoutStep convention: consecutive steps sharing the same `repeat` form one interval set

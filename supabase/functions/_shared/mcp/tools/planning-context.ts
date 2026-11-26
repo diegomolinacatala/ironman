@@ -26,7 +26,7 @@ export const getPlanningContextTool: RegisteredTool = defineTool({
     'Devuelve en una sola llamada todo lo necesario para planificar o replanificar una semana del usuario:',
     'perfil (nivel, deportes, umbrales FTP/ritmo/CSS/FC, su reloj en athlete.watchBrand: garmin o coros), sus zonas con cifras (athlete.zones: Z1-Z5 y ritmo de carrera por deporte en ppm, ritmo, vatios y RPE; missing = umbrales que faltan),',
     'disponibilidad (horas objetivo, día de descanso, días largos, días de piscina, franjas), carreras objetivo (prioridad A/B/C, días que faltan),',
-    'la semana como la ve la app (phase: fase, weekLabel Carga/Más volumen/Descarga…, targetMinutes y focus, con el ajuste del plan general aplicado) y season (las próximas semanas por encima: fixed = no admite ajuste, adjusted = ya ajustada),',
+    'la semana como la ve la app (phase: fase, weekLabel Carga/Más volumen/Descarga…, targetMinutes, runMaxMinutes = tope de minutos de carrera a pie de la semana, y focus, con el ajuste del plan general aplicado) y season (las próximas semanas por encima: fixed = no admite ajuste, adjusted = ya ajustada),',
     'entrenos de la semana con su id (UUID), fecha, hora, deporte, duración en minutos, intensidad, estado (planned/completed/skipped), targets (la serie principal con sus cifras), su prescripción (objective/coaching), plan frente a hecho de los completados (planVsDone), si son clave (isKey) o quedadas con amigos (jointSessionId, partners),',
     'totales planificado/hecho, imprevistos registrados, franjas ocupadas del calendario (solo horas, sin títulos), check-ins y métricas del reloj (Garmin o COROS) o de Apple Salud con señales de fatiga,',
     'carga semanal de las 6 semanas anteriores y la lista de amigos.',
