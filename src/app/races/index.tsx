@@ -1,18 +1,23 @@
 import { router } from 'expo-router';
+import { Fragment } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { useRaces } from '@/data/queries';
+import { useProfile, useRaces } from '@/data/queries';
 import { todayISO } from '@/domain/dates';
 import { PriorityExplainer } from '@/features/races/PriorityExplainer';
+import { RacePlanSection } from '@/features/races/RacePlanSection';
 import { RaceRow } from '@/features/races/RaceRow';
 import { splitRaces } from '@/features/races/raceModel';
+import { racePlanView } from '@/features/races/racePlanModel';
 import { errorMessage } from '@/lib/logger';
 import { Button, EmptyState, ErrorNotice, Loading, Screen, SectionHeader, space } from '@/ui';
 
 export default function RacesScreen() {
   const races = useRaces();
+  const profile = useProfile().data ?? null;
   const today = todayISO();
   const { upcoming, past } = splitRaces(races.data ?? [], today);
+  const planView = racePlanView({ races: upcoming, today, thresholds: profile?.thresholds, level: profile?.level });
   const add = () => router.push('/races/edit');
   const edit = (id: string) => router.push(`/races/edit?id=${encodeURIComponent(id)}`);
 
@@ -42,7 +47,10 @@ export default function RacesScreen() {
         <View style={styles.section}>
           <SectionHeader title="Próximas" />
           {upcoming.map((race) => (
-            <RaceRow key={race.id} race={race} today={today} onPress={() => edit(race.id)} />
+            <Fragment key={race.id}>
+              <RaceRow race={race} today={today} onPress={() => edit(race.id)} />
+              {planView?.race.id === race.id ? <RacePlanSection view={planView} /> : null}
+            </Fragment>
           ))}
         </View>
       ) : null}
