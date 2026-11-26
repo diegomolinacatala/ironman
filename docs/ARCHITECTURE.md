@@ -572,6 +572,12 @@ Widget deep links: `rebufo://workout/<id>`, `rebufo://today`, `rebufo://together
 - **Imports:** Garmin sync and `log_completed_activity` skip activities already completed from Apple Health
   (same day, compatible sport, duration ±max(10′,15 %), start ±45′); Claude-logged unplanned rows get
   `externalId 'claude:<uuid>'`; HealthKit unplanned rows `healthkit:<uuid>`.
+  Since 2026-11-26 a look-alike the athlete marked done by hand (no activity id in `completed`,
+  `domain/watchCompletion.ts`, mirrored) is not skipped: the Garmin sync (`enrichCompletedWorkout`, only while
+  `completed->>externalId` is null), the HealthKit importer (`updateWorkout`) and `log_completed_activity`
+  (`enriched_manual`) give it the activity's duration, distance, average/max HR, load, kcal, power, source and
+  id, keeping the athlete's RPE, sensaciones and notes. A look-alike already linked to another activity keeps
+  the old behaviour. `CompletedData` gains `maxHr`, `kcal`, `avgPowerW`, `bestPower1MinW`, `bestPower20MinW`.
 - **Accounts:** sign-out/deletion unregister the push token (`unregister_push_token`) first; deletion of SIWA accounts
   re-authorises with Apple and calls `apple-revoke`; session stored encrypted (key in Keychain, blob in AsyncStorage).
   Device opt-ins (Apple Salud, calendars, last syncs) are namespaced per user (`<key>.user.<userId>`); sign-out cancels
@@ -693,8 +699,8 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   (week-by-week overview to the target race + `applyWeekPlan`). Edge bundles cannot import `src/`, so
   `scripts/sync-domain-mirror.mjs` (`npm run sync:mirror`) generates
   `supabase/functions/_shared/planning/domain/` from `constants`, `dates` (subset), `recoveryLayout`,
-  `periodization`, `zones`, `season` and `prescription`; `mirror.test.ts` fails in `test:functions` when the
-  copy is stale. The server's old approximate `phaseFor` is now an adapter over the mirrored engine, so the
+  `periodization`, `zones`, `season`, `prescription` and `watchCompletion`; `mirror.test.ts` fails in
+  `test:functions` when the copy is stale. The server's old approximate `phaseFor` is now an adapter over the mirrored engine, so the
   app, the AI coach, Claude and the briefing describe the same week.
 - **Concrete sessions.** `WorkoutStep` gains `target` (explicit ranges), `cue` and `leg` (jsonb, no
   migration); targets are otherwise derived at render/export time from the step intensity and the current

@@ -71,11 +71,21 @@ export interface CompletedData {
   durationMin?: number;
   distanceM?: number;
   avgHr?: number;
+  /** Highest heart rate of the session (watch), ppm. */
+  maxHr?: number;
   rpe?: number;
   /** Sensaciones after the session, 1 (muy mal) … 5 (genial). */
   feel?: number;
   tss?: number;
+  /** Energy spent (watch), kcal. */
+  kcal?: number;
+  /** Average power (power meter), W. */
+  avgPowerW?: number;
+  /** Best 1-minute / 20-minute average power of the session (watch), W. */
+  bestPower1MinW?: number;
+  bestPower20MinW?: number;
   notes?: string;
+  /** A manual completion takes the watch's source and id when the activity arrives (domain/watchCompletion.ts). */
   source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
   externalId?: string;
   completedAt?: ISODateTime;
@@ -258,6 +268,10 @@ export interface Profile {
   watchBrand?: WatchBrand | null;
 }
 
+/** Answer to the morning question shown when the night's breathing or pulse is up (domain/illness.ts). */
+export const ILLNESS_ANSWERS = ['fine', 'symptoms', 'alcohol', 'heat', 'stress'] as const;
+export type IllnessAnswer = (typeof ILLNESS_ANSWERS)[number];
+
 export interface DailyCheckin {
   date: ISODate;
   sleepQuality: number;
@@ -267,6 +281,8 @@ export interface DailyCheckin {
   stress: number;
   motivation: number;
   notes: string | null;
+  /** Absent/null = not asked. */
+  illnessAnswer?: IllnessAnswer | null;
 }
 
 export interface DailyMetrics {
@@ -290,6 +306,9 @@ export interface DailyMetrics {
   /** When that night's sleep started / ended (ISO instant). */
   sleepStart?: ISODateTime | null;
   sleepEnd?: ISODateTime | null;
+  /** Average breathing rate (breaths/min) and heart rate (bpm) during that night. */
+  sleepRespiration?: number | null;
+  sleepAvgHr?: number | null;
 }
 
 export type SleepVerdict = 'great' | 'good' | 'fair' | 'poor' | 'unknown';

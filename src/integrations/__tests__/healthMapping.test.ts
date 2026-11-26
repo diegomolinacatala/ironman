@@ -3,9 +3,11 @@ import { describe, expect, test } from '@jest/globals';
 import {
   buildMetricsDrafts,
   mapHealthActivity,
+  quantityToKcal,
   quantityToMeters,
   quantityToMinutes,
   sleepHoursByDate,
+  sleepWindowsByDate,
   statsByDate,
 } from '../health/mapping';
 
@@ -47,6 +49,14 @@ describe('quantity conversions', () => {
     expect(quantityToMeters({ quantity: 1, unit: 'mi' })).toBeCloseTo(1609.344);
     expect(quantityToMeters({ quantity: Number.NaN, unit: 'm' })).toBeNull();
   });
+
+  test('energy units to kcal (a workout total)', () => {
+    expect(quantityToKcal({ quantity: 612, unit: 'kcal' })).toBe(612);
+    expect(quantityToKcal({ quantity: 2510, unit: 'kJ' })).toBeCloseTo(599.9, 1);
+    expect(quantityToKcal({ quantity: 0, unit: 'kcal' })).toBeNull();
+    expect(quantityToKcal({ quantity: 10, unit: 'lb' })).toBeNull();
+    expect(quantityToKcal(undefined)).toBeNull();
+  });
 });
 
 describe('sleepHoursByDate', () => {
@@ -67,6 +77,25 @@ describe('sleepHoursByDate', () => {
       { startDate: new Date(2026, 9, 27, 1, 0), endDate: new Date(2026, 9, 27, 7, 0), value: 3 },
     ];
     expect(sleepHoursByDate(samples)).toEqual({ '2026-10-27': 7 });
+  });
+});
+
+describe('sleepWindowsByDate', () => {
+  test('the main sleep from the first to the last asleep minute, awakenings inside, the afternoon nap left out', () => {
+    const samples = [
+      { startDate: new Date(2026, 9, 26, 23, 10), endDate: new Date(2026, 9, 27, 2, 0), value: 3 },
+      { startDate: new Date(2026, 9, 27, 2, 0), endDate: new Date(2026, 9, 27, 2, 40), value: 2 },
+      { startDate: new Date(2026, 9, 27, 2, 40), endDate: new Date(2026, 9, 27, 6, 55), value: 4 },
+      { startDate: new Date(2026, 9, 27, 15, 0), endDate: new Date(2026, 9, 27, 15, 30), value: 1 },
+      { startDate: new Date(2026, 9, 26, 22, 30), endDate: new Date(2026, 9, 27, 7, 15), value: 0 },
+    ];
+    expect(sleepWindowsByDate(samples)).toEqual({
+      '2026-10-27': { start: new Date(2026, 9, 26, 23, 10).toISOString(), end: new Date(2026, 9, 27, 6, 55).toISOString() },
+    });
+  });
+
+  test('a night with no asleep samples has no window', () => {
+    expect(sleepWindowsByDate([{ startDate: new Date(2026, 9, 26, 23, 0), endDate: new Date(2026, 9, 27, 7, 0), value: 0 }])).toEqual({});
   });
 });
 
@@ -102,6 +131,22 @@ describe('daily metrics', () => {
         stressAvg: null,
         trainingStatus: null,
       },
+    ]);
+  });
+
+  test('night vitals: both keys on every draft once they were read (null where a night has none)', () => {
+    const drafts = buildMetricsDrafts(['2026-10-26', '2026-10-27'], {
+      sleepHours: { '2026-10-26': 7, '2026-10-27': 6.5 },
+      restingHr: {},
+      hrvMs: {},
+      steps: {},
+      vo2max: {},
+      sleepRespiration: { '2026-10-27': 15.04 },
+      sleepAvgHr: { '2026-10-27': 55.66 },
+    });
+    expect(drafts.map((d) => [d.sleepRespiration, d.sleepAvgHr])).toEqual([
+      [null, null],
+      [15, 55.7],
     ]);
   });
 });

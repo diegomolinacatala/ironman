@@ -7,10 +7,14 @@
  * (Garmin Connect → Apple Health → app, and Garmin Personal API / Claude
  * bridge → server). `findCompletedLookalike` spots a workout that is already
  * completed with the same activity, so it is not imported a second time.
+ * `findCompletedLookalikes` tells an imported look-alike (a duplicate) from one
+ * the athlete marked done by hand, which the activity completes with the
+ * watch's numbers instead (domain/watchCompletion.ts).
  * Same rules as the app's HealthKit importer (src/integrations/health/importer.ts).
  */
 import { timeToMinutes } from '../dates.ts';
 import type { ISODate, ISOTime, Sport, UUID, Workout } from '../types.ts';
+import { isManualCompletion } from './domain/watchCompletion.ts';
 
 export interface ActivityLike {
   date: ISODate;
@@ -80,4 +84,18 @@ export function findCompletedLookalike(activity: ActivityLike, workouts: readonl
       return Math.abs(timeToMinutes(activity.startTime) - timeToMinutes(w.startTime)) <= DUPLICATE_START_TOLERANCE_MIN;
     }) ?? null
   );
+}
+
+export interface CompletedLookalikes {
+  /** Already linked to a watch or Apple Salud activity: `activity` is a duplicate. */
+  linked: Workout | null;
+  /** Marked done by hand with no activity linked (null when `linked` exists): complete it with `activity`. */
+  manual: Workout | null;
+}
+
+/** Same rules as `findCompletedLookalike`; an imported look-alike wins over a manual one. */
+export function findCompletedLookalikes(activity: ActivityLike, workouts: readonly Workout[], opts: { garminId?: string | null } = {}): CompletedLookalikes {
+  const linked = findCompletedLookalike(activity, workouts.filter((w) => !isManualCompletion(w)), opts);
+  const manual = linked ? null : findCompletedLookalike(activity, workouts.filter(isManualCompletion), opts);
+  return { linked, manual };
 }

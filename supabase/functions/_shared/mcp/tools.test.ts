@@ -136,6 +136,18 @@ test('log_daily_metrics accepts sleep stages and start/end (normalized to UTC in
   assert.equal(tooLong.isError, true);
 });
 
+test('log_daily_metrics saves the breathing and heart rate of the night (COROS / Garmin connectors)', async () => {
+  const state = emptyState();
+  const r = await run(state, 'log_daily_metrics', { source: 'coros', days: [{ date: '2026-10-24', sleep_respiration: 15.2, sleep_avg_hr: 54 }] });
+  assert.equal(r.isError, undefined, text(r));
+  assert.deepEqual(
+    { respiration: state.metricUpserts[0].rows[0].sleepRespiration, hr: state.metricUpserts[0].rows[0].sleepAvgHr, source: state.metricUpserts[0].source },
+    { respiration: 15.2, hr: 54, source: 'coros' },
+  );
+  const absurd = await run(state, 'log_daily_metrics', { days: [{ date: '2026-10-24', sleep_respiration: 80 }] });
+  assert.equal(absurd.isError, true);
+});
+
 test('log_completed_activity completes the matching planned workout, else creates one, without duplicates', async () => {
   const state = emptyState();
   state.workouts.push(workout({ id: PLANNED_ID, date: '2026-10-24', sport: 'run', durationMin: 50, startTime: '08:00' }));
@@ -166,6 +178,41 @@ test('log_completed_activity does not duplicate an activity already imported fro
   assert.equal(state.workouts.length, 1, 'no extra completed workout');
   const different = await run(state, 'log_completed_activity', { date: '2026-10-24', sport: 'swim', duration_min: 30 });
   assert.equal((different.structuredContent as { status: string }).status, 'created_unplanned');
+});
+
+test('log_completed_activity completes a session marked done by hand with the activity data, once', async () => {
+  const state = emptyState();
+  state.workouts.push(
+    workout({
+      id: PLANNED_ID,
+      date: '2026-10-24',
+      sport: 'run',
+      durationMin: 45,
+      startTime: '19:00',
+      status: 'completed',
+      completed: { source: 'manual', durationMin: 45, rpe: 6, feel: 2, notes: 'Mucho calor', completedAt: '2026-10-24T18:00:00.000Z' },
+    }),
+  );
+  const args = { date: '2026-10-24', sport: 'run', duration_min: 47, start_time: '19:02', distance_m: 9100, avg_hr: 152, max_hr: 176, calories: 540, rpe: 8, garmin_activity_id: '777' };
+  const r = await run(state, 'log_completed_activity', args);
+  assert.equal(r.isError, undefined, text(r));
+  assert.equal((r.structuredContent as { status: string }).status, 'enriched_manual');
+  assert.equal(state.workouts.length, 1, 'no second workout');
+  assert.deepEqual(state.workouts[0].completed, {
+    source: 'claude',
+    externalId: '777',
+    durationMin: 47,
+    distanceM: 9100,
+    avgHr: 152,
+    maxHr: 176,
+    kcal: 540,
+    rpe: 6,
+    feel: 2,
+    notes: 'Mucho calor',
+    completedAt: '2026-10-24T18:00:00.000Z',
+  });
+  const again = await run(state, 'log_completed_activity', args);
+  assert.equal((again.structuredContent as { status: string }).status, 'already_logged', 'the activity id is stored now');
 });
 
 test('get_plan_for_device returns planned workouts with Garmin JSON', async () => {

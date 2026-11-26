@@ -10,6 +10,7 @@ import {
   isHealthDataAvailable,
   queryCategorySamples,
   queryStatisticsCollectionForQuantity,
+  queryStatisticsForQuantity,
   queryWorkoutSamples,
   requestAuthorization,
   type QuantityTypeIdentifier,
@@ -26,6 +27,7 @@ import { importActivities, toImportCandidate, type HealthActivity, type ImportCa
 import {
   buildMetricsDrafts,
   localDate,
+  quantityToKcal,
   quantityToMeters,
   quantityToMinutes,
   sleepHoursByDate,
@@ -51,7 +53,8 @@ export type { HealthSyncResult } from './health/result';
 /**
  * Exactly the types this file queries (App Review: ask only for what you read
  * and keep NSHealthShareUsageDescription in sync): workouts and their heart
- * rate, resting heart rate, HRV, sleep, VO2max and steps.
+ * rate, resting heart rate, HRV, sleep, breathing rate (during sleep, for the
+ * illness signal), VO2max and steps.
  */
 export const HEALTH_READ_TYPES = [
   'HKWorkoutTypeIdentifier',
@@ -59,6 +62,7 @@ export const HEALTH_READ_TYPES = [
   'HKQuantityTypeIdentifierRestingHeartRate',
   'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
   'HKCategoryTypeIdentifierSleepAnalysis',
+  'HKQuantityTypeIdentifierRespiratoryRate',
   'HKQuantityTypeIdentifierVO2Max',
   'HKQuantityTypeIdentifierStepCount',
 ] as const;
@@ -143,7 +147,7 @@ async function dailyStat<T extends QuantityTypeIdentifier>(
 
 interface SleepRead {
   hours: Record<ISODate, number>;
-  /** Main sleep start/end per wake-up date. */
+  /** Main sleep start/end per wake-up date: the wake-up window, and where heart rate and breathing during sleep are read. */
   windows: Record<ISODate, SleepWindow>;
   /** Apps that wrote those nights ("COROS"…). */
   sources: string[];
@@ -168,6 +172,40 @@ async function readSleep(from: Date, to: Date): Promise<SleepRead> {
   return { hours: sleepHoursByDate(samples), windows: sleepWindowsByDate(samples), sources };
 }
 
+type NightVitalId = 'HKQuantityTypeIdentifierHeartRate' | 'HKQuantityTypeIdentifierRespiratoryRate';
+
+/** Average of a per-minute quantity inside one sleep window (ISO instants → Date; null when Health has none). */
+async function averageDuring(identifier: NightVitalId, window: SleepWindow): Promise<number | null> {
+  const stats = await queryStatisticsForQuantity(identifier, ['discreteAverage'], {
+    filter: { date: { startDate: new Date(window.start), endDate: new Date(window.end) } },
+    unit: 'count/min',
+  });
+  const value = stats.averageQuantity?.quantity;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/** Heart rate and breathing rate during each night's sleep (illness signal, domain/illness.ts). */
+async function readNightVitals(windows: Record<ISODate, SleepWindow>): Promise<Pick<DailyHealthSeries, 'sleepAvgHr' | 'sleepRespiration'>> {
+  const nights = Object.entries(windows);
+  const rows = await Promise.all(
+    nights.map(async ([date, window]) => {
+      const [hr, breathing] = await Promise.all([
+        safely<number | null>('sleep hr', null, () => averageDuring('HKQuantityTypeIdentifierHeartRate', window)),
+        safely<number | null>('sleep respiration', null, () => averageDuring('HKQuantityTypeIdentifierRespiratoryRate', window)),
+      ]);
+      return { date, hr, breathing };
+    }),
+  );
+  const pick = (read: (row: (typeof rows)[number]) => number | null): Record<ISODate, number> =>
+    Object.fromEntries(
+      rows.flatMap((row): [ISODate, number][] => {
+        const value = read(row);
+        return value === null ? [] : [[row.date, value]];
+      }),
+    );
+  return { sleepAvgHr: pick((r) => r.hr), sleepRespiration: pick((r) => r.breathing) };
+}
+
 interface DailyRead {
   series: DailyHealthSeries;
   sleepSources: string[];
@@ -181,8 +219,9 @@ async function readDailySeries(from: Date, to: Date): Promise<DailyRead> {
     safely('vo2max', {}, () => dailyStat('HKQuantityTypeIdentifierVO2Max', 'discreteAverage', 'ml/(kg*min)', from, to)),
     safely('sleep', NO_SLEEP, () => readSleep(from, to)),
   ]);
+  const vitals = await readNightVitals(sleep.windows);
   return {
-    series: { restingHr, hrvMs, steps, vo2max, sleepHours: sleep.hours, sleepWindows: sleep.windows },
+    series: { restingHr, hrvMs, steps, vo2max, sleepHours: sleep.hours, sleepWindows: sleep.windows, ...vitals },
     sleepSources: sleep.sources,
   };
 }
@@ -226,6 +265,9 @@ async function readActivities(from: Date, to: Date): Promise<HealthActivity[]> {
           durationMin,
           distanceM: quantityToMeters(json.totalDistance),
           avgHr: hr?.averageQuantity?.quantity ?? null,
+          maxHr: hr?.maximumQuantity?.quantity ?? null,
+          // Part of the workout itself: no extra Health permission (active energy is not requested).
+          kcal: quantityToKcal(json.totalEnergyBurned),
           sourceName: json.sourceRevision?.source?.name ?? null,
         };
       }),
@@ -255,6 +297,7 @@ function summarize({ drafts, candidates, imported, sources }: SyncFindings): Hea
     activitiesFound: candidates.length,
     workoutsCompleted: imported.workoutsCompleted,
     activitiesImported: imported.activitiesImported,
+    workoutsEnriched: imported.workoutsEnriched,
     sources,
   };
 }

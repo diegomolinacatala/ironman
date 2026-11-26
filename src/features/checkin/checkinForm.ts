@@ -1,5 +1,5 @@
 /** Pure form helpers for the daily check-in (unit-tested). */
-import type { CheckinDraft, DailyCheckin, ISODate, Score5 } from '@/domain/types';
+import type { CheckinDraft, DailyCheckin, IllnessAnswer, ISODate, Score5 } from '@/domain/types';
 
 export interface CheckinFormState {
   date: ISODate;
@@ -10,11 +10,20 @@ export interface CheckinFormState {
   stress: Score5 | null;
   motivation: Score5 | null;
   notes: string;
+  /** Last night's breathing or pulse is up: the extra question «¿Cómo te encuentras?» is shown (and required). */
+  illnessAsked: boolean;
+  illnessAnswer: IllnessAnswer | null;
 }
 
 export const DEFAULT_SLEEP_HOURS = 7.5;
 
-export function checkinToForm(date: ISODate, existing: DailyCheckin | null, sleepHoursHint: number | null): CheckinFormState {
+export function checkinToForm(
+  date: ISODate,
+  existing: DailyCheckin | null,
+  sleepHoursHint: number | null,
+  illnessAsked = false,
+): CheckinFormState {
+  const illnessAnswer = existing?.illnessAnswer ?? null;
   return {
     date,
     sleepQuality: existing?.sleepQuality ?? null,
@@ -24,6 +33,9 @@ export function checkinToForm(date: ISODate, existing: DailyCheckin | null, slee
     stress: existing?.stress ?? null,
     motivation: existing?.motivation ?? null,
     notes: existing?.notes ?? '',
+    // An answer given earlier stays editable even if the signal went away after a later sync.
+    illnessAsked: illnessAsked || illnessAnswer !== null,
+    illnessAnswer,
   };
 }
 
@@ -31,10 +43,16 @@ export function roundHalf(hours: number): number {
   return Math.round(hours * 2) / 2;
 }
 
-/** Returns the draft, or null when a score is still unanswered. */
+/** The extra question is shown and still unanswered. */
+export function missingIllnessAnswer(state: Pick<CheckinFormState, 'illnessAsked' | 'illnessAnswer'>): boolean {
+  return state.illnessAsked && state.illnessAnswer === null;
+}
+
+/** Returns the draft, or null when a score (or the extra question, when shown) is still unanswered. */
 export function formToCheckinDraft(state: CheckinFormState): CheckinDraft | null {
   const { sleepQuality, fatigue, soreness, stress, motivation } = state;
   if (sleepQuality == null || fatigue == null || soreness == null || stress == null || motivation == null) return null;
+  if (missingIllnessAnswer(state)) return null;
   const notes = state.notes.trim();
   return {
     date: state.date,
@@ -45,6 +63,8 @@ export function formToCheckinDraft(state: CheckinFormState): CheckinDraft | null
     stress,
     motivation,
     notes: notes ? notes : null,
+    // Only when asked: an absent key leaves a stored answer untouched.
+    ...(state.illnessAnswer !== null ? { illnessAnswer: state.illnessAnswer } : {}),
   };
 }
 

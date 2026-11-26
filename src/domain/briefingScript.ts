@@ -377,14 +377,17 @@ export interface ScriptInput {
   watchBrand?: WatchBrand | null;
   /** Today's outdoor session in the rain (city set): one sentence after the plan. */
   weather?: BriefingWeather | null;
+  /** Last night's possible-illness sentence (domain/illness.ts), said right after the sleep; never dropped. */
+  illness?: string | null;
 }
 
-/** The text-to-speech script: greeting, sleep, today, weather, quedadas, focus, tomorrow, race countdown, closing. */
+/** The text-to-speech script: greeting, sleep, illness signal, today, weather, quedadas, focus, tomorrow, race countdown, closing. */
 export function composeScript(input: ScriptInput): string {
   const { date, plan, race } = input;
   const sentences: Sentence[] = [
     { text: `${greetingOf(input.now, input.name)} Hoy es ${dateWords(date)}.` },
     ...sleepSentences(input.snapshot, input.verdict, input.hasAnyMetrics, input.watchBrand),
+    ...(input.illness ? [{ text: input.illness }] : []),
     ...todaySentences(plan, race, input.speech ?? {}),
     ...(input.weather && plan.kind === 'train' ? [weatherSentence(input.weather)] : []),
     ...togetherSentences(input.together ?? NO_TOGETHER, date),

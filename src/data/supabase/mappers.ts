@@ -8,6 +8,7 @@
  */
 import { normalizeCoaching } from '@/domain/changes';
 import {
+  ILLNESS_ANSWERS,
   INTENSITIES,
   LIFE_EVENT_KINDS,
   BODY_AREAS,
@@ -479,6 +480,7 @@ export function busyBlockDraftToInsert(draft: BusyBlockDraft, userId: string): R
 // ---------------------------------------------------------------------------
 
 export function rowToCheckin(row: CheckinRow): DailyCheckin {
+  const illnessAnswer = oneOf(row.illness_answer, ILLNESS_ANSWERS);
   return {
     userId: row.user_id,
     date: row.date,
@@ -489,6 +491,7 @@ export function rowToCheckin(row: CheckinRow): DailyCheckin {
     stress: clampScore(row.stress),
     motivation: clampScore(row.motivation),
     notes: row.notes,
+    ...(illnessAnswer ? { illnessAnswer } : {}),
   };
 }
 
@@ -503,6 +506,8 @@ export function checkinDraftToRow(draft: CheckinDraft, userId: string): CheckinR
     stress: draft.stress,
     motivation: draft.motivation,
     notes: draft.notes,
+    // Only when the question was asked: an absent key leaves a stored answer as it is.
+    ...(draft.illnessAnswer != null ? { illness_answer: draft.illnessAnswer } : {}),
   };
 }
 
@@ -527,11 +532,19 @@ export function rowToMetrics(row: MetricsRow): DailyMetrics {
     sleepAwakeMin: asNumber(row.sleep_awake_min),
     sleepStart: asString(row.sleep_start),
     sleepEnd: asString(row.sleep_end),
+    sleepRespiration: asNumber(row.sleep_respiration),
+    sleepAvgHr: asNumber(row.sleep_avg_hr),
   };
 }
 
 function minutesOrNull(value: number | null | undefined): number | null | undefined {
   return value == null ? value : Math.min(1440, Math.max(0, Math.round(value)));
+}
+
+/** Within the column's check (null outside it): a bad sensor reading never blocks the whole upsert. */
+function withinOrNull(value: number | null | undefined, min: number, max: number): number | null | undefined {
+  if (value == null) return value;
+  return Number.isFinite(value) && value >= min && value <= max ? Math.round(value * 10) / 10 : null;
 }
 
 export function metricsDraftToRow(draft: MetricsDraft, userId: string): MetricsRow {
@@ -557,6 +570,8 @@ export function metricsDraftToRow(draft: MetricsDraft, userId: string): MetricsR
       sleep_awake_min: minutesOrNull(draft.sleepAwakeMin),
       sleep_start: draft.sleepStart,
       sleep_end: draft.sleepEnd,
+      sleep_respiration: withinOrNull(draft.sleepRespiration, 4, 40),
+      sleep_avg_hr: withinOrNull(draft.sleepAvgHr, 25, 150),
     }),
   };
 }

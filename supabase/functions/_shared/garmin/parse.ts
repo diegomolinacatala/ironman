@@ -23,6 +23,9 @@ export interface DayMetricsPart {
   sleepAwakeMin?: number;
   sleepStart?: ISODateTime;
   sleepEnd?: ISODateTime;
+  /** Average breathing rate (breaths/min) and heart rate (bpm) during that night (illness signal). */
+  sleepRespiration?: number;
+  sleepAvgHr?: number;
 }
 
 export interface GarminActivity {
@@ -35,7 +38,16 @@ export interface GarminActivity {
   durationMin: number;
   distanceM: number | null;
   avgHr: number | null;
+  /** `maxHR`, ppm. */
+  maxHr: number | null;
   tss: number | null;
+  /** `calories` of the activity, kcal. */
+  kcal: number | null;
+  /** `avgPower` (power meter or running power), W. */
+  avgPowerW: number | null;
+  /** Best 1-minute (`maxAvgPower_60`) and 20-minute (`max20MinPower` / `maxAvgPower_1200`) power, W. */
+  bestPower1MinW: number | null;
+  bestPower20MinW: number | null;
 }
 
 type Obj = Record<string, unknown>;
@@ -153,9 +165,34 @@ function sleepWindow(dto: unknown, tz: string): Pick<DayMetricsPart, 'sleepStart
   return { sleepStart: new Date(start).toISOString(), sleepEnd: new Date(end).toISOString() };
 }
 
+/** Mean of `key` over the objects of an array (Garmin's per-epoch lists), or null. */
+function averageOf(list: unknown, key: string): number | null {
+  if (!Array.isArray(list)) return null;
+  const values = list.map((entry) => toNumber(at(entry, key))).filter((n): n is number => n !== null && n > 0);
+  return values.length > 0 ? values.reduce((sum, n) => sum + n, 0) / values.length : null;
+}
+
 /**
- * Daily sleep: duration, score, stages, start/end (dailySleepDTO), plus the resting HR and
- * overnight HRV some payloads carry. `tz` converts "local" timestamps when no GMT one exists.
+ * Breathing and heart rate during the night (illness signal). Garmin Connect's sleep DTO
+ * carries `averageRespirationValue` and, on recent payloads, `avgHeartRate`; otherwise the
+ * per-epoch lists (`wellnessEpochRespirationDataDTOList[].respirationValue`,
+ * `sleepHeartRate[].value`) and, last, the HR measured with the night's SpO2 readings.
+ */
+function nightVitals(row: Obj, dto: unknown): Pick<DayMetricsPart, 'sleepRespiration' | 'sleepAvgHr'> {
+  const breathing =
+    pickNumber(dto, ['averageRespirationValue', 'avgSleepRespirationValue', 'avgRespirationValue']) ??
+    averageOf(row.wellnessEpochRespirationDataDTOList, 'respirationValue');
+  const heartRate =
+    pickNumber(dto, ['avgHeartRate', 'averageHeartRate', 'avgSleepHeartRate']) ??
+    averageOf(row.sleepHeartRate, 'value') ??
+    pickNumber(dto, ['averageSpO2HRSleep']);
+  return { sleepRespiration: inRange(breathing, 4, 40), sleepAvgHr: inRange(heartRate, 25, 150) };
+}
+
+/**
+ * Daily sleep: duration, score, stages, start/end (dailySleepDTO), plus the resting HR,
+ * overnight HRV, breathing and heart rate some payloads carry. `tz` converts "local"
+ * timestamps when no GMT one exists.
  */
 export function parseSleepSummaries(payload: unknown, tz: string = DEFAULT_TZ): DayMetricsPart[] {
   const rows = isObj(payload) && isObj(payload.dailySleepDTO) ? [payload] : asRecords(payload, ['dailySleepSummaries', 'sleepSummaries', 'dailySleepDTOList', 'data', 'summaries']);
@@ -175,6 +212,7 @@ export function parseSleepSummaries(payload: unknown, tz: string = DEFAULT_TZ): 
       sleepRemMin: stageMinutes(dto, ['remSleepSeconds', 'remSleepDurationSeconds', 'sleepLevels.remSeconds']),
       sleepAwakeMin: stageMinutes(dto, ['awakeSleepSeconds', 'awakeDurationSeconds', 'awakeSeconds', 'sleepLevels.awakeSeconds']),
       ...sleepWindow(dto, tz),
+      ...nightVitals(row, dto),
     });
   });
 }
@@ -228,6 +266,30 @@ function activityStart(row: Obj, tz: string): { date: ISODate; time: string | nu
   return { date: parts.date, time: parts.time };
 }
 
+/** Rounded value of the first path found when it lies in [min, max], else null. */
+function roundedIn(row: Obj, paths: readonly string[], min: number, max: number): number | null {
+  const n = pickNumber(row, paths);
+  return n !== null && n >= min && n <= max ? Math.round(n) : null;
+}
+
+const MAX_POWER_W = 2500;
+
+/** What the activity list says about the effort: distance, heart rate, load, energy and power. */
+function activityNumbers(row: Obj): Pick<GarminActivity, 'distanceM' | 'avgHr' | 'maxHr' | 'tss' | 'kcal' | 'avgPowerW' | 'bestPower1MinW' | 'bestPower20MinW'> {
+  const distance = pickNumber(row, ['distance']);
+  const tss = pickNumber(row, ['trainingStressScore']);
+  return {
+    distanceM: distance !== null && distance > 0 ? Math.round(distance) : null,
+    avgHr: roundedIn(row, ['averageHR', 'avgHr', 'averageHeartRate'], 30, 230),
+    maxHr: roundedIn(row, ['maxHR', 'maxHr', 'maxHeartRate'], 30, 240),
+    tss: tss !== null && tss >= 0 && tss <= 1000 ? Math.round(tss * 10) / 10 : null,
+    kcal: roundedIn(row, ['calories'], 1, 20000),
+    avgPowerW: roundedIn(row, ['avgPower', 'averagePower'], 1, MAX_POWER_W),
+    bestPower1MinW: roundedIn(row, ['maxAvgPower_60'], 1, MAX_POWER_W),
+    bestPower20MinW: roundedIn(row, ['max20MinPower', 'maxAvgPower_1200'], 1, MAX_POWER_W),
+  };
+}
+
 export function parseActivities(payload: unknown, tz: string): GarminActivity[] {
   return asRecords(payload, ['activityList', 'activities', 'data']).flatMap((row): GarminActivity[] => {
     const idRaw = at(row, 'activityId');
@@ -249,18 +311,7 @@ export function parseActivities(payload: unknown, tz: string): GarminActivity[] 
         date: start.date,
         startTime: start.time,
         durationMin: Math.min(720, Math.round(seconds / 60)),
-        distanceM: (() => {
-          const d = pickNumber(row, ['distance']);
-          return d !== null && d > 0 ? Math.round(d) : null;
-        })(),
-        avgHr: (() => {
-          const hr = pickNumber(row, ['averageHR', 'avgHr', 'averageHeartRate']);
-          return hr !== null && hr >= 30 && hr <= 230 ? Math.round(hr) : null;
-        })(),
-        tss: (() => {
-          const t = pickNumber(row, ['trainingStressScore']);
-          return t !== null && t >= 0 && t <= 1000 ? Math.round(t * 10) / 10 : null;
-        })(),
+        ...activityNumbers(row),
       },
     ];
   });

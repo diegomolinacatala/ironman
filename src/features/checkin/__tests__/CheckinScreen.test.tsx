@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 import CheckinScreen from '@/app/checkin';
+import { addDays } from '@/domain/dates';
 import type { Readiness } from '@/domain/readiness';
 import type { CheckinDraft, DailyCheckin, DailyMetrics, Workout } from '@/domain/types';
 import { makeWorkout } from '@/features/coach/__tests__/fixtures';
@@ -126,6 +127,54 @@ describe('check-in', () => {
     await render(<CheckinScreen />);
     expect(screen.getByText('Datos de hoy · Garmin')).toBeTruthy();
     expect(screen.getByLabelText('VFC: 62 ms')).toBeTruthy();
+  });
+});
+
+describe('illness question', () => {
+  /** 20 steady nights before 2026-10-25 and last night with breathing and pulse up. */
+  function highNight(): DailyMetrics[] {
+    const steady = Array.from({ length: 20 }, (_, i) => metricsToday({ date: addDays('2026-10-25', -(i + 1)), sleepRespiration: 14.5, sleepAvgHr: 52 }));
+    return [...steady, metricsToday({ sleepRespiration: 16, sleepAvgHr: 59 })];
+  }
+
+  test('no signal last night: no extra question', async () => {
+    await render(<CheckinScreen />);
+    expect(screen.queryByText(/¿Cómo te encuentras\?/)).toBeNull();
+  });
+
+  test('asks first when breathing and pulse were up, and needs an answer', async () => {
+    mockMetrics = highNight();
+    await render(<CheckinScreen />);
+    expect(screen.getByText('Tu respiración y tu pulso de esta noche están más altos de lo normal. ¿Cómo te encuentras?')).toBeTruthy();
+    expect(screen.getByLabelText('Respiración: 16 resp/min')).toBeTruthy();
+    await answerAll({ sleep: 4, fatigue: 2, soreness: 2, stress: 2, motivation: 4 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(within(screen.getByTestId('form-footer')).getByText('Dinos cómo te encuentras (la primera pregunta).')).toBeTruthy();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  test('symptoms: saved with the check-in, the day turns red and offers to adjust the hard session', async () => {
+    mockMetrics = highNight();
+    await render(<CheckinScreen />);
+    await fireEvent.press(screen.getByRole('radio', { name: 'Noto algo: garganta, mocos o cansancio raro' }));
+    await answerAll({ sleep: 4, fatigue: 2, soreness: 2, stress: 2, motivation: 4 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    await waitFor(() => expect(mockUpsert).toHaveBeenCalledTimes(1));
+    expect(mockUpsert.mock.calls[0]?.[0]).toMatchObject({ illnessAnswer: 'symptoms' });
+    expect(await screen.findByText('Puede que estés empezando a ponerte malo: hoy mejor suave y vigila cómo evoluciona.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ajustar hoy' }));
+    expect(mockAdjust).toHaveBeenCalledWith(expect.objectContaining({ level: 'red' }));
+  });
+
+  test('alcohol or a late dinner explains it: no alarm, the plan stays', async () => {
+    mockMetrics = highNight();
+    await render(<CheckinScreen />);
+    await fireEvent.press(screen.getByRole('radio', { name: 'Bebí alcohol o cené tarde' }));
+    await answerAll({ sleep: 4, fatigue: 2, soreness: 2, stress: 2, motivation: 4 });
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    expect(await screen.findByText('· Respiración y pulso de esta noche altos, seguramente por el alcohol o la cena tardía')).toBeTruthy();
+    expect(screen.queryByText(/ponerte malo/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ajustar hoy' })).toBeNull();
   });
 });
 

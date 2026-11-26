@@ -1,11 +1,15 @@
 /**
  * Imports Apple Health workouts into the plan: completes the matching planned
- * workout (domain `matchActivity`) or creates a completed unplanned one.
+ * workout (domain `matchActivity`) or creates a completed unplanned one. A
+ * session the athlete already marked done by hand («Hecho») is not skipped as a
+ * duplicate: it gets the activity's numbers (domain `enrichManualCompletion`),
+ * keeping the athlete's RPE, sensaciones and notes.
  *
  * Depends only on a subset of the Repository, so it is testable with a fake.
  */
 import { matchActivity } from '@/domain/matching';
 import type { CompletedData, DateRange, ISODate, ISOTime, Sport, Workout, WorkoutDraft } from '@/domain/types';
+import { enrichManualCompletion, isManualCompletion } from '@/domain/watchCompletion';
 import type { Repository } from '@/data/repository';
 import { logger } from '@/lib/logger';
 
@@ -22,6 +26,10 @@ export interface HealthActivity {
   durationMin: number;
   distanceM: number | null;
   avgHr: number | null;
+  /** Highest heart rate of the workout, ppm (HealthKit statistics). */
+  maxHr?: number | null;
+  /** `totalEnergyBurned` of the workout, kcal. */
+  kcal?: number | null;
   /** App that wrote it to Apple Salud ("COROS", "Connect"…), when HealthKit tells. */
   sourceName?: string | null;
 }
@@ -35,21 +43,32 @@ export interface ImportCandidate {
   durationMin: number;
   distanceM: number | null;
   avgHr: number | null;
+  maxHr: number | null;
+  kcal: number | null;
   completedAt: string;
 }
 
-export type HealthRepo = Pick<Repository, 'listWorkouts' | 'createWorkout' | 'completeWorkout'>;
+export type HealthRepo = Pick<Repository, 'listWorkouts' | 'createWorkout' | 'completeWorkout' | 'updateWorkout'>;
 
 export interface ImportResult {
   workoutsCompleted: number;
   activitiesImported: number;
-  /** External ids handled in this run (imported, matched or recognised as duplicates). */
+  /** Sessions marked done by hand that got the activity's numbers in this run. */
+  workoutsEnriched: number;
+  /** External ids handled in this run (imported, matched, enriched or recognised as duplicates). */
   handledIds: string[];
 }
 
 const DUPLICATE_MIN_TOLERANCE = 10;
 const DUPLICATE_RATIO_TOLERANCE = 0.15;
 const DUPLICATE_START_TOLERANCE_MIN = 45;
+const MAX_HR = 240;
+const MAX_KCAL = 20_000;
+
+/** Rounded positive value up to `max`, else null. */
+function positive(value: number | null | undefined, max: number): number | null {
+  return value != null && Number.isFinite(value) && value > 0 && value <= max ? Math.round(value) : null;
+}
 
 /** Normalises an activity; null when it should not be imported (walks, transitions, too short). */
 export function toImportCandidate(activity: HealthActivity): ImportCandidate | null {
@@ -65,6 +84,8 @@ export function toImportCandidate(activity: HealthActivity): ImportCandidate | n
     durationMin: Math.min(MAX_ACTIVITY_MINUTES, Math.round(activity.durationMin)),
     distanceM: activity.distanceM != null && activity.distanceM > 0 ? Math.round(activity.distanceM) : null,
     avgHr: activity.avgHr != null && activity.avgHr > 0 ? Math.round(activity.avgHr) : null,
+    maxHr: positive(activity.maxHr, MAX_HR),
+    kcal: positive(activity.kcal, MAX_KCAL),
     completedAt: activity.end.toISOString(),
   };
 }
@@ -75,25 +96,36 @@ function sportsOverlap(a: Sport, b: Sport): boolean {
   return (a === 'brick' || b === 'brick') && multi(a) && multi(b);
 }
 
+/** A completed workout on the same day, same sport, similar duration and start time as `candidate`. */
+function sameActivityShape(candidate: ImportCandidate, w: Workout): boolean {
+  if (w.status !== 'completed' || w.date !== candidate.date) return false;
+  if (!sportsOverlap(w.sport, candidate.sport)) return false;
+  const actual = w.completed?.durationMin ?? w.durationMin;
+  const tolerance = Math.max(DUPLICATE_MIN_TOLERANCE, candidate.durationMin * DUPLICATE_RATIO_TOLERANCE);
+  if (Math.abs(actual - candidate.durationMin) > tolerance) return false;
+  const a = parseTimeMinutes(w.startTime);
+  const b = parseTimeMinutes(candidate.startTime);
+  return a == null || b == null || Math.abs(a - b) <= DUPLICATE_START_TOLERANCE_MIN;
+}
+
 /**
  * True when `candidate` is already in the plan: same external id, or a completed
- * workout (e.g. synced from Garmin) on the same day, same sport, similar duration
- * and start time. Prevents Garmin → Health → Road to Ironman double imports.
- * A still-planned 'healthkit:<uuid>' row is NOT a duplicate but an orphan to finish.
+ * workout imported from another source (e.g. synced from Garmin) on the same day,
+ * same sport, similar duration and start time. Prevents Garmin → Health → Road to
+ * Ironman double imports. A session marked done by hand is not a duplicate
+ * (`findManualLookalike`), and a still-planned 'healthkit:<uuid>' row is an orphan to finish.
  */
 export function isLikelyDuplicate(candidate: ImportCandidate, existing: readonly Workout[]): boolean {
   return existing.some((w) => {
     if (w.completed?.externalId === candidate.externalId) return true;
     if (w.externalId === healthExternalId(candidate.externalId)) return w.status !== 'planned';
-    if (w.status !== 'completed' || w.date !== candidate.date) return false;
-    if (!sportsOverlap(w.sport, candidate.sport)) return false;
-    const actual = w.completed?.durationMin ?? w.durationMin;
-    const tolerance = Math.max(DUPLICATE_MIN_TOLERANCE, candidate.durationMin * DUPLICATE_RATIO_TOLERANCE);
-    if (Math.abs(actual - candidate.durationMin) > tolerance) return false;
-    const a = parseTimeMinutes(w.startTime);
-    const b = parseTimeMinutes(candidate.startTime);
-    return a == null || b == null || Math.abs(a - b) <= DUPLICATE_START_TOLERANCE_MIN;
+    return !isManualCompletion(w) && sameActivityShape(candidate, w);
   });
+}
+
+/** The session the athlete marked done by hand that `candidate` records (same rules as a duplicate). */
+export function findManualLookalike(candidate: ImportCandidate, existing: readonly Workout[]): Workout | undefined {
+  return existing.find((w) => isManualCompletion(w) && sameActivityShape(candidate, w));
 }
 
 export function completedDataFor(candidate: ImportCandidate): CompletedData {
@@ -103,6 +135,8 @@ export function completedDataFor(candidate: ImportCandidate): CompletedData {
     durationMin: candidate.durationMin,
     ...(candidate.distanceM != null ? { distanceM: candidate.distanceM } : {}),
     ...(candidate.avgHr != null ? { avgHr: candidate.avgHr } : {}),
+    ...(candidate.maxHr != null ? { maxHr: candidate.maxHr } : {}),
+    ...(candidate.kcal != null ? { kcal: candidate.kcal } : {}),
     completedAt: candidate.completedAt,
   };
 }
@@ -147,23 +181,25 @@ interface ImportState {
   result: ImportResult;
 }
 
-type Counter = 'workoutsCompleted' | 'activitiesImported';
+type Counter = 'workoutsCompleted' | 'activitiesImported' | 'workoutsEnriched';
 
 function recordDone(state: ImportState, done: Workout, candidate: ImportCandidate, counter: Counter): ImportState {
   const r = state.result;
-  const counted =
-    counter === 'workoutsCompleted'
-      ? { ...r, workoutsCompleted: r.workoutsCompleted + 1 }
-      : { ...r, activitiesImported: r.activitiesImported + 1 };
   return {
     planned: state.planned.filter((w) => w.id !== done.id),
     known: [...state.known.filter((w) => w.id !== done.id), done],
-    result: { ...counted, handledIds: [...r.handledIds, candidate.externalId] },
+    result: { ...r, [counter]: r[counter] + 1, handledIds: [...r.handledIds, candidate.externalId] },
   };
 }
 
 async function importOne(repo: HealthRepo, candidate: ImportCandidate, state: ImportState): Promise<ImportState> {
   const data = completedDataFor(candidate);
+  const manual = findManualLookalike(candidate, state.known);
+  if (manual) {
+    // «Hecho» by hand: the activity's numbers complete it (RPE, feel and notes stay).
+    const enriched = await repo.updateWorkout(manual.id, { completed: enrichManualCompletion(manual.completed, data) });
+    return recordDone(state, enriched, candidate, 'workoutsEnriched');
+  }
   const orphan = findOrphanImport(candidate, state.known);
   if (orphan) return recordDone(state, await repo.completeWorkout(orphan.id, data), candidate, 'activitiesImported');
 
@@ -193,7 +229,7 @@ export async function importActivities(
     // Orphaned imports are never offered to `matchActivity` for another activity.
     planned: existing.filter((w) => w.status === 'planned' && w.sport !== 'rest' && !isHealthImport(w)),
     known: existing,
-    result: { workoutsCompleted: 0, activitiesImported: 0, handledIds: [] },
+    result: { workoutsCompleted: 0, activitiesImported: 0, workoutsEnriched: 0, handledIds: [] },
   };
   const ordered = [...candidates].sort((a, b) => a.completedAt.localeCompare(b.completedAt));
   for (const candidate of ordered) {

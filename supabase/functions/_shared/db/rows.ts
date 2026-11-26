@@ -6,6 +6,7 @@
 import { normalizeTime } from '../dates.ts';
 import {
   BODY_AREAS,
+  ILLNESS_ANSWERS,
   INTENSITIES,
   LIFE_EVENT_KINDS,
   RACE_DISTANCES,
@@ -24,6 +25,7 @@ import type {
   CompletedData,
   DailyCheckin,
   DailyMetrics,
+  IllnessAnswer,
   FriendSummary,
   FriendWeekItem,
   JointParticipant,
@@ -174,6 +176,7 @@ export function mapCheckin(raw: unknown): DailyCheckin {
     stress: num(r.stress, 3),
     motivation: num(r.motivation, 3),
     notes: strOrNull(r.notes),
+    ...(ILLNESS_ANSWERS.includes(r.illness_answer as IllnessAnswer) ? { illnessAnswer: r.illness_answer as IllnessAnswer } : {}),
   };
 }
 
@@ -198,6 +201,8 @@ export function mapMetrics(raw: unknown): DailyMetrics {
     sleepAwakeMin: numOrNull(r.sleep_awake_min),
     sleepStart: instantOrNull(r.sleep_start),
     sleepEnd: instantOrNull(r.sleep_end),
+    sleepRespiration: numOrNull(r.sleep_respiration),
+    sleepAvgHr: numOrNull(r.sleep_avg_hr),
   };
 }
 

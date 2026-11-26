@@ -31,7 +31,8 @@ const WEEK_PLAN_COLS = 'week_start,kind,target_minutes,note,source,updated_at';
 const EVENT_COLS = 'id,kind,title,start_date,end_date,start_time,duration_min,severity,body_area,notes';
 const METRIC_COLS =
   'date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status,' +
-  'sleep_deep_min,sleep_light_min,sleep_rem_min,sleep_awake_min,sleep_start,sleep_end';
+  'sleep_deep_min,sleep_light_min,sleep_rem_min,sleep_awake_min,sleep_start,sleep_end,sleep_respiration,sleep_avg_hr';
+const CHECKIN_COLS = 'date,sleep_quality,sleep_hours,fatigue,soreness,stress,motivation,notes,illness_answer';
 
 const METRIC_FIELDS: Record<string, string> = {
   hrvMs: 'hrv_ms',
@@ -50,6 +51,8 @@ const METRIC_FIELDS: Record<string, string> = {
   sleepAwakeMin: 'sleep_awake_min',
   sleepStart: 'sleep_start',
   sleepEnd: 'sleep_end',
+  sleepRespiration: 'sleep_respiration',
+  sleepAvgHr: 'sleep_avg_hr',
 };
 
 function metricsRow(userId: UUID, source: string, m: MetricsUpsert, nowIso: string): Record<string, unknown> {
@@ -211,7 +214,7 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
     },
     async listCheckins(userId, from, to) {
       const rows = rowsOf(
-        await db.from('daily_checkins').select('date,sleep_quality,sleep_hours,fatigue,soreness,stress,motivation,notes').eq('user_id', userId).gte('date', from).lte('date', to).order('date'),
+        await db.from('daily_checkins').select(CHECKIN_COLS).eq('user_id', userId).gte('date', from).lte('date', to).order('date'),
         'checkins',
       );
       return rows.map(mapCheckin);
@@ -305,6 +308,21 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
       const rows = rowsOf(
         await db.from('workouts').update({ status: 'completed', completed }).eq('id', workoutId).eq('user_id', userId).eq('status', 'planned').select('id'),
         'complete workout',
+      );
+      return rows.length > 0;
+    },
+    async enrichCompletedWorkout(userId, workoutId, completed) {
+      const rows = rowsOf(
+        await db
+          .from('workouts')
+          .update({ completed })
+          .eq('id', workoutId)
+          .eq('user_id', userId)
+          .eq('status', 'completed')
+          // Still no activity linked: a concurrent import (Apple Salud on the phone) may have won.
+          .is('completed->>externalId', null)
+          .select('id'),
+        'enrich workout',
       );
       return rows.length > 0;
     },

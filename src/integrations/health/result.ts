@@ -15,13 +15,15 @@ export interface HealthSyncResult {
   workoutsCompleted: number;
   /** Activities added as unplanned workouts in this run. */
   activitiesImported: number;
+  /** Sessions marked done by hand that got the activity's numbers (heart rate, distance…) in this run. */
+  workoutsEnriched: number;
   /** Apps that wrote the workouts and nights read ("COROS", "Connect"…): distinct, sorted. */
   sources: string[];
 }
 
 /** A fresh empty result (nothing read: Apple Salud off, unavailable or another account). */
 export function emptyHealthResult(): HealthSyncResult {
-  return { metricsDays: 0, sleepNights: 0, activitiesFound: 0, workoutsCompleted: 0, activitiesImported: 0, sources: [] };
+  return { metricsDays: 0, sleepNights: 0, activitiesFound: 0, workoutsCompleted: 0, activitiesImported: 0, workoutsEnriched: 0, sources: [] };
 }
 
 /** Distinct, trimmed, non-empty names in alphabetical order. */

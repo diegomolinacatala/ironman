@@ -9,8 +9,8 @@
 | Email y nombre (o Apple ID anónimo) | Tú, al crear la cuenta | Iniciar sesión e identificarte ante tus amigos |
 | Perfil deportivo: deportes, nivel, umbrales, disponibilidad, notas para el coach | Tú | Planificar tus entrenos |
 | Entrenos planificados y realizados, carreras, imprevistos, check-in diario, nutrición | Tú, tu Claude (si lo conectas) | Tu calendario, tu carga y las propuestas de cambios |
-| Datos de salud de **Apple Salud** (entrenos, sueño, frecuencia cardiaca, VFC, pasos) | Apple Salud, solo con tu permiso | Marcar entrenos como hechos y estimar tu recuperación |
-| Métricas de **Garmin** (sueño, VFC, Body Battery, actividades) | Tu clave personal de Garmin, solo si la conectas | Lo mismo que el anterior |
+| Datos de salud de **Apple Salud** (entrenos, sueño, frecuencia cardiaca, respiración durante el sueño, VFC, pasos) | Apple Salud, solo con tu permiso | Marcar entrenos como hechos, estimar tu recuperación y avisarte si la noche apunta a que te estás poniendo malo |
+| Métricas de **Garmin** (sueño, VFC, respiración y pulso durante el sueño, Body Battery, actividades) | Tu clave personal de Garmin, solo si la conectas | Lo mismo que el anterior |
 | Horas ocupadas de tu **calendario** (inicio y fin; el título solo lo ves tú) | Calendario del iPhone, solo con tu permiso | Encontrar huecos para entrenar |
 | Tus entrenos, escritos en un calendario «Road to Ironman» de tu iPhone | La app, solo si lo activas | Que veas tus sesiones en tu calendario con un aviso antes |
 | Lo que le dices o escribes a tu coach (la voz se convierte en texto **en el iPhone**) | Tú | Entender lesiones, cambios de planes y preferencias, y ajustar tu plan |

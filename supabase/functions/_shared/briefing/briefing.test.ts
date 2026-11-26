@@ -393,3 +393,29 @@ test('briefing context: only the first name reaches the model', async () => {
   assert.ok(!sent.includes('Molina') && !sent.includes('Catalá'));
   assert.equal(firstName(''), 'atleta');
 });
+
+test('briefing context: last night breathing and pulse up + symptoms → possible illness, amber, sent to the model', async () => {
+  const state = emptyState();
+  for (let back = 1; back <= 20; back += 1) {
+    const d = new Date(`${DATE}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - back);
+    state.metrics.push(metric({ date: d.toISOString().slice(0, 10), sleepRespiration: 14.5, sleepAvgHr: 50, hrvMs: 60 }));
+  }
+  state.metrics.push(metric({ date: DATE, sleepRespiration: 16, sleepAvgHr: 57, hrvMs: 58 }));
+  const checkin = { userId: USER, date: DATE, sleepQuality: 3, sleepHours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, notes: null };
+  state.checkins.push({ ...checkin, illnessAnswer: 'symptoms' });
+  const ctx = await buildBriefingContext(fakeStore(state), { userId: USER, date: DATE, now: fixedNow() });
+  assert.equal(ctx.illness?.outcome, 'possible_illness');
+  assert.equal(ctx.illness?.signal, 'likely');
+  assert.equal(ctx.recovery.level, 'red');
+  const sent = promptPayload(ctx) as { illness?: { outcome: string; message: string } };
+  assert.equal(sent.illness?.outcome, 'possible_illness');
+  assert.match(sent.illness?.message ?? '', /^Puede que estés empezando a ponerte malo/);
+
+  // Alcohol: explained, no alarm, the level is not raised.
+  state.checkins = [{ ...checkin, illnessAnswer: 'alcohol' }];
+  const explained = await buildBriefingContext(fakeStore(state), { userId: USER, date: DATE, now: fixedNow() });
+  assert.equal(explained.illness?.outcome, 'explained');
+  assert.match(explained.illness?.message ?? '', /alcohol/);
+  assert.notEqual(explained.recovery.level, 'red');
+});

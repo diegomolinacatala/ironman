@@ -4,6 +4,7 @@ import {
   assembleJointSessions,
   mapAcceptedFriends,
   mapBriefing,
+  mapCheckin,
   mapFriendWeekItem,
   mapLifeEvent,
   mapMetrics,
@@ -121,6 +122,16 @@ test('mapMetrics reads sleep stages and start/end instants', () => {
   assert.equal(m.sleepLightMin, null);
   assert.equal(m.sleepStart, '2026-10-23T21:10:00.000Z');
   assert.equal(m.sleepEnd, null);
+});
+
+test('mapMetrics reads the night vitals and mapCheckin the illness answer', () => {
+  const m = mapMetrics({ date: '2026-10-24', source: 'healthkit', sleep_respiration: '14.6', sleep_avg_hr: 52 });
+  assert.equal(m.sleepRespiration, 14.6);
+  assert.equal(m.sleepAvgHr, 52);
+  const base = { date: '2026-10-24', sleep_quality: 3, sleep_hours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, notes: null };
+  assert.equal(mapCheckin({ ...base, illness_answer: 'symptoms' }).illnessAnswer, 'symptoms');
+  assert.equal('illnessAnswer' in mapCheckin({ ...base, illness_answer: null }), false);
+  assert.equal('illnessAnswer' in mapCheckin({ ...base, illness_answer: 'resaca' }), false);
 });
 
 test('mapBriefing maps the row and keeps a defensive sleep snapshot', () => {

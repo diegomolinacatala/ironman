@@ -40,6 +40,8 @@ jest.setTimeout(60000);
 
 let mockData: ProgressData;
 jest.mock('@/features/progress/useProgressData', () => ({ useProgressData: () => mockData }));
+// The threshold suggestion has its own tests (features/thresholds) and reads the repository.
+jest.mock('@/features/thresholds/ThresholdSuggestions', () => ({ ThresholdSuggestions: () => null }));
 
 function progressData(zoneTrend: ReviewTrend | null): ProgressData {
   return {

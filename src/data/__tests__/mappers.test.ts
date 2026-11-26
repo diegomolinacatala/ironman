@@ -205,6 +205,15 @@ describe('table mappers round-trip (domain → row → domain)', () => {
   it('check-in', () => {
     const draft = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 1, stress: 3, motivation: 5, notes: null } as const;
     expect(rowToCheckin(checkinDraftToRow(draft, ME))).toEqual({ ...draft, userId: ME });
+    expect('illness_answer' in checkinDraftToRow(draft, ME)).toBe(false);
+  });
+
+  it('check-in with the answer to the illness question', () => {
+    const draft = { date: '2026-10-25', sleepQuality: 3, sleepHours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, notes: null, illnessAnswer: 'symptoms' } as const;
+    const row = checkinDraftToRow(draft, ME);
+    expect(row.illness_answer).toBe('symptoms');
+    expect(rowToCheckin(row)).toEqual({ ...draft, userId: ME });
+    expect('illnessAnswer' in rowToCheckin({ ...row, illness_answer: 'resaca' })).toBe(false);
   });
 
   it('metrics', () => {
@@ -228,11 +237,15 @@ describe('table mappers round-trip (domain → row → domain)', () => {
       sleepAwakeMin: 18,
       sleepStart: '2026-10-24T21:40:00.000Z',
       sleepEnd: '2026-10-25T05:15:00.000Z',
+      sleepRespiration: 14.6,
+      sleepAvgHr: 52,
     };
     const { userId, ...draft } = metrics;
     const row = metricsDraftToRow(draft, userId);
-    expect(row).toMatchObject({ sleep_deep_min: 82, sleep_rem_min: 104, sleep_start: '2026-10-24T21:40:00.000Z' });
+    expect(row).toMatchObject({ sleep_deep_min: 82, sleep_rem_min: 104, sleep_start: '2026-10-24T21:40:00.000Z', sleep_respiration: 14.6, sleep_avg_hr: 52 });
     expect(rowToMetrics(row)).toEqual(metrics);
+    // A reading outside the column's check is sent as null instead of failing the whole upsert.
+    expect(metricsDraftToRow({ ...draft, sleepRespiration: 70, sleepAvgHr: 10 }, userId)).toMatchObject({ sleep_respiration: null, sleep_avg_hr: null });
   });
 
   it('metrics without sleep detail (HealthKit) leave the v2 columns untouched', () => {
@@ -501,6 +514,14 @@ describe('v4: coaching, step targets, sensations, watch and season plan', () => 
 
   it('workout round trip keeps coaching, targets, cues, brick legs and sensations', () => {
     expect(rowToWorkout(workoutToRow(coached))).toEqual(coached);
+  });
+
+  it('keeps the watch numbers of a completed session (max HR, kcal and power)', () => {
+    const watched: Workout = {
+      ...coached,
+      completed: { source: 'garmin', externalId: '9001', durationMin: 60, avgHr: 150, maxHr: 176, kcal: 720, avgPowerW: 212, bestPower1MinW: 390, bestPower20MinW: 268, rpe: 6 },
+    };
+    expect(rowToWorkout(workoutToRow(watched)).completed).toEqual(watched.completed);
   });
 
   it('a workout without coaching keeps its pre-v4 shape (null or missing column)', () => {

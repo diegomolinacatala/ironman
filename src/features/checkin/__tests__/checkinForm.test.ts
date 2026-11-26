@@ -3,7 +3,7 @@ import { describe, expect, test } from '@jest/globals';
 import type { DailyCheckin } from '@/domain/types';
 import { checkinDraftSchema } from '@/domain/validation';
 
-import { DEFAULT_SLEEP_HOURS, checkinToForm, formToCheckinDraft, roundHalf, sleepHoursLabel } from '../checkinForm';
+import { DEFAULT_SLEEP_HOURS, checkinToForm, formToCheckinDraft, missingIllnessAnswer, roundHalf, sleepHoursLabel } from '../checkinForm';
 
 const existing: DailyCheckin = {
   userId: 'me',
@@ -36,6 +36,22 @@ describe('check-in form', () => {
     const draft = formToCheckinDraft(full);
     expect(draft).toMatchObject({ sleepQuality: 3, notes: null, sleepHours: DEFAULT_SLEEP_HOURS });
     expect(checkinDraftSchema.safeParse(draft).success).toBe(true);
+  });
+
+  test('the illness question, when shown, needs an answer that travels with the draft', () => {
+    const asked = { ...checkinToForm('2026-10-25', null, null, true), sleepQuality: 3, fatigue: 2, soreness: 1, stress: 2, motivation: 4 } as const;
+    expect(missingIllnessAnswer(asked)).toBe(true);
+    expect(formToCheckinDraft(asked)).toBeNull();
+    const answered = formToCheckinDraft({ ...asked, illnessAnswer: 'heat' });
+    expect(answered).toMatchObject({ illnessAnswer: 'heat' });
+    expect(checkinDraftSchema.safeParse(answered).success).toBe(true);
+    const notAsked = formToCheckinDraft({ ...asked, illnessAsked: false });
+    expect(notAsked && 'illnessAnswer' in notAsked).toBe(false);
+  });
+
+  test('an earlier answer stays editable even if the signal is gone', () => {
+    const form = checkinToForm('2026-10-25', { ...existing, illnessAnswer: 'symptoms' }, null, false);
+    expect(form).toMatchObject({ illnessAsked: true, illnessAnswer: 'symptoms' });
   });
 
   test('helpers', () => {

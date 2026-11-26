@@ -28,6 +28,8 @@ const day = object({
   sleep_awake_min: optional(integer({ min: 0, max: 1440, description: 'Minutos despierto durante la noche.' })),
   sleep_start: optional(string({ max: 40, format: 'date-time', description: 'Inicio del sueño (ISO 8601 con zona, p. ej. 2026-10-26T23:10:00+01:00).' })),
   sleep_end: optional(string({ max: 40, format: 'date-time', description: 'Fin del sueño (ISO 8601 con zona).' })),
+  sleep_respiration: optional(number({ min: 4, max: 40, description: 'Respiración media durante el sueño de esa noche, en respiraciones por minuto (p. ej. 14,5).' })),
+  sleep_avg_hr: optional(number({ min: 25, max: 150, description: 'FC media durante el sueño de esa noche, en ppm (no la FC en reposo).' })),
 });
 
 const input = object({
@@ -54,6 +56,8 @@ const FIELD_MAP = {
   sleep_awake_min: 'sleepAwakeMin',
   sleep_start: 'sleepStart',
   sleep_end: 'sleepEnd',
+  sleep_respiration: 'sleepRespiration',
+  sleep_avg_hr: 'sleepAvgHr',
 } as const;
 
 type Day = Infer<typeof day>;
@@ -90,7 +94,8 @@ export const logDailyMetricsTool: RegisteredTool = defineTool({
   name: 'log_daily_metrics',
   title: TITLE,
   description: [
-    'Guarda en Road to Ironman un resumen diario de bienestar leído del reloj del usuario con su conector de Garmin o de COROS (VFC/HRV en ms, FC en reposo en ppm, horas, puntuación, fases (profundo, ligero, REM, despierto en minutos) e inicio/fin del sueño, Body Battery, disposición para entrenar o recuperación, VO2max, pasos, estrés medio, estado de entrenamiento).',
+    'Guarda en Road to Ironman un resumen diario de bienestar leído del reloj del usuario con su conector de Garmin o de COROS (VFC/HRV en ms, FC en reposo en ppm, horas, puntuación, fases (profundo, ligero, REM, despierto en minutos) e inicio/fin del sueño, respiración y FC media durante el sueño, Body Battery, disposición para entrenar o recuperación, VO2max, pasos, estrés medio, estado de entrenamiento).',
+    'La respiración y la FC durante el sueño sirven para avisar de un posible resfriado: guárdalas cuando el conector las dé.',
     'source dice de qué reloj vienen (por defecto, el del perfil). Se fusiona con lo que ya hubiera para ese día: los campos que no envíes se conservan. Úsala solo con datos reales del conector; no inventes valores.',
     'Hasta 31 días por llamada; fechas de los últimos 365 días.',
   ].join(' '),

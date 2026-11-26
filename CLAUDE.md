@@ -11,7 +11,7 @@ Al empezar, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota pert
 - iOS builds: GitHub Actions (`.github/workflows/ios.yml`) runs `expo prebuild` on a Mac and uploads to TestFlight; no EAS.
 - After adding or updating an Expo package run `node scripts/ios/check-prebuilt-abi.mjs`: a prebuilt module built against another `expo-modules-core` closes the app at launch (build 7). `expo-file-system` is pinned to `58.0.11` for that reason.
 - v2 (`docs/V2.md`): the in-app AI is on and free — `coach`/`briefing`/`meal` call Cloudflare Workers AI via `cloudflare/ai` (EXPO_PUBLIC_AI_COACH=0 disables). Never add a paid AI path without asking the owner.
-- `src/domain/{zones,prescription,season,periodization,recoveryLayout,constants,runVolume}.ts` and part of `dates.ts` are mirrored into `supabase/functions/_shared/planning/domain/`: after editing them run `npm run sync:mirror` (`mirror.test.ts` fails otherwise). Never edit the mirror by hand.
+- `src/domain/{zones,prescription,season,periodization,recoveryLayout,constants,runVolume,wakeWindow,weather,watchCompletion,illness}.ts` and part of `dates.ts` are mirrored into `supabase/functions/_shared/planning/domain/`: after editing them run `npm run sync:mirror` (`mirror.test.ts` fails otherwise). Never edit the mirror by hand.
 - Jest replaces Reanimated globally (`jest.setup.ts`); worker tests: `node --test "cloudflare/ai/src/**/*.test.mts"`.
 
 ## Social ("Juntos") — state after v3 (2026-11-04)

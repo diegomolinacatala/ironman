@@ -116,12 +116,26 @@ export interface CompletedData {
   durationMin?: number;
   distanceM?: number;
   avgHr?: number;
+  /** Highest heart rate of the session (watch), ppm. */
+  maxHr?: number;
   /** Rate of perceived exertion 1–10. */
   rpe?: number;
   /** Sensaciones after the session: 1 = muy mal … 5 = genial. */
   feel?: Score5;
   tss?: number;
+  /** Energy spent in the session (watch), kcal. */
+  kcal?: number;
+  /** Average power of the session (power meter), W. */
+  avgPowerW?: number;
+  /** Best 1-minute / 20-minute average power of the session (watch), W: what an FTP test reads. */
+  bestPower1MinW?: number;
+  bestPower20MinW?: number;
   notes?: string;
+  /**
+   * Who wrote the data. A session marked done by hand ('manual', no `externalId`) is completed
+   * later with the watch's numbers when the same activity arrives (domain/watchCompletion.ts):
+   * it then takes the watch's source and id, and keeps the athlete's RPE, feel and notes.
+   */
   source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
   /** Id of the matched activity in the source system (e.g. HealthKit UUID). */
   externalId?: string;
@@ -366,6 +380,15 @@ export interface Availability {
 /** 1 = very bad … 5 = very good (for fatigue/soreness/stress: 1 = none … 5 = extreme). */
 export type Score5 = 1 | 2 | 3 | 4 | 5;
 
+/**
+ * Answer to the extra morning question shown when last night's breathing or
+ * pulse is above the athlete's baseline (domain/illness.ts): 'fine' «Bien,
+ * normal»; 'symptoms' «Noto algo: garganta, mocos o cansancio raro»; 'alcohol'
+ * «Bebí alcohol o cené tarde»; 'heat' «Calor o mal descanso»; 'stress' «Estrés».
+ */
+export const ILLNESS_ANSWERS = ['fine', 'symptoms', 'alcohol', 'heat', 'stress'] as const;
+export type IllnessAnswer = (typeof ILLNESS_ANSWERS)[number];
+
 export interface DailyCheckin {
   userId: UUID;
   date: ISODate;
@@ -376,6 +399,8 @@ export interface DailyCheckin {
   stress: Score5;
   motivation: Score5;
   notes: string | null;
+  /** How the athlete feels when the night's signals were up; absent/null = not asked. */
+  illnessAnswer?: IllnessAnswer | null;
 }
 
 export type CheckinDraft = Omit<DailyCheckin, 'userId'>;
@@ -405,6 +430,10 @@ export interface DailyMetrics {
   /** When that night's sleep started / ended (ISO instant). */
   sleepStart?: ISODateTime | null;
   sleepEnd?: ISODateTime | null;
+  /** Average breathing rate during that night, breaths/min (illness signal, domain/illness.ts). */
+  sleepRespiration?: number | null;
+  /** Average heart rate during that night, bpm (illness signal). */
+  sleepAvgHr?: number | null;
 }
 
 export type MetricsDraft = Omit<DailyMetrics, 'userId'>;

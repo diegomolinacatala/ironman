@@ -130,6 +130,21 @@ export function quantityToMeters(q: QuantityLike | null | undefined): number | n
   return factor === undefined ? null : q.quantity * factor;
 }
 
+const ENERGY_UNIT_TO_KCAL: Readonly<Record<string, number>> = {
+  kcal: 1,
+  Cal: 1,
+  cal: 0.001,
+  kJ: 1 / 4.184,
+  J: 1 / 4184,
+};
+
+/** Converts a HealthKit energy quantity (a workout's `totalEnergyBurned`) to kcal; null when unknown/invalid. */
+export function quantityToKcal(q: QuantityLike | null | undefined): number | null {
+  if (!q || !isFiniteNumber(q.quantity) || q.quantity <= 0) return null;
+  const factor = ENERGY_UNIT_TO_KCAL[q.unit];
+  return factor === undefined ? null : q.quantity * factor;
+}
+
 // ---------------------------------------------------------------------------
 // Sleep
 // ---------------------------------------------------------------------------
@@ -221,12 +236,15 @@ function sessionsOf(intervals: readonly Interval[]): Session[] {
 /**
  * Start and end of the main sleep (the longest session) per wake-up date, so an afternoon
  * nap does not move the time the athlete woke up (wake-up briefing, usual wake-up window).
+ * Heart rate and breathing during sleep (illness signal) are read inside this window. A
+ * "session" longer than 16 h is a recording artefact and is left out.
  */
 export function sleepWindowsByDate(samples: readonly SleepSampleLike[]): Record<ISODate, SleepWindow> {
   const result: Record<ISODate, SleepWindow> = {};
   for (const [date, intervals] of asleepByDate(samples)) {
     const main = sessionsOf(intervals).reduce<Session | null>((best, s) => (best === null || s.asleepMs > best.asleepMs ? s : best), null);
-    if (main) result[date] = { start: new Date(main.start).toISOString(), end: new Date(main.end).toISOString() };
+    if (!main || main.end - main.start > MAX_SLEEP_HOURS * HOUR_MS) continue;
+    result[date] = { start: new Date(main.start).toISOString(), end: new Date(main.end).toISOString() };
   }
   return result;
 }
@@ -258,10 +276,22 @@ export interface DailyHealthSeries {
   vo2max: Record<ISODate, number>;
   /** Main sleep start/end per wake-up date (the usual wake-up window and the wake-up briefing). */
   sleepWindows?: Record<ISODate, SleepWindow>;
+  /** Average breathing rate (breaths/min) and heart rate (bpm) inside each night's sleep window. */
+  sleepRespiration?: Record<ISODate, number>;
+  sleepAvgHr?: Record<ISODate, number>;
 }
 
 function round1(value: number | undefined): number | null {
   return isFiniteNumber(value) ? Math.round(value * 10) / 10 : null;
+}
+
+/**
+ * Night vitals, only when they were read: then every draft carries both keys
+ * (null when that night has none) so the batched upsert writes the same columns.
+ */
+function nightVitals(series: DailyHealthSeries, date: ISODate): Pick<MetricsDraft, 'sleepRespiration' | 'sleepAvgHr'> {
+  if (!series.sleepRespiration && !series.sleepAvgHr) return {};
+  return { sleepRespiration: round1(series.sleepRespiration?.[date]), sleepAvgHr: round1(series.sleepAvgHr?.[date]) };
 }
 
 /** One `MetricsDraft` (source 'healthkit') per date that has at least one value. */
@@ -283,9 +313,16 @@ export function buildMetricsDrafts(dates: readonly ISODate[], series: DailyHealt
       stressAvg: null,
       trainingStatus: null,
       ...(window ? { sleepStart: window.start, sleepEnd: window.end } : {}),
+      ...nightVitals(series, date),
     };
     const hasValue =
-      draft.hrvMs != null || draft.restingHr != null || draft.sleepHours != null || draft.vo2max != null || draft.steps != null;
+      draft.hrvMs != null ||
+      draft.restingHr != null ||
+      draft.sleepHours != null ||
+      draft.vo2max != null ||
+      draft.steps != null ||
+      draft.sleepRespiration != null ||
+      draft.sleepAvgHr != null;
     return hasValue ? [draft] : [];
   });
 }

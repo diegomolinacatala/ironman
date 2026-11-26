@@ -24,7 +24,19 @@ export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planni
  * Modules copied whole (their imports must stay inside this list, `dates` or `types`).
  * `wakeWindow`: the usual wake-up window and the wake-up briefing decision (app settings + `morning` sweep).
  */
-const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'runVolume', 'wakeWindow', 'weather'];
+const WHOLE = [
+  'constants',
+  'recoveryLayout',
+  'periodization',
+  'zones',
+  'season',
+  'prescription',
+  'runVolume',
+  'wakeWindow',
+  'weather',
+  'watchCompletion',
+  'illness',
+];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
 const DATE_DECLS = [
@@ -88,6 +100,8 @@ const TYPES_MODULE = `${header('the domain types used by the mirrored modules')}
  */
 export type {
   AthleteLevel,
+  CompletedData,
+  IllnessAnswer,
   Intensity,
   ISODate,
   NumberRange,
@@ -101,6 +115,7 @@ export type {
   WeekPlan,
   WeekPlanDraft,
   WeekPlanKind,
+  Workout,
   WorkoutCoaching,
   WorkoutStatus,
   WorkoutStep,

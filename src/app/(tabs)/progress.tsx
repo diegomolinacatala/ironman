@@ -1,7 +1,8 @@
 /**
- * Progreso — form (PMC, open) and folded sections: volume & compliance, recovery, nutrition,
- * races. Each one opens on demand and is remembered on the device. On top, only when easy
- * sessions keep coming out harder than planned, a quiet suggestion to review the zones.
+ * Progreso — a threshold suggestion when there is one, form (PMC, open) and folded sections:
+ * volume & compliance, recovery, nutrition, races. Each one opens on demand and is remembered on
+ * the device. On top, only when easy sessions keep coming out harder than planned, a quiet
+ * suggestion to review the zones.
  */
 import { router } from 'expo-router';
 import { StyleSheet } from 'react-native';
@@ -19,6 +20,7 @@ import { ZoneReviewCard } from '@/features/progress/ZoneReviewCard';
 import { useZoneReviewSnooze } from '@/features/progress/zoneReviewSnooze';
 import { RaceCountdownCard } from '@/features/races/RaceCountdownCard';
 import { phaseName } from '@/features/races/raceModel';
+import { ThresholdSuggestions } from '@/features/thresholds/ThresholdSuggestions';
 import { Button, Disclosure, ErrorNotice, Loading, Screen, space } from '@/ui';
 
 export default function ProgressScreen() {
@@ -40,6 +42,8 @@ export default function ProgressScreen() {
       contentStyle={[styles.content, bottomPadding != null ? { paddingBottom: bottomPadding } : null]}>
       {data.error ? <ErrorNotice message={data.error} onRetry={data.refetch} /> : null}
       {data.isLoading ? <Loading label="Calculando tu forma…" /> : null}
+      {/* "¿Actualizo tu umbral?" when the last 8 weeks say it moved (never applied without «Actualizar»). */}
+      <ThresholdSuggestions today={today} />
 
       {zoneTrend ? (
         <ZoneReviewCard trend={zoneTrend} onReview={() => router.push('/settings/profile')} onDismiss={zoneSnooze.snooze} />

@@ -1,4 +1,5 @@
 import { addDays } from '../dates';
+import { POSSIBLE_ILLNESS_MESSAGE } from '../illness';
 import { YESTERDAY_DATA_NOTE, computeReadiness } from '../readiness';
 import type { DailyMetrics } from '../types';
 import { makeCheckin, makeMetrics } from './fixtures';
@@ -136,6 +137,59 @@ describe('§11.8 signal counting (ENG-11)', () => {
     const r = computeReadiness({ today: TODAY, checkin: null, metrics: [...shortWeek, makeMetrics(TODAY, { sleepHours: 6.2, trainingReadiness: 45 })] });
     expect(r.level).toBe('green');
     expect(r.factors.join(' ')).toMatch(/Media de sueño/);
+  });
+});
+
+describe('illness signals and the morning answer', () => {
+  const nights = history(20, { sleepRespiration: 14.5, sleepAvgHr: 52 });
+  const highNight = makeMetrics(TODAY, { sleepRespiration: 16, sleepAvgHr: 59 });
+  const breathingOnly = makeMetrics(TODAY, { sleepRespiration: 16, sleepAvgHr: 52 });
+
+  test('symptoms with a likely signal turn the day red, with tact', () => {
+    const r = computeReadiness({ today: TODAY, checkin: makeCheckin({ illnessAnswer: 'symptoms' }), metrics: [...nights, highNight] });
+    expect(r.level).toBe('red');
+    expect(r.factors).toContain('Respiración y pulso de esta noche altos y notas síntomas');
+    expect(r.recommendation).toBe(POSSIBLE_ILLNESS_MESSAGE);
+    expect(r.illness).toMatchObject({ kind: 'possible_illness', level: 'likely' });
+  });
+
+  test('symptoms with a single signal, or feeling ill with normal numbers, make it amber', () => {
+    const watch = computeReadiness({ today: TODAY, checkin: makeCheckin({ illnessAnswer: 'symptoms' }), metrics: [...nights, breathingOnly] });
+    expect(watch.level).toBe('amber');
+    expect(watch.recommendation).toBe(POSSIBLE_ILLNESS_MESSAGE);
+    const normal = computeReadiness({ today: TODAY, checkin: makeCheckin({ illnessAnswer: 'symptoms' }), metrics: [...nights, makeMetrics(TODAY, { sleepRespiration: 14.5, sleepAvgHr: 52 })] });
+    expect(normal.level).toBe('amber');
+    expect(normal.factors).toContain('Notas síntomas: garganta, mocos o cansancio raro');
+  });
+
+  test('alcohol, heat or stress explain it: a note, no alarm, the plan stays', () => {
+    const r = computeReadiness({ today: TODAY, checkin: makeCheckin({ illnessAnswer: 'alcohol' }), metrics: [...nights, breathingOnly] });
+    expect(r.level).toBe('green');
+    expect(r.factors).toEqual(['Respiración de esta noche alta, seguramente por el alcohol o la cena tardía']);
+    expect(r.recommendation).toBe('Todo en orden: sigue el plan de hoy.');
+    expect(r.illness?.kind).toBe('explained');
+  });
+
+  test('an explained night still eases off when the rest of readiness is low', () => {
+    const r = computeReadiness({ today: TODAY, checkin: makeCheckin({ illnessAnswer: 'stress', fatigue: 4 }), metrics: [...nights, { ...breathingOnly, sleepHours: 5 }] });
+    expect(r.level).toBe('amber');
+    expect(r.recommendation).toMatch(/con freno/);
+    expect(r.recommendation).not.toMatch(/malo/);
+  });
+
+  test('"bien" keeps the plan and mentions it lightly', () => {
+    const r = computeReadiness({ today: TODAY, checkin: makeCheckin({ illnessAnswer: 'fine' }), metrics: [...nights, highNight] });
+    expect(r.level).toBe('green');
+    expect(r.factors).toEqual(['Respiración y pulso de esta noche altos, pero te encuentras bien']);
+  });
+
+  test('before answering, breathing up is a note; a high resting HR alone is not repeated', () => {
+    const noAnswer = computeReadiness({ today: TODAY, checkin: null, metrics: [...nights, breathingOnly] });
+    expect(noAnswer.level).toBe('green');
+    expect(noAnswer.factors).toEqual(['Respiración de esta noche alta frente a tu media']);
+    const rhrOnly = computeReadiness({ today: TODAY, checkin: null, metrics: [...history(20), makeMetrics(TODAY, { restingHr: 56 })] });
+    expect(rhrOnly.factors.filter((f) => /esta noche/.test(f))).toEqual([]);
+    expect(rhrOnly.illness?.kind).toBe('unanswered');
   });
 });
 

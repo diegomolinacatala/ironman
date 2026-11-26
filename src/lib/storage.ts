@@ -13,6 +13,7 @@ export const StorageKeys = {
   calendarLastSync: 'rti.calendar.lastSync',
   pushToken: 'rti.push.token',
   coachHistory: 'rti.coach.history',
+  thresholdSnoozes: 'rti.thresholds.snoozes.v1',
 } as const;
 
 export async function readJson<T>(key: string, fallback: T): Promise<T> {

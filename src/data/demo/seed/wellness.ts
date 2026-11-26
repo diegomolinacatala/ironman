@@ -73,7 +73,7 @@ export function seedCheckins(userId: UUID, today: ISODate, rand: () => number): 
   });
 }
 
-/** 28 days of Garmin metrics ending today (HRV ~60–75 ms, RHR ~48–52, sleep stages). */
+/** 28 days of Garmin metrics ending today (HRV ~60–75 ms, RHR ~48–52, sleep stages, quiet night vitals). */
 export function seedMetrics(userId: UUID, today: ISODate, rand: () => number): DailyMetrics[] {
   const sleepRand = createRandom(SLEEP_SEED);
   return Array.from({ length: DAYS }, (_, i) => {
@@ -81,12 +81,17 @@ export function seedMetrics(userId: UUID, today: ISODate, rand: () => number): D
     const trend = Math.sin(i / 4) * 3;
     const hrv = round1(67 + trend + (rand() - 0.5) * 8);
     const sleepHours = round1(6.6 + rand() * 1.6);
+    // Same draw order as before (the rest of the seed stays the same).
+    const restingHr = Math.min(52, Math.max(48, Math.round(50 - trend / 2 + (rand() - 0.5) * 3)));
     return {
       userId,
       date,
       source: 'garmin',
       hrvMs: Math.min(75, Math.max(60, hrv)),
-      restingHr: Math.min(52, Math.max(48, Math.round(50 - trend / 2 + (rand() - 0.5) * 3))),
+      restingHr,
+      // Steady nights (no illness signal in the demo): ~14,5 breaths/min and a few beats over resting HR.
+      sleepRespiration: round1(14.4 + ((i * 7) % 5) * 0.06),
+      sleepAvgHr: restingHr + 3 + (i % 2),
       sleepHours,
       sleepScore: Math.round(62 + (sleepHours - 6.5) * 12 + rand() * 8),
       bodyBattery: Math.round(58 + rand() * 32),

@@ -1,8 +1,9 @@
 import { describe, expect, test } from '@jest/globals';
 
-import type { CompletedData, DateRange, Workout, WorkoutDraft } from '@/domain/types';
+import type { CompletedData, DateRange, Workout, WorkoutDraft, WorkoutPatch } from '@/domain/types';
 
 import {
+  findManualLookalike,
   importActivities,
   isLikelyDuplicate,
   toImportCandidate,
@@ -46,6 +47,13 @@ function fakeRepo(initial: Workout[]): HealthRepo & { workouts: () => Workout[] 
       store = store.map((w) => (w.id === id ? done : w));
       return done;
     },
+    updateWorkout: async (id: string, patch: WorkoutPatch) => {
+      const current = store.find((w) => w.id === id);
+      if (!current) throw new Error('not found');
+      const updated: Workout = { ...current, ...(patch as Partial<Workout>) };
+      store = store.map((w) => (w.id === id ? updated : w));
+      return updated;
+    },
   };
 }
 
@@ -60,8 +68,16 @@ describe('toImportCandidate', () => {
       durationMin: 52,
       distanceM: 10121,
       avgHr: 149,
+      maxHr: null,
+      kcal: null,
       completedAt: new Date(2026, 9, 26, 19, 27).toISOString(),
     });
+  });
+
+  test('keeps the max heart rate and the energy of the workout when Health has them', () => {
+    const candidate = toImportCandidate(activity({ maxHr: 176.4, kcal: 611.8 }));
+    expect(candidate).toMatchObject({ maxHr: 176, kcal: 612 });
+    expect(toImportCandidate(activity({ maxHr: 0, kcal: -3 }))).toMatchObject({ maxHr: null, kcal: null });
   });
 
   test('drops walks and very short activities', () => {
@@ -96,7 +112,7 @@ describe('importActivities', () => {
     const planned = workout({ id: 'plan-1', date: '2026-10-26', startTime: '18:30', durationMin: 50 });
     const repo = fakeRepo([planned]);
     const result = await importActivities(repo, [toImportCandidate(activity())!], { range: RANGE, knownIds: new Set() });
-    expect(result).toEqual({ workoutsCompleted: 1, activitiesImported: 0, handledIds: ['hk-1'] });
+    expect(result).toEqual({ workoutsCompleted: 1, activitiesImported: 0, workoutsEnriched: 0, handledIds: ['hk-1'] });
     const done = repo.workouts().find((w) => w.id === 'plan-1');
     expect(done?.status).toBe('completed');
     expect(done?.completed).toMatchObject({ source: 'healthkit', externalId: 'hk-1', durationMin: 52, distanceM: 10121, avgHr: 149 });
@@ -131,7 +147,7 @@ describe('importActivities', () => {
 
     failCompletion = false;
     const second = await importActivities(flaky, [padel], { range: RANGE, knownIds: new Set() });
-    expect(second).toEqual({ workoutsCompleted: 0, activitiesImported: 1, handledIds: ['hk-9'] });
+    expect(second).toEqual({ workoutsCompleted: 0, activitiesImported: 1, workoutsEnriched: 0, handledIds: ['hk-9'] });
     expect(repo.workouts()).toHaveLength(1);
     expect(repo.workouts()[0]).toMatchObject({ status: 'completed', completed: { externalId: 'hk-9', source: 'healthkit' } });
   });
@@ -141,7 +157,7 @@ describe('importActivities', () => {
     const repo = fakeRepo([orphan]);
     const other = toImportCandidate(activity({ uuid: 'hk-new' }))!;
     const result = await importActivities(repo, [other], { range: RANGE, knownIds: new Set() });
-    expect(result).toEqual({ workoutsCompleted: 0, activitiesImported: 1, handledIds: ['hk-new'] });
+    expect(result).toEqual({ workoutsCompleted: 0, activitiesImported: 1, workoutsEnriched: 0, handledIds: ['hk-new'] });
     expect(repo.workouts().find((w) => w.id === 'orphan')?.status).toBe('planned');
   });
 
@@ -151,6 +167,65 @@ describe('importActivities', () => {
     const planned = workout({ id: 'p', date: '2026-10-26', status: 'planned', externalId: 'healthkit:hk-5' });
     expect(isLikelyDuplicate(candidate, [skipped])).toBe(true);
     expect(isLikelyDuplicate(candidate, [planned])).toBe(false);
+  });
+
+  test('a session marked done by hand gets the activity numbers and keeps RPE, feel and notes', async () => {
+    const manual = workout({
+      id: 'manual',
+      date: '2026-10-26',
+      startTime: '18:30',
+      durationMin: 50,
+      status: 'completed',
+      completed: { source: 'manual', durationMin: 50, rpe: 7, feel: 2, notes: 'Me costó', completedAt: '2026-10-26T18:00:00.000Z' },
+    });
+    const repo = fakeRepo([manual]);
+    const run = toImportCandidate(activity({ maxHr: 171, kcal: 590 }))!;
+    const result = await importActivities(repo, [run], { range: RANGE, knownIds: new Set() });
+    expect(result).toEqual({ workoutsCompleted: 0, activitiesImported: 0, workoutsEnriched: 1, handledIds: ['hk-1'] });
+    expect(repo.workouts()).toHaveLength(1);
+    expect(repo.workouts()[0]?.completed).toEqual({
+      source: 'healthkit',
+      externalId: 'hk-1',
+      durationMin: 52,
+      distanceM: 10121,
+      avgHr: 149,
+      maxHr: 171,
+      kcal: 590,
+      rpe: 7,
+      feel: 2,
+      notes: 'Me costó',
+      completedAt: '2026-10-26T18:00:00.000Z',
+    });
+  });
+
+  test('enriching is idempotent: the stored id makes the next sync skip the activity', async () => {
+    const manual = workout({ id: 'manual', date: '2026-10-26', startTime: '18:30', status: 'completed', completed: { source: 'manual', durationMin: 50, rpe: 5 } });
+    const repo = fakeRepo([manual]);
+    const run = toImportCandidate(activity())!;
+    await importActivities(repo, [run], { range: RANGE, knownIds: new Set() });
+    const after = repo.workouts()[0];
+    const again = await importActivities(repo, [run], { range: RANGE, knownIds: new Set() });
+    expect(again).toEqual({ workoutsCompleted: 0, activitiesImported: 0, workoutsEnriched: 0, handledIds: ['hk-1'] });
+    expect(repo.workouts()).toEqual([after]);
+  });
+
+  test('a look-alike already linked to another activity keeps being a duplicate, even next to a manual one', async () => {
+    const manual = workout({ id: 'manual', date: '2026-10-26', startTime: '18:30', status: 'completed', completed: { source: 'manual', durationMin: 50 } });
+    const garmin = workout({ id: 'g', date: '2026-10-26', startTime: '18:35', status: 'completed', source: 'garmin', externalId: 'garmin:9001', completed: { source: 'garmin', externalId: '9001', durationMin: 52 } });
+    const repo = fakeRepo([manual, garmin]);
+    const result = await importActivities(repo, [toImportCandidate(activity())!], { range: RANGE, knownIds: new Set() });
+    expect(result).toEqual({ workoutsCompleted: 0, activitiesImported: 0, workoutsEnriched: 0, handledIds: ['hk-1'] });
+    expect(repo.workouts().find((w) => w.id === 'manual')?.completed).toEqual({ source: 'manual', durationMin: 50 });
+  });
+
+  test('a manual completion is not a duplicate but a look-alike to complete; a Claude log with an activity id is linked', () => {
+    const candidate = toImportCandidate(activity())!;
+    const manual = workout({ id: 'm', date: '2026-10-26', startTime: '18:30', status: 'completed', completed: { source: 'manual', durationMin: 50 } });
+    const claudeLinked = workout({ id: 'c', date: '2026-10-26', startTime: '18:30', status: 'completed', source: 'claude', externalId: 'garmin:1', completed: { source: 'claude', externalId: '1', durationMin: 50 } });
+    expect(isLikelyDuplicate(candidate, [manual])).toBe(false);
+    expect(findManualLookalike(candidate, [manual])?.id).toBe('m');
+    expect(isLikelyDuplicate(candidate, [claudeLinked])).toBe(true);
+    expect(findManualLookalike(candidate, [claudeLinked])).toBeUndefined();
   });
 
   test('skips already imported ids and duplicates, continues after failures', async () => {
