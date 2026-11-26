@@ -6,7 +6,7 @@ import { lifeEventLabel } from '@/domain/labels';
 import type { LifeEvent } from '@/domain/types';
 import { useLifeEvents } from '@/data/queries';
 import { EventFields } from '@/features/events/EventFields';
-import { changeKind, emptyEventForm, eventToForm, isLifeEventKind, type EventFormState } from '@/features/events/eventForm';
+import { changeKind, emptyEventForm, eventToForm, isLifeEventKind, lastUsedKind, type EventFormState } from '@/features/events/eventForm';
 import { KindGrid } from '@/features/events/KindGrid';
 import { ReplanPanel } from '@/features/events/ReplanPanel';
 import { useEventEditor } from '@/features/events/useEventEditor';
@@ -34,8 +34,11 @@ export default function EventEditScreen() {
     ? { from: addDays(date, -60), to: addDays(date, 60) }
     : { from: addDays(todayISO(), -LOOKUP_BACK_DAYS), to: addDays(todayISO(), LOOKUP_AHEAD_DAYS) };
   const events = useLifeEvents(range);
+  const kind = param(params.kind);
+  const kindGiven = isLifeEventKind(kind);
 
-  if (id && events.isLoading) {
+  // A new imprevisto without a kind starts with the last kind used: wait for the list (it is quick).
+  if (events.isLoading && (id || !kindGiven)) {
     return (
       <Screen inSheet>
         <Loading label="Cargando imprevisto" />
@@ -64,8 +67,9 @@ export default function EventEditScreen() {
       </Screen>
     );
   }
-  const kind = param(params.kind);
-  const initial = existing ? eventToForm(existing, lifeEventLabel) : emptyEventForm(date, isLifeEventKind(kind) ? kind : 'padel');
+  const initial = existing
+    ? eventToForm(existing, lifeEventLabel)
+    : emptyEventForm(date, kindGiven ? kind : lastUsedKind(events.data ?? []));
   return <EventEditor key={existing?.id ?? 'new'} initial={initial} existing={existing} />;
 }
 

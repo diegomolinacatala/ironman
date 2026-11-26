@@ -53,6 +53,17 @@ describe('Ha surgido algo', () => {
     expect(mockRouter.replace).toHaveBeenCalledWith('/coach?mode=replan&lifeEventId=new-1');
   });
 
+  test('a new imprevisto starts with the kind used last', async () => {
+    mockEvents = [
+      makeEvent({ id: 'old', kind: 'padel', startDate: '2026-10-10', endDate: '2026-10-10', createdAt: '2026-10-01T10:00:00Z' }),
+      makeEvent({ id: 'last', kind: 'football', startDate: '2026-10-05', endDate: '2026-10-05', createdAt: '2026-10-20T10:00:00Z' }),
+    ];
+    await render(<EventEditScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar imprevisto' }));
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    expect(mockCreate.mock.calls[0]?.[0]).toMatchObject({ kind: 'football' });
+  });
+
   test('injury requires a body area', async () => {
     await render(<EventEditScreen />);
     await fireEvent.press(screen.getAllByLabelText(/Lesi/)[0]!);

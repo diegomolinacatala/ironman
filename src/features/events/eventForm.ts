@@ -36,6 +36,14 @@ export function isBodyArea(value: unknown): value is BodyArea {
   return typeof value === 'string' && (BODY_AREAS as readonly string[]).includes(value);
 }
 
+/** Kind a new imprevisto starts with: the one the athlete created last, else pádel. */
+export const FIRST_EVENT_KIND: LifeEventKind = 'padel';
+
+export function lastUsedKind(events: readonly LifeEvent[]): LifeEventKind {
+  const latest = events.reduce<LifeEvent | null>((best, e) => (best === null || e.createdAt > best.createdAt ? e : best), null);
+  return latest?.kind ?? FIRST_EVENT_KIND;
+}
+
 export function emptyEventForm(date: ISODate, kind: LifeEventKind = 'padel'): EventFormState {
   return {
     kind,

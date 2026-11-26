@@ -13,6 +13,7 @@ import {
   formToEventDraft,
   isBodyArea,
   isLifeEventKind,
+  lastUsedKind,
 } from '../eventForm';
 import { hasTime, isSeverity, kindGroup, lifeEventIcon } from '../kinds';
 
@@ -33,6 +34,16 @@ describe('kinds', () => {
 });
 
 describe('event form', () => {
+  test('a new imprevisto starts with the kind created last, pádel the first time', () => {
+    expect(lastUsedKind([])).toBe('padel');
+    const events = [
+      makeEvent({ id: 'a', kind: 'work', createdAt: '2026-10-20T08:00:00Z' }),
+      makeEvent({ id: 'b', kind: 'travel', createdAt: '2026-10-22T08:00:00Z' }),
+      makeEvent({ id: 'c', kind: 'padel', createdAt: '2026-10-01T08:00:00Z' }),
+    ];
+    expect(lastUsedKind(events)).toBe('travel');
+  });
+
   test('sport draft is a single timed day with duration', () => {
     const state = { ...emptyEventForm('2026-10-28', 'padel'), endDate: '2026-10-30' };
     const draft = formToEventDraft(state, lifeEventLabel);
