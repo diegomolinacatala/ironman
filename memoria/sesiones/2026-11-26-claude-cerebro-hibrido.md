@@ -37,4 +37,4 @@
 1. ~~Desplegar las funciones de Supabase~~ **Hecho el 26-11** con el OK de Diego: `coach`, `briefing`, `meal` y `mcp` están en producción y responden 401 sin sesión. `save_briefing` aparece en Claude al abrir un chat nuevo con el conector.
 2. Probar en el iPhone que el enlace `claude.ai/new?q=` abre la app de Claude con el texto ya escrito.
 3. Que cada uno configure su rutina diaria (texto en `docs/CLAUDE_COACH.md`).
-4. Actualizar los tests de Hoy, onboarding y cuenta en la tarea que los cambió.
+4. ~~Actualizar los tests de Hoy, onboarding y cuenta~~ **Hecho**: adaptados al diseño nuevo (tarjeta de sesión con «Ver entreno», menú con «Registrar como hecho», acciones Mi coach/Sensaciones/Imprevisto, día libre frente a descanso, onboarding directo de 3 pasos o guiado de 7, hero de inicio de sesión). `npm run test:all` en verde: 2091 tests de Jest, 164 de base de datos y 265 de funciones.

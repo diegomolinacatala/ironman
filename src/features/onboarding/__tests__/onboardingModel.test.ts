@@ -109,7 +109,10 @@ describe('resume', () => {
   test('stored progress is validated', () => {
     expect(
       parseStoredProgress({ version: 2, step: 'garmin', claudeDone: true, garminSkipped: true, claudeTokenId: 't9', plannedWeeks: ['2026-10-26', 3] }),
-    ).toEqual({ version: 2, step: 'garmin', claudeDone: true, garminSkipped: true, claudeTokenId: 't9', plannedWeeks: ['2026-10-26'] });
+    ).toEqual({ version: 2, step: 'garmin', guidedSetup: true, claudeDone: true, garminSkipped: true, claudeTokenId: 't9', plannedWeeks: ['2026-10-26'] });
+    // Progress saved before guidedSetup existed: a connection step reopens the walkthrough, the plan step does not.
+    expect(parseStoredProgress({ version: 2, step: 'plan' })?.guidedSetup).toBe(false);
+    expect(parseStoredProgress({ version: 2, step: 'garmin', guidedSetup: false })?.guidedSetup).toBe(false);
     expect(parseStoredProgress({ version: 2, step: 'garmin' })).toEqual(emptyProgress('garmin'));
     expect(parseStoredProgress({ version: 1, step: 'garmin' })).toBeNull();
     expect(parseStoredProgress({ version: 2, step: 'identity' })).toBeNull();

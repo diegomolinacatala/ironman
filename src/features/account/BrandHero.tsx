@@ -7,7 +7,7 @@ import { BrandMark } from './BrandMark';
 
 /**
  * The hero is navy in both schemes, so its colours come from `brand`, not from the scheme:
- * paper text (13:1 on navy), sky for the subtitle (6:1), icon tiles one step lighter than the panel.
+ * paper text (13:1 on navy) and sky for the subtitle (6:1).
  */
 const HERO = {
   bg: brand.navy,
@@ -24,7 +24,7 @@ export interface BrandHeroProps {
 
 /**
  * Sign-in hero: navy panel with the mark (road to the horizon under a rising sun), the
- * "Road to Ironman" wordmark, a one-line promise and the three things the coach does.
+ * "Road to Ironman" wordmark and a one-line promise.
  */
 export function BrandHero({ topInset }: BrandHeroProps) {
   return (
