@@ -35,6 +35,8 @@ export interface ForecastPoint {
   temp: number | null;
   /** km/h at `t` (10-minute mean). */
   wind: number | null;
+  /** Strongest gust, km/h, when MET gives it (`/complete`, Nordic area); absent otherwise. */
+  gust?: number | null;
   /** Precipitation over the step, mm. */
   mm: number;
   /** Chance of precipitation over the step, %, when MET gives it (Nordic area). */

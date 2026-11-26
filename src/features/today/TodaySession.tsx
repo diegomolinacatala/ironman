@@ -53,7 +53,7 @@ export function TodaySession({ workout, partnerName, inCalendar, onOpen, onMore,
           </View>
         ) : null}
       </View>
-      {weather?.rainy ? <SessionWeatherLine view={weather} /> : null}
+      {weather?.onCard ? <SessionWeatherLine view={weather} /> : null}
       <Button label="Ver entreno" iconRight="arrowRight" onPress={onOpen} accessibilityHint="Ver objetivo, ritmos y estructura" fullWidth />
     </Card>
   );

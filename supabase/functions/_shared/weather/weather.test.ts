@@ -410,9 +410,61 @@ test('weatherForBriefing: only when an outdoor session today falls in the rain, 
   assert.deepEqual(weatherForBriefing({ ...base, workouts: [run(), run({ id: 's', sport: 'swim', title: 'Técnica' })] }), {
     place: 'Valencia',
     source: 'MET Norway',
-    sessions: [{ title: 'Rodaje suave', startTime: '18:00', rain: 'a las 18', dryGap: 'entre las 15 y las 17', advice: 'Sal a correr entre las 15 y las 17: no llueve' }],
+    sessions: [{ title: 'Rodaje suave', startTime: '18:00', trouble: 'rain', rain: 'a las 18', dryGap: 'entre las 15 y las 17', advice: 'Sal a correr entre las 15 y las 17: no llueve' }],
   });
   assert.equal(weatherForBriefing({ ...base, workouts: [run({ startTime: '12:00' })] }), null, 'dry at its time: nothing to say');
   const noGap = weatherForBriefing({ ...base, busy: [{ start: '07:00', end: '17:00' }], workouts: [run()] });
   assert.equal((noGap?.sessions as { advice: string }[])[0]?.advice, 'Llueve y no hay un hueco seco: mejor rodillo o piscina');
+});
+
+// ---------------------------------------------------------------------------
+// Wind (gusts when MET gives them; strong wind joins the rain, a notice stays silent)
+// ---------------------------------------------------------------------------
+
+test('parseMetForecast: gusts in km/h when MET gives them (/complete, Nordic area), absent otherwise', () => {
+  const step = (time: string, details: Record<string, number>) => ({ time, data: { instant: { details }, next_1_hours: { details: { precipitation_amount: 0 } } } });
+  const parsed = parseMetForecast({ properties: { timeseries: [step('2026-11-26T11:00:00Z', { wind_speed: 10, wind_speed_of_gust: 16 }), step('2026-11-26T12:00:00Z', { wind_speed: 10 })] } });
+  assert.equal(parsed?.points[0]?.gust, 58);
+  assert.equal(parsed?.points[0]?.wind, 36);
+  assert.equal('gust' in (parsed?.points[1] ?? {}), false);
+  const hours = localHours(parsed?.points ?? [], 'Europe/Madrid', NOW, 9);
+  assert.equal(hours[0]?.gustKmh, 58);
+  assert.equal('gustKmh' in (hours[1] ?? {}), false, 'no gust: the field is left out');
+});
+
+function windyHours(date: string, wind: (h: number) => number, gust?: (h: number) => number) {
+  return hoursOf(date, () => 0).map((h) => ({ ...h, windKmh: wind(h.hour), ...(gust ? { gustKmh: gust(h.hour) } : {}) }));
+}
+
+test('weatherForCoach: strong wind hours, gusts and the summary say when it blows', () => {
+  const forecast = { place: 'Valencia', source: 'met_norway' as const, updatedAt: '', hours: windyHours('2026-11-27', (h) => (h >= 14 && h < 20 ? 40 : 12), (h) => (h >= 14 && h < 20 ? 60 : 20)) };
+  const [day] = (weatherForCoach(forecast, '2026-11-27')?.days ?? []) as Record<string, unknown>[];
+  assert.equal(day?.summary, 'seco todo el día; viento fuerte entre las 14 y las 20');
+  assert.equal(day?.strongWindHours, 6);
+  assert.equal(day?.gustMaxKmh, 60);
+  assert.equal(day?.windMaxKmh, 40);
+});
+
+test('weatherForBriefing: strong wind on the bike joins the briefing with a calmer gap; a breeze or the same wind on a run stays silent', () => {
+  const bike = run({ sport: 'bike', title: 'Rodaje en bici', durationMin: 90 });
+  const base = { date: '2026-11-27', today: '2026-11-26', busy: [], now: NOW, timezone: 'Europe/Madrid' };
+  const windy = { place: 'Valencia', source: 'met_norway' as const, updatedAt: '', hours: windyHours('2026-11-27', (h) => (h >= 15 ? 38 : 12)) };
+  assert.deepEqual(weatherForBriefing({ ...base, forecast: windy, workouts: [bike] }), {
+    place: 'Valencia',
+    source: 'MET Norway',
+    sessions: [
+      {
+        title: 'Rodaje en bici',
+        startTime: '18:00',
+        trouble: 'wind',
+        rain: null,
+        wind: 'viento fuerte (38 km/h) entre las 18 y las 20',
+        dryGap: 'entre las 7 y las 15',
+        advice: 'Sal en bici entre las 7 y las 15: hay menos viento',
+      },
+    ],
+  });
+  assert.equal(weatherForBriefing({ ...base, forecast: windy, workouts: [run()] }), null, '38 km/h bothers a run but is no reason to move it');
+  const breezy = { ...windy, hours: windyHours('2026-11-27', () => 28) };
+  assert.equal(weatherForBriefing({ ...base, forecast: breezy, workouts: [bike] }), null, 'a notice is only a line in the app');
 });

@@ -2,11 +2,12 @@
  * The weather layer of the plan (pure, app only): a proposal for an existing
  * week from the forecast, always reviewed by the athlete (never applied here).
  *
- * For each outdoor session (run, bike, brick) that falls in the rain
- * (`weather.ts`), key sessions first:
- * 1. a dry gap the same day (training hours minus busy time, other sessions
+ * For each outdoor session (run, bike, brick) that falls in the rain or in
+ * strong wind for its sport (`weather.ts`; a wind notice is only a line on
+ * the card, never a change), key sessions first:
+ * 1. a gap the same day (dry and without strong wind) (training hours minus busy time, other sessions
  *    and imprevistos; its own time when it is dry there) → new time;
- * 2. 'week' scope only: a dry gap another day of the window that keeps the
+ * 2. 'week' scope only: such a gap another day of the window that keeps the
  *    rules of the re-planner (rest day, restrictions of injuries and other
  *    sports, no two hard sessions the same day, no hard days in a row, at
  *    most two sessions a day and never two of the same sport) → move;
@@ -46,14 +47,20 @@ import {
   dryGaps,
   gapAdvice,
   gapNeed,
+  isActionable,
   isOutdoorSession,
   minToTime,
   sessionWeather,
   startInGap,
   timeToMin,
+  troubleOf,
+  troubleSpan,
   whenLabel,
+  windLabel,
   type MinuteRange,
+  type SessionWind,
   type WeatherForecast,
+  type WeatherTrouble,
 } from './weather';
 import { indoorVersion, type IndoorKind } from './weatherIndoor';
 
@@ -77,9 +84,16 @@ type Outcome =
   | { kind: 'indoor'; to: IndoorKind }
   | { kind: 'none' };
 
+/** Why a session is handled: rain, strong wind or both, over `span`. */
+interface Issue {
+  trouble: WeatherTrouble;
+  span: MinuteRange;
+  wind: SessionWind | null;
+}
+
 interface Handled {
   workout: Workout;
-  rain: MinuteRange;
+  issue: Issue;
   outcome: Outcome;
 }
 
@@ -88,7 +102,7 @@ export interface WeatherPlanResult {
   summary: string;
   /** What is proposed ("" when nothing): the same proposal is never offered twice. */
   signature: string;
-  /** Outdoor sessions in the window that fall in the rain (quedadas included). */
+  /** Outdoor sessions in the window that fall in the rain or in strong wind (quedadas included). */
   rainy: number;
 }
 
@@ -126,6 +140,21 @@ function capitalize(text: string): string {
 
 const INDOOR_WORDS: Record<IndoorKind, string> = { trainer: 'rodillo', pool: 'piscina' };
 
+/** What a good gap has: «no llueve», «hay menos viento», «no llueve y hay menos viento». */
+const GOOD: Record<WeatherTrouble, string> = { rain: 'no llueve', wind: 'hay menos viento', both: 'no llueve y hay menos viento' };
+/** The problem as a noun («Lluvia», «Viento fuerte», «Lluvia y viento fuerte»). */
+const NOUN: Record<WeatherTrouble, string> = { rain: 'Lluvia', wind: 'Viento fuerte', both: 'Lluvia y viento fuerte' };
+/** The problem as a verb («llueve», «hay viento fuerte», «llueve y hay viento fuerte»). */
+const VERB: Record<WeatherTrouble, string> = { rain: 'llueve', wind: 'hay viento fuerte', both: 'llueve y hay viento fuerte' };
+/** What is missing indoors («un hueco seco», «un rato más tranquilo», «un hueco seco y sin viento»). */
+const NO_GAP: Record<WeatherTrouble, string> = { rain: 'un hueco seco', wind: 'un rato más tranquilo', both: 'un hueco seco y sin viento' };
+
+/** «Lluvia mañana a las 18», «Viento fuerte (38 km/h, rachas 55) mañana a las 18». */
+function causeWords(issue: Issue, day: string): string {
+  const noun = issue.trouble === 'wind' && issue.wind ? capitalize(windLabel(issue.wind)) : NOUN[issue.trouble];
+  return `${noun} ${day} ${whenLabel(issue.span)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Where a rainy session can go
 // ---------------------------------------------------------------------------
@@ -138,7 +167,7 @@ function freeAfterNow(free: readonly MinuteRange[], date: ISODate, input: Weathe
 
 function dryGapOn(plan: WorkingPlan, ctx: ReplanCtx, input: WeatherPlanInput, w: Workout, date: ISODate): MinuteRange | null {
   const free = freeAfterNow(freeTimeOn(plan, ctx, date, w.id).free, date, input);
-  return bestGap(dryGaps(input.forecast.hours, date, { allowed: free, minMinutes: gapNeed(w) }), w);
+  return bestGap(dryGaps(input.forecast.hours, date, { allowed: free, minMinutes: gapNeed(w), sport: w.sport }), w);
 }
 
 function others(plan: WorkingPlan, date: ISODate, id: string): Workout[] {
@@ -215,24 +244,26 @@ function goIndoors(plan: WorkingPlan, ctx: ReplanCtx, w: Workout, why: string): 
   return { plan: next, outcome: next.changes.length > plan.changes.length ? { kind: 'indoor', to: version.kind } : { kind: 'none' } };
 }
 
-function handle(plan: WorkingPlan, ctx: ReplanCtx, input: WeatherPlanInput, w: Workout, rain: MinuteRange, until: ISODate): { plan: WorkingPlan; outcome: Outcome } {
+function handle(plan: WorkingPlan, ctx: ReplanCtx, input: WeatherPlanInput, w: Workout, issue: Issue, until: ISODate): { plan: WorkingPlan; outcome: Outcome } {
   const day = words(input, w.date);
+  const cause = causeWords(issue, day);
+  const good = GOOD[issue.trouble];
   const sameDay = dryGapOn(plan, ctx, input, w, w.date);
   if (sameDay) {
     const time = minToTime(startInGap(sameDay, w));
-    const reason = `Lluvia ${day} ${whenLabel(rain)}; ${whenLabel(sameDay)} no llueve.`;
+    const reason = `${cause}; ${whenLabel(sameDay)} ${good}.`;
     return { plan: record(plan, { op: 'move', workoutId: w.id, toDate: w.date, toStartTime: time, reason }), outcome: { kind: 'time', time, gap: sameDay } };
   }
   const moved = input.scope === 'week' ? otherDay(plan, ctx, input, w, until) : null;
   if (moved?.kind === 'move') {
-    const reason = `Lluvia ${day} ${whenLabel(rain)}; ${words(input, moved.date)} ${whenLabel(moved.gap)} no llueve.`;
+    const reason = `${cause}; ${words(input, moved.date)} ${whenLabel(moved.gap)} ${good}.`;
     return { plan: record(plan, { op: 'move', workoutId: w.id, toDate: moved.date, toStartTime: moved.time, reason }), outcome: moved };
   }
-  return goIndoors(plan, ctx, w, `${capitalize(day)} llueve ${whenLabel(rain)} y no hay un hueco seco`);
+  return goIndoors(plan, ctx, w, `${capitalize(day)} ${VERB[issue.trouble]} ${whenLabel(issue.span)} y no hay ${NO_GAP[issue.trouble]}`);
 }
 
 // ---------------------------------------------------------------------------
-// Rainy sessions, summary and signature
+// Sessions with bad weather, summary and signature
 // ---------------------------------------------------------------------------
 
 function notStarted(w: Workout, input: WeatherPlanInput): boolean {
@@ -241,10 +272,13 @@ function notStarted(w: Workout, input: WeatherPlanInput): boolean {
   return start === null ? input.nowMinutes < 21 * 60 : start > input.nowMinutes;
 }
 
-function rainyRange(input: WeatherPlanInput, w: Workout): MinuteRange | null {
+/** Rain or strong wind for the session (a wind notice is not an issue: it stays a line on the card). */
+function issueOf(input: WeatherPlanInput, w: Workout): Issue | null {
   const afterMin = w.date === input.today ? input.nowMinutes : undefined;
   const weather = sessionWeather(input.forecast.hours, w, afterMin === undefined ? {} : { afterMin });
-  return weather.kind === 'rain' ? weather.rain : null;
+  if (!isActionable(weather)) return null;
+  const trouble = troubleOf(weather);
+  return { trouble, span: troubleSpan(weather), wind: weather.wind?.level === 'strong' ? weather.wind : null };
 }
 
 function byPriority(a: Workout, b: Workout): number {
@@ -273,13 +307,23 @@ function signatureOf(handled: readonly Handled[]): string {
 function singleSummary(h: Handled, input: WeatherPlanInput): string | null {
   const day = words(input, h.workout.date);
   const o = h.outcome;
+  const t = h.issue.trouble;
   if (o.kind === 'time') {
-    const advice = gapAdvice(h.workout.sport, o.gap);
-    return day === 'hoy' ? `${advice}.` : `${capitalize(day)}, ${advice.charAt(0).toLowerCase()}${advice.slice(1)}.`;
+    const advice = gapAdvice(h.workout.sport, o.gap, t);
+    const lead = t === 'rain' ? '' : `${causeWords(h.issue, day)}. `;
+    if (day === 'hoy' || lead) return `${lead}${advice}.`;
+    return `${capitalize(day)}, ${advice.charAt(0).toLowerCase()}${advice.slice(1)}.`;
   }
-  if (o.kind === 'move') return `Lluvia ${day}: «${h.workout.title}» pasa ${toDayWords(input, o.date)}, que no llueve.`;
-  if (o.kind === 'indoor') return `${capitalize(day)} llueve ${whenLabel(h.rain)}: «${h.workout.title}» pasa a ${INDOOR_WORDS[o.to]}.`;
+  if (o.kind === 'move') return `${NOUN[t]} ${day}: «${h.workout.title}» pasa ${toDayWords(input, o.date)}, que ${GOOD[t]}.`;
+  if (o.kind === 'indoor') return `${capitalize(day)} ${VERB[t]} ${whenLabel(h.issue.span)}: «${h.workout.title}» pasa a ${INDOOR_WORDS[o.to]}.`;
   return null;
+}
+
+/** Rain only, wind only or both among the sessions handled. */
+function overall(acted: readonly Handled[]): WeatherTrouble {
+  const rain = acted.some((h) => h.issue.trouble !== 'wind');
+  const wind = acted.some((h) => h.issue.trouble !== 'rain');
+  return rain && wind ? 'both' : wind ? 'wind' : 'rain';
 }
 
 function summaryOf(handled: readonly Handled[], input: WeatherPlanInput, changes: number): string {
@@ -288,11 +332,16 @@ function summaryOf(handled: readonly Handled[], input: WeatherPlanInput, changes
   if (acted.length === 1 && first) return singleSummary(first, input) ?? '';
   if (changes === 0) return '';
   const what = changes === 1 ? '1 cambio' : `${changes} cambios`;
-  if (acted.every((h) => h.outcome.kind === 'indoor')) return `Lluvia sin huecos secos: ${what} para entrenar a cubierto, en rodillo o piscina.`;
-  return `Lluvia prevista: ${what} para entrenar en seco.`;
+  const t = overall(acted);
+  if (acted.every((h) => h.outcome.kind === 'indoor')) {
+    const without = { rain: 'Lluvia sin huecos secos', wind: 'Viento fuerte sin ratos más tranquilos', both: 'Lluvia y viento fuerte sin huecos buenos' }[t];
+    return `${without}: ${what} para entrenar a cubierto, en rodillo o piscina.`;
+  }
+  const better = { rain: 'Lluvia prevista: {w} para entrenar en seco.', wind: 'Viento fuerte previsto: {w} para entrenar con menos viento.', both: 'Lluvia y viento fuerte previstos: {w} para entrenar en seco y con menos viento.' }[t];
+  return better.replace('{w}', what);
 }
 
-/** The weather proposal for the window (empty `changes` when nothing falls in the rain). */
+/** The weather proposal for the window (empty `changes` when nothing falls in the rain or in strong wind). */
 export function planForWeather(rawInput: WeatherPlanInput): WeatherPlanResult {
   // Like the planner: automatic availability has no fixed rest day nor windows (the calendar decides).
   const input = { ...rawInput, profile: { ...rawInput.profile, availability: planningAvailability(rawInput.profile.availability) } };
@@ -302,18 +351,18 @@ export function planForWeather(rawInput: WeatherPlanInput): WeatherPlanResult {
   const excluded = new Set(input.exclude ?? []);
   const candidates = plan.workouts
     .filter((w) => isEditable(w, ctx) && w.date <= until && !excluded.has(w.id) && isOutdoorSession(w) && notStarted(w, input))
-    .map((w) => ({ w, rain: rainyRange(input, w) }))
-    .filter((c): c is { w: Workout; rain: MinuteRange } => c.rain !== null)
+    .map((w) => ({ w, issue: issueOf(input, w) }))
+    .filter((c): c is { w: Workout; issue: Issue } => c.issue !== null)
     .sort((a, b) => byPriority(a.w, b.w));
   const handled: Handled[] = [];
-  for (const { w, rain } of candidates) {
+  for (const { w, issue } of candidates) {
     if (isJoint(w)) {
-      plan = note(plan, `Lluvia ${words(input, w.date)} en «${w.title}»: es vuestra quedada con ${partnerName(w, ctx)}, decidid juntos si la movéis.`);
+      plan = note(plan, `${NOUN[issue.trouble]} ${words(input, w.date)} en «${w.title}»: es vuestra quedada con ${partnerName(w, ctx)}, decidid juntos si la movéis.`);
       continue;
     }
-    const done = handle(plan, ctx, input, w, rain, until);
+    const done = handle(plan, ctx, input, w, issue, until);
     plan = done.plan;
-    handled.push({ workout: w, rain, outcome: done.outcome });
+    handled.push({ workout: w, issue, outcome: done.outcome });
   }
   const changes = plan.changes;
   if (candidates.length === 0) return { changes: [], summary: '', signature: '', rainy: 0 };

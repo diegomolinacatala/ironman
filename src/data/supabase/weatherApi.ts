@@ -28,11 +28,13 @@ function hourOf(raw: unknown): WeatherHour | null {
   const hour = asNumber(raw.hour);
   const precipMm = asNumber(raw.precipMm);
   if (!date || !isISODate(date) || hour === null || !Number.isInteger(hour) || hour < 0 || hour > 23 || precipMm === null) return null;
+  const gustKmh = asNumber(raw.gustKmh);
   return {
     date,
     hour,
     tempC: asNumber(raw.tempC),
     windKmh: asNumber(raw.windKmh),
+    ...(gustKmh === null ? {} : { gustKmh }),
     precipMm: Math.max(0, precipMm),
     precipProb: asNumber(raw.precipProb),
     symbol: asString(raw.symbol),

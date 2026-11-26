@@ -112,6 +112,7 @@ const ICONS = {
   // Weather for outdoor sessions (2026-11-26)
   rain: { ios: 'cloud.rain.fill', md: 'rainy' },
   cloudSun: { ios: 'cloud.sun.fill', md: 'partly_cloudy_day' },
+  wind: { ios: 'wind', md: 'air' },
 } as const;
 
 export type IconName = keyof typeof ICONS;

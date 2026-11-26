@@ -204,8 +204,8 @@ describe('runWeatherCheck', () => {
 
 describe('weatherModel', () => {
   it('Tú row subtitle', () => {
-    expect(placeRowSubtitle(PLACE)).toBe('Valencia · la lluvia cuenta al planificar');
-    expect(placeRowSubtitle(null)).toBe('Para tener en cuenta la lluvia');
+    expect(placeRowSubtitle(PLACE)).toBe('Valencia · la lluvia y el viento cuentan al planificar');
+    expect(placeRowSubtitle(null)).toBe('Para tener en cuenta la lluvia y el viento');
   });
 
   it('Plan hint: only without a city and with outdoor sessions still to do', () => {

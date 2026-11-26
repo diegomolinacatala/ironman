@@ -852,6 +852,14 @@ without the athlete reviewing a proposal.
   window is rainy (untimed: 07:00–22:00); a dry gap holds the session + 30'. Outdoor = run, bike, brick,
   unless the title says rodillo / trainer / MyWhoosh / Zwift / indoor / cinta…; swim, strength and
   mobility are never affected.
+- **Wind (2026-11-27)** — `WIND_RULES` in `weather.ts`, km/h on MET's 10-minute mean (gusts only when MET
+  gives `wind_speed_of_gust`: `/complete` in the Nordic area; `/compact`, which we use, never has them, so
+  `gustKmh` is usually absent). Bike/brick: notice ≥ 25 (gust 40), strong ≥ 35 (gust 55); run: notice ≥ 30
+  (gust 50), strong ≥ 45 (gust 60). A notice is only a line on the card («Viento (28 km/h) a las 18; entre
+  las 7 y las 15 sopla menos»); strong wind makes the session actionable like rain (`kind 'wind'`, or
+  `'rain'` carrying `wind`): the gap must be dry and without strong wind, and the same proposal flow moves
+  it (calmer time, another day) or sends it indoors. Rain and wind give ONE line / change per session.
+  Timed sessions: the worst hour counts; untimed: strong only when ≥ half the day is. Low wind is silent.
 - **Proposal builder** `src/domain/weatherPlan.ts` (app only): key sessions first; same-day dry gap →
   new time; week scope: another day's dry gap that keeps the re-planner rules (rest day, restrictions,
   no two hard sessions a day, no hard days in a row, ≤ 2 sessions a day, never two of a sport); else
@@ -865,8 +873,8 @@ without the athlete reviewing a proposal.
   Proposals are ordinary `replan` proposals (`source 'rules'`, `model 'weather:<day|week>:<signature>'`),
   shown as an «El tiempo» banner in Hoy.
 - **Messages.** Hoy: one quiet line on today's outdoor session (rain on the card, a dry forecast inside the
-  details, always with the credit). Briefing: one sentence only when today's outdoor session falls in the
-  rain, both in the local script (`briefingScript.ts`) and in the server context/prompt. AI coach: seven
+  details, always with the credit; a wind notice or strong wind is on the card too). Briefing: one sentence only when today's outdoor session falls in the
+  rain or in strong wind, both in the local script (`briefingScript.ts`) and in the server context/prompt. AI coach: seven
   days of outlook in its context (`weather` in `coach/messages.ts`). Demo mode: deterministic example
   forecast and a fixed list of cities, labelled «Tiempo de ejemplo».
 - **Deploy:** `supabase db push` (`20261126000500_weather.sql`), then deploy `weather`, `briefing` and

@@ -5,17 +5,21 @@
 import type { Profile, WeatherPlace, Workout } from '@/domain/types';
 import { isOutdoorSession, sessionWeather, weatherLine, type SessionWeather, type WeatherForecast, type WeatherSource } from '@/domain/weather';
 
-/** Tú › Entrenamiento: "Valencia · la lluvia cuenta al planificar" or the nudge. */
+/** Tú › Entrenamiento: "Valencia · la lluvia y el viento cuentan al planificar" or the nudge. */
 export function placeRowSubtitle(place: WeatherPlace | null | undefined): string {
-  return place ? `${place.name} · la lluvia cuenta al planificar` : 'Para tener en cuenta la lluvia';
+  return place ? `${place.name} · la lluvia y el viento cuentan al planificar` : 'Para tener en cuenta la lluvia y el viento';
 }
 
 export interface SessionWeatherView {
   weather: SessionWeather;
   /** One quiet line, or null when there is nothing to say. */
   line: string | null;
-  /** Rain at the session's time: shown on the card itself (else inside the details). */
+  /** Rain at the session's time. */
   rainy: boolean;
+  /** Rain, or wind worth a warning (notice or strong): shown on the card itself (else inside the details). */
+  onCard: boolean;
+  /** The icon of the line: rain first, then wind. */
+  icon: 'rain' | 'wind' | 'cloudSun';
   source: WeatherSource;
 }
 
@@ -30,7 +34,9 @@ export function sessionWeatherView(forecast: WeatherForecast | null | undefined,
   const weather = sessionWeather(forecast.hours, workout, workout.date === today ? { afterMin: minutesOf(now) } : {});
   const line = weatherLine(weather, workout.sport);
   if (!line) return null;
-  return { weather, line, rainy: weather.kind === 'rain', source: forecast.source };
+  const rainy = weather.kind === 'rain';
+  const windy = 'wind' in weather && weather.wind !== undefined;
+  return { weather, line, rainy, onCard: rainy || windy, icon: rainy ? 'rain' : windy ? 'wind' : 'cloudSun', source: forecast.source };
 }
 
 /** Plan: one quiet hint without a city, only when the week has outdoor sessions still to do. */

@@ -1,5 +1,5 @@
 /**
- * Indoor versions of an outdoor session for a rainy day (pure, app only):
+ * Indoor versions of an outdoor session for a rainy or very windy day (pure, app only):
  * - bike → the same session on the trainer (title "Rodillo · …", same structure);
  * - brick → trainer: the bike as planned and, instead of running, ~1,3× that
  *   time on the trainer at high cadence;
@@ -116,7 +116,7 @@ function brickSteps(steps: readonly WorkoutStep[]): { steps: WorkoutStep[]; bike
 }
 
 const BRICK_COACHING = (planB: string | null): WorkoutCoaching => ({
-  objective: 'Mantener el estímulo de la transición sin salir con lluvia.',
+  objective: 'Mantener el estímulo de la transición sin salir con mal tiempo.',
   keys: ['La parte de bici, como estaba planificada.', 'El tramo que ibas a correr, en rodillo con cadencia alta.'],
   success: 'Acabas el último bloque con la cadencia alta y sin hundirte.',
   planB,
