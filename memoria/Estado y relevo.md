@@ -18,6 +18,7 @@ Cada tarea deja su nota en `sesiones/`, con la fecha al principio del nombre: pa
 
 Hasta el cambio de flujo:
 
+- [[2026-11-26-claude-cerebro-hibrido]] · La IA del coach fallaba desde el 20-11 porque Cloudflare retiró Nemotron 3. Ahora usa Qwen 3.8, con reserva automática. Modelo híbrido: Claude del plan Pro vía MCP (`save_briefing`), dictado con jerga y cifras. Worker y funciones de Supabase desplegados (Claude Code).
 - [[2026-11-26-flujo-de-equipo-con-pr]] · PR obligatorias, CI, environments para las claves de Apple y CONTRIBUTING (Claude Code).
 - [[2026-11-25-alta-de-david]] · David, Nico y Darius entran como desarrolladores. David ya tiene acceso al repo y a TestFlight. Nico y Darius están pendientes de alta (Claude Code).
 - [[2026-11-22-rechazo-app-review-build-19]] · Arreglos del rechazo 5.1.1(iv), 2.5.4 y 2.1. Falta el vídeo con el reloj (Claude Code).

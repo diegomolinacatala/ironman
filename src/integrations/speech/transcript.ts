@@ -43,45 +43,114 @@ export function normaliseVolume(value: number): number {
   return Math.min(1, value / 10);
 }
 
-/** Biases recognition towards the words athletes say to their coach. */
+/** Biases recognition towards the words athletes say to their coach (iOS works best under ~100 phrases). */
 export const VOICE_CONTEXTUAL_STRINGS: readonly string[] = [
+  // Sessions and structure
   'rodaje',
   'rodaje suave',
-  'series',
   'tirada larga',
-  'umbral',
-  'zona dos',
-  'zona tres',
-  'tempo',
+  'series',
+  'bloques',
+  'cambios de ritmo',
+  'progresivos',
+  'cuestas',
   'fartlek',
-  'VFC',
-  'variabilidad',
-  'pulsaciones',
-  'Garmin',
-  'COROS',
-  'Strava',
+  'tempo',
+  'umbral',
+  'ritmo de media',
+  'ritmo de carrera',
+  'calentamiento',
+  'vuelta a la calma',
+  'recuperación',
+  'técnica',
   'brick',
   'transición',
+  'T1',
+  'T2',
+  // Intensity and metrics
+  'zona uno',
+  'zona dos',
+  'zona tres',
+  'zona cuatro',
+  'zona cinco',
+  'RPE',
+  'pulsaciones',
+  'ppm',
   'FTP',
   'vatios',
-  'rodillo',
+  'potencia',
+  'cadencia',
+  'VFC',
+  'variabilidad',
+  'VO2max',
+  'el kilómetro',
+  'por kilómetro',
+  'los cien',
+  // Sports and gear
   'natación',
   'piscina',
   'aguas abiertas',
   'neopreno',
-  'triatlón',
-  'media distancia',
-  'pádel',
+  'pull buoy',
+  'palas',
+  'crol',
+  'bici',
+  'rodillo',
+  'Zwift',
+  'carrera a pie',
   'fuerza',
   'movilidad',
+  'pádel',
+  'Garmin',
+  'COROS',
+  'Strava',
+  'Body Battery',
+  // Races and periodisation
+  'triatlón',
+  'sprint',
+  'olímpico',
+  'media distancia',
+  'distancia completa',
+  'media maratón',
+  'maratón',
+  'afinamiento',
+  'descarga',
+  'semana de carga',
+  'quedada',
+  // Body and fuel
   'gemelo',
+  'sóleo',
   'isquio',
+  'aductor',
+  'cintilla',
+  'periostitis',
   'fascitis',
   'tendinitis',
+  'Aquiles',
   'agujetas',
+  'geles',
+  'hidratos',
+  'isotónico',
   'descanso',
   'Road to Ironman',
 ];
+
+/** Most phrases sent to the recogniser (base vocabulary + names). */
+export const MAX_CONTEXTUAL_STRINGS = 100;
+
+/** Base vocabulary plus the athlete's own words (friends' names), deduplicated and capped. */
+export function voiceVocabulary(extra: readonly string[] = []): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const phrase of [...extra, ...VOICE_CONTEXTUAL_STRINGS]) {
+    const value = phrase.trim();
+    const key = value.toLocaleLowerCase('es');
+    if (!value || value.length > 40 || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out.slice(0, MAX_CONTEXTUAL_STRINGS);
+}
 
 const PERMISSION_MESSAGE =
   'Sin acceso al micrófono o al reconocimiento de voz. Actívalo en Ajustes > Apps > Road to Ironman, o escríbelo con el teclado.';

@@ -4,7 +4,6 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { mealLabel } from '@/domain/labels';
 import type { ISODate, NutritionLog } from '@/domain/types';
-import { MEAL_CAMERA_ROUTE } from '@/features/accessory/coachActions';
 import { mealPhotoUri } from '@/integrations/camera/mealPhoto';
 import { Button, Icon, SectionHeader, Text, haptics, iconSize, radius, space, useTheme } from '@/ui';
 
@@ -51,7 +50,7 @@ function AddPhotoTile() {
       accessibilityLabel="Añadir una comida con una foto"
       onPress={() => {
         haptics.tap();
-        router.push(MEAL_CAMERA_ROUTE);
+        router.push('/meal?source=camera');
       }}
       style={({ pressed }) => [styles.tile, { opacity: pressed ? 0.85 : 1 }]}>
       <View style={[styles.thumb, styles.placeholder, styles.add, { backgroundColor: colors.accentSoft }]}>
@@ -84,11 +83,8 @@ export function MealsStrip({ date, meals, embedded = false }: { date: ISODate; m
         <Text variant="callout" color="textMuted" accessibilityLabel={mealTotalsA11y(totals)}>
           {`Hoy llevas ${line}`}
         </Text>
-      ) : meals.length === 0 ? (
-        <Text variant="callout" color="textMuted">
-          Haz una foto a lo que comes y te calculo calorías e hidratos.
-        </Text>
       ) : null}
+      <Button label="Apuntar una comida" icon="edit" variant="secondary" onPress={() => router.push('/meal')} />
       {embedded && meals.length > 0 ? <Button label="Ver el día completo" variant="ghost" size="sm" onPress={openDay} /> : null}
     </View>
   );

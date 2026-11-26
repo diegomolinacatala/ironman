@@ -18,11 +18,11 @@ export function TodayHeader({ greeting, dateLine, unread, countdown }: TodayHead
   return (
     <View style={styles.row}>
       <View style={styles.text}>
-        <Text variant="title" accessibilityRole="header">
-          {greeting}
-        </Text>
-        <Text variant="callout" color="textMuted">
+        <Text variant="caption" color="textMuted">
           {dateLine}
+        </Text>
+        <Text variant="display" accessibilityRole="header">
+          {greeting}
         </Text>
         {countdown ? (
           <Pressable accessibilityRole="link" onPress={() => router.push('/races')} hitSlop={8} style={({ pressed }) => pressed && styles.pressed}>

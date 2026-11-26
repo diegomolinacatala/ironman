@@ -15,6 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RepositoryProvider } from '@/data/RepositoryProvider';
 import { AppEffects } from '@/integrations/AppEffects';
 import { loadAppearancePreference } from '@/ui/appearance';
+import { loadDisclosureState } from '@/ui/disclosureState';
 import { fonts, useTheme } from '@/ui/theme';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -93,7 +94,7 @@ export default function RootLayout() {
   // The stored light/dark choice is applied before the first frame (no flash of the other scheme).
   const [appearanceReady, setAppearanceReady] = useState(false);
   useEffect(() => {
-    void loadAppearancePreference().finally(() => setAppearanceReady(true));
+    void Promise.all([loadAppearancePreference(), loadDisclosureState()]).finally(() => setAppearanceReady(true));
   }, []);
 
   const ready = (loaded || Boolean(error)) && appearanceReady;

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 import { resetDisclosureState } from '@/ui/disclosureState';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { ActionSheetIOS } from 'react-native';
 
 import WorkoutDetailScreen from '@/app/workout/[id]';
 import { addDays, todayISO } from '@/domain/dates';
@@ -91,6 +92,21 @@ function series(overrides: Partial<Workout> = {}): Workout {
   });
 }
 
+async function openSection(name: string) {
+  await fireEvent.press(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
+}
+
+async function chooseOption(label: string) {
+  const sheet = jest.spyOn(ActionSheetIOS, 'showActionSheetWithOptions').mockImplementation((options, select) => {
+    select(options.options.indexOf(label));
+  });
+  try {
+    await openSection('Opciones');
+  } finally {
+    sheet.mockRestore();
+  }
+}
+
 beforeEach(() => {
   resetDisclosureState();
   jest.clearAllMocks();
@@ -130,7 +146,7 @@ describe('workout detail', () => {
     mockRouter.canGoBack.mockReturnValue(false);
     mockWorkout = { data: makeWorkout({ id: 'w1' }), isLoading: false };
     await render(<WorkoutDetailScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Borrar' }));
+    await chooseOption('Borrar');
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/today'));
     expect(mockActions.remove).toHaveBeenCalledTimes(1);
   });
@@ -138,7 +154,7 @@ describe('workout detail', () => {
   test('deleting goes back when there is a previous screen', async () => {
     mockWorkout = { data: makeWorkout({ id: 'w1' }), isLoading: false };
     await render(<WorkoutDetailScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Borrar' }));
+    await chooseOption('Borrar');
     await waitFor(() => expect(mockRouter.back).toHaveBeenCalledTimes(1));
     expect(mockRouter.replace).not.toHaveBeenCalled();
   });
@@ -148,8 +164,13 @@ describe('workout detail · the coach’s prescription', () => {
   test('objective, keys, main target, one row per step, success and plan B', async () => {
     mockWorkout = { data: series(), isLoading: false };
     await render(<WorkoutDetailScreen />);
+    expect(screen.getByRole('button', { name: 'Registrar entreno' })).toBeTruthy();
+    expect(screen.queryByText('Carga')).toBeNull();
+    expect(screen.queryByText('Recupera trotando')).toBeNull();
+    await openSection('Guía del entreno');
+    await openSection('Objetivos y zonas');
     expect(screen.getByText('Objetivo')).toBeTruthy();
-    expect(screen.getByText('Subir tu umbral sin pasarte')).toBeTruthy();
+    expect(screen.getAllByText('Subir tu umbral sin pasarte').length).toBeGreaterThan(0);
     expect(screen.getByText('Claves')).toBeTruthy();
     expect(screen.getByText('Recupera trotando')).toBeTruthy();
     expect(screen.getByLabelText("Zona objetivo: 162–168 ppm, 3×8' Z4 · 4:27–4:44 /km · RPE 7–8")).toBeTruthy();
@@ -190,6 +211,7 @@ describe('workout detail · the coach’s prescription', () => {
     mockThresholds = { runThresholdPaceSecPerKm: 270 };
     mockWorkout = { data: series(), isLoading: false };
     await render(<WorkoutDetailScreen />);
+    await openSection('Objetivos y zonas');
     expect(screen.getByLabelText(/^Zona objetivo: 4:27–4:44 \/km/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: HR_HINT_TEXT }));
     expect(mockRouter.push).toHaveBeenCalledWith('/settings/profile');
@@ -199,8 +221,10 @@ describe('workout detail · the coach’s prescription', () => {
     mockThresholds = { lthr: 170 };
     mockWorkout = { data: makeWorkout({ id: 'w1', intensity: 'endurance' }), isLoading: false };
     await render(<WorkoutDetailScreen />);
+    await openSection('Guía del entreno');
+    await openSection('Objetivos y zonas');
     expect(screen.getByLabelText(/^Zona objetivo: 145–151 ppm, Z2/)).toBeTruthy();
-    expect(screen.getByText('Cómo debe sentirse')).toBeTruthy();
+    expect(screen.getAllByText('Cómo debe sentirse').length).toBeGreaterThan(0);
     expect(screen.queryByText('Objetivo')).toBeNull();
     expect(screen.queryByText('Si no es tu día')).toBeNull();
   });
@@ -209,6 +233,7 @@ describe('workout detail · the coach’s prescription', () => {
     mockThresholds = null;
     mockWorkout = { data: series({ coaching: undefined }), isLoading: false };
     await render(<WorkoutDetailScreen />);
+    await openSection('Objetivos y zonas');
     expect(screen.getByLabelText("Esfuerzo objetivo: RPE 7–8, 3×8' Z4")).toBeTruthy();
   });
 });

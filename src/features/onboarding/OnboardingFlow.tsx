@@ -40,7 +40,6 @@ type ProgressPatch = Partial<Omit<StoredProgress, 'version'>>;
 
 /** Step machine host: resumes the saved step, persists every move and renders the current step. */
 export function OnboardingFlow({ profile, userId, isDemo, onFinishing }: OnboardingFlowProps) {
-  const steps = useMemo(() => visibleSteps(Platform.OS), []);
   const progress = useOnboardingProgress(userId);
   const integrations = useIntegrations();
   const tokens = useTokens();
@@ -48,10 +47,12 @@ export function OnboardingFlow({ profile, userId, isDemo, onFinishing }: Onboard
   const health = useHealthIntegration();
   const updateProfile = useUpdateProfile();
   const [state, setState] = useState<StoredProgress | null>(null);
+  const guidedSetup = state?.guidedSetup ?? progress.saved?.guidedSetup ?? false;
+  const steps = useMemo(() => visibleSteps(Platform.OS, guidedSetup), [guidedSetup]);
   const stateRef = useRef<StoredProgress | null>(null);
   // The connector URL is shown once: keep the token for the whole session (only its id is persisted).
   const [claudeToken, setClaudeToken] = useState<CreatedToken | null>(null);
-  const factsReady = progress.loaded && !integrations.isLoading && !tokens.isLoading && health.loaded;
+  const factsReady = progress.loaded && (!guidedSetup || (!integrations.isLoading && !tokens.isLoading && health.loaded));
 
   useEffect(() => {
     if (stateRef.current || !factsReady) return;
@@ -110,7 +111,14 @@ export function OnboardingFlow({ profile, userId, isDemo, onFinishing }: Onboard
     case 'welcome':
       return <WelcomeStep nav={nav} profile={profile} />;
     case 'goal':
-      return <GoalStep nav={nav} profile={profile} />;
+      return (
+        <GoalStep
+          nav={nav}
+          profile={profile}
+          onCreatePlan={() => goTo('plan', { guidedSetup: false })}
+          onConnect={() => goTo('garmin', { guidedSetup: true })}
+        />
+      );
     case 'garmin':
       return (
         <WatchStep

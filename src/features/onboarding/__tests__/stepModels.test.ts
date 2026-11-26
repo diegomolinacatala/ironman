@@ -53,13 +53,13 @@ describe('goal', () => {
     expect(goal.race).toEqual({ name: 'Valencia', date: '2027-04-18', distance: 'olympic' });
   });
 
-  test('without races or profile: empty race, triathlon sports', () => {
+  test('without races or profile: no race yet, triathlon sports', () => {
     const goal = initialGoal(null, [], TODAY);
-    expect(goal).toMatchObject({ hasRace: true, raceId: null, sports: ['swim', 'bike', 'run'] });
+    expect(goal).toMatchObject({ hasRace: false, raceId: null, sports: ['swim', 'bike', 'run'] });
   });
 
   test('validation: sports, then the race only when "Tengo carrera"', () => {
-    const base: GoalInput = initialGoal(profile, [], TODAY);
+    const base: GoalInput = { ...initialGoal(profile, [], TODAY), hasRace: true };
     expect(goalError({ ...base, sports: [] }, TODAY)).toBe('Elige al menos un deporte');
     expect(goalError(base, TODAY)).toBe('Ponle un nombre a la carrera');
     expect(goalError({ ...base, race: { ...base.race, name: 'X' } }, TODAY)).toBe('Elige la fecha de la carrera');

@@ -6,10 +6,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/data/context';
 import { errorMessage, logger } from '@/lib/logger';
-import { ErrorNotice, ListRow, Text, haptics, space } from '@/ui';
+import { Disclosure, ErrorNotice, ListRow, Text, haptics, space } from '@/ui';
 
 import { confirmAction } from '../settings/confirm';
-import { GroupDivider, SettingsGroup } from './SettingsGroup';
+import { GroupDivider } from './SettingsGroup';
 
 /** App Store guideline 1.4.1: training guidance, not medical advice. */
 export const HEALTH_DISCLAIMER =
@@ -79,7 +79,8 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
 
   return (
     <View style={styles.wrap}>
-      <SettingsGroup title="Cuenta">
+      <Disclosure title="Cuenta" summary="Cerrar sesión o eliminar tu cuenta" icon="key">
+        <View>
         <ListRow
           icon="logout"
           title={busy === 'signout' ? 'Cerrando sesión…' : 'Cerrar sesión'}
@@ -95,8 +96,9 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
           onPress={busy ? undefined : () => void deleteAccount()}
           showChevron={false}
         />
-      </SettingsGroup>
-      {error ? <ErrorNotice message={error} /> : null}
+        </View>
+        {error ? <ErrorNotice message={error} /> : null}
+      </Disclosure>
       <Text variant="caption" color="textMuted" align="center">
         {HEALTH_DISCLAIMER}
       </Text>
@@ -110,5 +112,5 @@ export function AccountActions({ isDemo }: { isDemo: boolean }) {
 
 const styles = StyleSheet.create({
   // Account actions sit apart from the settings above them.
-  wrap: { gap: space.md, marginTop: space.lg },
+  wrap: { gap: space.md },
 });

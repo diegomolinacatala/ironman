@@ -277,18 +277,15 @@ describe('v2 onboarding', () => {
     await render(<OnboardingScreen />);
 
     // 1 · Bienvenida (prefilled name)
-    expect(await screen.findByText('Tu coach de bolsillo')).toBeTruthy();
+    expect(await screen.findByText('Prepara tu primer plan')).toBeTruthy();
     expect(screen.getByDisplayValue('Diego')).toBeTruthy();
-    expect(screen.getByText('Lee tu reloj')).toBeTruthy();
-    // The welcome step introduces the brand mark instead of a generic icon tile.
-    expect(screen.getByTestId('brand-mark', { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByRole('progressbar', { name: /^Paso 1 de \d+$/ })).toBeTruthy();
     await press('Empezar');
 
-    // 2 · Objetivo
-    expect(await screen.findByText('¿A por qué vamos?')).toBeTruthy();
+    // 2 · Objetivo, then the guided walkthrough of the connections
+    expect(await screen.findByText('¿Qué estás preparando?')).toBeTruthy();
     await fireEvent.press(screen.getByRole('tab', { name: 'Aún no tengo carrera' }));
-    await press('Siguiente');
+    await press('Configurar conexiones primero');
     await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith(expect.objectContaining({ sports: ['swim', 'bike', 'run'] })));
 
     // 3 · Garmin: no "Continuar" until connected
@@ -341,10 +338,24 @@ describe('v2 onboarding', () => {
     // Friday–Sunday the first plan also covers next week (weeksToPlan): one session per planned week.
     const sessions = weeksToPlan(todayISO()).length;
     expect(screen.getByText(sessions === 1 ? /1 sesión en los próximos días/ : new RegExp(`${sessions} sesiones en los próximos días`))).toBeTruthy();
-    await press('Empezar');
+    await press('Ir a Hoy');
     await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/today'));
     expect(mockUpdateProfile).toHaveBeenLastCalledWith({ onboardedAt: expect.any(String) });
     expect(mockState.stored['rti.onboarding.v2.u1']).toBeUndefined();
+  });
+
+  test('"Crear mi plan" skips the connections: name, goal and plan in three steps', async () => {
+    await render(<OnboardingScreen />);
+    expect(await screen.findByText('Prepara tu primer plan')).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: 'Paso 1 de 3' })).toBeTruthy();
+    await press('Empezar');
+    expect(await screen.findByText('¿Qué estás preparando?')).toBeTruthy();
+    await press('Crear mi plan');
+    expect(await screen.findByText('Tu plan está listo')).toBeTruthy();
+    expect(screen.queryByText('Conecta tu Garmin')).toBeNull();
+    expect(mockCoach).toHaveBeenCalledWith(expect.objectContaining({ mode: 'plan_week' }));
+    await press('Ir a Hoy');
+    await waitFor(() => expect(mockRouter.replace).toHaveBeenCalledWith('/today'));
   });
 
   test('resumes at the saved step, but never past a required step that is no longer done', async () => {

@@ -13,21 +13,18 @@ import { Button, ErrorNotice, Loading, Screen } from '@/ui';
 export default function AuthCallback() {
   const { auth } = useAuth();
   const params = useLocalSearchParams<{ code?: string; error_description?: string }>();
-  const [error, setError] = useState<string | null>(null);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
+  const error = params.code ? exchangeError : params.error_description || 'El enlace no es válido o ha caducado. Pide uno nuevo.';
   const started = useRef(false);
 
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || !params.code) return;
     started.current = true;
-    if (!params.code) {
-      setError(params.error_description ?? 'El enlace no es válido o ha caducado. Pide uno nuevo.');
-      return;
-    }
     auth
       .completeEmailLink(params.code)
       .then(() => router.replace('/'))
-      .catch((err: unknown) => setError(authErrorMessage(err, 'El enlace ha caducado o ya se usó. Pide uno nuevo.')));
-  }, [auth, params.code, params.error_description]);
+      .catch((err: unknown) => setExchangeError(authErrorMessage(err, 'El enlace ha caducado o ya se usó. Pide uno nuevo.')));
+  }, [auth, params.code]);
 
   if (!error) {
     return (

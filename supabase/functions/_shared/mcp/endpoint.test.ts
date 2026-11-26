@@ -79,7 +79,7 @@ test('GET and DELETE are 405 with Allow: POST; OPTIONS is a CORS preflight', asy
   assert.equal(pre.status, 204);
 });
 
-test('legacy ping, tools/list (10 tools, stable order: new ones last) and unknown method', async () => {
+test('legacy ping, tools/list (11 tools, stable order: new ones last) and unknown method', async () => {
   const ping = await call(post({ jsonrpc: '2.0', id: 1, method: 'ping' }, { 'mcp-protocol-version': '2025-11-25' }));
   assert.deepEqual(ping.body, { jsonrpc: '2.0', id: 1, result: {} });
   const list = await call(post({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }));
@@ -95,6 +95,7 @@ test('legacy ping, tools/list (10 tools, stable order: new ones last) and unknow
     'get_plan_for_device',
     'manage_race',
     'set_week_plans',
+    'save_briefing',
   ]);
   const weekPlans = tools[9];
   assert.deepEqual(

@@ -10,12 +10,15 @@
  *   `x-speech-model` names the model that actually spoke.
  * Errors `{ error, message }`: 401 unauthorized, 400 bad_request, 404, 405, 413 too_large,
  * 429 rate_limited, 503 quota (free daily neurons used up), 502 model_error, 500 misconfigured.
+ * A chat model that Cloudflare has retired is retried once on FALLBACK_TEXT_MODEL / FALLBACK_VISION_MODEL.
  * Never logs or echoes the secret, the request body or the spoken text.
  */
 import {
   bearer,
   clientKey,
+  fallbackModel,
   ipKey,
+  isModelUnavailable,
   isQuotaError,
   MAX_BODY_BYTES,
   MIN_SECRET_LENGTH,
@@ -24,6 +27,7 @@ import {
   parseChatRequest,
   secretMatches,
 } from './chat.mts';
+import type { ChatRequest, ChatResult } from './chat.mts';
 import {
   audioBytes,
   BASIC_SPEECH_MODEL,
@@ -83,18 +87,31 @@ const quotaExhausted = (): Response => error(503, 'quota', 'The free daily Worke
 async function handleChat(body: unknown, deps: Ready): Promise<Response> {
   const parsed = parseChatRequest(body);
   if (!parsed.ok) return error(400, 'bad_request', parsed.error);
-  const { model } = parsed.value;
+  const request = parsed.value;
   try {
-    const output = await deps.ai.run(model, modelInput(parsed.value));
-    return json(normalizeOutput(output, model));
+    return json(await runChat(request, deps));
   } catch (e) {
     const message = e instanceof Error ? e.message.slice(0, 300) : 'unknown';
     if (isQuotaError(e)) {
-      deps.log('warn', 'workers ai quota exhausted', { model });
+      deps.log('warn', 'workers ai quota exhausted', { model: request.model });
       return quotaExhausted();
     }
-    deps.log('error', 'workers ai failed', { model, message });
+    deps.log('error', 'workers ai failed', { model: request.model, message });
     return error(502, 'model_error', 'The model failed to answer.');
+  }
+}
+
+/** Runs the requested model; if Cloudflare has retired it, tries the fallback once (and logs it). */
+async function runChat(request: ChatRequest, deps: Ready): Promise<ChatResult> {
+  try {
+    return normalizeOutput(await deps.ai.run(request.model, modelInput(request)), request.model);
+  } catch (e) {
+    const fallback = fallbackModel(request);
+    if (!fallback || !isModelUnavailable(e)) throw e;
+    const message = e instanceof Error ? e.message.slice(0, 300) : 'unknown';
+    deps.log('warn', 'workers ai model unavailable, using fallback', { model: request.model, fallback, message });
+    const retry = { ...request, model: fallback };
+    return normalizeOutput(await deps.ai.run(fallback, modelInput(retry)), fallback);
   }
 }
 

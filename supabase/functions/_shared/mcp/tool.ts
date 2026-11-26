@@ -5,6 +5,7 @@
 import type { Logger } from '../log.ts';
 import { errorInfo } from '../log.ts';
 import { NotFoundError } from '../planning/context.ts';
+import type { BriefingStore } from '../briefing/ports.ts';
 import type { PlanningStore } from '../planning/store.ts';
 import type { JsonSchema, Schema } from '../schema.ts';
 import type { UUID } from '../types.ts';
@@ -12,6 +13,8 @@ import type { UUID } from '../types.ts';
 export interface ToolContext {
   userId: UUID;
   store: PlanningStore;
+  /** The `briefings` table (save_briefing); absent in contexts that do not need it. */
+  briefings?: BriefingStore;
   now: () => Date;
   logger: Logger;
 }

@@ -1,12 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useFriends } from '@/data/queries';
 import { AiConsentSheet } from '@/features/coach/AiConsentSheet';
 import { PreparedRequestCard } from '@/features/coach/PreparedRequestCard';
 import type { CoachRouteParams, PreparedRequest } from '@/features/coach/requests';
 import { ListeningCard, ThinkingCard } from '@/features/talk/LiveCards';
+import { friendPhrases } from '@/features/talk/friendMentions';
 import { TalkDock } from '@/features/talk/TalkDock';
 import { TalkGreeting } from '@/features/talk/TalkGreeting';
 import { openProposal } from '@/features/talk/talkSession';
@@ -15,9 +18,10 @@ import { useProposalDecision } from '@/features/talk/useProposalDecision';
 import { useAutoClear, useReviewedElsewhere, useRoutePrefill, useTalkAnnouncements, useVoiceTake } from '@/features/talk/useTalkEffects';
 import { useTalkSession } from '@/features/talk/useTalkSession';
 import { isLive } from '@/features/talk/voiceModel';
+import { confirmAsync } from '@/features/workouts/confirm';
 import { useSpeaker } from '@/integrations/speech/useSpeaker';
 import { useVoiceInput } from '@/integrations/speech/useVoiceInput';
-import { Button, ErrorNotice, IconButton, Text, haptics, space, useTheme } from '@/ui';
+import { ErrorNotice, IconButton, Text, haptics, space, useTheme } from '@/ui';
 
 const NOT_HEARD = 'No te he oído. Toca el micro y vuelve a probar.';
 
@@ -32,7 +36,12 @@ export default function TalkScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollViewInstance>(null);
-  const voice = useVoiceInput();
+  const lastScrolledTurn = useRef<string | null>(null);
+  const reducedMotion = useReducedMotion();
+  // Friends' names help the recogniser ("me ha dicho Nico…").
+  const friends = useFriends();
+  const phrases = useMemo(() => friendPhrases(friends.data), [friends.data]);
+  const voice = useVoiceInput(phrases);
   const speaker = useSpeaker();
   const session = useTalkSession(voice.available);
   const { state } = session;
@@ -57,12 +66,12 @@ export default function TalkScreen() {
   useReviewedElsewhere(session, open ? { turnId: open.turn.id, proposalId: open.proposal.id } : null);
 
   // Leaving the screen silences the coach and releases the mic.
-  const cleanup = useRef<() => void>(() => undefined);
-  cleanup.current = () => {
-    voice.cancel();
-    speaker.stop();
-  };
-  useEffect(() => () => cleanup.current(), []);
+  const { cancel: cancelVoice } = voice;
+  const { stop: stopSpeaker } = speaker;
+  useEffect(() => () => {
+    cancelVoice();
+    void stopSpeaker();
+  }, [cancelVoice, stopSpeaker]);
 
   const onMic = () => {
     haptics.impact();
@@ -75,7 +84,14 @@ export default function TalkScreen() {
     void speaker.stop().then(() => voice.start());
   };
 
-  const reset = () => {
+  const reset = async () => {
+    if (!(await confirmAsync({
+      title: '¿Empezar otra conversación?',
+      message: 'Se borrarán de este dispositivo los mensajes de hoy.',
+      confirmLabel: 'Empezar otra',
+      destructive: true,
+    }))) return;
+    lastScrolledTurn.current = null;
     speaker.stop();
     take.discard();
     setPrepared(null);
@@ -92,7 +108,7 @@ export default function TalkScreen() {
           Tu coach
         </Text>
         {hasConversation ? (
-          <Button label="Nueva conversación" variant="ghost" size="sm" icon="refresh" disabled={sending} onPress={reset} />
+          <IconButton icon="edit" size={44} accessibilityLabel="Nueva conversación" disabled={sending} onPress={() => void reset()} />
         ) : (
           <View style={styles.headerSpacer} />
         )}
@@ -104,8 +120,15 @@ export default function TalkScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
-          {!hasConversation ? <TalkGreeting showExamples={!live && !prepared} onPick={session.prefill} /> : null}
+          onContentSizeChange={() => {
+            // Scroll once per message. Opening a proposal or receiving a long reply keeps the reader's place.
+            const id = state.pending?.id ?? state.turns.at(-1)?.id;
+            if (id && id !== lastScrolledTurn.current) {
+              lastScrolledTurn.current = id;
+              scrollRef.current?.scrollToEnd({ animated: sending && !reducedMotion });
+            }
+          }}>
+          {!hasConversation && !prepared ? <TalkGreeting showExamples={!live && !state.draft.trim()} onPick={session.prefill} /> : null}
           {prepared ? (
             <PreparedRequestCard
               prepared={prepared}

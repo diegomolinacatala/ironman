@@ -12,6 +12,7 @@
 
 - **Reglas locales.** El planificador es TypeScript puro. La demo tiene un coach de reglas y permite ensayar cambios sin depender de un backend.
 - **Coach de la app.** Conversación por voz o texto, briefing matinal, análisis de comida y síntesis de voz tienen contratos de servicio distintos. Pasan por consentimiento, presupuestos o límites según función. Las respuestas estructuradas se validan antes de interpretarlas. Mantener una salida comprensible ante fallo de red o de proveedor.
-- **Claude personal del deportista.** MCP permite consultar contexto, registrar actividad/métricas/imprevistos, gestionar carreras, proponer cambios o quedadas y ajustar semanas. El usuario gestiona tokens desde la app. La memoria de desarrollo entre los dos socios vive en esta bóveda.
+- **Coach de la app: modelo.** Cloudflare Workers AI, plan gratuito. Desde el 26-11-2026 usa Qwen 3.8 27B sin razonamiento; si Cloudflare retira un modelo, el worker pasa solo a gpt-oss-120b. Ver `docs/CLAUDE_COACH.md`.
+- **Claude personal del deportista.** Es el «cerebro» con el plan Pro de cada uno: informe de la mañana con `save_briefing` y planificación larga. MCP permite consultar contexto, registrar actividad/métricas/imprevistos, gestionar carreras, proponer cambios o quedadas y ajustar semanas. El usuario gestiona tokens desde la app. La memoria de desarrollo entre los dos socios vive en esta bóveda.
 
 **Antes de cambiar una regla**, buscar una prueba en `src/domain/__tests__`, revisar el adaptador demo y el recorrido en Supabase. Los módulos compartidos de temporada, zonas y prescripción se copian al dominio de Edge Functions mediante `npm run sync:mirror`. El script `scripts/sync-domain-mirror.mjs` enumera los archivos exactos.

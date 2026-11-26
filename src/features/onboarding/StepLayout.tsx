@@ -126,9 +126,6 @@ function StepHeading({ step, title }: { step: OnboardingStep; title?: string }) 
           <Icon name={step.icon} size={28} color={colors.onAccentSoft} />
         </View>
       )}
-      <Text variant="overline" color="textMuted">
-        {step.overline}
-      </Text>
       <Text variant="display" accessibilityRole="header">
         {title ?? step.title}
       </Text>

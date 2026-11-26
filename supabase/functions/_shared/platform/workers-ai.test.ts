@@ -17,7 +17,7 @@ import { emptyState, fakeStore, fixedNow, USER } from '../testing/fakes.ts';
 import { chatBody, cleanModelJson, clientKey, createWorkersAiPort, QUOTA_MESSAGE, toChatMessages, toStrictSchema, WORKER_TIMEOUT_MESSAGE } from './workers-ai.ts';
 import type { FetchFn } from './workers-ai.ts';
 
-const MODEL = '@cf/nvidia/nemotron-3-120b-a12b';
+const MODEL = '@cf/qwen/qwen3.8-27b';
 const SECRET = 'worker-shared-secret-0123456789abcdef';
 
 interface Call {
@@ -67,8 +67,8 @@ test('provider choice: Workers AI first (secret ≥ 32 chars), then Claude, else
   });
   assert.equal((chooseAiProvider(env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: SECRET }), 'vision') as { model: string }).model, DEFAULT_WORKERS_VISION_MODEL);
   assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: 'short', ANTHROPIC_API_KEY: 'k' }), 'text'), { kind: 'claude', apiKey: 'k' });
-  const custom = env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: SECRET, AI_MODEL: '@cf/nvidia/nemotron-3-120b-a12b', AI_VISION_MODEL: '@cf/google/gemma-4-26b-a4b-it' });
-  assert.equal((chooseAiProvider(custom, 'text') as { model: string }).model, '@cf/nvidia/nemotron-3-120b-a12b');
+  const custom = env({ AI_WORKER_URL: 'https://w', AI_WORKER_SECRET: SECRET, AI_MODEL: '@cf/openai/gpt-oss-120b', AI_VISION_MODEL: '@cf/google/gemma-4-26b-a4b-it' });
+  assert.equal((chooseAiProvider(custom, 'text') as { model: string }).model, '@cf/openai/gpt-oss-120b');
   assert.equal((chooseAiProvider(custom, 'vision') as { model: string }).model, '@cf/google/gemma-4-26b-a4b-it');
   assert.deepEqual(chooseAiProvider(env({ AI_WORKER_URL: 'https://w', ANTHROPIC_API_KEY: 'k' }), 'vision'), { kind: 'claude', apiKey: 'k' });
   assert.deepEqual(chooseAiProvider(env({ AI_WORKER_SECRET: '  ' }), 'text'), { kind: 'none' });
