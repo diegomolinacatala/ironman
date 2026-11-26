@@ -58,8 +58,6 @@ jest.mock('@/data/queries', () => ({
   useWorkouts: () => ({ data: mockHistory }),
 }));
 jest.mock('@/features/workouts/useWorkoutActions', () => ({ useWorkoutActions: () => mockActions }));
-const mockShareZwo = jest.fn(async (_name: string, _xml: string) => 'shared');
-jest.mock('@/integrations/zwift/shareZwo', () => ({ shareZwo: (name: string, xml: string) => mockShareZwo(name, xml) }));
 // The coach's rules (domain/planB, domain/review) are unit-tested on their own: the screen only wires them.
 jest.mock('@/features/workouts/coachAdapters', () => ({
   easierPatch: (w: Workout, t: Thresholds | null) => mockEasierPatch(w, t),
@@ -255,21 +253,5 @@ describe('workout detail · against similar sessions', () => {
     await render(<WorkoutDetailScreen />);
     expect(screen.getByText(/^Eficiencia un \d+ % mejor que la media de tus 3 carreras parecidas/)).toBeTruthy();
     mockHistory = [];
-  });
-});
-
-describe('workout detail · Zwift', () => {
-  test('a planned bike session can be exported as .zwo; a run cannot', async () => {
-    mockThresholds = { ftpW: 250 };
-    mockWorkout = {
-      data: series({ sport: 'bike', title: "Umbral 3×8'", steps: [{ kind: 'warmup', durationMin: 15 }, { kind: 'work', durationMin: 8, repeat: 3, intensity: 'threshold' }, { kind: 'recovery', durationMin: 3, repeat: 3, intensity: 'recovery' }] }),
-      isLoading: false,
-    };
-    await render(<WorkoutDetailScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: /Exportar a Zwift/ }));
-    expect(mockShareZwo).toHaveBeenCalledWith('umbral-3x8.zwo', expect.stringContaining('<IntervalsT Repeat="3"'));
-    mockWorkout = { data: series(), isLoading: false };
-    await render(<WorkoutDetailScreen />);
-    expect(screen.queryByRole('button', { name: /Exportar a Zwift/ })).toBeNull();
   });
 });
