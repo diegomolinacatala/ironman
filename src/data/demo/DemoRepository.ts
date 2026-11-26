@@ -15,6 +15,7 @@ import { inboxDemo } from './repo/inboxDemo';
 import { integrationsDemo } from './repo/integrationsDemo';
 import { planningDemo } from './repo/planningDemo';
 import { socialDemo } from './repo/socialDemo';
+import { weatherDemo } from './repo/weatherDemo';
 import { weekPlansDemo } from './repo/weekPlansDemo';
 import { wellnessDemo } from './repo/wellnessDemo';
 import { workoutsDemo } from './repo/workoutsDemo';
@@ -50,6 +51,7 @@ export function createDemoRepository(options: DemoRepositoryOptions = {}): DemoR
     ...inboxDemo(deps),
     ...integrationsDemo(deps),
     ...aiDemo(deps),
+    ...weatherDemo(deps),
   };
 
   return {

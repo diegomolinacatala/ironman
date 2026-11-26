@@ -4,6 +4,8 @@ import { StyleSheet, View } from 'react-native';
 import { addDays, daysInRange, isoWeekNumber, startOfWeek, todayISO, weekRange } from '@/domain/dates';
 import type { ISODate, Workout } from '@/domain/types';
 import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
+import { WeatherPlaceHint } from '@/features/weather/WeatherPlaceHint';
+import { needsPlaceHint } from '@/features/weather/weatherModel';
 import { partnerNameFor } from '@/features/workouts/draft';
 import { errorMessage } from '@/lib/logger';
 import { Disclosure, EmptyState, ErrorNotice, Loading, Screen, space } from '@/ui';
@@ -81,6 +83,7 @@ export function WeekView({ weekParam }: WeekViewProps) {
             <WeekTotals summary={data.summary} targetHours={data.targetHours} embedded />
           </Disclosure>
           {toolbar}
+          {needsPlaceHint(data.profile, data.workouts, data.today) ? <WeatherPlaceHint /> : null}
         </>
       ) : isEmpty ? (
         <PhaseLine info={data.phase} plan={data.weekPlan} onPress={openGeneral} />

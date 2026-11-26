@@ -65,6 +65,8 @@ export const qk = {
   integrations: ['integrations'] as const,
   briefing: (date: ISODate) => ['briefing', date] as const,
   weekPlans: (r: DateRange) => ['week_plans', r.from, r.to] as const,
+  /** Keyed by the city's coordinates: a new city is a new forecast. */
+  weather: (place: string) => ['weather', place] as const,
 };
 
 /** Root keys invalidated for each change topic. */
@@ -699,5 +701,33 @@ export function useRevokeToken() {
   return useMutation({
     mutationFn: (id: UUID) => repo.revokeToken(id),
     onSuccess: () => client.invalidateQueries({ queryKey: qk.tokens }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Weather (the athlete's city, profile.weatherPlace)
+// ---------------------------------------------------------------------------
+
+/** How long a forecast stays fresh on the device (the server keeps MET's answer for longer). */
+export const WEATHER_STALE_MS = 30 * 60_000;
+
+/** Hourly forecast of the athlete's city; disabled (data undefined) without a city. */
+export function useWeather() {
+  const repo = useRepository();
+  const place = useProfile().data?.weatherPlace ?? null;
+  const signedIn = useSignedIn();
+  return useQuery({
+    queryKey: qk.weather(place ? `${place.lat},${place.lon}` : 'none'),
+    queryFn: () => (repo.getWeather ? repo.getWeather() : Promise.resolve(null)),
+    enabled: signedIn && place !== null && Boolean(repo.getWeather),
+    staleTime: WEATHER_STALE_MS,
+  });
+}
+
+/** City search of "Tu ciudad para el tiempo": only when the athlete taps Buscar (no autocomplete). */
+export function useSearchWeatherPlaces() {
+  const repo = useRepository();
+  return useMutation({
+    mutationFn: (query: string) => (repo.searchWeatherPlaces ? repo.searchWeatherPlaces(query) : Promise.resolve([])),
   });
 }

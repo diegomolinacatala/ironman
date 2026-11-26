@@ -109,6 +109,9 @@ const ICONS = {
   moonPlain: { ios: 'moon', md: 'dark_mode' },
   checkin: { ios: 'heart.text.clipboard', md: 'assignment_turned_in' },
   eventAdd: { ios: 'exclamationmark.bubble', md: 'report' },
+  // Weather for outdoor sessions (2026-11-26)
+  rain: { ios: 'cloud.rain.fill', md: 'rainy' },
+  cloudSun: { ios: 'cloud.sun.fill', md: 'partly_cloudy_day' },
 } as const;
 
 export type IconName = keyof typeof ICONS;

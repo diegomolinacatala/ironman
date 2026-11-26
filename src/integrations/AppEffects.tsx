@@ -8,7 +8,9 @@
  * - on mount / foreground: Garmin sync when its last sync is older than an hour
  *   (server-side, so also on web), only when the athlete's watch is Garmin (or not chosen),
  * - keeps local notifications, widgets (incl. today's briefing headline) and the
- *   "Road to Ironman" device calendar in sync with the plan.
+ *   "Road to Ironman" device calendar in sync with the plan,
+ * - with a city set, checks the weather (weekly and each morning) and leaves a
+ *   proposal to review when an outdoor session falls in the rain (any platform).
  * Widget deep links (roadtoironman://workout/<id>, roadtoironman://today) are handled by
  * Expo Router itself. Whenever there is no session (sign-out, deletion, revoked
  * session at launch) it clears local notifications and widgets.
@@ -20,6 +22,7 @@ import { useAuth, useRepository } from '@/data/context';
 import { useBriefing, useJointSessions, useProfile, useRaces, useWorkouts } from '@/data/queries';
 import { maxDate, minDate, todayISO } from '@/domain/dates';
 import type { DateRange, ISODate } from '@/domain/types';
+import { useWeatherChecks } from '@/features/weather/useWeatherChecks';
 
 import { defaultBusyRange } from './calendar';
 import { trainingCalendarWindow } from './calendar/trainingEvents';
@@ -81,6 +84,8 @@ export function AppEffects(): null {
   usePlanMirrors(ready, { workouts, races, jointSessions, profile, briefing, userId, today, tick });
   useSignedOutCleanup(isLoading, userId);
   useTimezoneSync(signedInAndOnboarded, profile);
+  // Weekly (Monday / Sunday evening) and morning weather checks: a proposal to review, never applied.
+  useWeatherChecks(signedInAndOnboarded, userId, profile, tick);
 
   return null;
 }

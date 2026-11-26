@@ -11,6 +11,7 @@ import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
 import { addDays, isISODate } from '@/domain/dates';
 import { nextRace } from '@/domain/periodization';
 import type { Briefing, ISODate, JointSession, Profile, Race, RaceDistance, Thresholds, WatchBrand } from '@/domain/types';
+import type { WeatherForecast } from '@/domain/weather';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
@@ -30,7 +31,7 @@ const BRIEFING_COLUMNS = 'user_id,date,headline,sleep_verdict,sleep_summary,scri
 
 type BriefingMethods = Pick<Repository, 'getBriefing' | 'generateBriefing'>;
 export type BriefingSourceRepo = Pick<Repository, 'getMyProfile' | 'listMetrics' | 'listWorkouts' | 'listRaces'> &
-  Partial<Pick<Repository, 'listJointSessions'>>;
+  Partial<Pick<Repository, 'listJointSessions' | 'getWeather'>>;
 
 export interface BriefingDeps {
   ctx: SupabaseCtx;
@@ -65,6 +66,17 @@ export function briefingAthleteFields(profile: Profile | null, race: Race | null
   };
 }
 
+/** The weather is a bonus too: no city, no forecast or a failure → the briefing says nothing about it. */
+async function forecastFor(repo: BriefingSourceRepo): Promise<WeatherForecast | null> {
+  if (!repo.getWeather) return null;
+  try {
+    return await repo.getWeather();
+  } catch (error) {
+    logger.info('briefing: no weather for the local template', error instanceof RepositoryError ? error.code : error);
+    return null;
+  }
+}
+
 /** Composes the local ('rules') briefing from the athlete's data. */
 export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODate, now: Date): Promise<Briefing> {
   const tomorrow = addDays(date, 1);
@@ -76,6 +88,7 @@ export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODa
     jointSessionsFor(repo, date),
   ]);
   const race = nextRace(races, date);
+  const forecast = profile?.weatherPlace ? await forecastFor(repo) : null;
   return composeBriefing({
     date,
     name: profile?.displayName ?? '',
@@ -86,6 +99,7 @@ export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODa
     now,
     ...briefingAthleteFields(profile, race),
     ...(profile && joint ? { social: { me: profile.id, jointSessions: joint } } : {}),
+    ...(forecast ? { forecast } : {}),
   });
 }
 

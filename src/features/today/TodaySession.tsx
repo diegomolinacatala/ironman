@@ -7,6 +7,8 @@ import type { RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { timeRangeLabel, workoutA11yLabel } from '@/features/workouts/format';
 import { IntensityTag } from '@/features/workouts/IntensityTag';
 import { JuntosTag, KeyTag } from '@/features/workouts/Tags';
+import { SessionWeatherLine } from '@/features/weather/SessionWeatherLine';
+import type { SessionWeatherView } from '@/features/weather/weatherModel';
 import { Button, Card, Icon, IconButton, SportBadge, Text, haptics, radius, space, useTheme } from '@/ui';
 import { useDisclosureOpen } from '@/ui/disclosureState';
 
@@ -25,6 +27,8 @@ export interface TodaySessionProps {
   /** The athlete's thresholds: the target line in ppm / pace / watts (RPE without them). */
   thresholds?: Thresholds | null;
   raceDistance?: RaceDistance | null;
+  /** Weather of an outdoor session (city set): rain at its time shows on the card, the rest inside the details. */
+  weather?: SessionWeatherView | null;
 }
 
 function CalendarBadge() {
@@ -100,6 +104,7 @@ export function TodaySession({
   busy,
   thresholds = null,
   raceDistance = null,
+  weather = null,
 }: TodaySessionProps) {
   const theme = useTheme();
   const time = timeRangeLabel(workout);
@@ -108,7 +113,10 @@ export function TodaySession({
   const feel = target ? sessionFeel(workout, thresholds, { raceDistance }) : '';
   const structure = structureSummary(workout);
   const [detailsOpen, setDetailsOpen] = useDisclosureOpen('today.sessionDetails', false);
-  const hasDetails = Boolean(lead || target || structure);
+  // Calm by default: rain at the session's time needs an answer now; a dry forecast waits in the details.
+  const rainLine = weather?.rainy ? weather : null;
+  const quietWeather = weather && !weather.rainy ? weather : null;
+  const hasDetails = Boolean(lead || target || structure || quietWeather);
   const a11y = [`Tu entreno de hoy: ${workoutA11yLabel(workout, { partnerName })}`, inCalendar ? 'en tu calendario' : '', lead ?? '', target ?? '']
     .filter(Boolean)
     .join('. ');
@@ -135,6 +143,7 @@ export function TodaySession({
           {workout.title}
         </Text>
       </Pressable>
+      {rainLine ? <SessionWeatherLine view={rainLine} /> : null}
       {hasDetails ? <DetailsToggle open={detailsOpen} onToggle={() => setDetailsOpen(!detailsOpen)} /> : null}
       {detailsOpen && hasDetails ? (
         <View style={styles.body}>
@@ -145,6 +154,7 @@ export function TodaySession({
               {structure}
             </Text>
           ) : null}
+          {quietWeather ? <SessionWeatherLine view={quietWeather} /> : null}
           <View style={styles.tags}>
             <IntensityTag intensity={workout.intensity} />
             {workout.isKey ? <KeyTag /> : null}

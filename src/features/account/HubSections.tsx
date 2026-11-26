@@ -4,10 +4,11 @@ import type { Profile, Race } from '@/domain/types';
 import { coachVoiceName, useCoachVoice } from '@/integrations/speech/coachVoice';
 
 import { AppearancePicker } from '../settings/AppearancePicker';
+import { placeRowSubtitle } from '../weather/weatherModel';
 import { availabilitySubtitle, raceRow, sportsProfileSubtitle } from './hubModel';
 import { GroupDivider, LinkRows, SettingsGroup } from './SettingsGroup';
 
-/** Entrenamiento: your race, your week and your sport profile. */
+/** Entrenamiento: your race, your week, your sport profile and your city for the weather. */
 export function TrainingGroup({ profile, races }: { profile: Profile; races: readonly Race[] | undefined }) {
   const race = raceRow(races, todayISO());
   return (
@@ -17,6 +18,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
           { icon: 'flag', title: race.title, subtitle: race.subtitle, href: '/races', brand: true },
           { icon: 'clock', title: 'Tus horarios', subtitle: availabilitySubtitle(profile.availability), href: '/settings/availability' },
           { icon: 'profile', title: 'Perfil deportivo', subtitle: sportsProfileSubtitle(profile), href: '/settings/profile' },
+          { icon: 'cloudSun', title: 'Tu ciudad para el tiempo', subtitle: placeRowSubtitle(profile.weatherPlace), href: '/settings/weather' },
         ]}
       />
     </SettingsGroup>

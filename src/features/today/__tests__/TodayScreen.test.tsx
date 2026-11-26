@@ -4,6 +4,7 @@ import { ActionSheetIOS } from 'react-native';
 
 import TodayScreen from '@/app/(tabs)/today';
 import type { JointSession, NutritionLog, Thresholds, Workout, WorkoutPatch, WorkoutStep } from '@/domain/types';
+import type { WeatherForecast, WeatherHour } from '@/domain/weather';
 import { ME, makeSession, makeWorkout } from '@/features/workouts/__tests__/fixtures';
 
 import { resetDisclosureState } from '@/ui/disclosureState';
@@ -36,6 +37,7 @@ const mockEasierPatch = jest.fn((_w: Workout, _t: Thresholds | null): WorkoutPat
 let mockData: TodayData;
 let mockCalendarEnabled = false;
 let mockInlineAccessory = false;
+let mockForecast: WeatherForecast | null = null;
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -62,6 +64,7 @@ jest.mock('@/integrations/camera/mealPhoto', () => ({ mealPhotoUri: () => null }
 jest.mock('@/data/queries', () => ({
   useCompleteWorkout: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }),
   useBriefing: () => ({ data: null }),
+  useWeather: () => ({ data: mockForecast }),
 }));
 jest.mock('@/features/today/TodaySocialCard', () => ({ TodaySocialCard: () => null, todayQuedadas: () => [] }));
 jest.mock('@/features/accessory/CoachAccessory', () => ({ CoachAccessory: () => null }));
@@ -121,6 +124,7 @@ beforeEach(() => {
   resetDisclosureState();
   mockCalendarEnabled = false;
   mockInlineAccessory = false;
+  mockForecast = null;
   mockEasierPatch.mockReturnValue(null);
 });
 
@@ -141,6 +145,51 @@ function coachedSeries(): Workout {
     coaching: { objective: 'Subir tu umbral sin pasarte', keys: [], success: 'Series iguales', planB: null },
   });
 }
+
+/** A whole day of the same weather on 2026-10-25 (MET hourly steps). */
+function dayForecast(rain: boolean, source: WeatherForecast['source'] = 'met_norway'): WeatherForecast {
+  const hours: WeatherHour[] = Array.from({ length: 24 }, (_, hour) => ({
+    date: '2026-10-25',
+    hour,
+    tempC: 14,
+    windKmh: 10,
+    precipMm: rain ? 2 : 0,
+    precipProb: rain ? 90 : 0,
+    symbol: rain ? 'rain' : 'clearsky_day',
+    coarse: false,
+  }));
+  return { place: 'Valencia', source, updatedAt: '2026-10-25T05:00:00Z', hours };
+}
+
+describe('Hoy · the weather of the outdoor session', () => {
+  test('rain at the session time shows one line on the card with the MET credit', async () => {
+    mockForecast = dayForecast(true);
+    mockData = data({ todayWorkouts: [makeWorkout({ id: 'h', startTime: '18:00', durationMin: 60 })] });
+    await render(<TodayScreen />);
+    expect(screen.getByText('Lluvia a las 18 y ningún hueco seco hoy: mejor rodillo o piscina.')).toBeTruthy();
+    expect(screen.getByText('Datos del tiempo: MET Norway')).toBeTruthy();
+  });
+
+  test('a dry forecast stays quiet, inside the details', async () => {
+    mockForecast = dayForecast(false);
+    mockData = data({ todayWorkouts: [makeWorkout({ id: 'h', startTime: '18:00', durationMin: 60 })] });
+    await render(<TodayScreen />);
+    expect(screen.queryByText(/Sin lluvia prevista/)).toBeNull();
+    await openDetails();
+    expect(screen.getByText('Sin lluvia prevista · 14 °C')).toBeTruthy();
+  });
+
+  test('indoor sessions and athletes without a forecast see nothing about the weather', async () => {
+    mockForecast = dayForecast(true);
+    mockData = data({ todayWorkouts: [makeWorkout({ id: 'h', sport: 'bike', title: 'Rodillo MyWhoosh', startTime: '18:00', durationMin: 60 })] });
+    await render(<TodayScreen />);
+    expect(screen.queryByText(/Lluvia/)).toBeNull();
+    mockForecast = null;
+    mockData = data({ todayWorkouts: [makeWorkout({ id: 'h', startTime: '18:00', durationMin: 60 })] });
+    await render(<TodayScreen />);
+    expect(screen.queryByText(/Lluvia|MET Norway/)).toBeNull();
+  });
+});
 
 describe('Hoy · the coach in the session card', () => {
   test('objective, target line and how it should feel, also when the session has steps', async () => {
