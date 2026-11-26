@@ -1,6 +1,7 @@
 /**
  * Progreso — form (PMC, open) and folded sections: volume & compliance, recovery, nutrition,
- * races. Each one opens on demand and is remembered on the device.
+ * races. Each one opens on demand and is remembered on the device. On top, only when easy
+ * sessions keep coming out harder than planned, a quiet suggestion to review the zones.
  */
 import { router } from 'expo-router';
 import { StyleSheet } from 'react-native';
@@ -14,6 +15,8 @@ import { PmcCard } from '@/features/progress/PmcCard';
 import { RecoveryCard } from '@/features/progress/RecoveryCard';
 import { useProgressData } from '@/features/progress/useProgressData';
 import { VolumeCard } from '@/features/progress/VolumeCard';
+import { ZoneReviewCard } from '@/features/progress/ZoneReviewCard';
+import { useZoneReviewSnooze } from '@/features/progress/zoneReviewSnooze';
 import { RaceCountdownCard } from '@/features/races/RaceCountdownCard';
 import { phaseName } from '@/features/races/raceModel';
 import { Button, Disclosure, ErrorNotice, Loading, Screen, space } from '@/ui';
@@ -25,6 +28,8 @@ export default function ProgressScreen() {
     ? `Semana ${isoWeekNumber(today)} · ${phaseName(data.phase.phase)}`
     : `Semana ${isoWeekNumber(today)}`;
   const bottomPadding = useTabBottomPadding();
+  const zoneSnooze = useZoneReviewSnooze(today);
+  const zoneTrend = zoneSnooze.loaded && !zoneSnooze.snoozed ? data.zoneTrend : null;
 
   return (
     <Screen
@@ -35,6 +40,10 @@ export default function ProgressScreen() {
       contentStyle={[styles.content, bottomPadding != null ? { paddingBottom: bottomPadding } : null]}>
       {data.error ? <ErrorNotice message={data.error} onRetry={data.refetch} /> : null}
       {data.isLoading ? <Loading label="Calculando tu forma…" /> : null}
+
+      {zoneTrend ? (
+        <ZoneReviewCard trend={zoneTrend} onReview={() => router.push('/settings/profile')} onDismiss={zoneSnooze.snooze} />
+      ) : null}
 
       {data.pmc ? (
         <Disclosure variant="plain" title="Tu forma" summary={formFoldSummary(data.pmc)} defaultOpen storageKey="progress.form">
