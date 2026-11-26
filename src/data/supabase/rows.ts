@@ -78,6 +78,8 @@ export interface RaceRow {
   location: string | null;
   goal: string | null;
   notes: string | null;
+  /** B/C race preparation (migration 20261126000100); absent before it is deployed. */
+  prep?: string | null;
   created_at: string;
   updated_at?: string;
 }

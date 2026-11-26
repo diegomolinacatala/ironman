@@ -23,10 +23,10 @@ import {
 } from './constants';
 import { addDays, diffDays, formatDuration } from './dates';
 import { computePmc, dailyLoads, estimateTss, weeklyLoadForRamp } from './load';
-import type { PhaseInfo } from './periodization';
+import { racePrepOf, type PhaseInfo, type SpecificPrep } from './periodization';
 import type { Placed } from './placement';
 import { canOverride } from './season';
-import { buildSession, hardMinutes, isQualitySpec, specClass, specIntensity, specSport, type SessionSpec } from './sessions';
+import { buildSession, hardMinutes, isQualitySpec, specClass, specIntensity, specSport, type SessionCode, type SessionSpec } from './sessions';
 import { trimSelected } from './trim';
 import type { AthleteLevel, ISODate, Race, RaceDistance, Sport, Thresholds, WeekPlan, WeekPlanKind, Workout } from './types';
 import type { FixedInput } from './weekModel';
@@ -189,25 +189,85 @@ export function lowIntensityShare(specs: readonly SessionSpec[]): number {
 
 const EASY_VERSION: Partial<Record<Sport, SessionSpec['code']>> = { bike: 'BK_END', run: 'RN_EASY', swim: 'SW_END' };
 
+function leastImportant(specs: readonly SessionSpec[]): SessionSpec | undefined {
+  return [...specs].sort((a, b) => b.priority - a.priority || a.code.localeCompare(b.code))[0];
+}
+
+/**
+ * One step easier: the least important quality session becomes Z2, else the
+ * race-pace blocks of a long session or brick become plain Z2. Sessions of a
+ * «Preparación específica» (`specificFor`) only once nothing else is left.
+ */
+function easierStep(specs: readonly SessionSpec[]): SessionSpec[] | null {
+  for (const specific of [false, true]) {
+    const pool = specs.filter((s) => Boolean(s.specificFor) === specific && !s.allowedDates);
+    const quality = leastImportant(pool.filter((s) => isQualitySpec(s) && specClass(s) !== 'BRICK' && EASY_VERSION[specSport(s)]));
+    const code = quality ? EASY_VERSION[specSport(quality)] : undefined;
+    if (quality && code) return specs.map((s) => (s === quality ? { ...s, code, priority: Math.max(s.priority, 5), specificFor: null } : s));
+    const paced = leastImportant(pool.filter((s) => s.racePace));
+    if (paced) return specs.map((s) => (s === paced ? { ...s, racePace: false, specificFor: null } : s));
+  }
+  return null;
+}
+
 /** Keeps Z1-Z2 ≥ 75 % of endurance time (§2.2 invariant) by downgrading the least important quality sessions. */
 export function enforceIntensityDistribution(specs: readonly SessionSpec[], raceWeek: boolean): SessionSpec[] {
   if (raceWeek) return [...specs];
   let out = [...specs];
   while (lowIntensityShare(out) < MIN_LOW_INTENSITY_SHARE) {
-    const quality = out
-      .filter((s) => isQualitySpec(s) && specClass(s) !== 'BRICK' && !s.allowedDates && EASY_VERSION[specSport(s)])
-      .sort((a, b) => b.priority - a.priority || a.code.localeCompare(b.code))[0];
-    const code = quality ? EASY_VERSION[specSport(quality)] : undefined;
-    if (quality && code) {
-      out = out.map((s) => (s === quality ? { ...s, code, priority: Math.max(s.priority, 5) } : s));
-      continue;
-    }
-    // Then race-pace blocks inside long sessions and bricks become plain Z2.
-    const paced = out.filter((s) => s.racePace && !s.allowedDates).sort((a, b) => b.priority - a.priority || a.code.localeCompare(b.code))[0];
-    if (!paced) break;
-    out = out.map((s) => (s === paced ? { ...s, racePace: false } : s));
+    const next = easierStep(out);
+    if (!next) break;
+    out = next;
   }
   return out;
+}
+
+/** Quality sessions that become race-pace sets for a 'specific' race. */
+const RACE_PACE_VERSION: Partial<Record<SessionCode, SessionCode>> = {
+  BK_TEMPO: 'BK_RP',
+  BK_SST: 'BK_RP',
+  BK_THR: 'BK_RP',
+  BK_VO2: 'BK_RP',
+  RN_TEMPO: 'RN_RP',
+  RN_THR: 'RN_RP',
+  RN_VO2: 'RN_RP',
+  RN_HILLS: 'RN_RP',
+};
+
+/** Short race-pace bricks first, then bike quality, then run quality: the most race-like work first. */
+function specificRank(spec: SessionSpec): number {
+  if (spec.code === 'BRICK') return 0;
+  return specSport(spec) === 'bike' ? 1 : 2;
+}
+
+/**
+ * «Preparación específica» of a B/C race (`PhaseInfo.specificPrep`): up to
+ * `sessions` sessions of the week target that race, its distance setting the
+ * race pace. Short race-pace bricks are retargeted; bike and run quality
+ * sessions become race-pace sets (BK_RP, RN_RP). Long sessions (and long
+ * bricks) keep serving the A race; a running race only takes runs. The chosen
+ * sessions become key sessions (priority ≤ 2), so trimming and the Z1-Z2 guard
+ * leave them for last.
+ */
+export function specializeForRace(specs: readonly SessionSpec[], prep: SpecificPrep | null | undefined): SessionSpec[] {
+  if (!prep || prep.sessions <= 0) return [...specs];
+  const runRace = prep.race.distance.startsWith('run_');
+  const candidate = (s: SessionSpec): boolean => {
+    if (s.allowedDates || (runRace && specSport(s) !== 'run')) return false;
+    if (s.code === 'BRICK') return s.racePace === true && s.longBrick !== true;
+    return RACE_PACE_VERSION[s.code] !== undefined;
+  };
+  const chosen = new Set(
+    specs
+      .filter(candidate)
+      .sort((a, b) => specificRank(a) - specificRank(b) || a.priority - b.priority)
+      .slice(0, prep.sessions),
+  );
+  return specs.map((s) =>
+    chosen.has(s)
+      ? { ...s, code: RACE_PACE_VERSION[s.code] ?? s.code, priority: Math.min(s.priority, 2), raceDistance: prep.race.distance, specificFor: prep.race.name }
+      : s,
+  );
 }
 
 /**
@@ -339,7 +399,8 @@ export function raceWeekSessions(race: Race, isTarget: boolean, kind: DistanceKi
     sport: isRun ? 'run' : 'brick',
     allowedDates: [race.date],
   };
-  if (!isTarget && race.priority === 'C') return [raceSpec];
+  // A B/C race done "como un entreno": the race alone, no activation (placement keeps the day before easy).
+  if (!isTarget && racePrepOf(race) === 'training') return [raceSpec];
   const dMinus = (n: number) => addDays(race.date, -n);
   const activation: SessionSpec = { code: 'ACTIVATION', durationMin: 25, priority: 2, sport: isRun ? 'run' : 'bike', raceDistance: race.distance, allowedDates: [dMinus(1)] };
   if (!isTarget) return [raceSpec, activation];

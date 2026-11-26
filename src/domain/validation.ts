@@ -14,6 +14,7 @@ import {
   LIFE_EVENT_KINDS,
   MEAL_SLOTS,
   RACE_DISTANCES,
+  RACE_PREPS,
   SPORTS,
   TRAINABLE_SPORTS,
   WATCH_BRANDS,
@@ -146,6 +147,7 @@ export const raceDraftSchema = z.object({
   location: optionalText(200, 'Lugar'),
   goal: optionalText(200, 'Objetivo'),
   notes: optionalText(2000, 'Notas'),
+  prep: z.enum(RACE_PREPS, { error: 'Elige cómo la preparas' }).nullable().optional(),
 });
 
 export const lifeEventDraftSchema = z

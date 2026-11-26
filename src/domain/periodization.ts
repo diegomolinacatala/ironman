@@ -23,6 +23,7 @@ import {
   READY_BASE_SHARE,
   RECOVERY_FACTOR_21,
   RECOVERY_FACTOR_31,
+  SPECIFIC_PREP_SESSIONS,
   TAPER_FACTORS,
   TRANSITION_FACTOR,
   VOLUME_CURVE,
@@ -31,7 +32,7 @@ import {
 } from './constants';
 import { addDays, diffDays, isISODate, startOfWeek, weekRange } from './dates';
 import { loadWeeks, type RecoveryCadence } from './recoveryLayout';
-import type { AthleteLevel, ISODate, Race, RaceDistance, TrainableSport } from './types';
+import type { AthleteLevel, ISODate, Race, RaceDistance, RacePrep, TrainableSport } from './types';
 
 export type Phase = 'prep' | 'base' | 'build' | 'peak' | 'taper' | 'race_week' | 'recovery' | 'transition';
 export type { RecoveryCadence };
@@ -51,8 +52,20 @@ export interface PhaseInfo {
   cadence: RecoveryCadence;
   /** Another race (B/C) or the target race happening this week. */
   raceInWeek: Race | null;
+  /**
+   * A B/C race prepared with 'specific' («Preparación específica») in the 2
+   * weeks after this one: this many of the week's race-pace sessions target it.
+   * Only in prep/base/build weeks of a plan towards an A race; null otherwise.
+   */
+  specificPrep: SpecificPrep | null;
   /** Spanish warnings (races too close…). */
   warnings: string[];
+}
+
+export interface SpecificPrep {
+  race: Race;
+  /** Race-pace sessions of the week for that race: 1 two weeks before its race week, 2 the week before. */
+  sessions: number;
 }
 
 export interface PhaseOptions {
@@ -82,6 +95,15 @@ const PRIORITY_RANK: Record<Race['priority'], number> = { A: 0, B: 1, C: 2 };
 
 function sortRaces(races: readonly Race[]): Race[] {
   return [...races].sort((a, b) => a.date.localeCompare(b.date) || PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.id.localeCompare(b.id));
+}
+
+/**
+ * How a B or C race is prepared: its own choice, else the priority's default
+ * (B → 'taper', C → 'training'); null for A races (they always get the full taper).
+ */
+export function racePrepOf(race: Pick<Race, 'priority' | 'prep'>): RacePrep | null {
+  if (race.priority === 'A') return null;
+  return race.prep ?? (race.priority === 'B' ? 'taper' : 'training');
 }
 
 /** Next A race on/after `today`, else the next race of any priority. */
@@ -295,18 +317,23 @@ function maintenanceInfo(date: ISODate, target: Race | null, cadence: RecoveryCa
     subphase: 'maintenance',
     cadence,
     raceInWeek: null,
+    specificPrep: null,
     warnings,
   };
 }
 
+/**
+ * Transition after an A race; easy days after a B/C race prepared with 'taper'
+ * or 'specific'. A race done 'training' (como un entreno) needs no recovery week.
+ */
 function recentRaceState(sorted: Race[], date: ISODate): { race: Race; kind: 'transition' | 'recovery' } | null {
-  const past = sorted.filter((r) => r.date < date && r.priority !== 'C');
+  const past = sorted.filter((r) => r.date < date && racePrepOf(r) !== 'training');
   const last = past[past.length - 1];
   if (!last) return null;
   const days = diffDays(date, last.date);
   const window = PHASE_TABLE[last.distance].transitionDays;
   if (last.priority === 'A' && days <= window) return { race: last, kind: 'transition' };
-  if (last.priority === 'B' && days <= Math.ceil(window / 2)) return { race: last, kind: 'recovery' };
+  if (last.priority !== 'A' && days <= Math.ceil(window / 2)) return { race: last, kind: 'recovery' };
   return null;
 }
 
@@ -336,12 +363,49 @@ function raceInWeekOf(sorted: Race[], date: ISODate): Race | null {
   return [...inWeek].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority])[0] ?? null;
 }
 
+/** Race-week volume of a B/C race: the mini-taper unless it is done 'training' (como un entreno). */
+function minorRaceWeekFactor(prep: RacePrep): number {
+  return prep === 'training' ? C_RACE_WEEK_FACTOR : B_RACE_WEEK_FACTOR;
+}
+
+const RACE_WEEK_NOTE: Readonly<Record<RacePrep, string>> = {
+  training: 'como un entreno, el día antes suave.',
+  taper: 'mini-taper de 3-5 días.',
+  specific: 'mini-taper de 3-5 días tras su preparación específica.',
+};
+
 function raceWeekAdjust(info: PhaseInfo, race: Race | null): PhaseInfo {
   if (!race || race.id === info.targetRace?.id || info.phase === 'race_week') return { ...info, raceInWeek: race ?? info.raceInWeek };
-  if (race.priority === 'A') return { ...info, raceInWeek: race };
-  const factor = race.priority === 'B' ? B_RACE_WEEK_FACTOR : C_RACE_WEEK_FACTOR;
-  const note = race.priority === 'B' ? ' Carrera B esta semana: mini-taper de 3-5 días.' : ' Carrera C esta semana: el día antes, suave.';
-  return { ...info, raceInWeek: race, volumeFactor: round2(info.volumeFactor * factor), focus: `${info.focus}${note}` };
+  const prep = racePrepOf(race);
+  if (prep === null) return { ...info, raceInWeek: race };
+  const note = ` Carrera ${race.priority} esta semana: ${RACE_WEEK_NOTE[prep]}`;
+  return { ...info, raceInWeek: race, volumeFactor: round2(info.volumeFactor * minorRaceWeekFactor(prep)), focus: `${info.focus}${note}` };
+}
+
+/** "1 sesión" / "2 sesiones". */
+function sessionsText(n: number): string {
+  return n === 1 ? '1 sesión' : `${n} sesiones`;
+}
+
+/**
+ * The 'specific' B/C race whose race week is 1 or 2 weeks after this one, in a
+ * prep/base/build week of a plan towards an A race (the A race keeps the
+ * phases, the volume and the long sessions); its race-pace sessions this week
+ * target that race. The focus says so.
+ */
+function withSpecificPrep(info: PhaseInfo, sorted: readonly Race[], weekStart: ISODate): PhaseInfo {
+  const target = info.targetRace;
+  if (!target || target.priority !== 'A' || !['prep', 'base', 'build'].includes(info.phase)) return info;
+  for (const race of sorted) {
+    if (race.id === target.id || racePrepOf(race) !== 'specific') continue;
+    const weeksBefore = Math.round(diffDays(startOfWeek(race.date), weekStart) / 7);
+    const sessions = weeksBefore >= 1 ? SPECIFIC_PREP_SESSIONS[weeksBefore - 1] : undefined;
+    if (sessions) {
+      const note = ` Preparación específica para ${race.name}: ${sessionsText(sessions)} a su ritmo.`;
+      return { ...info, specificPrep: { race, sessions }, focus: `${info.focus}${note}` };
+    }
+  }
+  return info;
 }
 
 function postRaceInfo(state: { race: Race; kind: 'transition' | 'recovery' }, target: Race | null, date: ISODate, cadence: RecoveryCadence): PhaseInfo {
@@ -353,6 +417,7 @@ function postRaceInfo(state: { race: Race; kind: 'transition' | 'recovery' }, ta
     subphase: null,
     cadence,
     raceInWeek: null,
+    specificPrep: null,
     warnings: [],
   };
 }
@@ -378,15 +443,16 @@ export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptio
   const slots = layout(target.distance, alloc, cadence);
   const warnings = [...avail.warnings, ...alloc.warnings];
   const slot = slots[k];
-  if (!slot) return raceWeekAdjust(maintenanceInfo(date, target, cadence, warnings, k - slots.length), raceInWeekOf(sorted, date));
+  const finish = (info: PhaseInfo): PhaseInfo => withSpecificPrep(raceWeekAdjust(info, raceInWeekOf(sorted, date)), sorted, weekStart);
+  if (!slot) return finish(maintenanceInfo(date, target, cadence, warnings, k - slots.length));
 
   const curve = curveFor(target.distance);
   const buildAvg = (curve.build1 + curve.build2) / 2;
-  let info: PhaseInfo;
   if (slot.taper !== null) {
-    const isBRaceWeek = slot.phase === 'race_week' && target.priority !== 'A';
-    const factor = isBRaceWeek ? curve.build2 * (target.priority === 'B' ? B_RACE_WEEK_FACTOR : C_RACE_WEEK_FACTOR) : buildAvg * slot.taper;
-    info = {
+    // A B/C race as the target (no A race): the race week of its own preparation.
+    const prep = slot.phase === 'race_week' ? racePrepOf(target) : null;
+    const factor = prep !== null ? curve.build2 * minorRaceWeekFactor(prep) : buildAvg * slot.taper;
+    return finish({
       ...baseInfo(slot.phase, target, date),
       isRecoveryWeek: false,
       volumeFactor: round2(factor),
@@ -394,20 +460,20 @@ export function phaseFor(date: ISODate, races: readonly Race[], opts: PhaseOptio
       subphase: null,
       cadence,
       raceInWeek: null,
+      specificPrep: null,
       warnings,
-    };
-  } else {
-    const subphase = slot.subphase ?? 'maintenance';
-    info = {
-      ...baseInfo(slot.phase, target, date),
-      isRecoveryWeek: slot.isRecovery,
-      volumeFactor: round2(curve[subphase] * slot.progression),
-      focus: slot.isRecovery ? RECOVERY_FOCUS : FOCUS[slot.phase],
-      subphase,
-      cadence,
-      raceInWeek: null,
-      warnings,
-    };
+    });
   }
-  return raceWeekAdjust(info, raceInWeekOf(sorted, date));
+  const subphase = slot.subphase ?? 'maintenance';
+  return finish({
+    ...baseInfo(slot.phase, target, date),
+    isRecoveryWeek: slot.isRecovery,
+    volumeFactor: round2(curve[subphase] * slot.progression),
+    focus: slot.isRecovery ? RECOVERY_FOCUS : FOCUS[slot.phase],
+    subphase,
+    cadence,
+    raceInWeek: null,
+    specificPrep: null,
+    warnings,
+  });
 }

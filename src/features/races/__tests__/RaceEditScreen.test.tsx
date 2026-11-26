@@ -66,6 +66,21 @@ describe('races/edit', () => {
     expect(mockCreate.mock.calls[0]?.[0]).toMatchObject({ priority: 'A', name: expect.stringMatching(/^Olímpico de \p{L}+$/u) });
   });
 
+  test('a B race asks how to prepare it, with a one-line hint, and saves the choice', async () => {
+    mockParams = { from: 'plan' };
+    await render(<RaceEditScreen />);
+    // An A race has no such question.
+    expect(screen.queryByText('¿Cómo la preparas?')).toBeNull();
+    await fireEvent.press(screen.getByRole('tab', { name: 'B · Importante' }));
+    expect(screen.getByText('¿Cómo la preparas?')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Solo afinar', selected: true })).toBeTruthy();
+    expect(screen.getByText('Solo afinar: mini-afinamiento de 3–5 días y unos días suaves después.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Específica' }));
+    expect(screen.getByText('Preparación específica: las 3 semanas antes, más sesiones a su ritmo; tu carrera A sigue mandando.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Añadir carrera' }));
+    expect(mockCreate.mock.calls[0]?.[0]).toMatchObject({ priority: 'B', prep: 'specific' });
+  });
+
   test('save errors sit in the footer, above the button', async () => {
     mockCreate.mockRejectedValueOnce(new Error('Sin conexión'));
     await render(<RaceEditScreen />);

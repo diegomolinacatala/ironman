@@ -208,9 +208,16 @@ export const RECOVERY_FACTOR_21 = 0.65;
 /** Transition (post A race) and post-B recovery volume. [H] */
 export const TRANSITION_FACTOR = 0.35;
 export const POST_B_RECOVERY_FACTOR = 0.6;
-/** Mini taper of a B race week (volume −35 %). [H] §5.3 */
+/** Mini taper of a B race week (volume −35 %): races prepared with 'taper' or 'specific'. [H] §5.3 */
 export const B_RACE_WEEK_FACTOR = 0.65;
+/** Race week of a race prepared 'training' («Como entreno»: the old C behaviour). [H] §5.3 */
 export const C_RACE_WEEK_FACTOR = 0.9;
+/**
+ * 'specific' B/C race («Preparación específica»): race-pace sessions of the week that target
+ * that race, by weeks before its race week (index 0 = the week right before it): 2 the week
+ * before, 1 the week before that. [H]
+ */
+export const SPECIFIC_PREP_SESSIONS: readonly number[] = [2, 1];
 
 // ---------------------------------------------------------------------------
 // Volume, sport split and sessions (§6-§9)

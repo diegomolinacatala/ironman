@@ -12,7 +12,7 @@ import { allocateSessions } from './allocation';
 import { normalWeekHours } from './availability';
 import { addDays, formatDuration } from './dates';
 import { distanceKindOf, phaseFor, type PhaseInfo } from './periodization';
-import { activeWeekPlan, enforceIntensityDistribution, pinnedRaceSessions } from './plannerSupport';
+import { activeWeekPlan, enforceIntensityDistribution, pinnedRaceSessions, specializeForRace } from './plannerSupport';
 import { applyWeekPlan, type SeasonWeek } from './season';
 import { buildSession, specClass, specIntensity, specSport, type SessionClass, type SessionCode, type SessionSpec } from './sessions';
 import type { Profile, Race, WorkoutStep } from './types';
@@ -51,6 +51,7 @@ const QUALITY_NAMES: Partial<Record<SessionCode, string>> = {
   RN_THR: 'Series umbral',
   RN_VO2: 'Series VO2',
   RN_HILLS: 'Cuestas',
+  RN_RP: 'Ritmo de carrera a pie',
   SW_CSS: 'Natación umbral',
   SW_SPEED: 'Natación velocidad',
 };
@@ -90,7 +91,7 @@ function weekSpecs(week: SeasonWeek, input: SeasonDetailInput): SessionSpec[] {
     caps: { runLongMax: null, bikeLongMax: null },
     freeWeek,
   });
-  return [...pinned, ...enforceIntensityDistribution(ideal, info.phase === 'race_week')];
+  return [...pinned, ...enforceIntensityDistribution(specializeForRace(ideal, info.specificPrep), info.phase === 'race_week')];
 }
 
 function classRank(spec: SessionSpec): number {

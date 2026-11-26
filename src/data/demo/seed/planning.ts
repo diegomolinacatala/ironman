@@ -31,6 +31,8 @@ export function seedRaces(clock: DemoClock, createdAt: ISODateTime): Race[] {
         location: 'Madrid · Casa de Campo',
         goal: 'Sub 2 h 30',
         notes: 'Test de forma a mitad de bloque.',
+        // Shows «Preparación específica» in the demo: race-pace sessions for it in the 2 weeks before.
+        prep: 'specific',
       },
       createdAt,
     ),

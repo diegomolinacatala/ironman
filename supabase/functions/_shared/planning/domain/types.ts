@@ -11,6 +11,7 @@ export type {
   NumberRange,
   Race,
   RaceDistance,
+  RacePrep,
   Sport,
   StepTarget,
   Thresholds,

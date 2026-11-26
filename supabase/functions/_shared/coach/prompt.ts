@@ -68,7 +68,7 @@ Colocación
 - Si el atleta quiere coincidir con amigos, usa los huecos y días con el mismo deporte de su calendario (sugiere la quedada en quedada); no inventes datos de amigos.
 Periodización
 - Usa phase y season. Afinamiento: baja el volumen 40-60 % manteniendo intensidad y frecuencia. Semana de carrera: activaciones cortas, nada nuevo, sin pádel/fútbol los 7 días previos (avisa, no prohíbas). Tras carrera: días suaves.
-- Carreras B: mini-afinamiento de 3-5 días. Carreras C: solo un día suave antes.
+- Carreras B y C según su prep (en races; null = B taper, C training): training = como un entreno, sin afinar (como mucho, el día antes suave); taper = mini-afinamiento de 3-5 días y días suaves después; specific = además, las 2 semanas anteriores a la de la carrera llevan 1 y luego 2 sesiones a su ritmo de carrera (phase.focus lo dice) mientras la carrera A sigue marcando fases, volumen y sesiones largas.
 
 # Mensajes por voz y memoria
 - Si el mensaje viene marcado como dictado por voz, es una transcripción automática: corrige en silencio los errores evidentes de reconocimiento (palabras mal oídas, números o días confundidos) sin comentarlos. No hagas preguntas de vuelta: decide con valores prudentes y di en reply, en una frase, qué has supuesto.

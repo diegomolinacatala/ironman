@@ -191,6 +191,31 @@ test('manage_race creates with required fields and updates by id', async () => {
   assert.equal(notFound.isError, true);
 });
 
+test('manage_race sets, changes and clears how a B/C race is prepared (prep)', async () => {
+  const state = emptyState();
+  const created = await run(state, 'manage_race', { name: 'Olímpico de Madrid', date: '2027-03-07', distance: 'olympic', priority: 'B', prep: 'specific' });
+  assert.equal((created.structuredContent as { race: { prep: string } }).race.prep, 'specific');
+  const id = state.races[0].id;
+  await run(state, 'manage_race', { race_id: id, prep: 'training' });
+  assert.equal(state.races[0].prep, 'training');
+  await run(state, 'manage_race', { race_id: id, prep: null });
+  assert.equal(state.races[0].prep, null, 'null = the priority default');
+  const unchanged = await run(state, 'manage_race', { race_id: id, name: 'Olímpico de la Casa de Campo' });
+  assert.equal((unchanged.structuredContent as { race: { prep: null } }).race.prep, null);
+  const bad = await run(state, 'manage_race', { race_id: id, prep: 'a tope' });
+  assert.equal(bad.isError, true);
+  assert.equal(state.races[0].prep, null);
+});
+
+test('manage_race input schema: prep is one of training, taper, specific or null', () => {
+  const tool = registry.get('manage_race');
+  assert.ok(tool);
+  const prep = (tool.inputSchema as { properties: Record<string, { anyOf?: { enum?: string[]; type?: string }[]; description?: string }> }).properties.prep;
+  assert.ok(prep, 'prep is part of the input');
+  assert.deepEqual(prep.anyOf?.map((s) => s.enum ?? s.type), [['training', 'taper', 'specific'], 'null']);
+  assert.match(prep.description ?? '', /preparación específica/);
+});
+
 test('get_friends_availability returns masked items, common slots and same-sport days', async () => {
   const state = withWeek();
   state.friends.set(USER, [{ friendId: FRIEND, username: 'alex', displayName: 'Álex' }]);

@@ -23,8 +23,8 @@ import {
   type Subphase,
 } from './constants';
 import { addDays, diffDays, startOfWeek } from './dates';
-import { distanceKindOf, phaseFor, type Phase, type PhaseInfo } from './periodization';
-import type { AthleteLevel, ISODate, Race, RaceDistance, WeekPlan, WeekPlanDraft, WeekPlanKind } from './types';
+import { distanceKindOf, phaseFor, racePrepOf, type Phase, type PhaseInfo, type SpecificPrep } from './periodization';
+import type { AthleteLevel, ISODate, Race, RaceDistance, RacePrep, WeekPlan, WeekPlanDraft, WeekPlanKind } from './types';
 
 /** What a week is for, in coach words. */
 export type SeasonWeekKind = WeekPlanKind | 'taper' | 'race' | 'transition';
@@ -289,14 +289,29 @@ function labelOf(kind: SeasonWeekKind, info: PhaseInfo, trend: number | null, pr
   }
 }
 
+/** Why the week of a B/C race looks like it does, by how the athlete prepares it. */
+const MINOR_RACE_WHY: Readonly<Record<RacePrep, (priority: string) => string>> = {
+  training: (p) => `Carrera ${p}: la haces como un entreno de calidad, sin afinar; como mucho, el día antes suave.`,
+  taper: (p) => `Carrera ${p}: mini-afinamiento de 3–5 días para llegar fresco sin perder el hilo del plan.`,
+  specific: (p) => `Carrera ${p}: mini-afinamiento de 3–5 días tras dos semanas con sesiones a su ritmo; luego, a por tu carrera A.`,
+};
+
 function raceWhy(info: PhaseInfo): string {
   const race = info.raceInWeek ?? info.targetRace;
-  if (race && race.id !== info.targetRace?.id && race.priority === 'B') return 'Carrera B: mini-afinamiento de 3–5 días para llegar fresco sin perder el hilo del plan.';
-  if (race && race.id !== info.targetRace?.id) return 'Carrera C: es un entrenamiento de calidad; el día antes, suave.';
+  const prep = race && race.id !== info.targetRace?.id ? racePrepOf(race) : null;
+  if (race && prep) return MINOR_RACE_WHY[prep](race.priority);
   return 'Activaciones cortas, descanso y confianza: el trabajo ya está hecho.';
 }
 
+/** "Preparación específica para Olímpico de Madrid: 2 sesiones a su ritmo; tu carrera A sigue mandando." */
+function specificWhy(prep: SpecificPrep): string {
+  const sessions = prep.sessions === 1 ? '1 sesión' : `${prep.sessions} sesiones`;
+  return `Preparación específica para ${prep.race.name}: ${sessions} a su ritmo; tu carrera A sigue mandando.`;
+}
+
 function whyOf(kind: SeasonWeekKind, info: PhaseInfo): string {
+  // A semana libre has no structure, so no race-pace sessions either.
+  if (info.specificPrep && (kind === 'load' || kind === 'push' || kind === 'recovery')) return specificWhy(info.specificPrep);
   switch (kind) {
     case 'race':
       return raceWhy(info);

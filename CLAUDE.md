@@ -27,3 +27,7 @@ Next ideas (not built): Live Activity for a quedada in progress; Garmin "same ac
 ## Coach v4 (2026-11-09) — un entrenador de verdad, COROS y plan general
 
 Every session carries targets (ppm / pace / W / RPE / sensations, derived from thresholds by `domain/zones.ts`, explicit `step.target` wins) and `coaching` (objective, keys, success, plan B); the coach (AI, rules, Claude, briefing) speaks with those numbers and reviews completed sessions (`domain/review.ts`). Watch = Garmin or COROS (`profiles.watch_brand`; COROS via Apple Salud + the official COROS connector in the athlete's Claude, guide in `/settings/coros` and `docs/SETUP.md` §8b). Plan → General (`?view=general`) shows the weeks to the race (carga, más volumen, descarga, afinamiento, carrera) from `domain/season.ts`; week-level overrides live in `week_plans` (MCP `set_week_plans`) and the weekly rules planner honours them. Deploy the two `20261109*` migrations before the functions and the app.
+
+## Planner and races (2026-11-26)
+
+Ramp cap +20 % (+15 % beginner, +10 % stress) over the biggest of the last 3 weeks; weekly run cap +15 % (mirrored `domain/runVolume.ts`, `phase.runMaxMinutes` on the server); short-notice plans get base + build when the athlete's last 4 weeks already cover the base (`PhaseOptions.recentWeeklyMinutes`, `useFitnessMinutes`); B/C races carry `races.prep` (`training | taper | specific`, null = priority default). Details in `docs/ARCHITECTURE.md` §17. Deploy `20261126000100_race_prep.sql` before the functions and the app.

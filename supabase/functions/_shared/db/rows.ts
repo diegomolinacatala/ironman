@@ -9,6 +9,7 @@ import {
   INTENSITIES,
   LIFE_EVENT_KINDS,
   RACE_DISTANCES,
+  RACE_PREPS,
   RACE_PRIORITIES,
   SLEEP_VERDICTS,
   SPORTS,
@@ -31,6 +32,7 @@ import type {
   NutritionLog,
   Profile,
   Race,
+  RacePrep,
   SleepSnapshot,
   SleepVerdict,
   Thresholds,
@@ -120,6 +122,8 @@ export function mapRace(raw: unknown): Race {
     location: strOrNull(r.location),
     goal: strOrNull(r.goal),
     notes: strOrNull(r.notes),
+    // B/C preparation (null = the priority's default).
+    prep: (RACE_PREPS as readonly unknown[]).includes(r.prep) ? (r.prep as RacePrep) : null,
     ...(createdAt ? { createdAt } : {}),
   };
 }

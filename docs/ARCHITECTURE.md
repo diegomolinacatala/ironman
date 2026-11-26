@@ -708,3 +708,33 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   device-neutral (Garmin JSON + provider-neutral steps Claude can push to the COROS calendar).
 - **Deploy order:** `supabase db push` (`20261109000100_coach_v4.sql`, then `20261109000900_week_plans_platform.sql`)
   before deploying the edge functions or shipping the app.
+
+## 17. Planner and races (2026-11-26)
+
+Four changes approved by David; the contract details live in §4 (`periodization.ts`, `planner.ts`) and `docs/V4.md`.
+
+- **Softer ramp cap.** `rampCapMinutes`: the volume cap over the biggest of the last 3 weeks is +20 % at most
+  (+15 % beginners, +10 % under life stress; +15' minimum). The coach prompt states the same numbers.
+- **Weekly run cap.** Mirrored `domain/runVolume.ts`; the rules planner caps the week's run minutes (bricks count
+  their run leg) and the planning context shows the same number as `phase.runMaxMinutes`.
+- **Short-notice plans from real volume.** `PhaseOptions.recentWeeklyMinutes` (see §4 `periodization.ts`).
+- **How a B/C race is prepared — `races.prep`** (migration `20261126000100_race_prep.sql`): `text`, null or
+  `'training' | 'taper' | 'specific'` (check constraint; covered by the table grants and own-rows RLS).
+  `Race.prep?` / `RaceDraft.prep?` (`RACE_PREPS`, `RacePrep`), zod `raceDraftSchema.prep`, app mappers (a null
+  prep is left out of inserts), server `mapRace` / `RACE_COLS` / `RaceWrite`, demo repository and both seeds
+  (the demo B race is `specific`), MCP `manage_race` (`prep`, nullable). null = the priority's default (B →
+  `taper`, C → `training`); A races ignore it (`racePrepOf`).
+  - `training` («Como entreno»): race week × 0.9, the race alone (no activation), easy day before, no recovery
+    week after (the old C behaviour).
+  - `taper` («Solo afinar»): mini-taper (race week × 0.65, activation D−1, no hard day 48 h before) and the
+    post-race recovery (the old B behaviour).
+  - `specific` («Preparación específica»): `PhaseInfo.specificPrep` = 1 session two weeks before the race week
+    and 2 the week before (`SPECIFIC_PREP_SESSIONS`), only in prep/base/build weeks of a plan towards an A
+    race. `specializeForRace` (planner and Plan → General detail) retargets short race-pace bricks and turns
+    bike/run quality sessions into race-pace sets (`BK_RP`, new `RN_RP`) with the B race's distance
+    (`SessionSpec.raceDistance`, `specificFor`); long sessions and long bricks keep serving the A race. They
+    become key sessions and the Z1-Z2 guard eases them last. Then the mini-taper and recovery as `taper`.
+  Plan → General's `why` and the week focus say which preparation applies; the form asks «¿Cómo la
+  preparas?» for B/C races (`RaceForm`, `raceFormModel`).
+- **Deploy order:** `supabase db push` (`20261126000100_race_prep.sql`) before deploying the edge functions
+  (`RACE_COLS` reads `prep`) or shipping the app.

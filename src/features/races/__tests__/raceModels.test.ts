@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 
 import type { Race } from '@/domain/types';
 
-import { changesSeason, defaultRaceName, initialRaceForm, toRaceDraft, validateRaceForm } from '../raceFormModel';
+import { PREP_OPTIONS, changesSeason, defaultRaceName, formPrep, initialRaceForm, prepHint, toRaceDraft, validateRaceForm } from '../raceFormModel';
 import { PHASE_TIMELINE, PRIORITY_INFO, countdown, phaseName, splitRaces, timelineIndex } from '../raceModel';
 
 const TODAY = '2026-10-25';
@@ -74,7 +74,31 @@ describe('raceFormModel', () => {
       location: 'Valencia',
       goal: 'sub 5h',
       notes: null,
+      prep: null,
     });
+  });
+
+  test('B and C races ask how to prepare them: their choice, else the default (B afinar, C como entreno)', () => {
+    const b = initialRaceForm(null, TODAY);
+    expect(b.prep).toBeNull();
+    expect(formPrep(b)).toBe('taper');
+    expect(formPrep({ ...b, priority: 'C' })).toBe('training');
+    expect(formPrep({ ...b, priority: 'A' })).toBeNull();
+    expect(formPrep({ ...b, prep: 'specific' })).toBe('specific');
+    expect(PREP_OPTIONS.map((o) => o.label)).toEqual(['Como entreno', 'Solo afinar', 'Específica']);
+    expect(prepHint('specific')).toBe('Preparación específica: las 3 semanas antes, más sesiones a su ritmo; tu carrera A sigue mandando.');
+    expect(prepHint('training')).toMatch(/sin afinar/);
+    expect(prepHint('taper')).toMatch(/mini-afinamiento de 3–5 días/);
+  });
+
+  test('the choice is saved for B/C races and cleared for A; an edit keeps it', () => {
+    const base = { ...initialRaceForm(null, TODAY), name: 'Olímpico de Madrid' };
+    expect(toRaceDraft({ ...base, prep: 'specific' }).prep).toBe('specific');
+    expect(toRaceDraft(base).prep).toBeNull();
+    expect(toRaceDraft({ ...base, priority: 'A', prep: 'specific' }).prep).toBeNull();
+    expect(initialRaceForm(race({ priority: 'C', prep: 'taper' }), TODAY).prep).toBe('taper');
+    const ok = validateRaceForm({ ...base, prep: 'training' });
+    expect(ok.ok && ok.draft.prep).toBe('training');
   });
 
   test('the first race defaults to A (the season goal)', () => {
@@ -108,6 +132,14 @@ describe('changesSeason', () => {
     expect(changesSeason(before, { ...draft, date: '2027-05-02' }, TODAY)).toBe(true);
     expect(changesSeason(before, { ...draft, distance: 'full' }, TODAY)).toBe(true);
     expect(changesSeason(before, { ...draft, priority: 'B' }, TODAY)).toBe(true);
+  });
+
+  test('a new way to prepare a B/C race does, the default spelled out does not', () => {
+    const b = race({ id: 'b', date: '2027-04-18', distance: 'olympic', priority: 'B' });
+    const bDraft = { ...draft, distance: 'olympic' as const, priority: 'B' as const };
+    expect(changesSeason(b, { ...bDraft, prep: 'specific' }, TODAY)).toBe(true);
+    expect(changesSeason(b, { ...bDraft, prep: 'taper' }, TODAY)).toBe(false);
+    expect(changesSeason(b, { ...bDraft, prep: null }, TODAY)).toBe(false);
   });
 
   test('renaming a race or saving a past one does not', () => {

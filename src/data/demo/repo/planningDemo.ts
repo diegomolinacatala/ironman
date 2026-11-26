@@ -89,7 +89,17 @@ function raceMethods({ store }: DemoDeps): Pick<Repository, 'listRaces' | 'creat
       const me = await requireMe(store);
       if (draft.name.trim().length === 0) throw new RepositoryError('validation', 'Ponle nombre a la carrera.');
       return store.update((db, clock) => {
-        const race: Race = { location: null, goal: null, notes: null, ...draft, name: draft.name.trim(), id: clock.newId(), userId: me, createdAt: clock.now };
+        const race: Race = {
+          location: null,
+          goal: null,
+          notes: null,
+          ...draft,
+          prep: draft.prep ?? null,
+          name: draft.name.trim(),
+          id: clock.newId(),
+          userId: me,
+          createdAt: clock.now,
+        };
         const next = feedForRace({ ...db, races: [...db.races, race] }, race, clock);
         return { db: next, result: race };
       });

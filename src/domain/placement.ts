@@ -59,7 +59,7 @@ interface State {
   bigWeekendUsed: boolean;
 }
 
-const LEG_KEYS: readonly SessionCode[] = ['RN_LONG', 'RN_THR', 'RN_VO2', 'RN_TEMPO', 'RN_HILLS', 'BRICK', 'BK_LONG'];
+const LEG_KEYS: readonly SessionCode[] = ['RN_LONG', 'RN_THR', 'RN_VO2', 'RN_TEMPO', 'RN_HILLS', 'RN_RP', 'BRICK', 'BK_LONG'];
 const BIKE_LONGS: readonly SessionCode[] = ['BK_LONG', 'BRICK'];
 
 function round5(n: number): number {
@@ -348,6 +348,7 @@ const DOWNGRADE: Partial<Record<SessionCode, SessionCode>> = {
   RN_THR: 'RN_EASY',
   RN_VO2: 'RN_EASY',
   RN_HILLS: 'RN_EASY',
+  RN_RP: 'RN_EASY',
   RN_LONG: 'RN_EASY',
   BK_LONG: 'BK_END',
   SW_CSS: 'SW_END',
@@ -360,7 +361,7 @@ function downgraded(spec: SessionSpec): SessionSpec | null {
   if (!code) return null;
   const sport = specSport(spec);
   const cap = sport === 'run' ? 60 : sport === 'bike' ? 120 : code === 'ST_MAINT' ? 30 : 60;
-  return { ...spec, code, racePace: false, durationMin: Math.min(spec.durationMin, cap), priority: Math.max(spec.priority, 5) };
+  return { ...spec, code, racePace: false, specificFor: null, durationMin: Math.min(spec.durationMin, cap), priority: Math.max(spec.priority, 5) };
 }
 
 function bestDay(s: State, ctx: PlacementContext, spec: SessionSpec, duration: number, pendingBikeLong: boolean): { index: number; bigWeekend: boolean } | null {

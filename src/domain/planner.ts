@@ -17,7 +17,7 @@
 import { READINESS_EFFECTS, maxHardDays, type DistanceKind } from './constants';
 import { allocateWeek } from './allocation';
 import { addDays, daysInRange, formatDuration, maxDate, weekRange } from './dates';
-import { distanceKindOf, phaseFor, type PhaseInfo, type PhaseOptions } from './periodization';
+import { distanceKindOf, phaseFor, racePrepOf, type PhaseInfo, type PhaseOptions } from './periodization';
 import { placeSessions, type Dropped, type Placed, type PlacementResult } from './placement';
 import { dailyLoads } from './load';
 import {
@@ -29,6 +29,7 @@ import {
   pinnedRaceSessions,
   rampCapMinutes,
   specRunMinutes,
+  specializeForRace,
   trimToBudget,
   tsbGuard,
   weekPlanSentence,
@@ -42,7 +43,7 @@ import { recentRunMinutes, runWeekCapMinutes, workoutRunMinutes } from './runVol
 import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
 import { applyWeekPlan } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
-import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, Sport, Weekday, WeekPlan, Workout } from './types';
+import type { BusyBlock, ISODate, JointSession, LifeEvent, PlanChange, Profile, Race, RacePrep, Sport, Weekday, WeekPlan, Workout } from './types';
 import { rangesLength } from './timeRanges';
 import { buildWeekModel, type DayState, type FixedInput } from './weekModel';
 
@@ -384,7 +385,9 @@ function buildSpecs(input: PlannerInput, ctx: WeekContext, budget: Budget): Week
   });
   const existingPlannable = ctx.fixed.filter((f) => ctx.plannable.includes(f.date));
   const remaining = trimToBudget(consumeExisting(ideal.specs, existingPlannable), Math.max(0, budget.budgetMinutes - specialMin));
-  const run = runWarnings(caps, enforceIntensityDistribution(remaining, info.phase === 'race_week'));
+  // «Preparación específica» of a B/C race: some race-pace sessions target it (before the Z1-Z2 guard, which keeps them for last).
+  const specific = specializeForRace(remaining, info.specificPrep);
+  const run = runWarnings(caps, enforceIntensityDistribution(specific, info.phase === 'race_week'));
   // Existing runs that did not match the ideal week can still go over the cap: trim the new runs.
   const weekly = capRunSpecs(run.specs, runCap === null ? null : runCap - ran.outside - ran.inside - pinnedRun);
   return {
@@ -408,6 +411,14 @@ interface WeekPlacement {
 
 function raceDatesOf(races: readonly Race[], priority: Race['priority']): ISODate[] {
   return races.filter((r) => r.priority === priority).map((r) => r.date);
+}
+
+/** B/C race dates by how they are prepared: mini-taper rules ('taper', 'specific') or "como un entreno" ('training'). */
+function minorRaceDates(races: readonly Race[], preps: readonly RacePrep[]): ISODate[] {
+  return races.filter((r) => {
+    const prep = racePrepOf(r);
+    return prep !== null && preps.includes(prep);
+  }).map((r) => r.date);
 }
 
 function longDaysOf(profile: Profile): Weekday[] {
@@ -457,8 +468,8 @@ function placeOn(input: PlannerInput, ctx: WeekContext, budget: Budget, specs: r
     maxHardDays: maxHardDays(budget.targetMinutes / 60, profile.level === 'advanced'),
     bigWeekendAllowed: ctx.kind === 'tri_long' && (ctx.info.phase === 'build' || ctx.info.phase === 'peak') && profile.level !== 'beginner',
     aRaceDates: raceDatesOf(input.races, 'A'),
-    bRaceDates: raceDatesOf(input.races, 'B'),
-    cRaceDates: raceDatesOf(input.races, 'C'),
+    bRaceDates: minorRaceDates(input.races, ['taper', 'specific']),
+    cRaceDates: minorRaceDates(input.races, ['training']),
     readinessToday: today && input.readiness ? { date: today, level: input.readiness.level } : null,
   });
   return { placement, rest };
