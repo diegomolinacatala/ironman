@@ -1,0 +1,5 @@
+# Las PR se fusionan sin aprobación, salvo las que tocan estas rutas:
+# workflows y scripts que se ejecutan con las claves de Apple. Esas necesitan el visto bueno de Diego.
+/.github/        @diegomolinacatala
+/scripts/asc/    @diegomolinacatala
+/scripts/ios/    @diegomolinacatala

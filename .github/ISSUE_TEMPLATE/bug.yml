@@ -1,0 +1,30 @@
+name: Error
+description: Algo no funciona como debería
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Qué pasa
+      description: Qué ves y qué esperabas ver.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Cómo reproducirlo
+      placeholder: |
+        1. Abre Hoy
+        2. Toca…
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Dónde
+      description: Build de TestFlight, simulador o web, y modelo de iPhone si aplica.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Capturas o registros
+      description: Sin datos de salud reales, tokens ni enlaces personales.

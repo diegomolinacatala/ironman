@@ -2,7 +2,11 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 
 ## Memoria compartida del proyecto
 
-Al empezar una sesión, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota del área afectada. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Deja decisiones, cambios, comprobaciones y pendientes para los dos socios, Codex y Claude Code.
+Al empezar una sesión, lee `memoria/Inicio.md`, `memoria/Estado y relevo.md` y la nota del área afectada. Al terminar cualquier tarea, actualiza siempre la bóveda de Obsidian siguiendo `memoria/Cómo trabajamos.md`. Deja decisiones, cambios, comprobaciones y pendientes para todo el equipo (ver `memoria/Cómo trabajamos.md` › Equipo) y sus asistentes, Codex y Claude Code.
+
+## Flujo de Git
+
+Desde el 26-11-2026 nadie hace commit ni push a `main`: un ruleset lo bloquea. Trabaja en una rama (`feat/…`, `fix/…`, `docs/…`, `chore/…`) con Conventional Commits, ejecuta `npm run test:all`, incluye la nota de sesión y abre una PR con la plantilla. El autor fusiona su propia PR con «Squash and merge» cuando pasa el check **Tests**. Solo las PR que tocan `.github/`, `scripts/asc/` o `scripts/ios/` necesitan la aprobación de Diego. Detalle en `CONTRIBUTING.md`.
 
 ## Expo has changed — do not trust your training data
 
