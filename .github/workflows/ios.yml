@@ -4,7 +4,7 @@ name: iOS
 # El proyecto de Xcode no está en el repo: lo genera `npx expo prebuild` a partir de app.config.ts.
 # Sin las claves de App Store Connect solo comprueba que compila; con ellas firma y sube.
 #
-# Secretos del repo (Settings → Secrets and variables → Actions):
+# Secretos del environment «production» (Settings → Environments → production; solo rama main):
 #   ASC_KEY_P8      contenido del .p8 de la clave de API de App Store Connect
 #   ASC_KEY_ID      Key ID de esa clave
 #   ASC_ISSUER_ID   Issuer ID (App Store Connect → Usuarios y acceso → Integraciones)
@@ -42,6 +42,9 @@ jobs:
   build:
     runs-on: macos-26
     timeout-minutes: 75
+    # Las claves de Apple viven en el environment «production», que solo acepta main.
+    # En otra rama no hay environment ni claves: solo se comprueba que compila.
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     env:
       HAS_SIGNING: ${{ secrets.ASC_KEY_P8 != '' && secrets.ASC_KEY_ID != '' && secrets.ASC_ISSUER_ID != '' && vars.APPLE_TEAM_ID != '' }}
       SHOULD_UPLOAD: ${{ github.ref == 'refs/heads/main' || github.event_name != 'push' }}

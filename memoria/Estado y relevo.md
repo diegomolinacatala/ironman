@@ -12,9 +12,14 @@
 
 **Verificación de partida.** TypeScript pasó. El repositorio carecía de configuración ESLint versionada. `npx expo lint` intentó instalarla y acabó con error de detección de versión. Con la configuración temporal generada, `npx eslint src` ejecutó el análisis y señaló 27 errores y 13 avisos en el árbol de trabajo. Se retiraron los cambios de configuración y manifiestos que creó la herramienta. Quedan por comprobar las suites completas, los flujos en iPhone y el estado de servicios desplegados.
 
-## Últimas sesiones
+## Sesiones
+
+Cada tarea deja su nota en `sesiones/`, con la fecha al principio del nombre: para ver las últimas, ordena la carpeta. Desde el 26-11-2026 esta nota ya no mantiene la lista, para que las PR en paralelo no choquen (ver [[Cómo trabajamos]] › Flujo de trabajo con PR).
+
+Hasta el cambio de flujo:
 
 - [[2026-11-26-claude-cerebro-hibrido]] · La IA del coach fallaba desde el 20-11 porque Cloudflare retiró Nemotron 3. Ahora usa Qwen 3.8, con reserva automática. Modelo híbrido: Claude del plan Pro vía MCP (`save_briefing`), dictado con jerga y cifras. Worker y funciones de Supabase desplegados (Claude Code).
+- [[2026-11-26-flujo-de-equipo-con-pr]] · PR obligatorias, CI, environments para las claves de Apple y CONTRIBUTING (Claude Code).
 - [[2026-11-25-alta-de-david]] · David, Nico y Darius entran como desarrolladores. David ya tiene acceso al repo y a TestFlight. Nico y Darius están pendientes de alta (Claude Code).
 - [[2026-11-22-rechazo-app-review-build-19]] · Arreglos del rechazo 5.1.1(iv), 2.5.4 y 2.1. Falta el vídeo con el reloj (Claude Code).
 - [[2026-11-22-rediseno-coach-disponibilidad]] · Rediseño con pliegues, coach y replanificación fiables, disponibilidad automática (Claude Code).
