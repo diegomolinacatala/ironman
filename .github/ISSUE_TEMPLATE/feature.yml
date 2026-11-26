@@ -1,0 +1,21 @@
+name: Idea o mejora
+description: Algo nuevo para la app o una mejora de lo que hay
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Para qué
+      description: Qué necesita el deportista o el equipo y en qué momento.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta
+      description: Cómo lo resolverías. Pantalla, pestaña o recorrido afectado.
+  - type: textarea
+    id: done
+    attributes:
+      label: Está hecho cuando…
+      placeholder: Se puede proponer una quedada desde la ficha de un amigo y aparece en Juntos.

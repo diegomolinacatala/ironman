@@ -1,0 +1,34 @@
+name: CI
+
+# Comprobación obligatoria de cada PR hacia main (ver CONTRIBUTING.md).
+# No lleva filtro de rutas: el ruleset de main exige el check «Tests» en todas las PR,
+# también en las que solo tocan la memoria o la documentación.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # typecheck + jest + base de datos (PGlite) + edge functions
+      - run: npm run test:all

@@ -10,4 +10,6 @@
 
 **Propuesta de trabajo a dos.** Cada uno en su rama y PR hacia main. Cada push a main dispara `ios.yml` y sube una build a TestFlight. Al cerrar cada tarea, una nota en `sesiones/` (ver [[Cómo trabajamos]]). Sin `.env`, la app arranca con el repositorio demo, así que David puede empezar sin acceso a Supabase.
 
+**Actualización.** David ya estaba en el grupo interno de TestFlight desde el 26-10-2026. Nico y Darius se suman también como desarrolladores. El equipo y los pasos para dar de alta a alguien están en [[Cómo trabajamos]] › Equipo.
+
 **Pendiente.** (1) El dueño comprueba en App Store Connect si David está como probador. (2) Commit de los cambios pendientes de la build 19 para que David parta del estado actual. (3) Decidir si David necesita acceso a Supabase y Cloudflare.
