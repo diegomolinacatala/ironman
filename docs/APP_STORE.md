@@ -48,6 +48,12 @@ https://diegomolinacatala.github.io/ironman/privacy/ · normas https://diegomoli
    | Contenido del usuario | Otro contenido del usuario |
    | Identificadores | ID de usuario |
    | Datos de uso | Interacción con el producto |
+   | Ubicación | Ubicación aproximada |
+
+   *Ubicación aproximada* (desde el 26-11-2026): la ciudad que el atleta elige para el tiempo (*Tú ›
+   Entrenamiento › Tu ciudad para el tiempo*) se guarda con sus coordenadas en el perfil. Nunca se pide
+   la ubicación del iPhone (no hay permiso de ubicación) y las coordenadas solo salen del servidor hacia
+   MET Norway, redondeadas a unos 1 km. Rastreo **no**, fin **Funcionalidad de la app**.
 
    Después pulsa **Publicar**.
 

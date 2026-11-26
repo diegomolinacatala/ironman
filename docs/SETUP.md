@@ -79,7 +79,7 @@ npx supabase secrets set GARMIN_KEY_SECRET="$(openssl rand -base64 48)"
 8. **Desplegar las funciones del servidor** (sin Docker):
 
 ```bash
-npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke coach briefing meal --use-api
+npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke coach briefing meal weather --use-api
 ```
 
 9. *Recomendado:* *Authentication → Emails → SMTP* con un proveedor propio (p. ej. Resend, gratis): el
@@ -107,6 +107,18 @@ npx supabase secrets set AI_WORKER_URL=https://ironman-ai.TU-SUBDOMINIO.workers.
 ```
 
 Si se agota la cuota del día, la app sigue funcionando con su informe y su motor de reglas locales.
+
+### 1.11 El tiempo (MET Norway + OpenStreetMap, gratis y sin claves)
+
+Nada que configurar: la función `weather` (desplegada en el paso 8) pide la previsión a **MET Norway
+Locationforecast 2.0** y busca ciudades en **Nominatim (OpenStreetMap)**, los dos gratuitos y sin
+clave. Cumple sus condiciones: se identifica con un `User-Agent` propio (nombre de la app + página de
+soporte), guarda la previsión de cada ciudad hasta su `Expires` (tabla `weather_forecasts`) y repite con
+`If-Modified-Since`, guarda las búsquedas 30 días (`geocode_results`), deja al menos un segundo entre
+búsquedas de toda la app (`svc_reserve_provider_call`) y la app muestra «Datos del tiempo: MET Norway»
+y «© colaboradores de OpenStreetMap». Opcional: `GEOCODER_URL` / `MET_FORECAST_URL` cambian de
+proveedor sin publicar otra versión (Nominatim admite como mucho una búsqueda por segundo: si la app
+crece mucho, apunta `GEOCODER_URL` a otro geocodificador).
 
 ---
 

@@ -692,3 +692,53 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   device-neutral (Garmin JSON + provider-neutral steps Claude can push to the COROS calendar).
 - **Deploy order:** `supabase db push` (`20261109000100_coach_v4.sql`, then `20261109000900_week_plans_platform.sql`)
   before deploying the edge functions or shipping the app.
+
+## 17. Weather for outdoor training (2026-11-26)
+
+Weather is a **separate layer that proposes changes to an existing week**; the planner
+(`allocation`, `placement`, `periodization`, `plannerSupport`) is untouched and nothing is ever applied
+without the athlete reviewing a proposal.
+
+- **City, never the device location.** `profiles.weather_place / weather_lat / weather_lon` (all three or
+  none, client-updatable; `Profile.weatherPlace`). Picked in *Tú › Entrenamiento › Tu ciudad para el
+  tiempo* (`/settings/weather`, `WeatherPlaceSettings`): one search per tap on *Buscar*, never while typing.
+  Plan shows one quiet hint (`WeatherPlaceHint`) only without a city and with outdoor sessions left.
+- **Providers (free, allowed in a free App Store app).** Forecast: **MET Norway Locationforecast 2.0**
+  (`compact`; NLOD 2.0 / CC BY 4.0: credit «Datos del tiempo: MET Norway», linking to the licence, wherever a
+  forecast is shown). City search: **Nominatim / OpenStreetMap** (ODbL: «© colaboradores de OpenStreetMap»;
+  usage policy: identifying `User-Agent`, at most 1 request/s for the whole app, no autocomplete, cached
+  results). Both are called only from the server with `WEATHER_USER_AGENT` (app name + support page).
+- **Edge function `weather`** (`verify_jwt = false`, JWT checked in code): `{ action: 'forecast' }` → the
+  forecast of the athlete's own city (coordinates come from the profile, never the request, so it is not
+  an open proxy) and `{ action: 'search', query }` → places. `_shared/weather/`: `met.ts` (fetch + parse,
+  `Expires` / `If-Modified-Since`), `geocode.ts`, `service.ts` (cache-first `cachedForecast`, stale copy
+  < 24 h when MET fails, UTC steps → local hours with 6-hour blocks spread as `coarse` hours,
+  `safeForecast` that never throws for the AI paths), `prompt.ts` (compact Spanish context, no
+  coordinates). Tables (service role only, no user id): `weather_forecasts` (PK coordinates rounded to
+  2 decimals), `geocode_results` (30 days), `provider_calls` + `svc_reserve_provider_call` (global
+  spacing). Migration `20261126000500_weather.sql`. Logs never contain the city, the query or coordinates.
+- **Pure rules** `src/domain/weather.ts` (mirrored to the server by `sync:mirror`): dry hour = chance
+  < 30 %, < 0.1 mm and no wet symbol; rainy hour = ≥ 0.5 mm (≥ 0.3 mm/h in a 6-hour block) with chance
+  ≥ 60 % or unknown (MET gives no probability outside the Nordic area); a session is rainy when ≥ half its
+  window is rainy (untimed: 07:00–22:00); a dry gap holds the session + 30'. Outdoor = run, bike, brick,
+  unless the title says rodillo / trainer / MyWhoosh / Zwift / indoor / cinta…; swim, strength and
+  mobility are never affected.
+- **Proposal builder** `src/domain/weatherPlan.ts` (app only): key sessions first; same-day dry gap →
+  new time; week scope: another day's dry gap that keeps the re-planner rules (rest day, restrictions,
+  no two hard sessions a day, no hard days in a row, ≤ 2 sessions a day, never two of a sport); else
+  `weatherIndoor.ts` (bike → «Rodillo», same structure; run → pool or trainer with a similar load; brick →
+  trainer). Quedadas only get a sentence (decide it with your partner). `weatherWeek.ts` folds the layer
+  into «Planificar semana» as one proposal (`model 'weather:plan:<signature>'`).
+- **Checks** (`src/features/weather/`, mounted by `AppEffects`): weekly on the first open on Monday (or
+  Sunday ≥ 18:00 for the next week) and daily on the first open of each day. At most one weather proposal
+  a day; a signature (sessions + outcome, FNV-1a) is never proposed again once the athlete discarded it;
+  sessions in a pending weather proposal are left out; out-of-date pending ones are closed by the app.
+  Proposals are ordinary `replan` proposals (`source 'rules'`, `model 'weather:<day|week>:<signature>'`),
+  shown as an «El tiempo» banner in Hoy.
+- **Messages.** Hoy: one quiet line on today's outdoor session (rain on the card, a dry forecast inside the
+  details, always with the credit). Briefing: one sentence only when today's outdoor session falls in the
+  rain, both in the local script (`briefingScript.ts`) and in the server context/prompt. AI coach: seven
+  days of outlook in its context (`weather` in `coach/messages.ts`). Demo mode: deterministic example
+  forecast and a fixed list of cities, labelled «Tiempo de ejemplo».
+- **Deploy:** `supabase db push` (`20261126000500_weather.sql`), then deploy `weather`, `briefing` and
+  `coach`, then ship the app. No secrets needed (`GEOCODER_URL` / `MET_FORECAST_URL` optional overrides).
