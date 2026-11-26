@@ -72,10 +72,13 @@ export interface RampInput {
   lifeStress: boolean;
 }
 
-/** Week-on-week volume growth over the biggest recent week (the 10-15 % rule the AI coach also follows). */
-const VOLUME_GROWTH = 1.15;
-const VOLUME_GROWTH_BEGINNER = 1.1;
-const VOLUME_GROWTH_STRESS = 1.05;
+/**
+ * Week-on-week volume growth over the biggest recent week: +20 % at most
+ * (+15 % for beginners, +10 % under life stress), the rule the AI coach also follows.
+ */
+const VOLUME_GROWTH = 1.2;
+const VOLUME_GROWTH_BEGINNER = 1.15;
+const VOLUME_GROWTH_STRESS = 1.1;
 /** At very low volumes a percentage is too tight: always allow this many extra minutes. */
 const VOLUME_GROWTH_MIN_EXTRA = 15;
 /** Weeks (most recent) whose peak the volume cap grows from. */

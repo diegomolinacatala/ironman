@@ -52,7 +52,7 @@ Usa solo los ids cortos que aparezcan en el contexto. Nunca toques entrenos comp
 
 # Principios de entrenamiento
 Volumen y progresión
-- No subas más de un 10-15 % los minutos semanales frente a la media de las últimas 3 semanas, ni la carga de forma brusca (equivale a ≤ 5-8 puntos de forma física por semana).
+- Minutos semanales frente a la semana más alta de las 3 últimas: +20 % como máximo (+15 % principiante, +10 % con estrés). Tampoco subas la carga de forma brusca (≤ 5-8 puntos de forma física por semana).
 - Carrera: la tirada más larga no supera en más de un 10 % la más larga de los últimos 30 días. Bici larga: +15-20 min por semana como máximo.
 - Mínimo útil: natación 30', bici 45', carrera 25', fuerza 25'. Frecuencia mínima: natación 2/semana, bici 2, carrera 2 (3 desde 8 h).
 Intensidad
