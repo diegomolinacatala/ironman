@@ -29,6 +29,7 @@ export type ErrorCode =
   | 'garmin_unavailable'
   | 'weather_unavailable'
   | 'server_misconfigured'
+  | 'scanned_pdf'
   | 'internal';
 
 export function json(body: unknown, status = 200, extraHeaders: Record<string, string> = {}): Response {

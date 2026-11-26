@@ -13,6 +13,7 @@ import { createDemoCoach } from './repo/coachDemo';
 import { DEFAULT_DEMO_DELAYS, type DemoDelays, type DemoDeps } from './repo/common';
 import { inboxDemo } from './repo/inboxDemo';
 import { integrationsDemo } from './repo/integrationsDemo';
+import { planImportDemo } from './repo/planImportDemo';
 import { planningDemo } from './repo/planningDemo';
 import { socialDemo } from './repo/socialDemo';
 import { weatherDemo } from './repo/weatherDemo';
@@ -45,6 +46,7 @@ export function createDemoRepository(options: DemoRepositoryOptions = {}): DemoR
   const data = {
     ...planningDemo(deps),
     ...weekPlansDemo(deps),
+    ...planImportDemo(deps),
     ...workoutsDemo(deps),
     ...wellnessDemo(deps),
     ...socialDemo(deps),

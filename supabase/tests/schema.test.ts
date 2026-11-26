@@ -43,6 +43,8 @@ const AUTHENTICATED_RPCS = [
   'integration_status',
   'delete_my_account',
   'claim_wake_briefing',
+  'apply_plan_import',
+  'delete_plan_import',
 ];
 
 const SERVICE_RPCS = [

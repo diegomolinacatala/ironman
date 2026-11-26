@@ -1038,3 +1038,32 @@ Approved by David (exam periods first). Mirrored pure module `domain/stressSleep
   focus; server `briefing/context.ts` `stressSleep` (`planning/wellness.ts` `stressSleepView`, bedtimes in the
   profile zone; life events read today − 3 .. today + 3, metrics 31 days) with a prompt rule. Coach, MCP and Claude:
   `get_planning_context` `wellness.stressSleep` (+ a note, the coach prompt and the MCP instructions).
+
+## 26. Imported plans (2026-11-27)
+
+Tú › Entrenamiento › **Importar un plan** (`/plan-import`, modal) brings a coach's plan in and makes it the base
+of those weeks.
+
+- **Domain** (`src/domain/planImport*.ts`, not mirrored): one normalized `ImportedPlan` (sessions with `week`
+  (1-based) + `day` (0 = Monday), optional `sourceDate`, sport, duration, distance, intensity in the app's zones,
+  steps, description, `confidence` high/medium/low) built by `buildPlan`/`normalizeSession`. Readers:
+  `planImportText.ts` (rules parse of pasted text: weeks, day prefixes, `4x8' Z4 rec 3'` steps, Z/RPE/%FTP →
+  zones; also the demo and the AI fallback for text), `planImportTable.ts` (CSV parser, header synonyms →
+  `ColumnMapping`, list or grid layouts, Excel serial dates), `planImportIcal.ts` (VEVENTs → sessions).
+  `importToWorkouts(plan, startMonday, today)` → `WorkoutDraft[]` with `source: 'imported'` (past sessions skipped).
+- **Sources:** photo / PDF / pasted text → `plan-import` edge function (free Workers AI: vision model for photos,
+  text model for text and PDF text extracted with unpdf; scanned PDFs → `422 scanned_pdf`); `.xlsx`
+  (`integrations/files/xlsx.ts`, fflate) and CSV parsed on the device; **TrainingPeaks** through its iCal feed
+  (Premium only, rolling ~5 days back / 14 ahead, fetched from the device); **Garmin**: the Personal API has no
+  calendar / scheduled-workout endpoint and the Training API is write-only for approved partners, so the UI
+  explains it and suggests a screenshot or TrainingPeaks.
+- **Data:** `plan_imports` (select own; writes via `apply_plan_import(p_import, p_workouts, p_replace)` and
+  `delete_plan_import(p_id)`), `workouts.plan_import_id` (`Workout.importId`), `WORKOUT_SOURCES` + `'imported'`.
+  Repository `parsePlanImport / listPlanImports / applyPlanImport / deletePlanImport`, hooks `usePlanImports /
+  useParsePlanImport / useApplyPlanImport / useDeletePlanImport`, topic `plan_imports`. Applying replaces (toggle) the
+  app's own planned sessions (rules / ai_coach / claude, no quedada, from today) in the imported weeks.
+- **Adapting on top:** `generateWeek` returns no changes for a week with imported sessions
+  (`isImportedWeek`, `IMPORTED_WEEK_SUMMARY`); the AI coach sees `imported: true` and its `plan_week` adds in
+  imported weeks are dropped (`dropAddsInImportedWeeks`). The re-planner (events, readiness, missed sessions,
+  weather, restrictions) still moves / eases imported sessions as proposals; `plan_update` keeps the source.
+- **Deploy order:** `supabase db push` (`20261127000500_plan_import.sql`), `functions deploy plan-import coach`, app.

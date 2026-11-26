@@ -67,6 +67,8 @@ import type {
 } from '@/domain/types';
 import type { WeatherForecast } from '@/domain/weather';
 
+import type { ImportedPlan, PlanImport, PlanImportDraft, PlanImportResult, PlanParseInput } from '@/domain/planImport';
+
 export type RepositoryMode = 'supabase' | 'demo';
 
 export type RepositoryErrorCode =
@@ -107,6 +109,7 @@ export type ChangeTopic =
   | 'feed'
   | 'notifications'
   | 'proposals'
+  | 'plan_imports'
   | 'profile'
   | 'integrations'
   | 'briefings'
@@ -174,6 +177,21 @@ export interface Repository {
   saveWeekPlans(drafts: WeekPlanDraft[]): Promise<WeekPlan[]>;
   /** Removes the entry of that week (back to the computed periodization). No-op when absent. */
   deleteWeekPlan(weekStart: ISODate): Promise<void>;
+
+  // Imported plans (a coach's PDF, photo, text, Excel/CSV, TrainingPeaks) ----
+  /**
+   * Reads a photo, a PDF or pasted text with the free AI (`plan-import` edge function). Pasted
+   * text falls back to the local rules parser when the AI is unavailable; photos and PDFs throw a
+   * RepositoryError with a Spanish message (scanned PDF, no consent, AI unavailable, too large).
+   * CSV, Excel and calendar feeds are parsed on the device (domain/planImport*).
+   */
+  parsePlanImport(input: PlanParseInput): Promise<ImportedPlan>;
+  /** Stored imports, newest first. */
+  listPlanImports(): Promise<PlanImport[]>;
+  /** Saves the reviewed plan and creates its planned workouts (source 'imported'). */
+  applyPlanImport(draft: PlanImportDraft): Promise<PlanImportResult>;
+  /** Deletes the import and its still planned sessions (done ones stay). Returns how many were removed. */
+  deletePlanImport(id: UUID): Promise<{ removed: number }>;
 
   // Life events --------------------------------------------------------------
   listLifeEvents(range: DateRange): Promise<LifeEvent[]>;

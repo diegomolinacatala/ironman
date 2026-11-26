@@ -52,7 +52,7 @@ export type Intensity = (typeof INTENSITIES)[number];
 export type WorkoutStatus = 'planned' | 'completed' | 'skipped';
 
 /** Who created / last planned the workout. */
-export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin'] as const;
+export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'imported'] as const;
 export type WorkoutSource = (typeof WORKOUT_SOURCES)[number];
 
 export type WorkoutStepKind = 'warmup' | 'work' | 'recovery' | 'cooldown' | 'rest';
@@ -166,6 +166,8 @@ export interface Workout {
   externalId: string | null;
   /** Objective, keys, success criterion and plan B (rules engine, AI coach, Claude). Absent = none. */
   coaching?: WorkoutCoaching | null;
+  /** Imported plan this session came from (`source: 'imported'`, domain/planImport.ts). Absent = none. */
+  importId?: UUID | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }

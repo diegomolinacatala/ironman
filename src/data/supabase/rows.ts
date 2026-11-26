@@ -63,6 +63,8 @@ export interface WorkoutRow {
   external_id: string | null;
   /** v4: WorkoutCoaching (camelCase jsonb) or null. Absent on servers without the v4 migration. */
   coaching?: unknown;
+  /** Imported plan (20261127000500_plan_import.sql); absent on older servers. */
+  plan_import_id?: string | null;
   created_at: string;
   updated_at: string;
 }

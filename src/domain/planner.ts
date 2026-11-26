@@ -44,6 +44,7 @@ import { fixedSessionsOn, lowIntensityShareFor, trainingPrefsSentence } from './
 import { athleteContextPlanSentence, lifeLoadFactor, mealRanges, preferredTrainingTime, sportFocus, wakingDayOn } from './athleteContext';
 import { recentRunMinutes, runWeekCapMinutes, workoutRunMinutes } from './runVolume';
 import { isAutoAvailability, normalWeekHours, planningAvailability } from './availability';
+import { IMPORTED_WEEK_SUMMARY, isImportedWeek } from './planImport';
 import { applyWeekPlan, weekMinutesFor } from './season';
 import { specClass, specSport, specToDraft, type SessionSpec } from './sessions';
 import type {
@@ -812,6 +813,8 @@ export function planWeek(rawInput: PlannerInput): PlanWeekResult {
 
 /** Rules-engine week proposal: only 'add' changes, never touches existing workouts. */
 export function generateWeek(input: PlannerInput): { changes: PlanChange[]; summary: string } {
+  // An imported plan (the athlete's coach) is the base of this week: nothing is added on top.
+  if (isImportedWeek(input.existing, input.weekStart)) return { changes: [], summary: IMPORTED_WEEK_SUMMARY };
   const result = planWeek(input);
   return { changes: result.changes, summary: result.summary };
 }

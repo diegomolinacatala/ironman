@@ -15,6 +15,7 @@ import { createCoachRequester } from './coach';
 import { inboxApi } from './inboxApi';
 import { integrationsApi } from './integrationsApi';
 import { mealApi } from './mealApi';
+import { planImportApi } from './planImportApi';
 import { speechApi } from './speechApi';
 import { planningApi } from './planningApi';
 import { profileApi } from './profileApi';
@@ -40,6 +41,7 @@ export function createSupabaseRepository(options: SupabaseRepositoryOptions = {}
     ...workoutsApi(ctx),
     ...planningApi(ctx),
     ...weekPlansApi(ctx),
+    ...planImportApi(ctx),
     ...wellnessApi(ctx),
     ...socialApi(ctx),
     ...inboxApi(ctx),
