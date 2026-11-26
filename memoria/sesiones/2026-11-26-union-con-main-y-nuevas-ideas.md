@@ -38,4 +38,56 @@ Decisiones de David:
 - **Importar un plan externo:** acepta PDF, foto, texto pegado, Excel o CSV, TrainingPeaks y Garmin. Se revisa antes de aplicarlo y pasa a ser la base que la app adapta.
 - **Viento fuerte:** siempre avisa. Busca horas con menos viento, como con la lluvia, y solo propone cambiar el entreno cuando de verdad molesta: el umbral es más bajo en bici que corriendo. Siempre lo propone antes de cambiar nada.
 
-Lo implementado se apunta al final de esta nota.
+## Implementado
+
+Se hizo con cinco agentes en paralelo, cada uno en su worktree, y luego se unió en la rama. Detalle técnico en `docs/ARCHITECTURE.md`, §20 (viento) y §23-26.
+
+- **Viento** (§20, `domain/weather.ts` `WIND_RULES`):
+  - Bici: aviso desde 25 km/h y propuesta desde 35 km/h o rachas de 55. Carrera: aviso desde 30 y propuesta desde 45 o rachas de 60.
+  - Lluvia y viento juntos dan una sola línea y una sola propuesta. Los huecos que se sugieren tienen que estar secos y sin viento fuerte.
+  - MET Norway casi nunca da rachas en España (el endpoint `compact` no las trae), así que en la práctica cuenta el viento medio.
+- **«Tu contexto»** (§23):
+  - `profiles.athlete_context` (migración `20261127000400`) y entrevista guiada de unas 15 preguntas, más «¿Algo más que deba saber?» con la IA.
+  - Plan: mantener un deporte con años de experiencia es una sesión menos y ×0,8; mejorar mucho, una sesión más y ×1,2.
+  - La carga de estudios o trabajo baja las horas como mucho un 15 %.
+  - Las épocas de exámenes se convierten en imprevistos `exam`.
+  - Se respetan las horas de comida y sueño y la hora preferida.
+- **Mis sitios, preguntas de la semana y «¿Sales con alguien?»** (§24):
+  - `profiles.places` y `profiles.week_questions` (migración `20261127000300`).
+  - Domingo: «Muchas cosas» es ×0,8, «Más libre» ×1,1 y «con gente» lleva las sesiones a huecos comunes.
+  - Miércoles: «¿Vuelves?» aplica el material de ese sitio, y si la bici está allí pregunta «¿salir en bici?» y luego «¿con quién?».
+  - Para todos: en cada bici al aire libre de los próximos 3 días pregunta «¿Sales con alguien?».
+- **Estrés que quita sueño** (§25, `domain/stressSleep.ts`, espejado):
+  - Salta cuando en 2 de las 3 últimas noches hubo un día estresante y una noche peor que la referencia de 28 días.
+  - Qué hace:
+    - propone «Suavizar» 2-3 días manteniendo la sesión clave;
+    - avisa 45 min antes de la hora habitual de dormir;
+    - abre `/breathing` (3 min, 4 s / 6 s);
+    - el informe lo nombra;
+    - el plan semanal baja entre un 10 y un 15 %.
+  - El aviso de dormir viene activado por defecto: solo salta los días con la señal.
+- **Importar un plan** (§26, migración `20261127000500`, función `plan-import`):
+  - Foto: visión. PDF: `unpdf` y luego texto. Texto pegado: IA, o parser local si no hay IA. Excel/CSV: en el teléfono y sin IA (`fflate`). TrainingPeaks: su iCal, que solo existe en Premium y cubre unos 14 días hacia delante.
+  - **Garmin no es posible**: la API personal no tiene calendario y la Training API solo escribe y es para empresas aprobadas.
+  - El plan se revisa antes de aplicarlo. Sus sesiones quedan como `imported` y el planificador no las pisa, pero los imprevistos, el tiempo, etc. siguen proponiendo cambios sobre ellas.
+  - Añade `expo-document-picker`, así que **hace falta una build nativa nueva**. El chequeo ABI pasa.
+
+Comprobado tras unirlo todo: tipos OK, Jest 2.694, base de datos 201, funciones 336, worker 36, y ESLint sin errores.
+
+**Desplegar (Diego), en orden:**
+1. `supabase db push`, con las migraciones `20261125000100`, `20261126000100`–`000600` y `20261127000300`–`000500`. Las funciones leen las columnas nuevas, así que esto va antes.
+2. Funciones `coach briefing mcp garmin morning weather plan-import` y las de planificación.
+3. `select private.schedule_platform_jobs();`
+4. Build nativa de la app.
+5. En App Store Connect, etiquetas «Ubicación aproximada» y los datos nuevos de contexto (hábitos, estudios o trabajo, fechas de exámenes). Actualizar también `docs/PRIVACY.md`.
+
+**Pendiente:**
+- Probar todo en iPhone.
+- El texto «¿Qué planes tienes?» no lo lee nadie todavía.
+- «Mis sitios» solo lo usa el planificador de la app; el servidor y MCP no lo conocen.
+- El replanificador no usa los horarios de «Tu contexto».
+- El aviso de dormir es local: solo funciona si se abre la app ese día.
+- No hay sincronización periódica del iCal de TrainingPeaks.
+- Una foto por lectura: no junta varias páginas.
+- `.xls` antiguo no está soportado.
+- PR hacia `main`, con la aprobación de Diego porque toca `.github/`.
