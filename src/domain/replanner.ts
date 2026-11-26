@@ -93,7 +93,10 @@ export function replanForEvent(input: ReplanInput & { event: LifeEvent }): Repla
   const handled = applyEvent(startPlan(input), ctx, e);
   const plan = e.kind === 'injury' || e.kind === 'illness' ? handled : resolveTimeConflicts(handled, ctx, e);
   const when = e.endDate > e.startDate ? `${formatDayMedium(e.startDate)} – ${formatDayMedium(e.endDate)}` : formatDayMedium(e.startDate);
-  return finish(plan, `${lifeEventLabel(e.kind)}: ${e.title} (${when}).`, 'Tu semana ya encaja con este imprevisto: no hace falta cambiar nada.');
+  const label = lifeEventLabel(e.kind);
+  // "Viaje (jue 26 – dom 29)", not "Viaje: Viaje (…)" when the title is just the kind.
+  const name = e.title.trim() && e.title.trim().toLowerCase() !== label.toLowerCase() ? `${label}: ${e.title.trim()}` : label;
+  return finish(plan, `${name} (${when}).`, 'Tu semana ya encaja con este imprevisto: no hace falta cambiar nada.');
 }
 
 // ---------------------------------------------------------------------------
