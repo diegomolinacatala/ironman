@@ -63,7 +63,9 @@ import type {
   CompletedData,
   ISODate,
   ISODateTime,
+  WeatherPlaceOption,
 } from '@/domain/types';
+import type { WeatherForecast } from '@/domain/weather';
 
 export type RepositoryMode = 'supabase' | 'demo';
 
@@ -220,6 +222,16 @@ export interface Repository {
    * (`engine: 'rules'`) when the AI is unavailable, so it only throws for auth/network errors.
    */
   generateBriefing(date: ISODate, opts?: { refresh?: boolean }): Promise<Briefing>;
+
+  // Weather (the athlete's city: profile.weatherPlace) ------------------------
+  /**
+   * Hourly forecast of the athlete's city (MET Norway through the `weather` edge function;
+   * simulated in demo mode). Null when no city is set or the forecast is unavailable: weather is
+   * a bonus and never throws for provider problems. Absent on test doubles.
+   */
+  getWeather?(): Promise<WeatherForecast | null>;
+  /** Cities matching `query` (2–80 characters; only on an explicit search, no autocomplete). */
+  searchWeatherPlaces?(query: string): Promise<WeatherPlaceOption[]>;
 
   // Social -------------------------------------------------------------------
   searchProfiles(query: string): Promise<PublicProfile[]>;

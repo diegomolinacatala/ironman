@@ -20,6 +20,7 @@ import { planningApi } from './planningApi';
 import { profileApi } from './profileApi';
 import { subscribeRealtime } from './realtime';
 import { socialApi } from './socialApi';
+import { weatherApi } from './weatherApi';
 import { weekPlansApi } from './weekPlansApi';
 import { wellnessApi } from './wellnessApi';
 import { workoutsApi } from './workoutsApi';
@@ -45,6 +46,7 @@ export function createSupabaseRepository(options: SupabaseRepositoryOptions = {}
     ...integrationsApi(ctx),
     ...mealApi(ctx),
     ...speechApi(ctx),
+    ...weatherApi(ctx),
   };
 
   const requestCoach = createCoachRequester({ ctx, repo: data, today: () => todayISO(now()) });

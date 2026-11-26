@@ -3,6 +3,7 @@ import { wordCount } from '../briefingSpeech';
 import { buildSession } from '../sessions';
 import { addDays } from '../dates';
 import type { DailyMetrics, SleepSnapshot } from '../types';
+import type { WeatherForecast } from '../weather';
 import { makeMetrics, makeRace, makeWorkout } from './fixtures';
 
 /** Tuesday. */
@@ -350,5 +351,34 @@ describe('composeBriefing as a coach', () => {
     expect(b.script).toContain('Tu objetivo: un esfuerzo de ocho a nueve sobre diez, por sensaciones.');
     expect(b.script).toContain('La parte principal son diez series de un minuto y quince segundos en zona cuatro.');
     expect(b.script).not.toMatch(/\d/);
+  });
+});
+
+describe('composeBriefing · the weather (city set)', () => {
+  /** Today in Valencia: rain from `from` to `to`, dry the rest of the day. */
+  function rainToday(from: number, to: number): WeatherForecast {
+    const hours = Array.from({ length: 24 }, (_, hour) => {
+      const wet = hour >= from && hour < to;
+      return { date: TODAY, hour, tempC: 12, windKmh: 8, precipMm: wet ? 1.5 : 0, precipProb: null, symbol: wet ? 'rain' : 'cloudy', coarse: false };
+    });
+    return { place: 'Valencia', source: 'met_norway', updatedAt: `${TODAY}T04:00:00Z`, hours };
+  }
+
+  it("one spoken sentence when today's run falls in the rain, with the dry hours", () => {
+    const b = composeBriefing(input({ forecast: rainToday(7, 9) }));
+    expect(b.script).toMatch(/Ojo, entre .+ llueve: sal a correr entre .+, que no llueve\./);
+    expect(b.script).not.toMatch(/\d/);
+  });
+
+  it('no dry gap: trainer or pool', () => {
+    const b = composeBriefing(input({ forecast: rainToday(0, 24) }));
+    expect(b.script).toContain('llueve y no hay un hueco seco: mejor en rodillo o en la piscina.');
+  });
+
+  it('silent when it is dry, without a forecast or when today is indoors', () => {
+    expect(composeBriefing(input({ forecast: rainToday(15, 18) })).script).not.toMatch(/llueve/);
+    expect(composeBriefing(input()).script).not.toMatch(/Ojo/);
+    const swim = makeWorkout({ date: TODAY, sport: 'swim', title: 'Técnica', durationMin: 45, startTime: '07:30' });
+    expect(composeBriefing(input({ todayWorkouts: [swim], forecast: rainToday(0, 24) })).script).not.toMatch(/llueve/);
   });
 });

@@ -169,3 +169,8 @@ verify_jwt = false
 # verified in code (userIdFromJwt), same pattern as briefing; 503 ai_unavailable without the worker.
 [functions.speech]
 verify_jwt = false
+
+# Weather for outdoor training (city search + forecast of the athlete's city, MET Norway and
+# Nominatim behind our cache): user JWT verified in code (userIdFromJwt), same pattern as briefing.
+[functions.weather]
+verify_jwt = false

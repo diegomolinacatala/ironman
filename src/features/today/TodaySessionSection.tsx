@@ -5,6 +5,7 @@ import type { Workout } from '@/domain/types';
 import { Skeleton } from '@/features/briefing/Skeleton';
 import { partnerNameFor } from '@/features/workouts/draft';
 import { WorkoutCard } from '@/features/workouts/WorkoutCard';
+import { useSessionWeather } from '@/features/weather/useSessionWeather';
 import { useTrainingCalendar } from '@/integrations/calendar/trainingCalendar';
 import { errorMessage } from '@/lib/logger';
 import { Card, ErrorNotice, SectionHeader, radius, space } from '@/ui';
@@ -38,6 +39,7 @@ export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySes
   const { today } = data;
   const plan = planForToday(data.todayWorkouts, today);
   const partner = (w: Workout) => partnerNameFor(w, data.jointSessions, data.myId);
+  const weather = useSessionWeather(plan.hero ?? null, today);
 
   let body;
   if (data.isLoading) body = <SessionSkeleton />;
@@ -55,6 +57,7 @@ export function TodaySessionSection({ data, busy, onComplete, onMore }: TodaySes
         busy={busy}
         thresholds={data.thresholds}
         raceDistance={data.raceDistance}
+        weather={weather}
       />
     );
   } else body = <DayStatusCard kind={plan.isRestDay ? 'rest' : 'done'} today={today} />;

@@ -6,7 +6,7 @@
  */
 import { composeBriefing } from '@/domain/briefing';
 import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
-import { addDays, isISODate } from '@/domain/dates';
+import { addDays, isISODate, toISODate } from '@/domain/dates';
 import { estimateMealLocally } from '@/domain/mealEstimate';
 import { nextRace } from '@/domain/periodization';
 import type { Briefing, ISODate, MealAnalysis, MealAnalysisInput, MealSlot, UUID } from '@/domain/types';
@@ -18,6 +18,7 @@ import type { DemoBriefing, DemoDb } from '../db';
 import { listJointFor } from '../jointOps';
 import { pause, requireMe, type DemoDeps } from './common';
 import { withSync } from './integrationsDemo';
+import { demoForecast } from './weatherDemo';
 
 type AiMethods = Pick<Repository, 'getBriefing' | 'generateBriefing' | 'analyzeMeal'>;
 
@@ -57,6 +58,8 @@ function briefingFrom(db: DemoDb, me: UUID, date: ISODate, now: Date): Briefing 
     now,
     ...briefingAthleteFields(profile, race),
     social: { me, jointSessions: listJointFor(db, me, { from: date, to: addDays(date, INVITE_HORIZON_DAYS - 1) }) },
+    // Like the server: with a city, one sentence when today's outdoor session falls in the (example) rain.
+    ...(profile?.weatherPlace ? { forecast: demoForecast(profile.weatherPlace.name, toISODate(now), now) } : {}),
   });
 }
 

@@ -41,6 +41,7 @@ import {
   type Score5,
   type Severity,
   type TrainableSport,
+  type WeatherPlace,
   type Workout,
   type WorkoutCoaching,
   type WorkoutDraft,
@@ -104,13 +105,23 @@ function recordOrEmpty(value: unknown): Record<string, unknown> {
 // Profiles
 // ---------------------------------------------------------------------------
 
+/** The three weather columns → WeatherPlace; null when any is missing (no city, or not migrated yet). */
+export function weatherPlaceOf(row: Pick<ProfileRow, 'weather_place' | 'weather_lat' | 'weather_lon'>): WeatherPlace | null {
+  const name = asString(row.weather_place)?.trim();
+  const lat = asNumber(row.weather_lat);
+  const lon = asNumber(row.weather_lon);
+  return name && lat !== null && lon !== null ? { name, lat, lon } : null;
+}
+
 export function rowToProfile(row: ProfileRow): Profile {
   // Not chosen yet (null) or a server without the v4 column: the key stays absent (treated as Garmin).
   const watchBrand = oneOf(row.watch_brand, WATCH_BRANDS);
   // «Tu forma de entrenar»: absent when nothing is stored (everything automático) or the column is not deployed yet.
   const trainingPrefs = parseTrainingPrefs(row.training_prefs);
+  const weatherPlace = weatherPlaceOf(row);
   return {
     ...(watchBrand ? { watchBrand } : {}),
+    ...(weatherPlace ? { weatherPlace } : {}),
     ...(trainingPrefs ? { trainingPrefs } : {}),
     id: row.id,
     username: row.username,
@@ -148,8 +159,17 @@ export function profileToRow(profile: Profile): ProfileRow {
     ai_consent_at: profile.aiConsentAt,
     watch_brand: profile.watchBrand ?? null,
     training_prefs: profile.trainingPrefs ?? null,
+    weather_place: profile.weatherPlace?.name ?? null,
+    weather_lat: profile.weatherPlace?.lat ?? null,
+    weather_lon: profile.weatherPlace?.lon ?? null,
     created_at: profile.createdAt,
   };
+}
+
+/** `weatherPlace` of a patch → the three columns (undefined = untouched, null = cleared). */
+function weatherPlaceColumns(place: WeatherPlace | null | undefined): Row {
+  if (place === undefined) return {};
+  return { weather_place: place?.name.trim() ?? null, weather_lat: place?.lat ?? null, weather_lon: place?.lon ?? null };
 }
 
 /** Only the provided keys are emitted (PATCH semantics). */
@@ -170,6 +190,7 @@ export function profilePatchToRow(patch: ProfilePatch): Row {
     ai_consent_at: patch.aiConsentAt,
     watch_brand: patch.watchBrand,
     training_prefs: patch.trainingPrefs,
+    ...weatherPlaceColumns(patch.weatherPlace),
   });
 }
 

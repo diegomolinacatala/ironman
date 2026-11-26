@@ -8,7 +8,7 @@
  * texts in `briefing.ts`. Pure.
  */
 import { keySessionSentences, lowerFirst, ZONE_SPOKEN, type SpeechContext } from './briefingCoach';
-import { atTimeWords, countWords, dateWords, durationWords, numberToWords, wordCount } from './briefingSpeech';
+import { atTimeWords, clockWords, countWords, dateWords, durationWords, numberToWords, wordCount } from './briefingSpeech';
 import { HRV_LOW_RATIO, hrvRatio, isNum } from './briefingSleep';
 import { NO_TOGETHER, type BriefingTogether, type PendingInvite, type TodayJoint } from './briefingSocial';
 import { diffDays } from './dates';
@@ -295,6 +295,28 @@ function togetherSentences(t: BriefingTogether, date: ISODate): Sentence[] {
   return [...t.today.map(todayJointSentence), ...inviteSentences(t.invitations, t.invitationCount, date)];
 }
 
+/** Today's outdoor session that falls in the rain (`weather.ts`), for one spoken sentence. */
+export interface BriefingWeather {
+  sport: Sport;
+  /** Minutes since midnight. */
+  rain: { start: number; end: number };
+  /** Dry stretch of the day long enough for the session, or null. */
+  gap: { start: number; end: number } | null;
+}
+
+/** "a las seis de la tarde" (an hour) or "entre las cuatro y las seis de la tarde". */
+function spokenRange(range: { start: number; end: number }): string {
+  if (range.end - range.start <= 60) return `a ${clockWords(range.start, true)}`;
+  return `entre ${clockWords(range.start)} y ${clockWords(range.end, true)}`;
+}
+
+/** «Ojo, a las seis de la tarde llueve: sal a correr entre las cuatro y las seis de la tarde, que no llueve.» */
+function weatherSentence(w: BriefingWeather): Sentence {
+  if (!w.gap) return { text: `Ojo, ${spokenRange(w.rain)} llueve y no hay un hueco seco: mejor en rodillo o en la piscina.` };
+  const go = w.sport === 'run' ? 'sal a correr' : 'sal en bici';
+  return { text: `Ojo, ${spokenRange(w.rain)} llueve: ${go} ${spokenRange(w.gap)}, que no llueve.` };
+}
+
 function tomorrowSentence(workouts: readonly Workout[]): Sentence {
   const plan = dayPlanOf(workouts, false);
   if (plan.kind !== 'train' || !plan.planned[0]) return { text: 'Mañana descansas.' };
@@ -353,15 +375,18 @@ export interface ScriptInput {
   speech?: SpeechContext;
   /** The athlete's watch, for the "no sleep data" sentences (null = not chosen: "tu reloj"). */
   watchBrand?: WatchBrand | null;
+  /** Today's outdoor session in the rain (city set): one sentence after the plan. */
+  weather?: BriefingWeather | null;
 }
 
-/** The text-to-speech script: greeting, sleep, today, quedadas, focus, tomorrow, race countdown, closing. */
+/** The text-to-speech script: greeting, sleep, today, weather, quedadas, focus, tomorrow, race countdown, closing. */
 export function composeScript(input: ScriptInput): string {
   const { date, plan, race } = input;
   const sentences: Sentence[] = [
     { text: `${greetingOf(input.now, input.name)} Hoy es ${dateWords(date)}.` },
     ...sleepSentences(input.snapshot, input.verdict, input.hasAnyMetrics, input.watchBrand),
     ...todaySentences(plan, race, input.speech ?? {}),
+    ...(input.weather && plan.kind === 'train' ? [weatherSentence(input.weather)] : []),
     ...togetherSentences(input.together ?? NO_TOGETHER, date),
     { text: input.focus },
     ...(plan.kind === 'race' ? [] : [tomorrowSentence(input.tomorrowWorkouts)]),

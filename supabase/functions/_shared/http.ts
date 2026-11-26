@@ -27,6 +27,7 @@ export type ErrorCode =
   | 'invalid_key'
   | 'garmin_expired'
   | 'garmin_unavailable'
+  | 'weather_unavailable'
   | 'server_misconfigured'
   | 'internal';
 

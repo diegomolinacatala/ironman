@@ -79,7 +79,7 @@ npx supabase secrets set GARMIN_KEY_SECRET="$(openssl rand -base64 48)"
 8. **Desplegar las funciones del servidor** (sin Docker):
 
 ```bash
-npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke coach briefing meal morning --use-api
+npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke coach briefing meal morning weather --use-api
 ```
 
 9. *Recomendado:* *Authentication → Emails → SMTP* con un proveedor propio (p. ej. Resend, gratis): el

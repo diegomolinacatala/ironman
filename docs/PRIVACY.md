@@ -1,6 +1,6 @@
 # Política de privacidad de Road to Ironman
 
-**Responsable:** Diego Molina · Contacto: [diegomolinacatala@gmail.com](mailto:diegomolinacatala@gmail.com) · Última actualización: 12 de noviembre de 2026
+**Responsable:** Diego Molina · Contacto: [diegomolinacatala@gmail.com](mailto:diegomolinacatala@gmail.com) · Última actualización: 26 de noviembre de 2026
 
 ## Qué datos tratamos y para qué
 
@@ -16,6 +16,7 @@
 | Lo que le dices o escribes a tu coach (la voz se convierte en texto **en el iPhone**) | Tú | Entender lesiones, cambios de planes y preferencias, y ajustar tu plan |
 | Fotos de tus comidas (se guardan **solo en tu iPhone**) y lo que apuntas que comes | Tú | Estimar lo que comes y darte consejos para entrenar |
 | Informe de cada mañana (texto generado con tu sueño y tu plan del día) | La app | Contarte cómo has dormido y qué te toca; se lee en voz alta en el iPhone |
+| **Tu ciudad para el tiempo** (nombre y coordenadas de la ciudad que eliges; nunca la ubicación del iPhone) | Tú, solo si la añades en *Tú › Entrenamiento* | Mirar la previsión y proponerte entrenar en un hueco seco o a cubierto |
 | Mensajes en las quedadas, kudos y tu @usuario | Tú | Que tus amigos te encuentren y os organicéis |
 | Denuncias que envías (motivo, a quién y el mensaje denunciado) y bloqueos | Tú | Revisar abusos y que no te contacte quien bloqueas |
 | Token de notificaciones | Tu iPhone | Enviarte avisos |
@@ -34,6 +35,13 @@
     solo para generar la respuesta: según Cloudflare, no guarda esas entradas ni salidas y no las usa
     para entrenar modelos. Nunca le enviamos los títulos de tus eventos del calendario. Puedes retirar el
     permiso en *Tú › Privacidad* y la app sigue funcionando con reglas automáticas.
+- **Servicios del tiempo**, solo si añades tu ciudad, y siempre desde nuestro servidor (no reciben tu
+  dirección IP, tu nombre ni tu cuenta):
+  - **MET Norway** (Instituto Meteorológico de Noruega) recibe las coordenadas de tu ciudad redondeadas
+    a unos 1 km para devolver la previsión. Los datos del tiempo son suyos (licencia CC BY 4.0).
+  - **Nominatim (OpenStreetMap)** recibe el texto que escribes al buscar tu ciudad. Guardamos las
+    búsquedas (sin saber quién las hizo) 30 días para no repetirlas.
+  Puedes quitar tu ciudad cuando quieras en *Tú › Entrenamiento › Tu ciudad para el tiempo*.
 - **Tu propio Claude**, solo si tú creas el conector: lo que tu Claude lea o escriba en la app queda
   sujeto también a tu relación con Anthropic. La app no envía nada a Anthropic por su cuenta.
 

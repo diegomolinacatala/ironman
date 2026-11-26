@@ -30,6 +30,8 @@ import type {
   WeekPlan,
   Workout,
 } from '../types.ts';
+import type { WeatherForecast } from '../planning/domain/weather.ts';
+import { weatherForBriefing } from '../weather/prompt.ts';
 import { todaySession, tomorrowSession, yesterdaySession } from './sessions.ts';
 import type { SessionView } from './sessions.ts';
 import { sleepForPrompt, sleepSnapshot } from './sleep.ts';
@@ -71,6 +73,8 @@ export interface BriefingContext {
   busyToday: { start: string; end: string }[];
   /** Today's quedadas and invitations waiting for an answer (first names, title, time, place). */
   together: BriefingTogether;
+  /** Only when one of the day's outdoor sessions falls in the rain: its dry gap and the advice. */
+  weather: Record<string, unknown> | null;
 }
 
 /** Only the first name goes to the model (enough to greet; no surnames). */
@@ -95,6 +99,8 @@ export interface BriefingContextOptions {
   userId: UUID;
   date: ISODate;
   now: Date;
+  /** The athlete's city forecast (null/absent: no weather in the briefing). */
+  forecast?: WeatherForecast | null;
 }
 
 interface BriefingData {
@@ -160,6 +166,10 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
   const race = nextRace(data.races, date);
   const view: SessionView = { thresholds: data.profile.thresholds, raceDistance: race?.distance ?? null };
   const sleep = sleepSnapshot(data.metrics, date);
+  const busyToday = busyView(data.busy, data.tz, date, date).map(({ start, end }) => ({ start, end }));
+  const weather = opts.forecast
+    ? weatherForBriefing({ forecast: opts.forecast, date, today, workouts: data.workouts, busy: busyToday, now: opts.now, timezone: data.tz })
+    : null;
   return {
     date,
     weekday: WEEKDAYS_ES[weekdayOf(date)],
@@ -175,8 +185,9 @@ export async function buildBriefingContext(reader: BriefingReader, opts: Briefin
     race: raceForPrompt(race, date),
     phase: phaseView(data, date, today),
     lifeEvents: data.events.filter((e) => e.startDate <= date && e.endDate >= date).map(eventForPrompt),
-    busyToday: busyView(data.busy, data.tz, date, date).map(({ start, end }) => ({ start, end })),
+    busyToday,
     together: togetherOf(data.joint, opts.userId, date),
+    weather,
   };
 }
 
@@ -198,5 +209,6 @@ export function promptPayload(ctx: BriefingContext): Record<string, unknown> {
     activeImprevistos: ctx.lifeEvents,
     busyToday: ctx.busyToday,
     ...(together ? { together } : {}),
+    ...(ctx.weather ? { weather: ctx.weather } : {}),
   };
 }
