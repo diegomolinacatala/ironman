@@ -171,18 +171,35 @@ function eventWeekLoad(workouts: readonly Workout[], e: LifeEvent): number {
   return workouts.filter((w) => w.status !== 'skipped' && w.date >= from && w.date <= to).reduce((s, w) => s + workoutLoad(w), 0);
 }
 
+/** Sports a match can stand in for: it loads the legs like a run or a ride, never like a swim. */
+const MATCH_REPLACES: readonly Sport[] = ['run', 'bike'];
+/** At most this many easy sessions give way to one match: the rest of the week stays as planned. */
+const MATCH_MAX_DROPS = 1;
+/** Never leave a sport with fewer sessions than this in the week because of a match. */
+const MATCH_MIN_PER_SPORT = 2;
+
 function weeklyLoadCap(plan: WorkingPlan, ctx: ReplanCtx, e: LifeEvent): WorkingPlan {
   const planned = eventWeekLoad(ctx.input.weekWorkouts, e);
   if (planned <= 0) return plan;
   let p = plan;
   const projected = () => eventWeekLoad(p.workouts, e) + lifeEventLoad(e);
-  // A descarga or semana libre absorbs nothing extra.
-  const [trigger, goal] = ctx.easyWeek ? [1, 1] : [1.1, 1.05];
+  // A descarga or semana libre absorbs little extra.
+  const [trigger, goal] = ctx.easyWeek ? [1.05, 1] : [1.1, 1.05];
   if (projected() <= trigger * planned) return p;
-  const candidates = pending(p, ctx, isLowPriority).sort((a, b) => workoutLoad(b) - workoutLoad(a) || a.id.localeCompare(b.id));
+  const from = startOfWeek(e.startDate);
+  const to = addDays(from, 6);
+  const sportCount = (sport: Sport) => p.workouts.filter((w) => w.sport === sport && w.status !== 'skipped' && w.date >= from && w.date <= to).length;
+  // Only an easy run or ride (a match loads the legs, not the swim), never the last two of a sport;
+  // runs first (impact), then the biggest load.
+  const candidates = pending(p, ctx, (w) => isLowPriority(w) && MATCH_REPLACES.includes(w.sport) && w.date >= from && w.date <= to).sort(
+    (a, b) => (a.sport === 'run' ? 0 : 1) - (b.sport === 'run' ? 0 : 1) || workoutLoad(b) - workoutLoad(a) || a.id.localeCompare(b.id),
+  );
+  let dropped = 0;
   for (const w of candidates) {
-    if (projected() <= goal * planned) break;
+    if (projected() <= goal * planned || dropped >= MATCH_MAX_DROPS) break;
+    if (sportCount(w.sport) <= MATCH_MIN_PER_SPORT) continue;
     p = remove(p, ctx, w, `Con ${sportName(e)} la semana ya va cargada: quito esta sesión suave`);
+    dropped += 1;
   }
   return p;
 }

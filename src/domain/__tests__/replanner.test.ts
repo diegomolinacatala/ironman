@@ -53,6 +53,24 @@ describe('replanForEvent — other sports', () => {
     for (const c of r.changes) expect(c.reason).toMatch(/\.$/);
   });
 
+  test('a match in a light week never takes the swims and drops at most one easy run or ride', () => {
+    const light: Workout[] = [
+      makeWorkout({ id: 'l-bike', date: '2026-10-27', sport: 'bike', intensity: 'tempo', durationMin: 45, startTime: '07:00', title: 'Bici tempo' }),
+      makeWorkout({ id: 'l-swim1', date: '2026-10-28', sport: 'swim', durationMin: 30, title: 'Natación fondo' }),
+      makeWorkout({ id: 'l-run1', date: '2026-10-29', sport: 'run', durationMin: 30, title: 'Rodaje suave' }),
+      makeWorkout({ id: 'l-swim2', date: '2026-10-30', sport: 'swim', durationMin: 30, title: 'Natación técnica' }),
+      makeWorkout({ id: 'l-long', date: '2026-10-31', sport: 'bike', durationMin: 85, title: 'Bici larga' }),
+      makeWorkout({ id: 'l-run2', date: '2026-11-01', sport: 'run', durationMin: 30, title: 'Rodaje suave' }),
+      makeWorkout({ id: 'l-run3', date: '2026-10-28', sport: 'run', durationMin: 25, startTime: '07:00', title: 'Rodaje suave' }),
+    ];
+    const padel = makeEvent({ kind: 'padel', startDate: '2026-10-27', startTime: '19:00', durationMin: 90 });
+    const r = replanForEvent({ ...input(), weekWorkouts: light, event: padel });
+    const deleted = r.changes.flatMap((c) => (c.op === 'delete' ? [c.workoutId] : []));
+    expect(deleted).not.toContain('l-swim1');
+    expect(deleted).not.toContain('l-swim2');
+    expect(deleted.filter((id) => id.startsWith('l-run') || id === 'l-long').length).toBeLessThanOrEqual(1);
+  });
+
   test('football on Saturday: no running the next day, even the quedada (partner named)', () => {
     const football = makeEvent({ kind: 'football', startDate: '2026-10-31', startTime: '17:00', durationMin: 90 });
     const r = replanForEvent({ ...input(), event: football });
