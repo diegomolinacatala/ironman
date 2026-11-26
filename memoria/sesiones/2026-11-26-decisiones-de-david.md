@@ -55,16 +55,18 @@ David revisó una a una las 39 propuestas de [[2026-11-25-auditoria-y-mejoras]],
 - Semanas de estudio y exámenes, y el estrés que provocan, muy en cuenta en el plan.
 - Aviso del informe X minutos después de despertar, opcional, detectando dentro de las horas habituales de levantarse.
 
-## Implementado
+## Implementado (rama `david/auditoria-y-mejoras`, sin subir)
 
-_Se completa al terminar._
+Pruebas en verde: 2.503 app, 189 base de datos, 317 funciones. Nada probado en iPhone.
 
-## Estado al parar (26-11, sin batería)
+- Decisiones aplicadas (deshechos: check-in de 3 toques, guarda de texto de amigos, Zwift).
+- Plan: frescura bien sembrada (ya no lee la constancia como fatiga), rampa +20 %, tope de carrera a pie, plan corto según volumen real, volumen habitual respetado en automático, tirada larga prioritaria, semanas de exámenes más ligeras, principiantes con una calidad, «Tu forma de entrenar» (sesiones por deporte, días preferidos, modelo de intensidad, sesiones fijas), carreras B a elegir.
+- Coach: entiende situaciones (cena, exámenes, viaje, trabajo, sin piscina, poco tiempo, semana suave, más/menos deporte, cansancio, «¿por qué?», «¿voy bien?»); con IA activada, las peticiones concretas las resuelve primero el motor de reglas (`EXPO_PUBLIC_COACH_RULES_FIRST=0` lo apaga); los imprevistos contados se apuntan solos.
+- Imprevistos: un partido no se lleva la natación; «sin bici» bien leído; titulares sin repetir el tipo.
+- Adaptación: aviso en Hoy (vas justo / sesión clave saltada), señales de enfermedad confirmadas en el check-in, umbrales sugeridos con tu OK, aviso de revisar zonas.
+- Nuevo: plan de carrera y previsión, aviso del informe al despertar, el tiempo (MET Norway + OpenStreetMap), MyWhoosh opcional, guardado sin conexión, repetir quedada.
+- Seguridad/servidor: Claude de pago solo con `AI_ALLOW_PAID=1`; `sync_all` de Garmin por antigüedad.
 
-En `david/auditoria-y-mejoras` (sin subir), con todas las pruebas en verde (2.416 app, 184 BD, 303 funciones): decisiones aplicadas, coach que entiende situaciones y resuelve primero con reglas, fallo de fatiga del plan corregido, pádel sin borrar natación, aviso de adaptar en Hoy, plan de carrera + previsión, aviso al despertar, motor (rampa +20 %, tope carrera a pie, plan corto por volumen real, carreras B a elegir), MyWhoosh opcional, sin conexión, repetir quedada, revisar zonas y el tiempo.
+Desplegar (en orden): `supabase db push` (migraciones 20261125000100 y 20261126000100–000600), funciones (`coach briefing mcp garmin morning weather` y las de planificación), `select private.schedule_platform_jobs();`, y luego build de la app. En App Store Connect: etiqueta «Ubicación aproximada».
 
-A medias, en worktrees sin unir:
-- `.claude/worktrees/agent-af93854afc1bb28d5`: reloj completa sesiones (commit c431bc7) + señales de enfermedad y umbrales automáticos (sin terminar / sin commit).
-- `.claude/worktrees/agent-aa085eee61583716a`: plan semanal (volumen habitual, tirada larga, exámenes, principiantes) y «Tu forma de entrenar»; partió de antes del merge del tiempo.
-
-Pendiente después: unir esas dos ramas, ESLint, actualizar `docs/AUDITORIA-2026-11-25.md` y la memoria, lista de cambios, proyecto FIT aparte, PR.
+Pendiente: revisión en iPhone, PR hacia main, proyecto aparte de métricas del FIT, check-in automático y unificar semáforos (más adelante).
