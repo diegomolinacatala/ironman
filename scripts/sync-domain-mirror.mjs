@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Mirrors the pure domain modules the edge functions need (periodization,
- * zones, season overview and their dependencies) from `src/domain` into
+ * zones, season overview, the weather rules and their dependencies) from `src/domain` into
  * `supabase/functions/_shared/planning/domain`. Edge bundles cannot import
  * `src/`, and the app and the server must compute the same weeks, zones and
  * targets, so the server copy is generated, never edited by hand.
@@ -21,7 +21,7 @@ const SRC = join(ROOT, 'src', 'domain');
 export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planning', 'domain');
 
 /** Modules copied whole (their imports must stay inside this list, `dates` or `types`). */
-const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription'];
+const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'weather'];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
 const DATE_DECLS = [
