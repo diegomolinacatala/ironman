@@ -5,9 +5,10 @@ import { coachVoiceName, useCoachVoice } from '@/integrations/speech/coachVoice'
 
 import { AppearancePicker } from '../settings/AppearancePicker';
 import { availabilitySubtitle, raceRow, sportsProfileSubtitle } from './hubModel';
+import { MyWhooshRow } from './MyWhooshRow';
 import { GroupDivider, LinkRows, SettingsGroup } from './SettingsGroup';
 
-/** Entrenamiento: your race, your week and your sport profile. */
+/** Entrenamiento: your race, your week, your sport profile and whether you ride indoors with MyWhoosh. */
 export function TrainingGroup({ profile, races }: { profile: Profile; races: readonly Race[] | undefined }) {
   const race = raceRow(races, todayISO());
   return (
@@ -19,6 +20,8 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
           { icon: 'profile', title: 'Perfil deportivo', subtitle: sportsProfileSubtitle(profile), href: '/settings/profile' },
         ]}
       />
+      <GroupDivider />
+      <MyWhooshRow />
     </SettingsGroup>
   );
 }

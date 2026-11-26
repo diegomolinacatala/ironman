@@ -692,3 +692,12 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   device-neutral (Garmin JSON + provider-neutral steps Claude can push to the COROS calendar).
 - **Deploy order:** `supabase db push` (`20261109000100_coach_v4.sql`, then `20261109000900_week_plans_platform.sql`)
   before deploying the edge functions or shipping the app.
+
+## 17. Indoor trainer, offline saves, repeated quedadas and zone reviews (2026-11-26)
+
+- **MyWhoosh** (`domain/mywhoosh.ts`): hand-curated catalog of free MyWhoosh workouts (source: the fan site
+  mywhooshinfo.com, checked 26-11-2026). `myWhooshFor(workout, { thresholds, raceDistance })` reads the session's
+  main set (kind, rep length, rep count, then duration; sweet spot from the title or its 88–94 % target; race pace
+  → tempo or sweet spot by % FTP; rides over 105' → «90 Minute Endurance» + free ride). Opt-in device setting
+  `rti.myWhoosh.v1` (`features/workouts/myWhooshSetting.ts`, Tú › Entrenamiento); when on, planned bike sessions
+  show one line under the structure (`detail/MyWhooshNote.tsx`).
