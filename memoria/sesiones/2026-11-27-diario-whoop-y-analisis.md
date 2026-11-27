@@ -22,6 +22,6 @@
 **Comprobaciones.** `npm run test:all` en verde (2124 pruebas de app, 167 de base de datos, 287 de funciones). Pruebas nuevas: dominio (catálogo, impactos, disposición, análisis por reglas), formulario y pantallas del check-in, selector de hábitos, hoja de completar, detalle con análisis, función `analysis` (5) y base de datos (3). Tipos de `_shared/analysis` comprobados aparte con `tsc`. **No probado en iPhone, en la vista web ni contra la IA real.**
 
 **Pendiente.**
-1. Diego: `supabase db push` de `20261127001000_journal_and_analysis.sql` y `supabase functions deploy analysis coach briefing mcp --use-api` **antes** de la build (sin la migración, guardar un check-in solo con sí/no falla porque las escalas siguen siendo obligatorias en la tabla).
+1. ~~Migración y funciones~~ **Hecho el 27-11-2026 (Claude Code) antes de fusionar la PR:** `supabase db push --remote` aplicó `20261127001000_journal_and_analysis.sql` en producción y `supabase functions deploy analysis coach briefing mcp --use-api` desplegó las cuatro (`analysis` contesta 401 sin sesión). PR [#6](https://github.com/diegomolinacatala/ironman/pull/6) con auto-merge: al fusionarse arranca la build de TestFlight.
 2. Probar en TestFlight: check-in de la mañana, elegir preguntas, «Analizar sesión» tras marcar un entreno y con una actividad de Garmin/COROS.
 3. Ideas: notificación al llegar una actividad del reloj («¿la analizamos?»), pedir RPE y sensaciones si faltan, impactos sobre la VFC además de la disposición, que el briefing mencione el hábito con más efecto.
