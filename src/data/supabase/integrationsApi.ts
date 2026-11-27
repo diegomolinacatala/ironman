@@ -9,7 +9,16 @@ import type { IntegrationRpcRow, TokenRpcRow } from './rows';
 
 type IntegrationMethods = Pick<
   Repository,
-  'listIntegrations' | 'connectGarmin' | 'disconnectGarmin' | 'syncGarmin' | 'listTokens' | 'createToken' | 'revokeToken'
+  | 'listIntegrations'
+  | 'connectGarmin'
+  | 'disconnectGarmin'
+  | 'syncGarmin'
+  | 'startCorosConnect'
+  | 'disconnectCoros'
+  | 'syncCoros'
+  | 'listTokens'
+  | 'createToken'
+  | 'revokeToken'
 >;
 
 type GarminAction = 'connect' | 'disconnect' | 'sync';
@@ -18,6 +27,14 @@ const GARMIN_FALLBACK: Record<GarminAction, string> = {
   connect: 'No hemos podido conectar Garmin. Revisa la clave e inténtalo de nuevo.',
   disconnect: 'No hemos podido desconectar Garmin.',
   sync: 'No hemos podido sincronizar con Garmin.',
+};
+
+type CorosAction = 'start' | 'disconnect' | 'sync';
+
+const COROS_FALLBACK: Record<CorosAction, string> = {
+  start: 'No hemos podido contactar con COROS. Inténtalo de nuevo en unos minutos.',
+  disconnect: 'No hemos podido desconectar COROS.',
+  sync: 'No hemos podido sincronizar con COROS.',
 };
 
 export function integrationsApi(ctx: SupabaseCtx): IntegrationMethods {
@@ -32,6 +49,32 @@ export function integrationsApi(ctx: SupabaseCtx): IntegrationMethods {
     }
     if (response.error) throw await toFunctionError(response.error, GARMIN_FALLBACK[action]);
     return response.data;
+  }
+
+  async function invokeCoros(action: CorosAction): Promise<unknown> {
+    let response: { data: unknown; error: unknown };
+    try {
+      response = await client.functions.invoke('coros', { body: { action } });
+    } catch (error) {
+      throw await toFunctionError(error, COROS_FALLBACK[action]);
+    }
+    if (response.error) throw await toFunctionError(response.error, COROS_FALLBACK[action]);
+    return response.data;
+  }
+
+  async function startCorosConnect(): Promise<string> {
+    const data = await invokeCoros('start');
+    const url = data && typeof data === 'object' ? (data as { url?: unknown }).url : null;
+    if (typeof url !== 'string' || !url.startsWith('https://')) throw new RepositoryError('unknown', COROS_FALLBACK.start);
+    return url;
+  }
+
+  async function disconnectCoros(): Promise<void> {
+    await invokeCoros('disconnect');
+  }
+
+  async function syncCoros(): Promise<SyncResult> {
+    return parseSyncResult(await invokeCoros('sync'));
   }
 
   async function listIntegrations(): Promise<IntegrationStatus[]> {
@@ -84,5 +127,16 @@ export function integrationsApi(ctx: SupabaseCtx): IntegrationMethods {
     await runVoid('revokeToken', client.rpc('revoke_personal_token', { p_id: id }));
   }
 
-  return { listIntegrations, connectGarmin, disconnectGarmin, syncGarmin, listTokens, createToken, revokeToken };
+  return {
+    listIntegrations,
+    connectGarmin,
+    disconnectGarmin,
+    syncGarmin,
+    startCorosConnect,
+    disconnectCoros,
+    syncCoros,
+    listTokens,
+    createToken,
+    revokeToken,
+  };
 }

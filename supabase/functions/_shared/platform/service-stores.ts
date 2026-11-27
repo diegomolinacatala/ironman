@@ -2,7 +2,7 @@
 import type { AiUsageStore, CoachStore } from '../coach/ports.ts';
 import { asRow } from '../db/rows.ts';
 import type { CredentialStore, GarminCredential } from '../garmin/credentials.ts';
-import { PROVIDER } from '../garmin/credentials.ts';
+import { PROVIDER as GARMIN_PROVIDER } from '../garmin/credentials.ts';
 import type { PendingNotification, PushStore } from '../push/dispatch.ts';
 import type { UUID } from '../types.ts';
 import { rowsOf, unwrap } from './db.ts';
@@ -152,11 +152,12 @@ function mapCredential(raw: unknown): GarminCredential {
   };
 }
 
-export function createCredentialStore(db: Db): CredentialStore {
+/** integration_credentials for one provider ('garmin_personal' by default, 'coros_mcp'). */
+export function createCredentialStore(db: Db, provider: string = GARMIN_PROVIDER): CredentialStore {
   return {
     async getCredential(userId) {
       const data = unwrap(
-        await db.from('integration_credentials').select(CRED_COLS).eq('user_id', userId).eq('provider', PROVIDER).maybeSingle(),
+        await db.from('integration_credentials').select(CRED_COLS).eq('user_id', userId).eq('provider', provider).maybeSingle(),
         'get credential',
       );
       return data ? mapCredential(data) : null;
@@ -166,7 +167,7 @@ export function createCredentialStore(db: Db): CredentialStore {
         await db.from('integration_credentials').upsert(
           {
             user_id: userId,
-            provider: PROVIDER,
+            provider,
             secret_ciphertext: value.ciphertext,
             key_expires_at: value.keyExpiresAt,
             state: 'connected',
@@ -183,16 +184,16 @@ export function createCredentialStore(db: Db): CredentialStore {
           .from('integration_credentials')
           .update({ state: value.state, last_error: value.lastError, ...(value.lastSyncAt ? { last_sync_at: value.lastSyncAt } : {}) })
           .eq('user_id', userId)
-          .eq('provider', PROVIDER),
+          .eq('provider', provider),
         'update credential',
       );
     },
     async deleteCredential(userId) {
-      unwrap(await db.from('integration_credentials').delete().eq('user_id', userId).eq('provider', PROVIDER), 'delete credential');
+      unwrap(await db.from('integration_credentials').delete().eq('user_id', userId).eq('provider', provider), 'delete credential');
     },
     async listSyncable() {
       const rows = rowsOf(
-        await db.from('integration_credentials').select(CRED_COLS).eq('provider', PROVIDER).in('state', ['connected', 'error']).limit(200),
+        await db.from('integration_credentials').select(CRED_COLS).eq('provider', provider).in('state', ['connected', 'error']).limit(200),
         'syncable credentials',
       );
       return rows.map(mapCredential);

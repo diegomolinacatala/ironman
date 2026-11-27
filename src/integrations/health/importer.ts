@@ -51,6 +51,11 @@ const DUPLICATE_MIN_TOLERANCE = 10;
 const DUPLICATE_RATIO_TOLERANCE = 0.15;
 const DUPLICATE_START_TOLERANCE_MIN = 45;
 
+/** True for workouts the COROS app wrote to Apple Salud (skipped when COROS is connected directly). */
+export function isCorosSource(sourceName: string | null | undefined): boolean {
+  return /coros/i.test(sourceName ?? '');
+}
+
 /** Normalises an activity; null when it should not be imported (walks, transitions, too short). */
 export function toImportCandidate(activity: HealthActivity): ImportCandidate | null {
   const kind = mapHealthActivity(activity.activityType);

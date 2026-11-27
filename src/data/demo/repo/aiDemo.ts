@@ -33,7 +33,7 @@ function assertDate(date: ISODate): void {
 }
 
 function syncIfStale(db: DemoDb, me: UUID, now: string, today: string): DemoDb {
-  const garmin = db.integrations.find((i) => i.userId === me && i.state === 'connected');
+  const garmin = db.integrations.find((i) => i.userId === me && i.provider === 'garmin_personal' && i.state === 'connected');
   if (!garmin) return db;
   const stale = garmin.lastSyncAt === null || Date.parse(now) - Date.parse(garmin.lastSyncAt) > GARMIN_STALE_MS;
   return stale ? withSync(db, me, now, today) : db;

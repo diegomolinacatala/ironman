@@ -25,6 +25,7 @@ const WORKOUT_STATUSES = ['planned', 'completed', 'skipped'] as const;
 const FEED_TYPES = ['workout_completed', 'race_added', 'joint_confirmed', 'plan_updated'] as const;
 const TOKEN_SCOPES: readonly TokenScope[] = ['mcp', 'ics'];
 const INTEGRATION_STATES = ['connected', 'error', 'expired', 'disconnected'] as const;
+const INTEGRATION_PROVIDERS = ['garmin_personal', 'coros_mcp'] as const;
 const VISIBILITIES = ['full', 'summary', 'busy'] as const;
 
 export function rowToFriend(row: FriendRpcRow): Friend {
@@ -94,7 +95,7 @@ export function rowToToken(row: TokenRpcRow): PersonalToken {
 
 export function rowToIntegration(row: IntegrationRpcRow): IntegrationStatus {
   return {
-    provider: 'garmin_personal',
+    provider: oneOfOr(row.provider, INTEGRATION_PROVIDERS, 'garmin_personal'),
     state: oneOfOr(row.state, INTEGRATION_STATES, 'disconnected'),
     expiresAt: row.key_expires_at,
     lastSyncAt: row.last_sync_at,

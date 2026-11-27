@@ -397,6 +397,9 @@ describe('RPC mappers', () => {
   it('tokens, integrations and URLs', () => {
     expect(rowToToken({ id: 't', scope: 'ics', label: 'Cal', prefix: 'rb_abc', created_at: NOW, last_used_at: null, revoked_at: null }).scope).toBe('ics');
     expect(rowToIntegration({ provider: 'garmin_personal', state: 'expired', key_expires_at: '2026-11-01', last_sync_at: null, last_error: 'x' })).toEqual({ provider: 'garmin_personal', state: 'expired', expiresAt: '2026-11-01', lastSyncAt: null, lastError: 'x' });
+    // The provider is kept (a COROS row must not show up as Garmin); unknown ones fall back to Garmin.
+    expect(rowToIntegration({ provider: 'coros_mcp', state: 'connected', key_expires_at: null, last_sync_at: NOW, last_error: null }).provider).toBe('coros_mcp');
+    expect(rowToIntegration({ provider: 'strava', state: 'connected', key_expires_at: null, last_sync_at: null, last_error: null }).provider).toBe('garmin_personal');
     expect(tokenUrl('mcp', 'rb_s', 'https://p.supabase.co/functions/v1/')).toBe('https://p.supabase.co/functions/v1/mcp/u/rb_s');
     expect(tokenUrl('ics', 'rb_s', 'https://p.supabase.co/functions/v1')).toBe('https://p.supabase.co/functions/v1/ics/rb_s.ics');
     const created = parseCreatedToken({ id: 'i', secret: 'rb_0123456789abcdef', prefix: 'rb_0123456' }, { scope: 'mcp', label: 'Claude', now: NOW, functionsBaseUrl: 'https://x/functions/v1' });

@@ -21,7 +21,7 @@ export type Intensity = (typeof INTENSITIES)[number];
 export const WORKOUT_STATUSES = ['planned', 'completed', 'skipped'] as const;
 export type WorkoutStatus = (typeof WORKOUT_STATUSES)[number];
 
-export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin'] as const;
+export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'coros'] as const;
 export type WorkoutSource = (typeof WORKOUT_SOURCES)[number];
 
 export const STEP_KINDS = ['warmup', 'work', 'recovery', 'cooldown', 'rest'] as const;
@@ -76,7 +76,7 @@ export interface CompletedData {
   feel?: number;
   tss?: number;
   notes?: string;
-  source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
+  source?: 'manual' | 'healthkit' | 'garmin' | 'coros' | 'claude';
   externalId?: string;
   completedAt?: ISODateTime;
 }
@@ -476,7 +476,7 @@ export interface SyncResult {
 }
 
 export interface IntegrationStatus {
-  provider: 'garmin_personal';
+  provider: 'garmin_personal' | 'coros_mcp';
   state: 'connected' | 'error' | 'expired' | 'disconnected';
   expiresAt: ISODate | null;
   lastSyncAt: ISODateTime | null;

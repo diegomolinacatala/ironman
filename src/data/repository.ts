@@ -270,6 +270,15 @@ export interface Repository {
   disconnectGarmin(): Promise<void>;
   /** Pulls recent Garmin metrics + activities (Personal API) into daily_metrics / workouts. */
   syncGarmin(): Promise<SyncResult>;
+  /**
+   * COROS through the official COROS MCP (OAuth, synced server-side twice a day): returns the
+   * COROS authorization URL to open in the in-app browser; COROS sends the athlete back to
+   * roadtoironman://settings/integrations?coros=connected|error.
+   */
+  startCorosConnect(): Promise<string>;
+  disconnectCoros(): Promise<void>;
+  /** Pulls recent COROS activities + wellness into workouts / daily_metrics (source 'coros'). */
+  syncCoros(): Promise<SyncResult>;
 
   // Personal tokens (Claude connector, calendar feed) --------------------------
   listTokens(): Promise<PersonalToken[]>;
