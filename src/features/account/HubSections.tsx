@@ -3,7 +3,10 @@ import { useRepository } from '@/data/context';
 import type { Profile, Race } from '@/domain/types';
 import { coachVoiceName, useCoachVoice } from '@/integrations/speech/coachVoice';
 
+import { journalHabitsOf } from '@/domain/habitCatalog';
+
 import { AppearancePicker } from '../settings/AppearancePicker';
+import { habitsSubtitle } from '../settings/journalHabitsModel';
 import { availabilitySubtitle, raceRow, sportsProfileSubtitle } from './hubModel';
 import { GroupDivider, LinkRows, SettingsGroup } from './SettingsGroup';
 
@@ -17,6 +20,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
           { icon: 'flag', title: race.title, subtitle: race.subtitle, href: '/races', brand: true },
           { icon: 'clock', title: 'Tus horarios', subtitle: availabilitySubtitle(profile.availability), href: '/settings/availability' },
           { icon: 'profile', title: 'Perfil deportivo', subtitle: sportsProfileSubtitle(profile), href: '/settings/profile' },
+          { icon: 'checkin', title: 'Preguntas de la mañana', subtitle: habitsSubtitle(journalHabitsOf(profile)), href: '/settings/journal' },
         ]}
       />
     </SettingsGroup>

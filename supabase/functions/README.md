@@ -9,6 +9,7 @@ crea el cliente de Supabase y conecta las piezas.
 | `coach` | `POST /coach` con un `CoachRequest` | JWT del usuario | `true` |
 | `briefing` (v2) | `POST /briefing` con `{ date, refresh? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `meal` (v2) | `POST /meal` con `{ date, time, imageBase64?, text? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
+| `analysis` | `POST /analysis` con `{ workoutId, date, refresh? }` (análisis post-entreno, «Analizar sesión») | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `speech` | `POST /speech` con `{ text, voice? }` (voz natural del coach y del informe) | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `mcp` | `POST /mcp/u/<secreto>` (conector "Conecta tu Claude") | secreto personal en la ruta (scope `mcp`) | `false` |
 | `ics` | `GET /ics/<secreto>.ics` (suscripción `webcal://`) | secreto personal en la ruta (scope `ics`) | `false` |
@@ -148,6 +149,7 @@ npx supabase functions deploy coach briefing meal garmin mcp --use-api    # v2 (
 npx supabase functions deploy speech --use-api                            # voz natural (junto con db push de 20261105000100_speech_budget.sql y 20261105000200_speech_budget_caps.sql)
 npx supabase secrets set COROS_TOKEN_SECRET="$(openssl rand -base64 48)"   # conexión directa con COROS
 npx supabase functions deploy coros --use-api                             # tras db push de 20261127000100_coros_mcp.sql y 20261127000900_coros_platform.sql
+npx supabase functions deploy analysis coach briefing mcp --use-api         # diario + análisis post-entreno (tras db push de 20261127001000_journal_and_analysis.sql)
 ```
 
 Cada función tiene su `deno.json` (`nodeModulesDir: "none"`) para que Deno no use el

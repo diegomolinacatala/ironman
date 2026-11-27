@@ -27,6 +27,8 @@ export interface ProfileRow {
   ai_consent_at?: string | null;
   /** v4 (`20261109000100_coach_v4.sql`): 'garmin' | 'coros' | null (not chosen yet). */
   watch_brand?: string | null;
+  /** Morning journal habits (null = defaults); absent before the journal migration. */
+  journal_habits?: string[] | null;
   created_at: string;
   updated_at?: string;
 }
@@ -112,12 +114,14 @@ export interface BusyBlockRow {
 export interface CheckinRow {
   user_id: string;
   date: string;
-  sleep_quality: number;
+  sleep_quality: number | null;
   sleep_hours: NumericValue;
-  fatigue: number;
-  soreness: number;
-  stress: number;
-  motivation: number;
+  fatigue: number | null;
+  soreness: number | null;
+  stress: number | null;
+  motivation: number | null;
+  /** Journal yes/no answers keyed by habit id; absent before the journal migration. */
+  habits?: unknown;
   notes: string | null;
   created_at?: string;
   updated_at?: string;

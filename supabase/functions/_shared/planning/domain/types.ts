@@ -1,11 +1,15 @@
 // GENERATED MIRROR of the domain types used by the mirrored modules — do not edit here.
 // Edit the app file and run `node scripts/sync-domain-mirror.mjs` (checked by mirror.test.ts).
 /**
- * Re-exports the edge-function type mirror (../../types.ts) plus the two
- * calendar types the mirrored date helpers need.
+ * Re-exports the edge-function type mirror (../../types.ts), the journal's
+ * habit ids, plus the two calendar types the mirrored date helpers need.
  */
+export { HABIT_IDS } from '../../types.ts';
+
 export type {
   AthleteLevel,
+  HabitAnswers,
+  HabitId,
   Intensity,
   ISODate,
   NumberRange,

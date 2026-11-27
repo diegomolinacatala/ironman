@@ -169,8 +169,16 @@ describe('table mappers round-trip (domain → row → domain)', () => {
   });
 
   it('check-in', () => {
-    const draft = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 1, stress: 3, motivation: 5, notes: null } as const;
+    const draft = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 1, stress: 3, motivation: 5, habits: { alcohol: true, niggle: false }, notes: null } as const;
     expect(rowToCheckin(checkinDraftToRow(draft, ME))).toEqual({ ...draft, userId: ME });
+  });
+
+  it('check-in: journal only (scales unanswered) and rows from before the journal migration', () => {
+    const journalOnly = { date: '2026-10-26', sleepQuality: null, sleepHours: null, fatigue: null, soreness: null, stress: null, motivation: null, habits: { sick: true }, notes: null };
+    expect(rowToCheckin(checkinDraftToRow(journalOnly, ME))).toEqual({ ...journalOnly, userId: ME });
+    const legacy = { user_id: ME, date: '2026-10-25', sleep_quality: 4, sleep_hours: 7, fatigue: 2, soreness: 1, stress: 3, motivation: 5, notes: null };
+    expect(rowToCheckin(legacy).habits).toEqual({});
+    expect(rowToCheckin({ ...legacy, habits: { alcohol: true, unknown: true, niggle: 'sí' } }).habits).toEqual({ alcohol: true });
   });
 
   it('metrics', () => {

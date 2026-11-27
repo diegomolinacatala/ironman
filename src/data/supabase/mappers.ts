@@ -7,6 +7,7 @@
  * sent to PostgREST.
  */
 import { normalizeCoaching } from '@/domain/changes';
+import { cleanHabitAnswers, isHabitId } from '@/domain/habitCatalog';
 import {
   INTENSITIES,
   LIFE_EVENT_KINDS,
@@ -80,6 +81,11 @@ const PROPOSAL_STATUSES = ['pending', 'applied', 'partially_applied', 'discarded
 
 type Row = Record<string, unknown>;
 
+/** Unanswered 1–5 scale (null in the row) stays null. */
+function scoreOrNull(value: unknown): Score5 | null {
+  return asNumber(value) === null ? null : clampScore(value);
+}
+
 function clampScore(value: unknown): Score5 {
   const n = Math.round(asNumber(value) ?? 3);
   return Math.min(5, Math.max(1, n)) as Score5;
@@ -105,8 +111,10 @@ function recordOrEmpty(value: unknown): Record<string, unknown> {
 export function rowToProfile(row: ProfileRow): Profile {
   // Not chosen yet (null) or a server without the v4 column: the key stays absent (treated as Garmin).
   const watchBrand = oneOf(row.watch_brand, WATCH_BRANDS);
+  const journalHabits = Array.isArray(row.journal_habits) ? row.journal_habits.filter(isHabitId) : [];
   return {
     ...(watchBrand ? { watchBrand } : {}),
+    ...(journalHabits.length > 0 ? { journalHabits } : {}),
     id: row.id,
     username: row.username,
     displayName: row.display_name,
@@ -142,6 +150,7 @@ export function profileToRow(profile: Profile): ProfileRow {
     onboarded_at: profile.onboardedAt,
     ai_consent_at: profile.aiConsentAt,
     watch_brand: profile.watchBrand ?? null,
+    journal_habits: profile.journalHabits ?? null,
     created_at: profile.createdAt,
   };
 }
@@ -163,6 +172,7 @@ export function profilePatchToRow(patch: ProfilePatch): Row {
     onboarded_at: patch.onboardedAt,
     ai_consent_at: patch.aiConsentAt,
     watch_brand: patch.watchBrand,
+    journal_habits: patch.journalHabits,
   });
 }
 
@@ -454,12 +464,14 @@ export function rowToCheckin(row: CheckinRow): DailyCheckin {
   return {
     userId: row.user_id,
     date: row.date,
-    sleepQuality: clampScore(row.sleep_quality),
+    sleepQuality: scoreOrNull(row.sleep_quality),
     sleepHours: asNumber(row.sleep_hours),
-    fatigue: clampScore(row.fatigue),
-    soreness: clampScore(row.soreness),
-    stress: clampScore(row.stress),
-    motivation: clampScore(row.motivation),
+    fatigue: scoreOrNull(row.fatigue),
+    soreness: scoreOrNull(row.soreness),
+    stress: scoreOrNull(row.stress),
+    motivation: scoreOrNull(row.motivation),
+    // Absent on servers without the journal migration.
+    habits: cleanHabitAnswers(row.habits),
     notes: row.notes,
   };
 }
@@ -474,6 +486,7 @@ export function checkinDraftToRow(draft: CheckinDraft, userId: string): CheckinR
     soreness: draft.soreness,
     stress: draft.stress,
     motivation: draft.motivation,
+    habits: draft.habits,
     notes: draft.notes,
   };
 }

@@ -2,6 +2,8 @@ import { formatWeekRange, startOfWeek, todayISO } from '@/domain/dates';
 import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { NutritionSummaryCard } from '@/features/nutrition/NutritionSummaryCard';
 import { ComplianceCard } from '@/features/progress/ComplianceCard';
+import { HabitImpactsCard } from '@/features/progress/HabitImpactsCard';
+import { useHabitImpacts } from '@/features/progress/useHabitImpacts';
 import { PmcCard } from '@/features/progress/PmcCard';
 import { RecoveryCard } from '@/features/progress/RecoveryCard';
 import { useProgressData } from '@/features/progress/useProgressData';
@@ -18,6 +20,7 @@ export default function ProgressScreen() {
   const overline = data.phase ? `${range} · ${phaseName(data.phase.phase)}` : range;
   const week = data.volume.find((item) => item.isCurrent);
   const bottomPadding = useTabBottomPadding();
+  const habits = useHabitImpacts(today);
 
   return (
     <Screen
@@ -47,6 +50,12 @@ export default function ProgressScreen() {
       {data.recovery && <Disclosure variant="plain" title="Recuperación" icon="heartOutline" summary="Pulso, variabilidad y sueño" storageKey="progress.recovery">
         <RecoveryCard series={data.recovery} />
       </Disclosure>}
+
+      {habits.impacts ? (
+        <Disclosure variant="plain" title="Qué te afecta" icon="lightbulb" summary="Tus hábitos frente a tu recuperación" storageKey="progress.habits">
+          <HabitImpactsCard impacts={habits.impacts} noWatchData={habits.noWatchData} />
+        </Disclosure>
+      ) : null}
 
       {data.nutrition && <Disclosure variant="plain" title="Nutrición" icon="food" summary="Calorías e hidratos de hoy" storageKey="progress.nutrition">
         <NutritionSummaryCard totals={data.nutrition.totals} entries={data.nutrition.entries} />

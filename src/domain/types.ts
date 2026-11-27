@@ -351,15 +351,50 @@ export interface Availability {
 /** 1 = very bad … 5 = very good (for fatigue/soreness/stress: 1 = none … 5 = extreme). */
 export type Score5 = 1 | 2 | 3 | 4 | 5;
 
+/**
+ * Morning journal (Whoop-style yes/no questions): the habits an athlete can
+ * track. Copy and defaults live in `habitCatalog.ts`.
+ */
+export const HABIT_IDS = [
+  'alcohol',
+  'late_meal',
+  'late_caffeine',
+  'screens_in_bed',
+  'hydration',
+  'niggle',
+  'sick',
+  'mobility',
+  'nap',
+  'hard_workday',
+  'travel',
+  'other_sport',
+  'enough_carbs',
+  'ultra_processed',
+  'regular_bedtime',
+  'read_before_bed',
+  'meditation',
+  'daylight',
+  'sauna',
+  'cold_exposure',
+] as const;
+export type HabitId = (typeof HABIT_IDS)[number];
+/** Yes/no answers of one morning, keyed by habit (unanswered = absent). */
+export type HabitAnswers = Partial<Record<HabitId, boolean>>;
+
+/**
+ * Morning check-in. The yes/no journal goes first; the 1–5 scales are
+ * optional (null = not answered) and only refine the readiness.
+ */
 export interface DailyCheckin {
   userId: UUID;
   date: ISODate;
-  sleepQuality: Score5;
+  sleepQuality: Score5 | null;
   sleepHours: number | null;
-  fatigue: Score5;
-  soreness: Score5;
-  stress: Score5;
-  motivation: Score5;
+  fatigue: Score5 | null;
+  soreness: Score5 | null;
+  stress: Score5 | null;
+  motivation: Score5 | null;
+  habits: HabitAnswers;
   notes: string | null;
 }
 
@@ -465,6 +500,30 @@ export interface MealAnalysis {
 }
 
 // ---------------------------------------------------------------------------
+// Post-workout analysis
+// ---------------------------------------------------------------------------
+
+/**
+ * The coach's analysis of a completed session ("Analizar"): plan vs real, the
+ * morning check-in and the week's load, written by the AI (`engine: 'ai'`,
+ * stored in `workout_analyses`) or by the rules (`'rules'`: demo, AI off or
+ * unavailable; not stored).
+ */
+export interface WorkoutAnalysis {
+  workoutId: UUID;
+  /** One-line verdict (≤ 90 chars). */
+  headline: string;
+  /** 1–3 things that went well. */
+  wentWell: string[];
+  /** 0–3 things to adjust next time. */
+  improve: string[];
+  /** What it means for the next session or tomorrow (one or two sentences). */
+  nextStep: string;
+  engine: 'ai' | 'rules';
+  createdAt: ISODateTime;
+}
+
+// ---------------------------------------------------------------------------
 // Speech (natural voice of the coach)
 // ---------------------------------------------------------------------------
 
@@ -562,6 +621,8 @@ export interface Profile {
   aiConsentAt: ISODateTime | null;
   /** The athlete's watch; null/absent = not chosen yet (treated as Garmin). */
   watchBrand?: WatchBrand | null;
+  /** Habits asked in the morning journal; null/absent = the defaults (`habitCatalog.DEFAULT_HABITS`). */
+  journalHabits?: HabitId[] | null;
   createdAt: ISODateTime;
 }
 

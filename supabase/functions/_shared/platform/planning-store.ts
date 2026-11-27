@@ -210,7 +210,7 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
     },
     async listCheckins(userId, from, to) {
       const rows = rowsOf(
-        await db.from('daily_checkins').select('date,sleep_quality,sleep_hours,fatigue,soreness,stress,motivation,notes').eq('user_id', userId).gte('date', from).lte('date', to).order('date'),
+        await db.from('daily_checkins').select('date,sleep_quality,sleep_hours,fatigue,soreness,stress,motivation,habits,notes').eq('user_id', userId).gte('date', from).lte('date', to).order('date'),
         'checkins',
       );
       return rows.map(mapCheckin);

@@ -47,9 +47,14 @@ describe('validation schemas (Spanish messages)', () => {
   });
 
   test('check-in and nutrition', () => {
-    const checkin = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7, fatigue: 2, soreness: 2, stress: 3, motivation: 4, notes: null };
+    const checkin = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7, fatigue: 2, soreness: 2, stress: 3, motivation: 4, habits: { alcohol: true }, notes: null };
     expect(checkinDraftSchema.safeParse(checkin).success).toBe(true);
     expect(firstError(checkinDraftSchema.safeParse({ ...checkin, fatigue: 9 }))).toMatch(/Fatiga/);
+    expect(checkinDraftSchema.safeParse({ ...checkin, sleepQuality: null, fatigue: null, soreness: null, stress: null, motivation: null }).success).toBe(true);
+    expect(checkinDraftSchema.safeParse({ ...checkin, habits: { cerveza: true } }).success).toBe(false);
+    expect(profilePatchSchema.safeParse({ journalHabits: ['alcohol', 'late_meal', 'nap', 'sick', 'travel'] }).success).toBe(true);
+    expect(firstError(profilePatchSchema.safeParse({ journalHabits: ['alcohol', 'nap'] }))).toMatch(/Elige 5 preguntas/);
+    expect(firstError(profilePatchSchema.safeParse({ journalHabits: ['alcohol', 'alcohol', 'nap', 'sick', 'travel'] }))).toMatch(/repetir/);
     expect(nutritionDraftSchema.safeParse({ date: '2026-10-25', meal: 'lunch', description: 'Pasta', carbsG: 90 }).success).toBe(true);
     expect(firstError(nutritionDraftSchema.safeParse({ date: '2026-10-25', meal: 'lunch', description: 'Pasta', kcal: -1 }))).toMatch(/Kcal/);
   });

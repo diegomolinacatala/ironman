@@ -7,9 +7,11 @@
 import { z } from 'zod';
 
 import { validateCoaching } from './changes';
+import { JOURNAL_SIZE } from './habitCatalog';
 import { diffDays, isISODate, timeToMinutes, weekdayOf } from './dates';
 import {
   BODY_AREAS,
+  HABIT_IDS,
   INTENSITIES,
   LIFE_EVENT_KINDS,
   MEAL_SLOTS,
@@ -176,14 +178,18 @@ const score5 = (label: string) =>
     .min(1, { error: `${label}: elige un valor de 1 a 5` })
     .max(5, { error: `${label}: elige un valor de 1 a 5` });
 
+/** Journal answers: known habit ids → yes/no. */
+const habitAnswersSchema = z.partialRecord(z.enum(HABIT_IDS, { error: 'Pregunta del diario no válida' }), z.boolean());
+
 export const checkinDraftSchema = z.object({
   date: isoDateSchema,
-  sleepQuality: score5('Calidad del sueño'),
+  sleepQuality: score5('Calidad del sueño').nullable(),
   sleepHours: z.number({ error: 'Horas de sueño: debe ser un número' }).min(0).max(16, { error: 'Horas de sueño: máximo 16' }).nullable(),
-  fatigue: score5('Fatiga'),
-  soreness: score5('Agujetas'),
-  stress: score5('Estrés'),
-  motivation: score5('Motivación'),
+  fatigue: score5('Fatiga').nullable(),
+  soreness: score5('Agujetas').nullable(),
+  stress: score5('Estrés').nullable(),
+  motivation: score5('Motivación').nullable(),
+  habits: habitAnswersSchema,
   notes: z.string().max(1000, { error: 'Notas: máximo 1000 caracteres' }).nullable(),
 });
 
@@ -287,6 +293,11 @@ export const profilePatchSchema = z
     coachNotes: z.string().max(4000, { error: 'Notas para el coach: máximo 4000 caracteres' }).nullable(),
     onboardedAt: z.string().nullable(),
     watchBrand: z.enum(WATCH_BRANDS, { error: 'Elige tu reloj: Garmin o COROS' }).nullable(),
+    journalHabits: z
+      .array(z.enum(HABIT_IDS, { error: 'Pregunta del diario no válida' }))
+      .length(JOURNAL_SIZE, { error: `Elige ${JOURNAL_SIZE} preguntas para el diario` })
+      .refine((ids) => new Set(ids).size === ids.length, { error: 'Las preguntas del diario no se pueden repetir' })
+      .nullable(),
   })
   .partial();
 

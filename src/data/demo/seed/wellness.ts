@@ -1,5 +1,5 @@
 import { addDays, minutesToTime, weekdayOf } from '@/domain/dates';
-import type { DailyCheckin, DailyMetrics, ISODate, NutritionLog, Score5, UUID } from '@/domain/types';
+import type { DailyCheckin, DailyMetrics, HabitAnswers, ISODate, NutritionLog, Score5, UUID } from '@/domain/types';
 
 import type { DemoClock } from '../db';
 import { createRandom, localIso } from '../ids';
@@ -7,6 +7,8 @@ import { createRandom, localIso } from '../ids';
 const DAYS = 28;
 /** Separate generator so the sleep detail does not shift the other seeded values. */
 const SLEEP_SEED = 20261027;
+/** HRV (ms) the demo athlete loses the morning after drinking. */
+const ALCOHOL_HRV_DROP = 8;
 
 export type SleepDetail = Pick<
   DailyMetrics,
@@ -51,6 +53,23 @@ const CHECKIN_NOTES: Record<number, string> = {
   16: 'Dormí fatal por el calor.',
 };
 
+/** Saturday and Sunday mornings: a beer with friends the night before (the demo's "Qué te afecta" shows it). */
+function drankLastNight(date: ISODate): boolean {
+  const weekday = weekdayOf(date);
+  return weekday === 5 || weekday === 6;
+}
+
+/** Deterministic journal answers for the default habits (no `rand()` calls, so the other seeded values do not shift). */
+function seedHabits(date: ISODate, daysAgo: number): HabitAnswers {
+  return {
+    alcohol: drankLastNight(date),
+    late_meal: daysAgo % 3 === 0,
+    screens_in_bed: daysAgo % 2 === 0,
+    hydration: daysAgo % 4 !== 1,
+    niggle: daysAgo === 2,
+  };
+}
+
 /** 28 days of check-ins ending yesterday (today's is left for the user). */
 export function seedCheckins(userId: UUID, today: ISODate, rand: () => number): DailyCheckin[] {
   return Array.from({ length: DAYS }, (_, i) => {
@@ -68,6 +87,7 @@ export function seedCheckins(userId: UUID, today: ISODate, rand: () => number): 
       soreness: score((afterLongDay ? 2.6 : 1.4) + rand() * 1),
       stress: score((busyWeekday ? 2.5 : 1.6) + rand() * 1),
       motivation: score(3.5 + rand() * 1.5),
+      habits: seedHabits(date, daysAgo),
       notes: CHECKIN_NOTES[daysAgo] ?? null,
     };
   });
@@ -79,18 +99,19 @@ export function seedMetrics(userId: UUID, today: ISODate, rand: () => number): D
   return Array.from({ length: DAYS }, (_, i) => {
     const date = addDays(today, -(DAYS - 1 - i));
     const trend = Math.sin(i / 4) * 3;
-    const hrv = round1(67 + trend + (rand() - 0.5) * 8);
+    const hangover = drankLastNight(date) ? ALCOHOL_HRV_DROP : 0;
+    const hrv = round1(67 + trend + (rand() - 0.5) * 8) - hangover;
     const sleepHours = round1(6.6 + rand() * 1.6);
     return {
       userId,
       date,
       source: 'garmin',
-      hrvMs: Math.min(75, Math.max(60, hrv)),
+      hrvMs: Math.min(75, Math.max(60 - hangover, hrv)),
       restingHr: Math.min(52, Math.max(48, Math.round(50 - trend / 2 + (rand() - 0.5) * 3))),
       sleepHours,
       sleepScore: Math.round(62 + (sleepHours - 6.5) * 12 + rand() * 8),
       bodyBattery: Math.round(58 + rand() * 32),
-      trainingReadiness: Math.round(52 + trend * 3 + rand() * 30),
+      trainingReadiness: Math.round(52 + trend * 3 + rand() * 30) - hangover * 2,
       vo2max: 54,
       steps: Math.round(7500 + rand() * 6500),
       stressAvg: Math.round(22 + rand() * 14),

@@ -15,6 +15,8 @@ jest.mock(
   'react-native-safe-area-context',
   () => (jest.requireActual('react-native-safe-area-context/jest/mock') as { default: object }).default,
 );
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({ router: { push: (href: string) => mockPush(href) } }));
 jest.mock('@/data/queries', () => ({
   useCompleteWorkout: () => ({ mutateAsync: mockComplete, isPending: false, error: null }),
 }));
@@ -39,7 +41,29 @@ describe('CompleteSheet', () => {
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
     expect(mockComplete.mock.calls[0]?.[0].data).toMatchObject({ durationMin: 45, rpe: 4, feel: 4, source: 'manual' });
     expect(onDone).toHaveBeenCalledTimes(1);
+    // Saved: the sheet offers the analysis; "Ahora no" closes it.
+    expect(await screen.findByText('¡Sesión hecha!')).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ahora no' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  test('"Analizar sesión" after saving opens the workout and starts the analysis (or hands it to the caller)', async () => {
+    const workout = makeWorkout({ id: 'w9', durationMin: 45 });
+    const onClose = jest.fn();
+    await render(<CompleteSheet workout={workout} visible onClose={onClose} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar como hecho' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Analizar sesión' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/workout/w9?analyze=1');
+
+    const onAnalyze = jest.fn();
+    await render(<CompleteSheet workout={workout} visible onClose={() => undefined} onAnalyze={onAnalyze} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar como hecho' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Analizar sesión' }));
+    expect(onAnalyze).toHaveBeenCalledWith(expect.objectContaining({ id: 'w9', status: 'completed' }));
+    expect(mockPush).toHaveBeenCalledTimes(1);
   });
 
   test('sensaciones are optional; strength shows its planned effort', async () => {

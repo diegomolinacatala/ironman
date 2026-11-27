@@ -130,6 +130,7 @@ export function makeCheckin(overrides: Partial<DailyCheckin> = {}): DailyCheckin
     soreness: 2,
     stress: 2,
     motivation: 4,
+    habits: {},
     notes: null,
     ...overrides,
   };
