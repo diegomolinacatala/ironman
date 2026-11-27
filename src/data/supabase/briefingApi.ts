@@ -91,7 +91,7 @@ export async function composeLocalBriefing(repo: BriefingSourceRepo, date: ISODa
 
 const MISSING_TABLE_CODES: readonly string[] = ['42P01', 'PGRST205'];
 
-function isMissingTable(error: unknown): boolean {
+export function isMissingTable(error: unknown): boolean {
   if (!(error instanceof RepositoryError)) return false;
   const cause = isRecord(error.cause) ? asString(error.cause.code) : null;
   return cause !== null && MISSING_TABLE_CODES.includes(cause);

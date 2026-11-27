@@ -9,6 +9,7 @@ import { todayISO } from '@/domain/dates';
 import type { Repository } from '../repository';
 import { createSupabaseAuth } from './auth';
 import { createCtx } from './base';
+import { analysisApi } from './analysisApi';
 import { briefingApi } from './briefingApi';
 import { getSupabaseClient } from './client';
 import { createCoachRequester } from './coach';
@@ -44,6 +45,7 @@ export function createSupabaseRepository(options: SupabaseRepositoryOptions = {}
     ...inboxApi(ctx),
     ...integrationsApi(ctx),
     ...mealApi(ctx),
+    ...analysisApi(ctx),
     ...speechApi(ctx),
   };
 

@@ -15,6 +15,7 @@ import type {
   ApplyResult,
   BusyBlock,
   Briefing,
+  WorkoutAnalysis,
   BusyBlockDraft,
   CheckinDraft,
   CoachRequest,
@@ -201,6 +202,16 @@ export interface Repository {
    * `engine: 'rules'` and `confidence: 'low'`. Throws RepositoryError for auth/validation/network.
    */
   analyzeMeal(input: MealAnalysisInput): Promise<MealAnalysis>;
+
+  // Post-workout analysis ---------------------------------------------------------
+  /** The stored AI analysis of a completed workout (`workout_analyses`), or null. */
+  getWorkoutAnalysis(workoutId: UUID): Promise<WorkoutAnalysis | null>;
+  /**
+   * Asks the coach's AI to analyse a completed workout (`analysis` edge function; returns the
+   * stored one unless `refresh`). Resolves to null when the AI is off or unavailable: the
+   * screen shows the rules analysis then. Throws RepositoryError for auth/network errors.
+   */
+  analyzeWorkout(input: { workoutId: UUID; date: ISODate; refresh?: boolean }): Promise<WorkoutAnalysis | null>;
 
   // Natural voice ----------------------------------------------------------------
   /**

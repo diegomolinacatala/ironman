@@ -21,7 +21,7 @@ const SRC = join(ROOT, 'src', 'domain');
 export const MIRROR_DIR = join(ROOT, 'supabase', 'functions', '_shared', 'planning', 'domain');
 
 /** Modules copied whole (their imports must stay inside this list, `dates` or `types`). */
-const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription'];
+const WHOLE = ['constants', 'recoveryLayout', 'periodization', 'zones', 'season', 'prescription', 'habitCatalog'];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
 const DATE_DECLS = [
@@ -80,11 +80,15 @@ function datesModule() {
 }
 
 const TYPES_MODULE = `${header('the domain types used by the mirrored modules')}/**
- * Re-exports the edge-function type mirror (../../types.ts) plus the two
- * calendar types the mirrored date helpers need.
+ * Re-exports the edge-function type mirror (../../types.ts), the journal's
+ * habit ids, plus the two calendar types the mirrored date helpers need.
  */
+export { HABIT_IDS } from '../../types.ts';
+
 export type {
   AthleteLevel,
+  HabitAnswers,
+  HabitId,
   Intensity,
   ISODate,
   NumberRange,

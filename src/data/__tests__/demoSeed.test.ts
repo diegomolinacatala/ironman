@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { addDays, diffDays, startOfWeek } from '@/domain/dates';
+import { addDays, diffDays, startOfWeek, weekdayOf } from '@/domain/dates';
 
 import { DEMO_USERS } from '../demo/ids';
 import { WEDNESDAY, resetStorage, signedInRepo } from './demoTestUtils';
@@ -75,7 +75,13 @@ describe('demo seed (relative to today)', () => {
     expect(checkins[checkins.length - 1]?.date).toBe(addDays(TODAY, -1));
     const metrics = await repo.listMetrics({ from: addDays(TODAY, -40), to: TODAY });
     expect(metrics).toHaveLength(28);
-    expect(metrics.every((m) => (m.hrvMs ?? 0) >= 60 && (m.hrvMs ?? 0) <= 75)).toBe(true);
+    // HRV ~60–75 ms, ~8 ms lower on Saturday and Sunday mornings (a drink the night before: "Qué te afecta").
+    expect(metrics.every((m) => (m.hrvMs ?? 0) >= 52 && (m.hrvMs ?? 0) <= 75)).toBe(true);
+    const weekend = metrics.filter((m) => weekdayOf(m.date) >= 5);
+    const weekdays = metrics.filter((m) => weekdayOf(m.date) < 5);
+    const avg = (list: typeof metrics) => list.reduce((s, m) => s + (m.hrvMs ?? 0), 0) / list.length;
+    expect(avg(weekend)).toBeLessThan(avg(weekdays) - 4);
+    expect(checkins.filter((c) => c.habits.alcohol === true).every((c) => weekdayOf(c.date) >= 5)).toBe(true);
     expect(metrics.every((m) => (m.restingHr ?? 0) >= 48 && (m.restingHr ?? 0) <= 52)).toBe(true);
     expect(metrics.every((m) => (m.sleepDeepMin ?? 0) >= 60 && (m.sleepDeepMin ?? 0) <= 100)).toBe(true);
     expect(metrics.every((m) => (m.sleepRemMin ?? 0) >= 80 && (m.sleepRemMin ?? 0) <= 120)).toBe(true);

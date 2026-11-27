@@ -11,6 +11,7 @@ import CheckinScreen from '@/app/checkin';
 import { AuthContext, RepositoryContext } from '@/data/context';
 import type { Repository } from '@/data/repository';
 import type { CheckinDraft, DailyCheckin, DailyMetrics, DateRange, Workout } from '@/domain/types';
+import { DEFAULT_HABITS } from '@/domain/habitCatalog';
 import { makeWorkout } from '@/features/coach/__tests__/fixtures';
 
 const DATE = '2026-10-25';
@@ -89,6 +90,10 @@ function Providers({ children }: { children: ReactNode }) {
 
 async function answerAll(values: [number, number, number, number, number]) {
   const [sleep, fatigue, soreness, stress, motivation] = values;
+  for (const id of DEFAULT_HABITS) {
+    await fireEvent.press(within(screen.getByTestId(`journal-${id}`)).getByLabelText('No'));
+  }
+  await fireEvent.press(screen.getByText('Sueño y sensaciones'));
   await fireEvent.press(screen.getByLabelText(`Calidad del sueño: ${sleep} de 5`));
   await fireEvent.press(screen.getByLabelText(`Fatiga: ${fatigue} de 5`));
   await fireEvent.press(screen.getByLabelText(`Agujetas / dolor muscular: ${soreness} de 5`));

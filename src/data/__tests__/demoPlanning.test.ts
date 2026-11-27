@@ -59,7 +59,7 @@ describe('demo busy blocks', () => {
 describe('demo wellness & nutrition', () => {
   it('upserts check-ins and metrics by date (and source)', async () => {
     const repo = await signedInRepo();
-    const draft = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7, fatigue: 2, soreness: 2, stress: 2, motivation: 4, notes: null } as const;
+    const draft = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7, fatigue: 2, soreness: 2, stress: 2, motivation: 4, habits: { alcohol: false }, notes: null } as const;
     await repo.upsertCheckin(draft);
     await repo.upsertCheckin({ ...draft, fatigue: 4 });
     const today = await repo.listCheckins({ from: '2026-10-25', to: '2026-10-25' });

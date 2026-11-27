@@ -253,14 +253,42 @@ export interface Profile {
   watchBrand?: WatchBrand | null;
 }
 
+/** Morning journal habits (mirror of src/domain/types.ts HABIT_IDS). */
+export const HABIT_IDS = [
+  'alcohol',
+  'late_meal',
+  'late_caffeine',
+  'screens_in_bed',
+  'hydration',
+  'niggle',
+  'sick',
+  'mobility',
+  'nap',
+  'hard_workday',
+  'travel',
+  'other_sport',
+  'enough_carbs',
+  'ultra_processed',
+  'regular_bedtime',
+  'read_before_bed',
+  'meditation',
+  'daylight',
+  'sauna',
+  'cold_exposure',
+] as const;
+export type HabitId = (typeof HABIT_IDS)[number];
+export type HabitAnswers = Partial<Record<HabitId, boolean>>;
+
+/** Morning check-in: yes/no journal + optional 1–5 scales (null = not answered). */
 export interface DailyCheckin {
   date: ISODate;
-  sleepQuality: number;
+  sleepQuality: number | null;
   sleepHours: number | null;
-  fatigue: number;
-  soreness: number;
-  stress: number;
-  motivation: number;
+  fatigue: number | null;
+  soreness: number | null;
+  stress: number | null;
+  motivation: number | null;
+  habits: HabitAnswers;
   notes: string | null;
 }
 
@@ -333,6 +361,17 @@ export interface MealAnalysis {
   confidence: 'high' | 'medium' | 'low';
   tip: string | null;
   engine: 'ai' | 'rules';
+}
+
+/** The coach's analysis of a completed session (mirror of the app's WorkoutAnalysis). */
+export interface WorkoutAnalysis {
+  workoutId: UUID;
+  headline: string;
+  wentWell: string[];
+  improve: string[];
+  nextStep: string;
+  engine: 'ai' | 'rules';
+  createdAt: ISODateTime;
 }
 
 export interface NutritionLog {

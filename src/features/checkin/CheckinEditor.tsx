@@ -11,14 +11,16 @@ import { FormFooter } from '@/features/workouts/FormFooter';
 import { FormScreen } from '@/features/workouts/FormScreen';
 import { ModalCancel } from '@/features/workouts/ModalClose';
 import { errorMessage, logger } from '@/lib/logger';
-import { Button, ScorePicker, Screen, Stepper, Text, TextField, haptics, space } from '@/ui';
+import type { HabitId } from '@/domain/types';
+import { Button, Disclosure, ScorePicker, Screen, Stepper, Text, TextField, haptics, space } from '@/ui';
 
-import { formToCheckinDraft, sleepHoursLabel, type CheckinFormState } from './checkinForm';
+import { answeredCount, formToCheckinDraft, hasScales, sleepHoursLabel, type CheckinFormState } from './checkinForm';
+import { JournalQuestions } from './JournalQuestions';
 import { CheckinResult } from './CheckinResult';
 import { MetricsToday } from './MetricsToday';
 import { useTodayPlan } from './useTodayPlan';
 
-export const MISSING_SCORES_ERROR = 'Responde las cinco preguntas (un toque en cada fila).';
+export const MISSING_SCORES_ERROR = 'Responde sí o no a cada pregunta (un toque en cada fila).';
 
 export interface CheckinEditorProps {
   initial: CheckinFormState;
@@ -43,6 +45,11 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
   const set =<K extends keyof CheckinFormState>(key: K, value: CheckinFormState[K]) => {
     setError(null);
     setState((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const answer = (habit: HabitId, value: boolean) => {
+    setError(null);
+    setState((prev) => ({ ...prev, habits: { ...prev.habits, [habit]: value } }));
   };
 
   const fail = (message: string) => {
@@ -87,8 +94,9 @@ export function CheckinEditor({ initial, date, today, metrics, todayMetrics }: C
         options={{ title: date === today ? '¿Cómo estás hoy?' : `Check-in · ${formatDayLabel(date, today)}`, headerLeft: () => <ModalCancel /> }}
       />
       <Text variant="callout" color="textMuted">
-        30 segundos. Con esto y tus datos del reloj ajustamos la carga del día.
+        {`${state.questions.length} preguntas de sí o no. Con tus respuestas y los datos del reloj vemos qué hábitos te ayudan a recuperar.`}
       </Text>
+      <JournalQuestions questions={state.questions} answers={state.habits} onAnswer={answer} />
       <MetricsToday metrics={todayMetrics} />
       <CheckinFields state={state} set={set} />
     </FormScreen>
@@ -100,9 +108,14 @@ interface CheckinFieldsProps {
   set: <K extends keyof CheckinFormState>(key: K, value: CheckinFormState[K]) => void;
 }
 
+/** The optional 1–5 scales, folded: they refine the readiness when you want to say more. */
 function CheckinFields({ state, set }: CheckinFieldsProps) {
   return (
-    <>
+    <Disclosure
+      title="Sueño y sensaciones"
+      summary="Opcional: afina tu disposición de hoy"
+      icon="sleep"
+      defaultOpen={hasScales(state)}>
       <View style={styles.block}>
         <ScorePicker label="Calidad del sueño" value={state.sleepQuality} onChange={(v) => set('sleepQuality', v)} ends={['Fatal', 'Genial']} />
         <Stepper
@@ -135,7 +148,7 @@ function CheckinFields({ state, set }: CheckinFieldsProps) {
         maxLength={1000}
         placeholder="Molestias, cómo has dormido, comidas…"
       />
-    </>
+    </Disclosure>
   );
 }
 
