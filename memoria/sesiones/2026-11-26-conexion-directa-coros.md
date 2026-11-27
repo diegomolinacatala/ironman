@@ -19,7 +19,7 @@
 **Comprobaciones.** `npm run test:all` en verde, con 17 pruebas nuevas de la función y pruebas de app (modelo de la tarjeta, demo, mapeo de proveedores). Tipos de `_shared/coros` comprobados aparte con `tsc`, porque el typecheck del repo excluye `supabase/`. **No probado contra COROS desde el servidor:** el flujo OAuth y las herramientas sí se verificaron desde un ordenador (cliente local del atleta), pero no desde Supabase.
 
 **Pendiente.**
-1. **Diego despliega** (`supabase/functions/README.md`): `db push`, `supabase secrets set COROS_TOKEN_SECRET=…` y `functions deploy coros`. Hasta entonces el botón responde «no está configurada en el servidor».
+1. ~~Diego despliega~~ **Hecho el 27-11** (Claude Code, con el OK de Diego): migraciones `20261127000100` y `20261127000900` aplicadas, cron `rti-coros-sync` programado (05:35 y 08:35 UTC), `COROS_TOKEN_SECRET` creado (aleatorio, no está guardado en ningún sitio más: no lo cambies) y función `coros` desplegada. Responde 401 sin sesión y 302 en `/coros/callback`. La build de TestFlight del 27-11 (`bebb233`) ya trae la tarjeta. También se volvió a desplegar `mcp`, así que Claude ya lee las instrucciones nuevas de COROS y comprueba lo que llegó solo antes de registrar.
 2. **Primera prueba real**: conectar una cuenta COROS desde la app y confirmar que COROS acepta la dirección de vuelta `…/functions/v1/coros/callback` y la región (la entrada `mcp.coros.com` remite a `mcpeu.coros.com`; si la región dependiera de la IP, `COROS_MCP_URL` permite fijarla).
 3. Confirmar con COROS que su MCP se puede usar desde un servidor en nombre del atleta (lo verificado es su uso desde clientes como Claude o un script local).
 4. Onboarding: añadir la conexión directa al paso «Tu reloj» cuando esté probada.
