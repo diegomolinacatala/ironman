@@ -151,6 +151,11 @@ verify_jwt = false
 [functions.garmin]
 verify_jwt = false
 
+# COROS through the official COROS MCP (OAuth). Same pattern as garmin, plus GET /coros/callback,
+# which COROS calls after the athlete authorizes: no JWT there, the encrypted OAuth state identifies the user.
+[functions.coros]
+verify_jwt = false
+
 # v2 morning briefing ("Informe de hoy"): called by the app with the user's JWT. verify_jwt = false
 # like garmin: the function verifies the JWT in code (userIdFromJwt) and answers JSON errors.
 [functions.briefing]

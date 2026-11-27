@@ -62,6 +62,11 @@ const mockUpdateProfile = jest.fn(async (patch: Partial<Profile>) => ({ ...mockP
 const mockReschedule = jest.fn(async (_input: unknown) => 3);
 const mockSetString = jest.fn(async (_text: string) => true);
 const mockOpenBrowser = jest.fn(async (_url: string, _opts?: unknown) => ({ type: 'dismiss' }));
+const mockOpenAuthSession = jest.fn(async (_url: string, _redirect: string) => ({
+  type: 'success',
+  url: 'roadtoironman://settings/integrations?coros=connected',
+}));
+const mockStartCoros = jest.fn(async () => 'https://mcpeu.coros.example/oauth2/authorize?client_id=x');
 const COROS_RESULT = { metricsDays: 26, sleepNights: 26, activitiesFound: 12, workoutsCompleted: 3, activitiesImported: 9, sources: ['COROS'] };
 /** Apple Salud on this device (how a COROS watch reaches us). */
 const mockHealth = {
@@ -87,6 +92,7 @@ jest.mock('expo-router', () => ({
   get router() {
     return mockRouter;
   },
+  useLocalSearchParams: () => ({}),
 }));
 
 jest.mock(
@@ -98,6 +104,7 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetSt
 jest.mock('expo-web-browser', () => ({
   WebBrowserPresentationStyle: { PAGE_SHEET: 'pageSheet' },
   openBrowserAsync: (url: string, opts?: unknown) => mockOpenBrowser(url, opts),
+  openAuthSessionAsync: (url: string, redirect: string) => mockOpenAuthSession(url, redirect),
 }));
 jest.mock('@/integrations/calendar/trainingCalendar', () => ({
   useTrainingCalendar: () => ({
@@ -144,6 +151,9 @@ jest.mock('@/data/queries', () => {
     useConnectGarmin: () => mutation(mockConnectGarmin),
     useSyncGarmin: () => mutation(jest.fn()),
     useDisconnectGarmin: () => mutation(jest.fn()),
+    useStartCorosConnect: () => mutation(mockStartCoros),
+    useSyncCoros: () => mutation(jest.fn()),
+    useDisconnectCoros: () => mutation(jest.fn()),
   };
 });
 
@@ -337,10 +347,23 @@ describe('Tu reloj › COROS', () => {
     mockState.profile = { ...mockProfile, watchBrand: 'coros' };
     await render(<IntegrationsScreen />);
     expect(screen.getByText(/Perfil › Ajustes › Apps de terceros › Sincronización de datos › Apple Health/)).toBeTruthy();
-    expect(screen.getByText('Sin conectar')).toBeTruthy();
+    // Both COROS cards (direct connection and Apple Salud) start disconnected.
+    expect(screen.getAllByText('Sin conectar')).toHaveLength(2);
     await fireEvent.press(screen.getByRole('button', { name: 'Conectar Apple Salud' }));
     await waitFor(() => expect(mockHealth.connect).toHaveBeenCalledWith({ days: 28 }));
     expect(await screen.findByText('12 entrenos y 26 noches de sueño de tus últimas 4 semanas.')).toBeTruthy();
+  });
+
+  test('COROS direct connection: opens the COROS authorization and comes back connected', async () => {
+    mockState.profile = { ...mockProfile, watchBrand: 'coros' };
+    await render(<IntegrationsScreen />);
+    expect(screen.getByText('Conexión directa')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Conectar con COROS' }));
+    await waitFor(() =>
+      expect(mockOpenAuthSession).toHaveBeenCalledWith('https://mcpeu.coros.example/oauth2/authorize?client_id=x', 'roadtoironman://settings/integrations'),
+    );
+    expect(mockStartCoros).toHaveBeenCalled();
+    expect(await screen.findByText('COROS conectado. Hemos traído tus últimas cuatro semanas.')).toBeTruthy();
   });
 
   test('COROS card, connected: last read, «Sincronizar» and the step-by-step guide', async () => {

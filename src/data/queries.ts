@@ -606,7 +606,7 @@ export function useCoach() {
 }
 
 // ---------------------------------------------------------------------------
-// Integrations (Garmin Personal API)
+// Integrations (Garmin Personal API, COROS MCP)
 // ---------------------------------------------------------------------------
 
 export function useIntegrations() {
@@ -630,6 +630,22 @@ export function useDisconnectGarmin() {
 export function useSyncGarmin() {
   const repo = useRepository();
   return useRepoMutation(() => repo.syncGarmin(), ['integrations', 'metrics', 'workouts', 'feed']);
+}
+
+/** Returns the COROS authorization URL (empty in demo mode, where the connection is simulated). */
+export function useStartCorosConnect() {
+  const repo = useRepository();
+  return useRepoMutation(() => repo.startCorosConnect(), ['integrations']);
+}
+
+export function useDisconnectCoros() {
+  const repo = useRepository();
+  return useRepoMutation(() => repo.disconnectCoros(), ['integrations']);
+}
+
+export function useSyncCoros() {
+  const repo = useRepository();
+  return useRepoMutation(() => repo.syncCoros(), ['integrations', 'metrics', 'workouts', 'feed']);
 }
 
 // ---------------------------------------------------------------------------

@@ -52,7 +52,7 @@ export type Intensity = (typeof INTENSITIES)[number];
 export type WorkoutStatus = 'planned' | 'completed' | 'skipped';
 
 /** Who created / last planned the workout. */
-export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin'] as const;
+export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'coros'] as const;
 export type WorkoutSource = (typeof WORKOUT_SOURCES)[number];
 
 export type WorkoutStepKind = 'warmup' | 'work' | 'recovery' | 'cooldown' | 'rest';
@@ -122,7 +122,7 @@ export interface CompletedData {
   feel?: Score5;
   tss?: number;
   notes?: string;
-  source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
+  source?: 'manual' | 'healthkit' | 'garmin' | 'coros' | 'claude';
   /** Id of the matched activity in the source system (e.g. HealthKit UUID). */
   externalId?: string;
   completedAt?: ISODateTime;
@@ -885,7 +885,7 @@ export interface WeekPlanDraft {
 // External integrations (Garmin Personal API, HealthKit, device calendar)
 // ---------------------------------------------------------------------------
 
-export type IntegrationProvider = 'garmin_personal';
+export type IntegrationProvider = 'garmin_personal' | 'coros_mcp';
 export type IntegrationState = 'connected' | 'error' | 'expired' | 'disconnected';
 
 export interface IntegrationStatus {

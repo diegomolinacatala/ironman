@@ -78,6 +78,21 @@ describe('demo integrations', () => {
     expect(await repo.listIntegrations()).toEqual([]);
     await repo.store.dispose();
   });
+
+  it('COROS connects at once in demo mode and lives next to Garmin', async () => {
+    const repo = await signedInRepo();
+    await expect(repo.syncCoros()).rejects.toMatchObject({ code: 'validation' });
+    expect(await repo.startCorosConnect()).toBe('');
+    await repo.connectGarmin('demo-personal-api-key', null);
+    const both = await repo.listIntegrations();
+    expect(both.map((i) => i.provider).sort()).toEqual(['coros_mcp', 'garmin_personal']);
+    expect((await repo.syncCoros()).message).toContain('demo');
+    await repo.disconnectGarmin();
+    expect((await repo.listIntegrations()).map((i) => i.provider)).toEqual(['coros_mcp']);
+    await repo.disconnectCoros();
+    expect(await repo.listIntegrations()).toEqual([]);
+    await repo.store.dispose();
+  });
 });
 
 describe('demo auth & persistence', () => {

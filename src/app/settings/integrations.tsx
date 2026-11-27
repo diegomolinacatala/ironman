@@ -1,7 +1,10 @@
+import { useLocalSearchParams } from 'expo-router';
+
 import { useProfile } from '@/data/queries';
 import { isAiCoachEnabled } from '@/features/coach/aiCoachFlag';
 import { CalendarCard } from '@/features/settings/CalendarCard';
 import { CorosCard } from '@/features/settings/CorosCard';
+import { CorosDirectCard } from '@/features/settings/CorosDirectCard';
 import { GarminCard } from '@/features/settings/GarminCard';
 import { HealthCard } from '@/features/settings/HealthCard';
 import { KeyboardAvoider } from '@/features/settings/KeyboardAvoider';
@@ -16,6 +19,9 @@ export default function IntegrationsScreen() {
   const profile = useProfile();
   const watch = useWatchBrand(profile.data);
   const coros = watch.brand === 'coros';
+  // roadtoironman://settings/integrations?coros=connected|error&reason=… after the COROS authorization.
+  const params = useLocalSearchParams<{ coros?: string; reason?: string }>();
+  const corosReturn = params.coros ? `?coros=${params.coros}${params.reason ? `&reason=${params.reason}` : ''}` : null;
 
   if (profile.isLoading) {
     return (
@@ -35,7 +41,14 @@ export default function IntegrationsScreen() {
         <Card padding="md">
           <WatchBrandPicker choice={watch} />
         </Card>
-        {coros ? <CorosCard /> : <GarminCard />}
+        {coros ? (
+          <>
+            <CorosDirectCard returnUrl={corosReturn} />
+            <CorosCard />
+          </>
+        ) : (
+          <GarminCard />
+        )}
         <TrainingCalendarCard />
         <CalendarCard />
         {/* With COROS, Apple Salud is the watch connection itself (the COROS card). */}

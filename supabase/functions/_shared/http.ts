@@ -27,6 +27,8 @@ export type ErrorCode =
   | 'invalid_key'
   | 'garmin_expired'
   | 'garmin_unavailable'
+  | 'coros_expired'
+  | 'coros_unavailable'
   | 'server_misconfigured'
   | 'internal';
 
