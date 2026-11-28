@@ -7,6 +7,7 @@
  * sensaciones: planning/review.ts). Device-neutral and compact. Pure.
  */
 import { sessionFeel, stepLines, targetSummary } from '../planning/domain/prescription.ts';
+import { fileMetricsOf } from '../planning/file-metrics.ts';
 import type { StepLine } from '../planning/domain/prescription.ts';
 import { intensityLabel, sportLabel } from '../planning/labels.ts';
 import { doneVsPlan } from '../planning/review.ts';
@@ -47,7 +48,7 @@ function doneOf(w: Workout, view: SessionView): PromptSession {
   if (!c) return {};
   const review = doneVsPlan(w, { thresholds: view.thresholds, raceDistance: view.raceDistance });
   return {
-    done: { durationMin: c.durationMin, distanceM: c.distanceM, avgHr: c.avgHr, rpe: c.rpe, feel: c.feel },
+    done: { durationMin: c.durationMin, distanceM: c.distanceM, avgHr: c.avgHr, rpe: c.rpe, feel: c.feel, ...fileMetricsOf(c) },
     ...(review ? { planVsDone: review.line } : {}),
   };
 }

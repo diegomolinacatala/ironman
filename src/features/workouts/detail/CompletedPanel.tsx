@@ -4,7 +4,7 @@ import type { Compliance } from '@/domain/load';
 import type { RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { Card, Divider, Text, space } from '@/ui';
 
-import { activityInsights } from '../activityInsights';
+import { activityInsights } from '@/domain/activityInsights';
 import { ComplianceDot } from '../ComplianceDot';
 import { complianceMeta } from '../complianceMeta';
 import { completedSourceLabel, planVsRealRows, type CompareRow } from '../targets';

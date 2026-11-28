@@ -27,4 +27,19 @@ describe('rulesAnalysis', () => {
     expect(a?.improve.length).toBeLessThanOrEqual(3);
     expect(a?.nextStep).toMatch(/^Hoy, recupera/);
   });
+
+  test('the watch file: a heart rate that came loose in the second half is something to fix, a steady one is praised', () => {
+    const long = (decouplingPct: number) =>
+      makeWorkout({
+        status: 'completed',
+        intensity: 'endurance',
+        durationMin: 90,
+        completed: { durationMin: 92, rpe: 3, feel: 4, decouplingPct, hrDriftBpm: decouplingPct, analyzedAt: NOW },
+      });
+    const loose = rulesAnalysis({ workout: long(7), thresholds, raceDistance: null, checkin: null, tomorrow: [], now: NOW });
+    expect(loose?.improve[0]).toMatch(/^En la segunda mitad tu pulso subió 7 ppm y rendiste un 7 % menos por latido/);
+    const steady = rulesAnalysis({ workout: long(2), thresholds, raceDistance: null, checkin: null, tomorrow: [], now: NOW });
+    expect(steady?.improve).toEqual([]);
+    expect(steady?.wentWell[1]).toMatch(/^Pulso estable en la segunda mitad \(desacople del 2 %\)/);
+  });
 });

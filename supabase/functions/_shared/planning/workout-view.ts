@@ -8,6 +8,7 @@
 import { weekdayOf, WEEKDAYS_ES } from '../dates.ts';
 import type { ISODate, JointSession, RaceDistance, Thresholds, UUID, Workout, WorkoutCoaching } from '../types.ts';
 import { targetSummary } from './domain/prescription.ts';
+import { fileMetricsOf } from './file-metrics.ts';
 import { intensityLabel, sportLabel } from './labels.ts';
 import { workoutLoad } from './load.ts';
 import { doneVsPlan } from './review.ts';
@@ -80,7 +81,17 @@ function doneOf(w: Workout, ctx: ViewContext): Pick<WorkoutView, 'completed' | '
   if (!c) return {};
   const review = doneVsPlan(w, { thresholds: ctx.thresholds, raceDistance: ctx.raceDistance });
   return {
-    completed: { durationMin: c.durationMin, distanceM: c.distanceM, avgHr: c.avgHr, rpe: c.rpe, feel: c.feel, tss: c.tss, source: c.source },
+    completed: {
+      durationMin: c.durationMin,
+      distanceM: c.distanceM,
+      avgHr: c.avgHr,
+      rpe: c.rpe,
+      feel: c.feel,
+      tss: c.tss,
+      source: c.source,
+      // From the watch's FIT file: decoupling, HR drift, NP, IF, power curve (planning/file-metrics.ts).
+      ...fileMetricsOf(c),
+    },
     ...(review ? { planVsDone: review.line } : {}),
   };
 }
