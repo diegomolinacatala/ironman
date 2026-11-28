@@ -242,7 +242,24 @@ export function parseSteps(value: unknown): WorkoutStep[] {
 
 export function parseCompleted(value: unknown): CompletedData | null {
   if (!isRecord(value)) return null;
-  const keys = ['durationMin', 'distanceM', 'avgHr', 'maxHr', 'rpe', 'tss', 'kcal', 'avgPowerW', 'bestPower1MinW', 'bestPower20MinW'] as const;
+  const keys = [
+    'durationMin',
+    'distanceM',
+    'avgHr',
+    'maxHr',
+    'rpe',
+    'tss',
+    'kcal',
+    'avgPowerW',
+    'bestPower1MinW',
+    'bestPower20MinW',
+    'bestPower5MinW',
+    'bestPower60MinW',
+    'normalizedPowerW',
+    'intensityFactor',
+    'decouplingPct',
+    'hrDriftBpm',
+  ] as const;
   const numbers = keys.reduce<CompletedData>((acc, key) => {
     const n = asNumber(value[key]);
     return n === null ? acc : { ...acc, [key]: n };
@@ -251,6 +268,7 @@ export function parseCompleted(value: unknown): CompletedData | null {
   const source = oneOf(value.source, COMPLETED_SOURCES);
   const externalId = asString(value.externalId);
   const completedAt = asString(value.completedAt);
+  const analyzedAt = asString(value.analyzedAt);
   const feel = score5(value.feel);
   return {
     ...numbers,
@@ -259,6 +277,7 @@ export function parseCompleted(value: unknown): CompletedData | null {
     ...(source ? { source } : {}),
     ...(externalId ? { externalId } : {}),
     ...(completedAt ? { completedAt } : {}),
+    ...(analyzedAt ? { analyzedAt } : {}),
   };
 }
 

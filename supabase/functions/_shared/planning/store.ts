@@ -180,6 +180,12 @@ export interface PlanningWriter {
    * concurrent import cannot overwrite another; false otherwise.
    */
   enrichCompletedWorkout(userId: UUID, workoutId: UUID, completed: CompletedData): Promise<boolean>;
+  /**
+   * Merges the metrics computed from the activity file (garmin/analysis.ts) into
+   * `completed`, only while it is still linked to that activity
+   * (`completed.externalId`); false otherwise.
+   */
+  saveActivityAnalysis(userId: UUID, workoutId: UUID, externalId: string, analysis: Partial<CompletedData>): Promise<boolean>;
   /** Finds a workout already linked to an external activity (external_id or completed.externalId). */
   findByExternalId(userId: UUID, externalId: string, rawId: string): Promise<Workout | null>;
   /** Inserts a completed (unplanned) workout; returns null if the external id already exists. */

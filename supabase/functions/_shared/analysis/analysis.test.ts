@@ -171,3 +171,18 @@ test('analysis context: without check-in or tomorrow it says so', () => {
   assert.match(text, /No hizo el check-in esa mañana/);
   assert.match(text, /Mañana no tiene nada planificado/);
 });
+
+test('analysis context: what the watch file says reaches the model under completed.fromFile, only when analysed', () => {
+  const state = emptyState();
+  const analysed: Workout = {
+    ...DONE,
+    completed: { ...DONE.completed, decouplingPct: 6.2, hrDriftBpm: 7.6, normalizedPowerW: 212, analyzedAt: '2026-10-27T10:00:00.000Z' },
+  };
+  const text = analysisMessage({ workout: analysed, profile: state.profiles[0]!, races: [], workouts: [analysed], checkin: null });
+  assert.match(text, /"fromFile":\{"decouplingPct":6\.2,"hrDriftBpm":7\.6,"normalizedPowerW":212\}/);
+  const plain = analysisMessage({ workout: DONE, profile: state.profiles[0]!, races: [], workouts: [DONE], checkin: null });
+  assert.doesNotMatch(plain, /fromFile/);
+  const notMarked: Workout = { ...DONE, completed: { ...DONE.completed, decouplingPct: 6 } };
+  assert.doesNotMatch(analysisMessage({ workout: notMarked, profile: state.profiles[0]!, races: [], workouts: [notMarked], checkin: null }), /fromFile/);
+  assert.match(ANALYSIS_SYSTEM_PROMPT, /completed\.fromFile/);
+});

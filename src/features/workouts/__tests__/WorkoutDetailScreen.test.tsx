@@ -278,6 +278,18 @@ describe('workout detail · completed', () => {
     expect(screen.queryByText('Si no es tu día')).toBeNull();
     expect(screen.getByRole('button', { name: /^Lo has hecho bien si…/ })).toBeTruthy();
   });
+
+  test('what the watch file says: heart rate that rose in the second half', async () => {
+    mockWorkout = {
+      data: series({
+        status: 'completed',
+        completed: { durationMin: 62, avgHr: 150, decouplingPct: 6.2, hrDriftBpm: 7.6, source: 'garmin', externalId: '1', analyzedAt: '2026-10-25T10:00:00.000Z' },
+      }),
+      isLoading: false,
+    };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.getByText(/^En la segunda mitad tu pulso subió 8 ppm y rendiste un 6 % menos por latido/)).toBeTruthy();
+  });
 });
 
 describe('workout detail · «Hecho» saved without connection', () => {

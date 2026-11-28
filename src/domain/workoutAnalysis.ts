@@ -2,8 +2,10 @@
  * The rules version of "Analizar" (demo, AI off or unavailable): the coach's
  * plan-vs-real verdict (`review.ts`) turned into the same shape as the AI
  * analysis, plus what that morning's journal explains (alcohol, a niggle,
- * feeling ill) and what tomorrow holds. Never invents numbers. Pure.
+ * feeling ill), what the watch's file says about the second half (decoupling,
+ * activityInsights.ts) and what tomorrow holds. Never invents numbers. Pure.
  */
+import { decouplingInsight } from './activityInsights';
 import { reviewWorkout, type ReviewVerdict } from './review';
 import type { DailyCheckin, ISODateTime, RaceDistance, Thresholds, Workout, WorkoutAnalysis } from './types';
 
@@ -45,14 +47,17 @@ export function rulesAnalysis(input: RulesAnalysisInput): WorkoutAnalysis | null
   const good = GOOD_VERDICTS.has(review.verdict);
   const hard = review.verdict === 'harder';
   const hints = journalHints(input.checkin);
-  const improve = [...(good || !review.next ? [] : [review.next]), ...(hard ? hints : hints.slice(0, 1))].slice(0, 3);
+  const decoupling = decouplingInsight(input.workout);
+  const fileWarning = decoupling?.tone === 'warn' ? [decoupling.text] : [];
+  const improve = [...(good || !review.next ? [] : [review.next]), ...fileWarning, ...(hard ? hints : hints.slice(0, 1))].slice(0, 3);
+  const wentWell = [good ? review.detail : 'Sesión hecha: cada entreno suma.', ...(decoupling?.tone === 'good' ? [decoupling.text] : [])];
   const nextStep = [hard ? 'Hoy, recupera: come, hidrátate y duerme bien.' : null, tomorrowLine(input.tomorrow)]
     .filter((p): p is string => p !== null)
     .join(' ');
   return {
     workoutId: input.workout.id,
     headline: review.title,
-    wentWell: good ? [review.detail] : ['Sesión hecha: cada entreno suma.'],
+    wentWell,
     improve,
     nextStep: nextStep || (review.next ?? 'Sigue con tu plan.'),
     engine: 'rules',

@@ -7,6 +7,8 @@
  * Health → app) are skipped so load and totals are not counted twice. A
  * session the athlete marked done by hand gets the activity's numbers instead
  * (heart rate, load, distance…), keeping their RPE, sensaciones and notes.
+ * Then the newest bike and run sessions get the metrics of their FIT file
+ * (analysis.ts: NP, IF, power curve, decoupling, HR drift).
  */
 import { addDays, todayIn } from '../dates.ts';
 import type { Logger } from '../log.ts';
@@ -17,6 +19,7 @@ import { intensityFromEffort } from '../planning/load.ts';
 import { findCompletedLookalikes, matchActivity } from '../planning/match.ts';
 import type { CompletedWorkoutInsert, MetricsUpsert, PlanningStore } from '../planning/store.ts';
 import type { CompletedData, SyncResult, UUID, Workout } from '../types.ts';
+import { analyzeGarminActivities } from './analysis.ts';
 import { GarminApiError } from './api.ts';
 import type { GarminApi, GarminToken } from './api.ts';
 import { mergeDayParts, parseActivities, parseBodyBattery, parseDailySummaries, parseHrv, parseSleepSummaries } from './parse.ts';
@@ -27,7 +30,10 @@ export const SYNC_DAYS = 14;
 export const FIRST_SYNC_DAYS = 28;
 const MAX_SYNC_DAYS = 28;
 
-export type GarminSyncStore = Pick<PlanningStore, 'listWorkouts' | 'completeWorkout' | 'enrichCompletedWorkout' | 'insertCompletedWorkout' | 'upsertMetrics'>;
+export type GarminSyncStore = Pick<
+  PlanningStore,
+  'getProfile' | 'listWorkouts' | 'completeWorkout' | 'enrichCompletedWorkout' | 'insertCompletedWorkout' | 'saveActivityAnalysis' | 'upsertMetrics'
+>;
 
 export interface GarminSyncDeps {
   api: GarminApi;
@@ -208,6 +214,9 @@ export async function syncGarminUser(deps: GarminSyncDeps, input: SyncUserInput)
   const activities = parseActivities(data.activities, input.timezone).filter((a) => a.date >= from && a.date <= to);
   const workouts = await deps.store.listWorkouts(input.userId, from, to);
   const counts = await applyImport(deps, input.userId, planActivityImport(activities, workouts, nowIso));
+  // Per-second metrics from the activity files (NP, IF, power curve, decoupling, HR drift).
+  const [afterImport, profile] = await Promise.all([deps.store.listWorkouts(input.userId, from, to), deps.store.getProfile(input.userId).catch(() => null)]);
+  await analyzeGarminActivities(deps, { userId: input.userId, token, workouts: afterImport, ftpW: profile?.thresholds?.ftpW, nowIso });
   return {
     metricsDays,
     activitiesImported: counts.inserted,

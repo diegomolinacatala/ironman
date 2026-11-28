@@ -326,6 +326,26 @@ export function createPlanningStore(db: Db, now: () => Date = () => new Date()):
       );
       return rows.length > 0;
     },
+    async saveActivityAnalysis(userId, workoutId, externalId, analysis) {
+      const found = rowsOf(
+        await db.from('workouts').select('completed').eq('id', workoutId).eq('user_id', userId).eq('completed->>externalId', externalId),
+        'read workout for analysis',
+      );
+      const current = (found[0] as { completed?: unknown } | undefined)?.completed;
+      if (!current || typeof current !== 'object') return false;
+      const rows = rowsOf(
+        await db
+          .from('workouts')
+          .update({ completed: { ...(current as Record<string, unknown>), ...analysis } })
+          .eq('id', workoutId)
+          .eq('user_id', userId)
+          // Still the same activity: an edit in between keeps its link and is merged next sync.
+          .eq('completed->>externalId', externalId)
+          .select('id'),
+        'save activity analysis',
+      );
+      return rows.length > 0;
+    },
     findByExternalId,
     async insertCompletedWorkout(userId, w) {
       if (w.externalId && (await findByExternalId(userId, w.externalId, w.externalId.replace(/^garmin:/, '')))) return null;

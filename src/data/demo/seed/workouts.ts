@@ -63,11 +63,32 @@ function feelFor(rand: () => number): Score5 {
   return roll < 0.8 ? 4 : 5;
 }
 
+const DEMO_IF: Record<Intensity, number> = { recovery: 0.55, endurance: 0.68, tempo: 0.8, threshold: 0.9, vo2: 0.95, race: 0.8 };
+
+/**
+ * What the Garmin sync reads from the FIT file of long runs and rides (decoupling and HR drift;
+ * normalized power and IF on rides with an FTP). Derived from the HR without drawing from `rand`,
+ * so the rest of the seed stays the same.
+ */
+function fileMetrics(w: Workout, athlete: SeedAthlete, durationMin: number, avgHr: number | null, completedAt: string): Partial<CompletedData> {
+  if ((w.sport !== 'run' && w.sport !== 'bike') || durationMin < 45 || avgHr === null) return {};
+  const decouplingPct = Math.round(((avgHr % 9) - 1) * 10) / 10;
+  const out: Partial<CompletedData> = { decouplingPct, hrDriftBpm: Math.max(0, Math.round(decouplingPct * 1.3)), analyzedAt: completedAt };
+  const ftp = athlete.thresholds.ftpW;
+  if (w.sport === 'bike' && ftp) {
+    const factor = DEMO_IF[w.intensity];
+    const normalizedPowerW = Math.round(ftp * factor);
+    Object.assign(out, { normalizedPowerW, intensityFactor: Math.round(factor * 100) / 100, bestPower5MinW: Math.round(normalizedPowerW * 1.18) });
+  }
+  return out;
+}
+
 function completedData(w: Workout, athlete: SeedAthlete, rand: () => number): CompletedData {
   const durationMin = Math.max(10, Math.round(w.durationMin * (0.92 + rand() * 0.14)));
   const distanceM = w.distanceM === null ? undefined : Math.round((w.distanceM * durationMin) / Math.max(1, w.durationMin));
   const startIso = localIso(w.date, w.startTime ?? '18:00');
   const avgHr = averageHr(w, athlete, rand);
+  const completedAt = new Date(Date.parse(startIso) + durationMin * 60_000).toISOString();
   return {
     durationMin,
     ...(distanceM !== undefined ? { distanceM } : {}),
@@ -75,7 +96,8 @@ function completedData(w: Workout, athlete: SeedAthlete, rand: () => number): Co
     rpe: rpeFor(w, athlete, rand),
     feel: feelFor(rand),
     source: w.sport === 'strength' ? 'manual' : 'garmin',
-    completedAt: new Date(Date.parse(startIso) + durationMin * 60_000).toISOString(),
+    completedAt,
+    ...fileMetrics(w, athlete, durationMin, avgHr, completedAt),
   };
 }
 
