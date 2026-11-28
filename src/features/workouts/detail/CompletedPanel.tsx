@@ -4,6 +4,7 @@ import type { Compliance } from '@/domain/load';
 import type { RaceDistance, Thresholds, Workout } from '@/domain/types';
 import { Card, Divider, Text, space } from '@/ui';
 
+import { activityInsights } from '../activityInsights';
 import { ComplianceDot } from '../ComplianceDot';
 import { complianceMeta } from '../complianceMeta';
 import { completedSourceLabel, planVsRealRows, type CompareRow } from '../targets';
@@ -17,7 +18,10 @@ export interface CompletedPanelProps {
 
 const LABEL_WIDTH = 96;
 
-/** Plan vs real for completed workouts (duration, distance, FC media, RPE, sensaciones); skipped notice otherwise. */
+/**
+ * Plan vs real for completed workouts (duration, distance, FC media, RPE, sensaciones), then what the
+ * watch's per-second data says (activityInsights: decoupling, normalized power); skipped notice otherwise.
+ */
 export function CompletedPanel({ workout, compliance, thresholds, raceDistance }: CompletedPanelProps) {
   if (workout.status === 'skipped') return <SkippedPanel workout={workout} compliance={compliance} />;
   if (workout.status !== 'completed') return null;
@@ -25,6 +29,7 @@ export function CompletedPanel({ workout, compliance, thresholds, raceDistance }
   const source = completedSourceLabel(workout);
   const rows = planVsRealRows(workout, thresholds, { raceDistance });
   const notes = workout.completed?.notes;
+  const insights = activityInsights(workout);
   return (
     <Card padding="md" style={styles.card}>
       <View style={styles.row}>
@@ -56,6 +61,15 @@ export function CompletedPanel({ workout, compliance, thresholds, raceDistance }
           <CompareLine key={row.label} row={row} />
         ))}
       </View>
+      {insights.length ? (
+        <View style={styles.insights}>
+          {insights.map((line) => (
+            <Text key={line} variant="callout" color="textMuted">
+              {line}
+            </Text>
+          ))}
+        </View>
+      ) : null}
       {notes ? (
         <Text variant="callout" style={styles.notes}>
           {notes}
@@ -105,6 +119,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   notes: { marginTop: space.xs },
   table: { gap: space.sm },
+  insights: { gap: space.xs },
   compare: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
   label: { width: LABEL_WIDTH },
   cell: { flex: 1 },

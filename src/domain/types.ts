@@ -130,6 +130,22 @@ export interface CompletedData {
   /** Best 1-minute / 20-minute average power of the session (watch), W: what an FTP test reads. */
   bestPower1MinW?: number;
   bestPower20MinW?: number;
+  /**
+   * From the watch's per-second samples (Garmin FIT, computed on sync by
+   * supabase/functions/_shared/garmin/streamMetrics.ts, same formulas as camino-703).
+   * Best 5 / 60-minute average power, W.
+   */
+  bestPower5MinW?: number;
+  bestPower60MinW?: number;
+  /** Normalized power, W, and intensity factor (NP / FTP at sync time). */
+  normalizedPowerW?: number;
+  intensityFactor?: number;
+  /** Aerobic decoupling, %: output per heartbeat in the first vs the second half (> 0 = the heart worked more). */
+  decouplingPct?: number;
+  /** Mean heart rate of the second half minus the first, ppm. */
+  hrDriftBpm?: number;
+  /** When the activity file was analysed (also when it had nothing to measure). */
+  analyzedAt?: ISODateTime;
   notes?: string;
   /**
    * Who wrote the data. A session marked done by hand ('manual', no `externalId`) is completed

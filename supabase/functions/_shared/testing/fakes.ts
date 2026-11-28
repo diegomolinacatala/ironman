@@ -205,6 +205,12 @@ export function fakeStore(state: FakeState, applyResult?: ApplyChangesResult): P
       state.workouts[idx] = { ...state.workouts[idx], completed };
       return true;
     },
+    saveActivityAnalysis: async (userId, workoutId, externalId, analysis) => {
+      const idx = state.workouts.findIndex((w) => w.id === workoutId && w.userId === userId && w.completed?.externalId === externalId);
+      if (idx === -1) return false;
+      state.workouts[idx] = { ...state.workouts[idx], completed: { ...state.workouts[idx].completed, ...analysis } };
+      return true;
+    },
     findByExternalId,
     insertCompletedWorkout: async (userId, row) => {
       if (row.externalId && (await findByExternalId(userId, row.externalId, row.externalId.replace(/^garmin:/, '')))) return null;

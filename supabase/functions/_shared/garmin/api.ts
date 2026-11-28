@@ -32,6 +32,8 @@ export interface GarminToken {
 export interface GarminApi {
   exchangeKey(apiKey: string): Promise<GarminToken>;
   get(path: string, token: GarminToken, query?: Record<string, string | number>): Promise<unknown>;
+  /** Raw bytes (e.g. the activity file ZIP of `/download-service/files/activity/{id}`). */
+  getBytes(path: string, token: GarminToken): Promise<Uint8Array>;
 }
 
 async function safeFetch(fetchFn: FetchFn, url: string, init: RequestInit): Promise<Response> {
@@ -76,6 +78,17 @@ export function createGarminApi(fetchFn: FetchFn, baseUrl: string = GARMIN_BASE_
       } catch {
         throw new GarminApiError(502, `Respuesta de Garmin no válida en ${path}.`);
       }
+    },
+    async getBytes(path, token) {
+      const res = await safeFetch(fetchFn, `${base}${path}`, {
+        method: 'GET',
+        headers: { Accept: '*/*', Authorization: `Bearer ${token.accessToken}` },
+      });
+      if (!res.ok) {
+        await res.body?.cancel();
+        throw new GarminApiError(res.status, `Garmin respondió HTTP ${res.status} en ${path}.`);
+      }
+      return new Uint8Array(await res.arrayBuffer());
     },
   };
 }
