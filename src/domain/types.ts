@@ -52,7 +52,7 @@ export type Intensity = (typeof INTENSITIES)[number];
 export type WorkoutStatus = 'planned' | 'completed' | 'skipped';
 
 /** Who created / last planned the workout. */
-export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'imported'] as const;
+export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'coros', 'imported'] as const;
 export type WorkoutSource = (typeof WORKOUT_SOURCES)[number];
 
 export type WorkoutStepKind = 'warmup' | 'work' | 'recovery' | 'cooldown' | 'rest';
@@ -136,7 +136,7 @@ export interface CompletedData {
    * later with the watch's numbers when the same activity arrives (domain/watchCompletion.ts):
    * it then takes the watch's source and id, and keeps the athlete's RPE, feel and notes.
    */
-  source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
+  source?: 'manual' | 'healthkit' | 'garmin' | 'coros' | 'claude';
   /** Id of the matched activity in the source system (e.g. HealthKit UUID). */
   externalId?: string;
   completedAt?: ISODateTime;
@@ -391,15 +391,50 @@ export type Score5 = 1 | 2 | 3 | 4 | 5;
 export const ILLNESS_ANSWERS = ['fine', 'symptoms', 'alcohol', 'heat', 'stress'] as const;
 export type IllnessAnswer = (typeof ILLNESS_ANSWERS)[number];
 
+/**
+ * Morning journal (Whoop-style yes/no questions): the habits an athlete can
+ * track. Copy and defaults live in `habitCatalog.ts`.
+ */
+export const HABIT_IDS = [
+  'alcohol',
+  'late_meal',
+  'late_caffeine',
+  'screens_in_bed',
+  'hydration',
+  'niggle',
+  'sick',
+  'mobility',
+  'nap',
+  'hard_workday',
+  'travel',
+  'other_sport',
+  'enough_carbs',
+  'ultra_processed',
+  'regular_bedtime',
+  'read_before_bed',
+  'meditation',
+  'daylight',
+  'sauna',
+  'cold_exposure',
+] as const;
+export type HabitId = (typeof HABIT_IDS)[number];
+/** Yes/no answers of one morning, keyed by habit (unanswered = absent). */
+export type HabitAnswers = Partial<Record<HabitId, boolean>>;
+
+/**
+ * Morning check-in. The yes/no journal goes first; the 1–5 scales are
+ * optional (null = not answered) and only refine the readiness.
+ */
 export interface DailyCheckin {
   userId: UUID;
   date: ISODate;
-  sleepQuality: Score5;
+  sleepQuality: Score5 | null;
   sleepHours: number | null;
-  fatigue: Score5;
-  soreness: Score5;
-  stress: Score5;
-  motivation: Score5;
+  fatigue: Score5 | null;
+  soreness: Score5 | null;
+  stress: Score5 | null;
+  motivation: Score5 | null;
+  habits: HabitAnswers;
   notes: string | null;
   /** How the athlete feels when the night's signals were up; absent/null = not asked. */
   illnessAnswer?: IllnessAnswer | null;
@@ -510,6 +545,30 @@ export interface MealAnalysis {
   /** One short tip related to today's training, or null. */
   tip: string | null;
   engine: 'ai' | 'rules';
+}
+
+// ---------------------------------------------------------------------------
+// Post-workout analysis
+// ---------------------------------------------------------------------------
+
+/**
+ * The coach's analysis of a completed session ("Analizar"): plan vs real, the
+ * morning check-in and the week's load, written by the AI (`engine: 'ai'`,
+ * stored in `workout_analyses`) or by the rules (`'rules'`: demo, AI off or
+ * unavailable; not stored).
+ */
+export interface WorkoutAnalysis {
+  workoutId: UUID;
+  /** One-line verdict (≤ 90 chars). */
+  headline: string;
+  /** 1–3 things that went well. */
+  wentWell: string[];
+  /** 0–3 things to adjust next time. */
+  improve: string[];
+  /** What it means for the next session or tomorrow (one or two sentences). */
+  nextStep: string;
+  engine: 'ai' | 'rules';
+  createdAt: ISODateTime;
 }
 
 // ---------------------------------------------------------------------------
@@ -807,6 +866,8 @@ export interface Profile {
   places?: TrainingPlaces | null;
   /** Sunday/Wednesday questions; null/absent = off. */
   weekQuestions?: WeekQuestions | null;
+  /** Habits asked in the morning journal; null/absent = the defaults (`habitCatalog.DEFAULT_HABITS`). */
+  journalHabits?: HabitId[] | null;
   createdAt: ISODateTime;
 }
 
@@ -1139,7 +1200,7 @@ export interface WeekPlanDraft {
 // External integrations (Garmin Personal API, HealthKit, device calendar)
 // ---------------------------------------------------------------------------
 
-export type IntegrationProvider = 'garmin_personal';
+export type IntegrationProvider = 'garmin_personal' | 'coros_mcp';
 export type IntegrationState = 'connected' | 'error' | 'expired' | 'disconnected';
 
 export interface IntegrationStatus {

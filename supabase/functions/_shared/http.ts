@@ -28,6 +28,8 @@ export type ErrorCode =
   | 'garmin_expired'
   | 'garmin_unavailable'
   | 'weather_unavailable'
+  | 'coros_expired'
+  | 'coros_unavailable'
   | 'server_misconfigured'
   | 'scanned_pdf'
   | 'internal';

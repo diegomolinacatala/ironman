@@ -1,9 +1,12 @@
 import { describe, expect, test } from '@jest/globals';
 
-import type { DailyCheckin } from '@/domain/types';
+import { DEFAULT_HABITS } from '@/domain/habitCatalog';
+import type { DailyCheckin, HabitId } from '@/domain/types';
 import { checkinDraftSchema } from '@/domain/validation';
 
-import { DEFAULT_SLEEP_HOURS, checkinToForm, formToCheckinDraft, missingIllnessAnswer, roundHalf, sleepHoursLabel } from '../checkinForm';
+import { DEFAULT_SLEEP_HOURS, answeredCount, checkinToForm, formToCheckinDraft, hasScales, missingIllnessAnswer, roundHalf, sleepHoursLabel } from '../checkinForm';
+
+const QUESTIONS: HabitId[] = [...DEFAULT_HABITS];
 
 const existing: DailyCheckin = {
   userId: 'me',
@@ -14,32 +17,54 @@ const existing: DailyCheckin = {
   soreness: 2,
   stress: 4,
   motivation: 5,
+  habits: { alcohol: true, niggle: false },
   notes: 'Bien',
 };
 
+const allNo = Object.fromEntries(QUESTIONS.map((id) => [id, false]));
+
 describe('check-in form', () => {
-  test('prefills from an existing check-in', () => {
-    const form = checkinToForm('2026-10-25', existing, 8.2);
-    expect(form).toMatchObject({ sleepQuality: 4, sleepHours: 6.5, stress: 4, notes: 'Bien' });
+  test('prefills from an existing check-in, journal answers included', () => {
+    const form = checkinToForm('2026-10-25', existing, 8.2, QUESTIONS);
+    expect(form).toMatchObject({ sleepQuality: 4, sleepHours: 6.5, stress: 4, notes: 'Bien', habits: { alcohol: true, niggle: false } });
+    expect(form.questions).toEqual(QUESTIONS);
+    expect(answeredCount(form)).toBe(2);
+    expect(hasScales(form)).toBe(true);
   });
 
-  test('new check-in uses the device sleep hint rounded to half hours', () => {
-    expect(checkinToForm('2026-10-25', null, 7.3).sleepHours).toBe(7.5);
-    expect(checkinToForm('2026-10-25', null, null).sleepHours).toBe(DEFAULT_SLEEP_HOURS);
-    expect(checkinToForm('2026-10-25', null, null).fatigue).toBeNull();
+  test('new check-in uses the device sleep hint rounded to half hours; scales start empty', () => {
+    expect(checkinToForm('2026-10-25', null, 7.3, QUESTIONS).sleepHours).toBe(7.5);
+    expect(checkinToForm('2026-10-25', null, null, QUESTIONS).sleepHours).toBe(DEFAULT_SLEEP_HOURS);
+    const fresh = checkinToForm('2026-10-25', null, null, QUESTIONS);
+    expect(fresh.fatigue).toBeNull();
+    expect(hasScales(fresh)).toBe(false);
   });
 
-  test('draft is null until every score is answered', () => {
-    const empty = checkinToForm('2026-10-25', null, null);
+  test('draft is null until every yes/no question is answered; the 1–5 scales are optional', () => {
+    const empty = checkinToForm('2026-10-25', null, null, QUESTIONS);
     expect(formToCheckinDraft(empty)).toBeNull();
-    const full = { ...empty, sleepQuality: 3, fatigue: 2, soreness: 1, stress: 2, motivation: 4, notes: '  ' } as const;
-    const draft = formToCheckinDraft(full);
-    expect(draft).toMatchObject({ sleepQuality: 3, notes: null, sleepHours: DEFAULT_SLEEP_HOURS });
-    expect(checkinDraftSchema.safeParse(draft).success).toBe(true);
+    expect(formToCheckinDraft({ ...empty, habits: { alcohol: true } })).toBeNull();
+    const journalOnly = formToCheckinDraft({ ...empty, habits: allNo, notes: '  ' });
+    expect(journalOnly).toMatchObject({ habits: allNo, fatigue: null, notes: null, sleepHours: DEFAULT_SLEEP_HOURS });
+    expect(checkinDraftSchema.safeParse(journalOnly).success).toBe(true);
+    const full = formToCheckinDraft({ ...empty, habits: allNo, sleepQuality: 3, fatigue: 2, soreness: 1, stress: 2, motivation: 4 });
+    expect(full).toMatchObject({ sleepQuality: 3, fatigue: 2 });
+    expect(checkinDraftSchema.safeParse(full).success).toBe(true);
+  });
+
+  test('answers to habits no longer asked are kept', () => {
+    const form = checkinToForm('2026-10-25', { ...existing, habits: { ...allNo, sauna: true } }, null, QUESTIONS);
+    expect(formToCheckinDraft(form)?.habits.sauna).toBe(true);
+  });
+
+  test('the schema rejects unknown habits and non-boolean answers', () => {
+    const base = formToCheckinDraft({ ...checkinToForm('2026-10-25', null, null, QUESTIONS), habits: allNo });
+    expect(checkinDraftSchema.safeParse({ ...base, habits: { beer: true } }).success).toBe(false);
+    expect(checkinDraftSchema.safeParse({ ...base, habits: { alcohol: 'sí' } }).success).toBe(false);
   });
 
   test('the illness question, when shown, needs an answer that travels with the draft', () => {
-    const asked = { ...checkinToForm('2026-10-25', null, null, true), sleepQuality: 3, fatigue: 2, soreness: 1, stress: 2, motivation: 4 } as const;
+    const asked = { ...checkinToForm('2026-10-25', null, null, QUESTIONS, true), habits: allNo };
     expect(missingIllnessAnswer(asked)).toBe(true);
     expect(formToCheckinDraft(asked)).toBeNull();
     const answered = formToCheckinDraft({ ...asked, illnessAnswer: 'heat' });
@@ -50,7 +75,7 @@ describe('check-in form', () => {
   });
 
   test('an earlier answer stays editable even if the signal is gone', () => {
-    const form = checkinToForm('2026-10-25', { ...existing, illnessAnswer: 'symptoms' }, null, false);
+    const form = checkinToForm('2026-10-25', { ...existing, illnessAnswer: 'symptoms' }, null, QUESTIONS, false);
     expect(form).toMatchObject({ illnessAsked: true, illnessAnswer: 'symptoms' });
   });
 

@@ -142,7 +142,7 @@ function sleepSignals(metrics: readonly DailyMetrics[], today: ISODate, checkin:
   const short = hoursSlept !== null && hoursSlept < READINESS.sleepAmberHours;
   if (short) amber.push(`Has dormido ${fmt(hoursSlept ?? 0, 1)} h`);
   else if (score !== null && score < READINESS.sleepScoreAmber) amber.push(`Sueño flojo (${Math.round(score)}/100)`);
-  else if (checkin && checkin.sleepQuality <= 2) notes.push('Has dormido mal');
+  else if (checkin?.sleepQuality != null && checkin.sleepQuality <= 2) notes.push('Has dormido mal');
   const yesterday = metricOn(metrics, addDays(today, -1), 'sleepHours');
   if (short && yesterday !== null && yesterday < READINESS.sleepAmberHours) amberRules.push('Dos noches seguidas durmiendo menos de 6 h');
   const week = [...seriesBefore(metrics, today, 'sleepHours', 6), ...(hoursSlept !== null ? [hoursSlept] : [])];
@@ -165,23 +165,32 @@ function garminSignals(metrics: readonly DailyMetrics[], today: ISODate): Signal
   return { ...EMPTY, hasData: true, notes, garminScore: tr };
 }
 
-/** Subjective body signal: fatigue ≥ 4 or soreness ≥ 4 is ONE amber signal (§11.8); fatigue 5 is red. */
+/** Subjective body signal: fatigue ≥ 4 or soreness ≥ 4 is ONE amber signal (§11.8); fatigue 5 is red. Unanswered scales count as nothing. */
 function bodySignal(checkin: DailyCheckin): string | null {
   const tired = checkin.fatigue === 4;
-  const sore = checkin.soreness >= 4;
+  const sore = (checkin.soreness ?? 0) >= 4;
   if (tired && sore) return `Fatiga y dolor muscular altos (${checkin.fatigue}/5 y ${checkin.soreness}/5)`;
   if (tired) return `Fatiga alta (${checkin.fatigue}/5)`;
   return sore ? `Dolor muscular alto (${checkin.soreness}/5)` : null;
 }
 
+/** Journal answers that change today: feeling ill makes the day amber on its own; a niggle is a note. */
+function habitSignals(checkin: DailyCheckin): Pick<Signals, 'amberRules' | 'notes'> {
+  return {
+    amberRules: checkin.habits.sick === true ? ['Te notas enfermo: hoy nada intenso'] : [],
+    notes: checkin.habits.niggle === true ? ['Tienes una molestia: si duele al entrenar, para'] : [],
+  };
+}
+
 function checkinSignals(checkin: DailyCheckin | null): Signals {
   if (!checkin) return EMPTY;
-  const red: string[] = checkin.fatigue >= 5 ? ['Fatiga muy alta (5/5)'] : [];
+  const red: string[] = checkin.fatigue === 5 ? ['Fatiga muy alta (5/5)'] : [];
   const body = bodySignal(checkin);
+  const habits = habitSignals(checkin);
   const notes: string[] = [];
-  if (checkin.stress >= 4) notes.push(`Estrés alto (${checkin.stress}/5)`);
-  if (checkin.motivation <= 1) notes.push('Motivación muy baja');
-  return { ...EMPTY, red, amber: body ? [body] : [], notes, hasData: true };
+  if ((checkin.stress ?? 0) >= 4) notes.push(`Estrés alto (${checkin.stress}/5)`);
+  if (checkin.motivation === 1) notes.push('Motivación muy baja');
+  return { ...EMPTY, red, amber: body ? [body] : [], amberRules: habits.amberRules, notes: [...notes, ...habits.notes], hasData: true };
 }
 
 /**
@@ -200,10 +209,17 @@ function illnessSignals(outcome: IllnessOutcome | null, signal: IllnessSignal): 
   const news = signal.breathingUp || (signal.sleepHrDelta ?? 0) >= ILLNESS_SIGNAL.heartRateRise;
   return outcome.kind === 'unanswered' && !news ? EMPTY : { ...EMPTY, hasData: true, notes: [outcome.factor] };
 }
+/** Neutral (3) for an unanswered scale. */
+const NEUTRAL_SCORE = 3;
 
 function ownScore(s: Signals, checkin: DailyCheckin | null): number {
   let score = 82 - 15 * (s.amber.length + s.amberRules.length) - 35 * s.red.length;
-  if (checkin) score += (3 - checkin.fatigue) * 3 + (checkin.sleepQuality - 3) * 3 + (checkin.motivation - 3) * 2;
+  if (checkin) {
+    const fatigue = checkin.fatigue ?? NEUTRAL_SCORE;
+    const sleep = checkin.sleepQuality ?? NEUTRAL_SCORE;
+    const motivation = checkin.motivation ?? NEUTRAL_SCORE;
+    score += (NEUTRAL_SCORE - fatigue) * 3 + (sleep - NEUTRAL_SCORE) * 3 + (motivation - NEUTRAL_SCORE) * 2;
+  }
   return score;
 }
 

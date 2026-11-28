@@ -24,9 +24,12 @@ export function garminState(integrations: readonly IntegrationStatus[] | undefin
 /** Same three states for either watch ('expired' only exists for a Garmin key). */
 export type WatchState = GarminState;
 
-/** COROS counts as connected once Apple Salud is enabled on this device. */
+/** COROS counts as connected with the direct connection (COROS MCP) or once Apple Salud is enabled on this device. */
 export function watchState(brand: WatchBrand, integrations: readonly IntegrationStatus[] | undefined, healthEnabled: boolean): WatchState {
-  if (brand === 'coros') return healthEnabled ? 'connected' : 'missing';
+  if (brand === 'coros') {
+    const direct = (integrations ?? []).some((i) => i.provider === 'coros_mcp' && i.state === 'connected');
+    return direct || healthEnabled ? 'connected' : 'missing';
+  }
   return garminState(integrations);
 }
 

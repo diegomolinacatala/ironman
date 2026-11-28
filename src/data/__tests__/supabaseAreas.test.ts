@@ -89,7 +89,7 @@ describe('Supabase planning & wellness', () => {
       daily_checkins: { data: { user_id: 'me', date: '2026-10-25', sleep_quality: 4, sleep_hours: '7.5', fatigue: 2, soreness: 1, stress: 2, motivation: 5, notes: null }, error: null },
       daily_metrics: { data: null, error: null },
     });
-    const checkin = await repo.upsertCheckin({ date: '2026-10-25', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 1, stress: 2, motivation: 5, notes: null });
+    const checkin = await repo.upsertCheckin({ date: '2026-10-25', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 1, stress: 2, motivation: 5, habits: {}, notes: null });
     expect(checkin.sleepHours).toBe(7.5);
     expect(chainArgs(calls[0], 'upsert')?.[1]).toEqual({ onConflict: 'user_id,date' });
     await repo.upsertMetrics([{ date: '2026-10-25', source: 'healthkit', hrvMs: 60, restingHr: 50, sleepHours: null, sleepScore: null, bodyBattery: null, trainingReadiness: null, vo2max: null, steps: 9000.4, stressAvg: null, trainingStatus: null }]);
@@ -113,7 +113,7 @@ describe('Supabase planning & wellness', () => {
       });
     }
     const { repo, calls } = repoWith(responses as FakeResponses);
-    const checkin = await repo.upsertCheckin({ date: '2026-10-25', sleepQuality: 3, sleepHours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, notes: null, illnessAnswer: 'symptoms' });
+    const checkin = await repo.upsertCheckin({ date: '2026-10-25', sleepQuality: 3, sleepHours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, habits: {}, notes: null, illnessAnswer: 'symptoms' });
     expect(checkin.fatigue).toBe(3);
     const checkinRows = calls.filter((c) => c.target === 'daily_checkins').map((c) => chainArgs(c, 'upsert')?.[0] as Record<string, unknown>);
     expect(checkinRows.map((r) => r.illness_answer)).toEqual(['symptoms', undefined]);

@@ -38,6 +38,8 @@ export interface ProfileRow {
   /** `20261127000300_week_questions_places.sql`: «Mis sitios» and the Sunday/Wednesday questions (jsonb or null). */
   places?: unknown;
   week_questions?: unknown;
+  /** Morning journal habits (null = defaults); absent before the journal migration. */
+  journal_habits?: string[] | null;
   created_at: string;
   updated_at?: string;
 }
@@ -127,12 +129,14 @@ export interface BusyBlockRow {
 export interface CheckinRow {
   user_id: string;
   date: string;
-  sleep_quality: number;
+  sleep_quality: number | null;
   sleep_hours: NumericValue;
-  fatigue: number;
-  soreness: number;
-  stress: number;
-  motivation: number;
+  fatigue: number | null;
+  soreness: number | null;
+  stress: number | null;
+  motivation: number | null;
+  /** Journal yes/no answers keyed by habit id; absent before the journal migration. */
+  habits?: unknown;
   notes: string | null;
   /** `20261126000200_illness_signal.sql`: answer to the illness question; absent before the migration. */
   illness_answer?: string | null;

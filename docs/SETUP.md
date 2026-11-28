@@ -301,6 +301,15 @@ ejecución y lo arreglo.
 > Desde la v4 el onboarding pregunta **"Tu reloj: Garmin o COROS"** y guía cada paso; la guía completa
 > está en la app en **Tú → Conexiones → COROS → Guía paso a paso**. COROS no da una clave personal como
 > Garmin, así que usamos dos caminos gratuitos que se complementan.
+>
+> **Nuevo (nov-2026): conexión directa.** En **Tú → Conexiones → COROS «Conexión directa» → Conectar con
+> COROS** el atleta entra con su cuenta de COROS (página oficial) y el servidor sincroniza solo, dos veces
+> al día (≈06:35 y 09:35), actividades con distancia, pulso y carga, y sueño, VFC, pulso en reposo,
+> recuperación y VO2max, a través del MCP oficial de COROS. Con ella conectada, la app deja de importar las
+> copias de COROS que hay en Apple Salud (llevan el tiempo total con paradas y duplicaban natación y bici).
+> Puesta en marcha (Diego): `supabase db push` (migraciones `20261127000100_coros_mcp.sql` y
+> `20261127000900_coros_platform.sql`), secreto `COROS_TOKEN_SECRET` y `supabase functions deploy coros`
+> (ver `supabase/functions/README.md`). Los caminos de abajo siguen valiendo sin ella.
 
 1. **Apple Salud (automático).** En la app **COROS**: *Perfil → Ajustes → Apps de terceros →
    Sincronización de datos → Apple Health* → actívalo y, cuando Salud lo pida, *Activar todo* → *Permitir*.

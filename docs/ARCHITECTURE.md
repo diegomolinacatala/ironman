@@ -288,10 +288,11 @@ of the tabs), never `router.push`, which would stack a second tab navigator. Fiv
 | `(tabs)/together` (`?friend`) | ui-together | Juntos (tab): requests, quedadas, compare, shared races, feed |
 | `(tabs)/progress` | ui-coach | Progreso (tab): PMC, volume, recovery, nutrition, races |
 | `(tabs)/me` | ui-account | Tú (tab): settings hub incl. Apariencia (automático / claro / oscuro) |
-| `workout/[id]` | ui-plan | detail + complete/skip/move/edit/delete/invite |
+| `workout/[id]` (`?analyze=1`) | ui-plan | detail + complete/skip/move/edit/delete/invite; completed sessions get "Analizar sesión" (`analyze=1` starts it, from "¡Sesión hecha!") |
 | `workout/edit` (`?id` or `?date&sport`) | ui-plan | create/edit (modal) |
 | `event/edit` (`?id` or `?date&kind`) | ui-plan | imprevisto (modal) → offers re-plan |
-| `checkin` (`?date`) | ui-plan | daily check-in (modal) |
+| `checkin` (`?date`) | ui-plan | daily check-in (modal): 5 yes/no journal questions first, optional 1–5 scales folded |
+| `settings/journal` | ui-account | "Preguntas de la mañana": pick the 5 journal habits (`profiles.journal_habits`) |
 | `talk` (`?message…`) | ui-talk | voice coach (full-screen modal) |
 | `meal` (`?source&date`) | ui-talk | meal photo / description (modal) |
 | `briefing` (`?play=1`) | ui-today | morning report (modal) |
@@ -1067,3 +1068,22 @@ of those weeks.
   imported weeks are dropped (`dropAddsInImportedWeeks`). The re-planner (events, readiness, missed sessions,
   weather, restrictions) still moves / eases imported sessions as proposals; `plan_update` keeps the source.
 - **Deploy order:** `supabase db push` (`20261127000500_plan_import.sql`), `functions deploy plan-import coach`, app.
+
+## 27. Morning journal and post-workout analysis (2026-11-27)
+
+- **Journal (Whoop-style).** `DailyCheckin.habits` holds yes/no answers keyed by `HabitId`
+  (`domain/types.ts` `HABIT_IDS`, copy in `domain/habitCatalog.ts`, mirrored to the edge functions).
+  The five 1–5 scales are now optional (`null` = not answered). Each athlete picks 5 habits
+  (`profiles.journal_habits`, null = `DEFAULT_HABITS`) in Tú › Entrenamiento › Preguntas de la mañana.
+  `sick` makes readiness amber on its own; `niggle` is a note. The coach, the MCP planning context and
+  the analysis see the answers in words (`habitAnswerLines`: "Bebió alcohol ayer: sí").
+- **"Qué te afecta"** (Progreso): `domain/habitImpacts.ts` compares the watch-only readiness score
+  (`computeReadiness` with `checkin: null`) on "sí" vs "no" days over 90 days, once a habit has 5 of each.
+  Correlation, said as such in the card.
+- **Analysis.** `analysis` edge function (`_shared/analysis/`): stored row in `workout_analyses`
+  (select-own, service-role writes) or one structured AI call (Workers AI, effort low, 30/24 h,
+  consent) with plan vs done, that morning's check-in, last-7-days load and tomorrow's plan. App:
+  `getWorkoutAnalysis`, `analyzeWorkout` (null = AI unavailable → `domain/workoutAnalysis.rulesAnalysis`).
+  `CompleteSheet` ends on "¡Sesión hecha!" with "Analizar sesión".
+- **Migration:** `20261127001000_journal_and_analysis.sql` (deploy before the app and the function).
+

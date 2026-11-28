@@ -42,6 +42,7 @@ const WHOLE = [
   'trainingPrefs',
   'athleteContext',
   'stressSleep',
+  'habitCatalog',
 ];
 
 /** Declarations of src/domain/dates.ts the mirrored modules use (in source order). */
@@ -101,9 +102,11 @@ function datesModule() {
 }
 
 const TYPES_MODULE = `${header('the domain types used by the mirrored modules')}/**
- * Re-exports the edge-function type mirror (../../types.ts) plus the two
- * calendar types the mirrored date helpers need.
+ * Re-exports the edge-function type mirror (../../types.ts), the journal's
+ * habit ids, plus the two calendar types the mirrored date helpers need.
  */
+export { HABIT_IDS } from '../../types.ts';
+
 export type {
   AthleteContext,
   AthleteLevel,
@@ -120,6 +123,8 @@ export type {
   WorkSchedule,
   IllnessAnswer,
   FixedWeeklySession,
+  HabitAnswers,
+  HabitId,
   Intensity,
   IntensityModel,
   ISODate,

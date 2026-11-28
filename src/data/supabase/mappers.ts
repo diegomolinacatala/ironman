@@ -11,6 +11,7 @@ import { parsePlaces } from '@/domain/places';
 import { parseTrainingPrefs } from '@/domain/trainingPrefs';
 import { parseAthleteContext } from '@/domain/athleteContext';
 import { parseWeekQuestions } from '@/domain/weekQuestions';
+import { cleanHabitAnswers, isHabitId } from '@/domain/habitCatalog';
 import {
   ILLNESS_ANSWERS,
   INTENSITIES,
@@ -87,6 +88,11 @@ const PROPOSAL_STATUSES = ['pending', 'applied', 'partially_applied', 'discarded
 
 type Row = Record<string, unknown>;
 
+/** Unanswered 1–5 scale (null in the row) stays null. */
+function scoreOrNull(value: unknown): Score5 | null {
+  return asNumber(value) === null ? null : clampScore(value);
+}
+
 function clampScore(value: unknown): Score5 {
   const n = Math.round(asNumber(value) ?? 3);
   return Math.min(5, Math.max(1, n)) as Score5;
@@ -127,6 +133,7 @@ export function rowToProfile(row: ProfileRow): Profile {
   const athleteContext = parseAthleteContext(row.athlete_context);
   const places = parsePlaces(row.places);
   const weekQuestions = parseWeekQuestions(row.week_questions);
+  const journalHabits = Array.isArray(row.journal_habits) ? row.journal_habits.filter(isHabitId) : [];
   return {
     ...(watchBrand ? { watchBrand } : {}),
     ...(athleteContext ? { athleteContext } : {}),
@@ -134,6 +141,7 @@ export function rowToProfile(row: ProfileRow): Profile {
     ...(weekQuestions ? { weekQuestions } : {}),
     ...(weatherPlace ? { weatherPlace } : {}),
     ...(trainingPrefs ? { trainingPrefs } : {}),
+    ...(journalHabits.length > 0 ? { journalHabits } : {}),
     id: row.id,
     username: row.username,
     displayName: row.display_name,
@@ -176,6 +184,7 @@ export function profileToRow(profile: Profile): ProfileRow {
     weather_lon: profile.weatherPlace?.lon ?? null,
     places: profile.places ?? null,
     week_questions: profile.weekQuestions ?? null,
+    journal_habits: profile.journalHabits ?? null,
     created_at: profile.createdAt,
   };
 }
@@ -208,6 +217,7 @@ export function profilePatchToRow(patch: ProfilePatch): Row {
     places: patch.places,
     week_questions: patch.weekQuestions,
     ...weatherPlaceColumns(patch.weatherPlace),
+    journal_habits: patch.journalHabits,
   });
 }
 
@@ -507,12 +517,14 @@ export function rowToCheckin(row: CheckinRow): DailyCheckin {
   return {
     userId: row.user_id,
     date: row.date,
-    sleepQuality: clampScore(row.sleep_quality),
+    sleepQuality: scoreOrNull(row.sleep_quality),
     sleepHours: asNumber(row.sleep_hours),
-    fatigue: clampScore(row.fatigue),
-    soreness: clampScore(row.soreness),
-    stress: clampScore(row.stress),
-    motivation: clampScore(row.motivation),
+    fatigue: scoreOrNull(row.fatigue),
+    soreness: scoreOrNull(row.soreness),
+    stress: scoreOrNull(row.stress),
+    motivation: scoreOrNull(row.motivation),
+    // Absent on servers without the journal migration.
+    habits: cleanHabitAnswers(row.habits),
     notes: row.notes,
     ...(illnessAnswer ? { illnessAnswer } : {}),
   };
@@ -528,6 +540,7 @@ export function checkinDraftToRow(draft: CheckinDraft, userId: string): CheckinR
     soreness: draft.soreness,
     stress: draft.stress,
     motivation: draft.motivation,
+    habits: draft.habits,
     notes: draft.notes,
     // Only when the question was asked: an absent key leaves a stored answer as it is.
     ...(draft.illnessAnswer != null ? { illness_answer: draft.illnessAnswer } : {}),

@@ -9,7 +9,7 @@ import { INVITE_HORIZON_DAYS } from '@/domain/briefingSocial';
 import { addDays, isISODate, toISODate } from '@/domain/dates';
 import { estimateMealLocally } from '@/domain/mealEstimate';
 import { nextRace } from '@/domain/periodization';
-import type { Briefing, ISODate, MealAnalysis, MealAnalysisInput, MealSlot, UUID } from '@/domain/types';
+import type { Briefing, ISODate, MealAnalysis, MealAnalysisInput, MealSlot, UUID, WorkoutAnalysis } from '@/domain/types';
 
 import { RepositoryError, type Repository } from '../../repository';
 import { briefingAthleteFields, briefingIllness, briefingStressSleep } from '../../supabase/briefingApi';
@@ -20,7 +20,7 @@ import { pause, requireMe, type DemoDeps } from './common';
 import { withSync } from './integrationsDemo';
 import { demoForecast } from './weatherDemo';
 
-type AiMethods = Pick<Repository, 'getBriefing' | 'generateBriefing' | 'analyzeMeal'>;
+type AiMethods = Pick<Repository, 'getBriefing' | 'generateBriefing' | 'analyzeMeal' | 'getWorkoutAnalysis' | 'analyzeWorkout'>;
 
 /** Like the server: Garmin is re-synced before a briefing when the last sync is older than this. */
 const GARMIN_STALE_MS = 30 * 60_000;
@@ -34,7 +34,7 @@ function assertDate(date: ISODate): void {
 }
 
 function syncIfStale(db: DemoDb, me: UUID, now: string, today: string): DemoDb {
-  const garmin = db.integrations.find((i) => i.userId === me && i.state === 'connected');
+  const garmin = db.integrations.find((i) => i.userId === me && i.provider === 'garmin_personal' && i.state === 'connected');
   if (!garmin) return db;
   const stale = garmin.lastSyncAt === null || Date.parse(now) - Date.parse(garmin.lastSyncAt) > GARMIN_STALE_MS;
   return stale ? withSync(db, me, now, today) : db;
@@ -153,6 +153,19 @@ export function aiDemo({ store, delays }: DemoDeps): AiMethods {
       await requireMe(store);
       await pause(delays.aiMs);
       return demoMealAnalysis(input);
+    },
+
+    // The demo has no AI: nothing is stored and "Analizar" shows the rules analysis.
+    async getWorkoutAnalysis(_workoutId: UUID): Promise<WorkoutAnalysis | null> {
+      await requireMe(store);
+      return null;
+    },
+
+    async analyzeWorkout(input: { workoutId: UUID; date: ISODate }): Promise<WorkoutAnalysis | null> {
+      assertDate(input.date);
+      await requireMe(store);
+      await pause(delays.aiMs);
+      return null;
     },
   };
 }

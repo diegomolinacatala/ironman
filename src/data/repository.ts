@@ -15,6 +15,7 @@ import type {
   ApplyResult,
   BusyBlock,
   Briefing,
+  WorkoutAnalysis,
   BusyBlockDraft,
   CheckinDraft,
   CoachRequest,
@@ -223,6 +224,16 @@ export interface Repository {
    */
   analyzeMeal(input: MealAnalysisInput): Promise<MealAnalysis>;
 
+  // Post-workout analysis ---------------------------------------------------------
+  /** The stored AI analysis of a completed workout (`workout_analyses`), or null. */
+  getWorkoutAnalysis(workoutId: UUID): Promise<WorkoutAnalysis | null>;
+  /**
+   * Asks the coach's AI to analyse a completed workout (`analysis` edge function; returns the
+   * stored one unless `refresh`). Resolves to null when the AI is off or unavailable: the
+   * screen shows the rules analysis then. Throws RepositoryError for auth/network errors.
+   */
+  analyzeWorkout(input: { workoutId: UUID; date: ISODate; refresh?: boolean }): Promise<WorkoutAnalysis | null>;
+
   // Natural voice ----------------------------------------------------------------
   /**
    * Speech audio for `text` (≤ 600 characters) in a natural voice (`speech` edge function,
@@ -308,6 +319,15 @@ export interface Repository {
   disconnectGarmin(): Promise<void>;
   /** Pulls recent Garmin metrics + activities (Personal API) into daily_metrics / workouts. */
   syncGarmin(): Promise<SyncResult>;
+  /**
+   * COROS through the official COROS MCP (OAuth, synced server-side twice a day): returns the
+   * COROS authorization URL to open in the in-app browser; COROS sends the athlete back to
+   * roadtoironman://settings/integrations?coros=connected|error.
+   */
+  startCorosConnect(): Promise<string>;
+  disconnectCoros(): Promise<void>;
+  /** Pulls recent COROS activities + wellness into workouts / daily_metrics (source 'coros'). */
+  syncCoros(): Promise<SyncResult>;
 
   // Personal tokens (Claude connector, calendar feed) --------------------------
   listTokens(): Promise<PersonalToken[]>;

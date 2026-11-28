@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -21,6 +22,8 @@ export interface CompleteSheetProps {
   onDone?: (workout: Workout) => void;
   /** Target race distance: decides the planned RPE of race-pace sessions. */
   raceDistance?: RaceDistance | null;
+  /** "Analizar sesión" after saving; default: open the workout and start the analysis there. */
+  onAnalyze?: (workout: Workout) => void;
 }
 
 const MAX_DURATION_MIN = 12 * 60;
@@ -30,13 +33,15 @@ function hasDistance(workout: Workout): boolean {
 }
 
 /** Quick "Hecho" form: real duration, distance, RPE vs the planned one, sensaciones and notes. */
-export function CompleteSheet({ workout, visible, onClose, onDone, raceDistance = null }: CompleteSheetProps) {
+export function CompleteSheet({ workout, visible, onClose, onDone, raceDistance = null, onAnalyze }: CompleteSheetProps) {
   const complete = useCompleteWorkout();
   const [durationMin, setDurationMin] = useState(workout.completed?.durationMin ?? workout.durationMin);
   const [distance, setDistance] = useState(formatDistanceInput(workout.completed?.distanceM ?? workout.distanceM, workout.sport));
   const [rpe, setRpe] = useState<Rpe | null>(null);
   const [feel, setFeel] = useState<Score5 | null>(workout.completed?.feel ?? null);
   const [notes, setNotes] = useState('');
+  // Once saved, the sheet offers the analysis instead of closing at once.
+  const [saved, setSaved] = useState<Workout | null>(null);
   const unit = distanceUnit(workout.sport);
   const plannedRange = workout.sport === 'rest' ? null : sessionRpe(workout, { raceDistance });
   const plannedRpe = plannedRange ? formatRpe(plannedRange) : null;
@@ -64,11 +69,13 @@ export function CompleteSheet({ workout, visible, onClose, onDone, raceDistance 
       const done = await complete.mutateAsync({ id: workout.id, data, workout });
       haptics.success();
       onDone?.(done);
-      onClose();
+      setSaved(done);
     } catch (error) {
       logger.warn('complete workout failed', error);
     }
   };
+
+  if (saved) return <AnalyzeOffer workout={saved} visible={visible} onClose={onClose} onAnalyze={onAnalyze ?? openAnalysis} />;
 
   return (
     <SheetModal
@@ -109,6 +116,42 @@ export function CompleteSheet({ workout, visible, onClose, onDone, raceDistance 
       <RpePicker value={rpe} onChange={setRpe} planned={plannedRpe} />
       <FeelPicker value={feel} onChange={setFeel} />
       <TextField label="Notas" value={notes} onChangeText={setNotes} multiline placeholder="Molestias, clima, cómo has comido…" />
+    </SheetModal>
+  );
+}
+
+/** After "Guardar como hecho": the option to analyse the session right away. */
+function openAnalysis(workout: Workout): void {
+  router.push(`/workout/${workout.id}?analyze=1`);
+}
+
+interface AnalyzeOfferProps {
+  workout: Workout;
+  visible: boolean;
+  onClose: () => void;
+  onAnalyze: (workout: Workout) => void;
+}
+
+function AnalyzeOffer({ workout, visible, onClose, onAnalyze }: AnalyzeOfferProps) {
+  const analyze = () => {
+    onClose();
+    onAnalyze(workout);
+  };
+  return (
+    <SheetModal
+      visible={visible}
+      onClose={onClose}
+      overline={workout.title}
+      title="¡Sesión hecha!"
+      footer={
+        <View style={styles.block}>
+          <Button label="Analizar sesión" icon="sparkles" onPress={analyze} fullWidth size="lg" />
+          <Button label="Ahora no" variant="ghost" onPress={onClose} fullWidth />
+        </View>
+      }>
+      <Text variant="body">
+        Tu coach compara lo que has hecho con el plan, tu check-in de hoy y la carga de la semana, y te dice qué ajustar y qué toca mañana.
+      </Text>
     </SheetModal>
   );
 }

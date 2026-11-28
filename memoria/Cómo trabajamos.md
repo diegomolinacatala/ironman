@@ -10,7 +10,7 @@ Desde el 25 de noviembre de 2026 somos cuatro personas desarrollando la app. Cad
 | --- | --- | --- |
 | Diego | Dueño del proyecto. Administra GitHub, App Store Connect, Supabase y Cloudflare. | Todos |
 | David | Desarrollador. Es el compañero de piso de Diego. | GitHub con permiso de escritura. TestFlight en el grupo interno «Road to Ironman», con rol Developer. Le invitamos el 26-10-2026 y el 25-11-2026 seguía en estado «Invitado», sin aceptar. |
-| Nico | Desarrollador, se incorpora el 25-11-2026. | GitHub (`nicoroig-ai`) con permiso de escritura; el 26-11-2026 la invitación seguía sin aceptar. TestFlight pendiente. |
+| Nico | Desarrollador, se incorpora el 25-11-2026. Usa COROS. | GitHub (`nicoroig-ai`) con permiso de escritura (aceptada el 26-11-2026). App Store Connect aceptado y app instalada por TestFlight el 26-11-2026. |
 | Darius | Desarrollador, se incorpora el 25-11-2026. | GitHub con permiso de escritura, probablemente como `ddorel-rt` (sin confirmar). TestFlight pendiente. |
 
 Para incorporar a alguien:

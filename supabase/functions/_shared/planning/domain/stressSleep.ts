@@ -55,8 +55,8 @@ export interface StressSleepMetrics {
 
 export interface StressSleepCheckin {
   date: ISODate;
-  /** 1-5. */
-  stress: number;
+  /** 1-5; null = not answered (the scales are optional since the morning journal). */
+  stress: number | null;
   sleepHours?: number | null;
 }
 

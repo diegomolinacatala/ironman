@@ -27,7 +27,7 @@ import { RepositoryError } from '../repository';
 
 const ME = 'me';
 const OTHER = 'someone-else';
-const DRAFT: CheckinDraft = { date: '2026-11-26', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 2, stress: 2, motivation: 4, notes: null };
+const DRAFT: CheckinDraft = { date: '2026-11-26', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 2, stress: 2, motivation: 4, habits: {}, notes: null };
 const DONE: CompletedData = { durationMin: 50, rpe: 4, feel: 4, source: 'manual', completedAt: '2026-11-26T07:30:00.000Z' };
 
 const offline = () => new RepositoryError('network', 'Sin conexión. Revisa tu internet e inténtalo de nuevo.');
