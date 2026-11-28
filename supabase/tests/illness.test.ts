@@ -1,5 +1,5 @@
 /**
- * 20261126000200_illness_signal.sql: night breathing / heart rate on daily_metrics and the
+ * 20261128000300_illness_signal.sql: night breathing / heart rate on daily_metrics and the
  * answer to the morning illness question on daily_checkins.
  */
 import assert from 'node:assert/strict';

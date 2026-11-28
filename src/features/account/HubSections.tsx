@@ -4,10 +4,13 @@ import { placesSubtitle } from '@/domain/places';
 import type { Profile, Race } from '@/domain/types';
 import { coachVoiceName, useCoachVoice } from '@/integrations/speech/coachVoice';
 
+import { journalHabitsOf } from '@/domain/habitCatalog';
+
 import { AppearancePicker } from '../settings/AppearancePicker';
 import { placeRowSubtitle } from '../weather/weatherModel';
 import { trainingPrefsSubtitle } from '../settings/trainingPrefsModel';
 import { contextSubtitle } from '../context/interviewModel';
+import { habitsSubtitle } from '../settings/journalHabitsModel';
 import { availabilitySubtitle, raceRow, sportsProfileSubtitle } from './hubModel';
 import { MyWhooshRow } from './MyWhooshRow';
 import { GroupDivider, LinkRows, SettingsGroup } from './SettingsGroup';
@@ -27,6 +30,7 @@ export function TrainingGroup({ profile, races }: { profile: Profile; races: rea
           { icon: 'location', title: 'Mis sitios', subtitle: placesSubtitle(profile.places), href: '/settings/places' },
           { icon: 'cloudSun', title: 'Tu ciudad para el tiempo', subtitle: placeRowSubtitle(profile.weatherPlace), href: '/settings/weather' },
           { icon: 'clipboard', title: 'Importar un plan', subtitle: 'El de tu entrenador: foto, PDF, Excel o TrainingPeaks', href: '/plan-import' },
+          { icon: 'checkin', title: 'Preguntas de la mañana', subtitle: habitsSubtitle(journalHabitsOf(profile)), href: '/settings/journal' },
         ]}
       />
       <GroupDivider />

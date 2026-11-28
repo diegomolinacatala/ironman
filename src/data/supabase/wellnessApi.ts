@@ -39,7 +39,7 @@ type WellnessMethods = Pick<
 const METRICS_V1_COLUMNS =
   'user_id,date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status';
 const METRICS_V2_COLUMNS = `${METRICS_V1_COLUMNS},sleep_deep_min,sleep_light_min,sleep_rem_min,sleep_awake_min,sleep_start,sleep_end`;
-/** Night vitals of the illness signal (`20261126000200_illness_signal.sql`). */
+/** Night vitals of the illness signal (`20261128000300_illness_signal.sql`). */
 const ILLNESS_METRIC_COLUMNS = ['sleep_respiration', 'sleep_avg_hr'] as const;
 /** Everything but `raw` (large Garmin payload). The sleep_* columns come from the v2 migration. */
 export const METRICS_COLUMNS = `${METRICS_V2_COLUMNS},${ILLNESS_METRIC_COLUMNS.join(',')}`;

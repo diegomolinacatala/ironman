@@ -1,5 +1,5 @@
 /**
- * "Tu informe de hoy" when you wake up (20261126000300_wake_notification.sql): who the sweep looks
+ * "Tu informe de hoy" when you wake up (20261128000400_wake_notification.sql): who the sweep looks
  * at, the light-pull throttle, one briefing per user and local day whoever sends it (server push
  * or the app's Apple Salud claim), and the privileges.
  */

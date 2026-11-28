@@ -27,17 +27,19 @@ export interface ProfileRow {
   ai_consent_at?: string | null;
   /** v4 (`20261109000100_coach_v4.sql`): 'garmin' | 'coros' | null (not chosen yet). */
   watch_brand?: string | null;
-  /** «Tu forma de entrenar» (`20261126000600_training_prefs.sql`): jsonb object or null (automático). */
+  /** «Tu forma de entrenar» (`20261128000700_training_prefs.sql`): jsonb object or null (automático). */
   training_prefs?: unknown;
-  /** «Tu contexto» (`20261127000400_athlete_context.sql`): jsonb object or null (not told yet). */
+  /** «Tu contexto» (`20261128000900_athlete_context.sql`): jsonb object or null (not told yet). */
   athlete_context?: unknown;
-  /** `20261126000500_weather.sql`: the city for the forecast (all three or none). */
+  /** `20261128000600_weather.sql`: the city for the forecast (all three or none). */
   weather_place?: string | null;
   weather_lat?: number | string | null;
   weather_lon?: number | string | null;
-  /** `20261127000300_week_questions_places.sql`: «Mis sitios» and the Sunday/Wednesday questions (jsonb or null). */
+  /** `20261128000800_week_questions_places.sql`: «Mis sitios» and the Sunday/Wednesday questions (jsonb or null). */
   places?: unknown;
   week_questions?: unknown;
+  /** Morning journal habits (null = defaults); absent before the journal migration. */
+  journal_habits?: string[] | null;
   created_at: string;
   updated_at?: string;
 }
@@ -63,7 +65,7 @@ export interface WorkoutRow {
   external_id: string | null;
   /** v4: WorkoutCoaching (camelCase jsonb) or null. Absent on servers without the v4 migration. */
   coaching?: unknown;
-  /** Imported plan (20261127000500_plan_import.sql); absent on older servers. */
+  /** Imported plan (20261128001000_plan_import.sql); absent on older servers. */
   plan_import_id?: string | null;
   created_at: string;
   updated_at: string;
@@ -91,7 +93,7 @@ export interface RaceRow {
   location: string | null;
   goal: string | null;
   notes: string | null;
-  /** B/C race preparation (migration 20261126000100); absent before it is deployed. */
+  /** B/C race preparation (migration 20261128000200); absent before it is deployed. */
   prep?: string | null;
   created_at: string;
   updated_at?: string;
@@ -127,14 +129,16 @@ export interface BusyBlockRow {
 export interface CheckinRow {
   user_id: string;
   date: string;
-  sleep_quality: number;
+  sleep_quality: number | null;
   sleep_hours: NumericValue;
-  fatigue: number;
-  soreness: number;
-  stress: number;
-  motivation: number;
+  fatigue: number | null;
+  soreness: number | null;
+  stress: number | null;
+  motivation: number | null;
+  /** Journal yes/no answers keyed by habit id; absent before the journal migration. */
+  habits?: unknown;
   notes: string | null;
-  /** `20261126000200_illness_signal.sql`: answer to the illness question; absent before the migration. */
+  /** `20261128000300_illness_signal.sql`: answer to the illness question; absent before the migration. */
   illness_answer?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -161,7 +165,7 @@ export interface MetricsRow {
   sleep_awake_min?: NumericValue;
   sleep_start?: string | null;
   sleep_end?: string | null;
-  /** `20261126000200_illness_signal.sql`: breathing rate and heart rate during that night. */
+  /** `20261128000300_illness_signal.sql`: breathing rate and heart rate during that night. */
   sleep_respiration?: NumericValue;
   sleep_avg_hr?: NumericValue;
   raw?: unknown;

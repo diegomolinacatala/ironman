@@ -1,5 +1,5 @@
 /**
- * «Tu contexto» (20261127000400_athlete_context.sql): profiles.athlete_context is null until the
+ * «Tu contexto» (20261128000900_athlete_context.sql): profiles.athlete_context is null until the
  * athlete tells the coach anything, the owner writes and clears it, the outline and size are
  * checked, and nobody else reads or changes it.
  */

@@ -21,7 +21,7 @@ export type Intensity = (typeof INTENSITIES)[number];
 export const WORKOUT_STATUSES = ['planned', 'completed', 'skipped'] as const;
 export type WorkoutStatus = (typeof WORKOUT_STATUSES)[number];
 
-export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'imported'] as const;
+export const WORKOUT_SOURCES = ['manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'coros', 'imported'] as const;
 export type WorkoutSource = (typeof WORKOUT_SOURCES)[number];
 
 export const STEP_KINDS = ['warmup', 'work', 'recovery', 'cooldown', 'rest'] as const;
@@ -98,7 +98,7 @@ export interface CompletedData {
   analyzedAt?: ISODateTime;
   notes?: string;
   /** A manual completion takes the watch's source and id when the activity arrives (domain/watchCompletion.ts). */
-  source?: 'manual' | 'healthkit' | 'garmin' | 'claude';
+  source?: 'manual' | 'healthkit' | 'garmin' | 'coros' | 'claude';
   externalId?: string;
   completedAt?: ISODateTime;
 }
@@ -371,14 +371,42 @@ export interface AthleteContext {
 export const ILLNESS_ANSWERS = ['fine', 'symptoms', 'alcohol', 'heat', 'stress'] as const;
 export type IllnessAnswer = (typeof ILLNESS_ANSWERS)[number];
 
+/** Morning journal habits (mirror of src/domain/types.ts HABIT_IDS). */
+export const HABIT_IDS = [
+  'alcohol',
+  'late_meal',
+  'late_caffeine',
+  'screens_in_bed',
+  'hydration',
+  'niggle',
+  'sick',
+  'mobility',
+  'nap',
+  'hard_workday',
+  'travel',
+  'other_sport',
+  'enough_carbs',
+  'ultra_processed',
+  'regular_bedtime',
+  'read_before_bed',
+  'meditation',
+  'daylight',
+  'sauna',
+  'cold_exposure',
+] as const;
+export type HabitId = (typeof HABIT_IDS)[number];
+export type HabitAnswers = Partial<Record<HabitId, boolean>>;
+
+/** Morning check-in: yes/no journal + optional 1–5 scales (null = not answered). */
 export interface DailyCheckin {
   date: ISODate;
-  sleepQuality: number;
+  sleepQuality: number | null;
   sleepHours: number | null;
-  fatigue: number;
-  soreness: number;
-  stress: number;
-  motivation: number;
+  fatigue: number | null;
+  soreness: number | null;
+  stress: number | null;
+  motivation: number | null;
+  habits: HabitAnswers;
   notes: string | null;
   /** Absent/null = not asked. */
   illnessAnswer?: IllnessAnswer | null;
@@ -458,6 +486,17 @@ export interface MealAnalysis {
   confidence: 'high' | 'medium' | 'low';
   tip: string | null;
   engine: 'ai' | 'rules';
+}
+
+/** The coach's analysis of a completed session (mirror of the app's WorkoutAnalysis). */
+export interface WorkoutAnalysis {
+  workoutId: UUID;
+  headline: string;
+  wentWell: string[];
+  improve: string[];
+  nextStep: string;
+  engine: 'ai' | 'rules';
+  createdAt: ISODateTime;
 }
 
 export interface NutritionLog {
@@ -603,7 +642,7 @@ export interface SyncResult {
 }
 
 export interface IntegrationStatus {
-  provider: 'garmin_personal';
+  provider: 'garmin_personal' | 'coros_mcp';
   state: 'connected' | 'error' | 'expired' | 'disconnected';
   expiresAt: ISODate | null;
   lastSyncAt: ISODateTime | null;

@@ -13,7 +13,7 @@
 -- * RPCs: svc_wake_candidates, svc_record_wake_check, svc_send_morning_briefing and
 --   svc_skip_morning_briefing (service role: the `morning` edge function) and
 --   claim_wake_briefing (the app, before scheduling its local notification).
--- The cron job is in 20261126000301_wake_notification_platform.sql.
+-- The cron job is in 20261128000500_wake_notification_platform.sql.
 
 -- ---------------------------------------------------------------------------
 -- 1. Schema

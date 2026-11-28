@@ -20,6 +20,7 @@ import {
   type SleepVerdict,
   type UUID,
   type WeekPlanDraft,
+  type WorkoutAnalysis,
 } from '@/domain/types';
 
 import { asArray, asNumber, asString, isRecord, oneOf, oneOfOr, pick, type JsonRecord } from './narrow';
@@ -261,5 +262,25 @@ export function parseCoachExtras(value: unknown): CoachExtras {
     lifeEventId: id && UUID_RE.test(id) ? id : null,
     quedada: parseQuedadaSuggestion(r.quedada),
     weekPlans: parseWeekPlanSuggestions(pick(r, 'weekPlans', 'week_plans')),
+  };
+}
+
+/** `workout_analyses` row or `analysis` function response → WorkoutAnalysis (engine 'ai'); null when unusable. */
+export function parseWorkoutAnalysis(data: unknown): WorkoutAnalysis | null {
+  const r = asJsonRecord(data);
+  if (!r) return null;
+  const workoutId = text(r.workoutId ?? r.workout_id);
+  const headline = text(r.headline);
+  const nextStep = text(r.nextStep ?? r.next_step);
+  if (!workoutId || !headline || !nextStep) return null;
+  const list = (value: unknown): string[] => asArray(value).map(text).filter((s): s is string => s !== null);
+  return {
+    workoutId,
+    headline,
+    wentWell: list(r.wentWell ?? r.went_well),
+    improve: list(r.improve),
+    nextStep,
+    engine: 'ai',
+    createdAt: text(r.createdAt ?? r.created_at) ?? new Date().toISOString(),
   };
 }

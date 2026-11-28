@@ -1,7 +1,7 @@
 /**
  * Weather ports over supabase-js (service role): the athlete's city (its own
  * select, so profile reads elsewhere never depend on the weather columns),
- * the forecast and city-search caches (`20261126000500_weather.sql`, no client
+ * the forecast and city-search caches (`20261128000600_weather.sql`, no client
  * access) and the global spacing between provider calls (`svc_reserve_provider_call`).
  */
 import type { UUID } from '../types.ts';

@@ -51,6 +51,7 @@ export const qk = {
   profile: ['profile'] as const,
   workouts: (r: DateRange) => ['workouts', r.from, r.to] as const,
   workout: (id: UUID) => ['workout', id] as const,
+  workoutAnalysis: (id: UUID) => ['workout_analysis', id] as const,
   races: ['races'] as const,
   lifeEvents: (r: DateRange) => ['life_events', r.from, r.to] as const,
   busyBlocks: (r: DateRange) => ['busy_blocks', r.from, r.to] as const,
@@ -80,7 +81,7 @@ export const qk = {
 
 /** Root keys invalidated for each change topic. */
 const TOPIC_KEYS: Record<ChangeTopic, readonly string[]> = {
-  workouts: ['workouts', 'workout', 'friend_week'],
+  workouts: ['workouts', 'workout', 'workout_analysis', 'friend_week'],
   races: ['races', 'friend_races'],
   life_events: ['life_events'],
   busy_blocks: ['busy_blocks', 'friend_week'],
@@ -421,6 +422,32 @@ export function useDeleteBusyBlock() {
 }
 
 // ---------------------------------------------------------------------------
+// Post-workout analysis
+// ---------------------------------------------------------------------------
+
+/** The stored AI analysis of a completed workout (null = not analysed yet). */
+export function useWorkoutAnalysis(workoutId: UUID | undefined) {
+  const repo = useRepository();
+  return useQuery({
+    queryKey: qk.workoutAnalysis(workoutId ?? ''),
+    queryFn: () => repo.getWorkoutAnalysis(workoutId as UUID),
+    enabled: useSignedIn() && Boolean(workoutId),
+  });
+}
+
+/** "Analizar": the AI analysis (stored in the query cache), or null when the AI is unavailable. */
+export function useAnalyzeWorkout() {
+  const repo = useRepository();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { workoutId: UUID; date: ISODate; refresh?: boolean }) => repo.analyzeWorkout(input),
+    onSuccess: (analysis, input) => {
+      if (analysis) client.setQueryData(qk.workoutAnalysis(input.workoutId), analysis);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Wellness
 // ---------------------------------------------------------------------------
 
@@ -751,7 +778,7 @@ export function useCoach() {
 }
 
 // ---------------------------------------------------------------------------
-// Integrations (Garmin Personal API)
+// Integrations (Garmin Personal API, COROS MCP)
 // ---------------------------------------------------------------------------
 
 export function useIntegrations() {
@@ -775,6 +802,22 @@ export function useDisconnectGarmin() {
 export function useSyncGarmin() {
   const repo = useRepository();
   return useRepoMutation(() => repo.syncGarmin(), ['integrations', 'metrics', 'workouts', 'feed']);
+}
+
+/** Returns the COROS authorization URL (empty in demo mode, where the connection is simulated). */
+export function useStartCorosConnect() {
+  const repo = useRepository();
+  return useRepoMutation(() => repo.startCorosConnect(), ['integrations']);
+}
+
+export function useDisconnectCoros() {
+  const repo = useRepository();
+  return useRepoMutation(() => repo.disconnectCoros(), ['integrations']);
+}
+
+export function useSyncCoros() {
+  const repo = useRepository();
+  return useRepoMutation(() => repo.syncCoros(), ['integrations', 'metrics', 'workouts', 'feed']);
 }
 
 // ---------------------------------------------------------------------------

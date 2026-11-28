@@ -108,6 +108,7 @@ describe('unreadCount / checkinFor', () => {
       soreness: 2,
       stress: 3,
       motivation: 4,
+      habits: {},
       notes: null,
     };
     expect(checkinFor([checkin], TODAY)).toBe(checkin);

@@ -1,5 +1,5 @@
 /**
- * How a B/C race is prepared (20261126000100_race_prep.sql): races.prep is null (the priority's
+ * How a B/C race is prepared (20261128000200_race_prep.sql): races.prep is null (the priority's
  * default) or one of training / taper / specific. Owners write it like any other column of their
  * races (own-rows RLS); other users neither see nor change it; the service role (MCP manage_race)
  * writes it too.

@@ -203,17 +203,25 @@ describe('table mappers round-trip (domain → row → domain)', () => {
   });
 
   it('check-in', () => {
-    const draft = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 1, stress: 3, motivation: 5, notes: null } as const;
+    const draft = { date: '2026-10-25', sleepQuality: 4, sleepHours: 7.5, fatigue: 2, soreness: 1, stress: 3, motivation: 5, habits: { alcohol: true, niggle: false }, notes: null } as const;
     expect(rowToCheckin(checkinDraftToRow(draft, ME))).toEqual({ ...draft, userId: ME });
     expect('illness_answer' in checkinDraftToRow(draft, ME)).toBe(false);
   });
 
   it('check-in with the answer to the illness question', () => {
-    const draft = { date: '2026-10-25', sleepQuality: 3, sleepHours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, notes: null, illnessAnswer: 'symptoms' } as const;
+    const draft = { date: '2026-10-25', sleepQuality: 3, sleepHours: 7, fatigue: 3, soreness: 2, stress: 2, motivation: 3, habits: {}, notes: null, illnessAnswer: 'symptoms' } as const;
     const row = checkinDraftToRow(draft, ME);
     expect(row.illness_answer).toBe('symptoms');
     expect(rowToCheckin(row)).toEqual({ ...draft, userId: ME });
     expect('illnessAnswer' in rowToCheckin({ ...row, illness_answer: 'resaca' })).toBe(false);
+  });
+
+  it('check-in: journal only (scales unanswered) and rows from before the journal migration', () => {
+    const journalOnly = { date: '2026-10-26', sleepQuality: null, sleepHours: null, fatigue: null, soreness: null, stress: null, motivation: null, habits: { sick: true }, notes: null };
+    expect(rowToCheckin(checkinDraftToRow(journalOnly, ME))).toEqual({ ...journalOnly, userId: ME });
+    const legacy = { user_id: ME, date: '2026-10-25', sleep_quality: 4, sleep_hours: 7, fatigue: 2, soreness: 1, stress: 3, motivation: 5, notes: null };
+    expect(rowToCheckin(legacy).habits).toEqual({});
+    expect(rowToCheckin({ ...legacy, habits: { alcohol: true, unknown: true, niggle: 'sí' } }).habits).toEqual({ alcohol: true });
   });
 
   it('metrics', () => {
@@ -454,6 +462,9 @@ describe('RPC mappers', () => {
   it('tokens, integrations and URLs', () => {
     expect(rowToToken({ id: 't', scope: 'ics', label: 'Cal', prefix: 'rb_abc', created_at: NOW, last_used_at: null, revoked_at: null }).scope).toBe('ics');
     expect(rowToIntegration({ provider: 'garmin_personal', state: 'expired', key_expires_at: '2026-11-01', last_sync_at: null, last_error: 'x' })).toEqual({ provider: 'garmin_personal', state: 'expired', expiresAt: '2026-11-01', lastSyncAt: null, lastError: 'x' });
+    // The provider is kept (a COROS row must not show up as Garmin); unknown ones fall back to Garmin.
+    expect(rowToIntegration({ provider: 'coros_mcp', state: 'connected', key_expires_at: null, last_sync_at: NOW, last_error: null }).provider).toBe('coros_mcp');
+    expect(rowToIntegration({ provider: 'strava', state: 'connected', key_expires_at: null, last_sync_at: null, last_error: null }).provider).toBe('garmin_personal');
     expect(tokenUrl('mcp', 'rb_s', 'https://p.supabase.co/functions/v1/')).toBe('https://p.supabase.co/functions/v1/mcp/u/rb_s');
     expect(tokenUrl('ics', 'rb_s', 'https://p.supabase.co/functions/v1')).toBe('https://p.supabase.co/functions/v1/ics/rb_s.ics');
     const created = parseCreatedToken({ id: 'i', secret: 'rb_0123456789abcdef', prefix: 'rb_0123456' }, { scope: 'mcp', label: 'Claude', now: NOW, functionsBaseUrl: 'https://x/functions/v1' });

@@ -200,11 +200,19 @@ function baseSignals(metrics: readonly DailyMetrics[], checkins: readonly DailyC
     if (latest.bodyBattery != null && latest.bodyBattery < 30) signals.push(`Body Battery bajo (${latest.bodyBattery})${note}`);
   }
   if (lastCheckin) {
-    if (lastCheckin.fatigue >= 5) red += 1;
-    else if (lastCheckin.fatigue >= 4 || lastCheckin.soreness >= 4) amber += 1;
-    if (lastCheckin.fatigue >= 4) signals.push(`Fatiga subjetiva ${lastCheckin.fatigue}/5 (${lastCheckin.date})`);
-    if (lastCheckin.soreness >= 4) signals.push(`Agujetas/dolor muscular ${lastCheckin.soreness}/5${yesterdayNote(lastCheckin.date)}`);
-    if (lastCheckin.stress >= 4) signals.push(`Estrés ${lastCheckin.stress}/5${yesterdayNote(lastCheckin.date)}`);
+    // Unanswered scales (null) count as nothing.
+    const fatigue = lastCheckin.fatigue ?? 0;
+    const soreness = lastCheckin.soreness ?? 0;
+    if (fatigue >= 5) red += 1;
+    else if (fatigue >= 4 || soreness >= 4) amber += 1;
+    if (fatigue >= 4) signals.push(`Fatiga subjetiva ${fatigue}/5 (${lastCheckin.date})`);
+    if (soreness >= 4) signals.push(`Agujetas/dolor muscular ${soreness}/5${yesterdayNote(lastCheckin.date)}`);
+    if ((lastCheckin.stress ?? 0) >= 4) signals.push(`Estrés ${lastCheckin.stress}/5${yesterdayNote(lastCheckin.date)}`);
+    if (lastCheckin.habits?.sick === true) {
+      amber += 2;
+      signals.push(`Se nota enfermo o incubando algo (${lastCheckin.date})`);
+    }
+    if (lastCheckin.habits?.niggle === true) signals.push(`Tiene alguna molestia o dolor (${lastCheckin.date})`);
   }
   const level = !latest && !lastCheckin ? 'unknown' : red > 0 ? 'red' : amber >= 2 ? 'amber' : 'green';
   return { latestDate: latest?.date ?? lastCheckin?.date ?? null, signals, level };

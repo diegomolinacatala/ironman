@@ -11,12 +11,14 @@ import { useJointSession, useWorkout } from '@/data/queries';
 import { OfflineNotice } from '@/features/offline/OfflineNotice';
 import { easierPatch, workoutVerdict } from '@/features/workouts/coachAdapters';
 import { CompleteSheet } from '@/features/workouts/CompleteSheet';
+import { AnalysisCard } from '@/features/workouts/detail/AnalysisCard';
 import { CoachVerdict } from '@/features/workouts/detail/CoachVerdict';
 import { CompletedPanel } from '@/features/workouts/detail/CompletedPanel';
 import { DetailActions } from '@/features/workouts/detail/DetailActions';
 import { JointInfo } from '@/features/workouts/detail/JointInfo';
 import { PlanSections } from '@/features/workouts/detail/PlanSections';
 import { SimilarSessionsNote } from '@/features/workouts/detail/SimilarSessionsNote';
+import { useWorkoutAnalysisFlow } from '@/features/workouts/detail/useWorkoutAnalysisFlow';
 import { WorkoutHeader } from '@/features/workouts/detail/WorkoutSummary';
 import { partnerNames } from '@/features/workouts/draft';
 import { FuelingHint } from '@/features/workouts/FuelingHint';
@@ -28,7 +30,7 @@ import { errorMessage } from '@/lib/logger';
 import { Button, EmptyState, ErrorNotice, Loading, Screen } from '@/ui';
 
 export default function WorkoutDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, analyze } = useLocalSearchParams<{ id: string; analyze?: string }>();
   const workoutId = typeof id === 'string' ? id : undefined;
   const auth = useAuth();
   const workout = useWorkout(workoutId);
@@ -63,16 +65,33 @@ export default function WorkoutDetailScreen() {
       </Screen>
     );
   }
-  return <WorkoutDetail workout={workout.data} onRefresh={() => void workout.refetch()} refreshing={workout.isRefetching} />;
+  return (
+    <WorkoutDetail
+      workout={workout.data}
+      onRefresh={() => void workout.refetch()}
+      refreshing={workout.isRefetching}
+      autoAnalyze={analyze === '1'}
+    />
+  );
 }
 
-function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; onRefresh: () => void; refreshing: boolean }) {
+interface WorkoutDetailProps {
+  workout: Workout;
+  onRefresh: () => void;
+  refreshing: boolean;
+  /** Opened from "¡Sesión hecha! › Analizar sesión": start the analysis at once. */
+  autoAnalyze: boolean;
+}
+
+function WorkoutDetail({ workout, onRefresh, refreshing, autoAnalyze }: WorkoutDetailProps) {
   const today = todayISO();
   const { session } = useAuth();
   const myId = session?.userId;
   const joint = useJointSession(workout.jointSessionId ?? undefined);
   const actions = useWorkoutActions();
   const athlete = useAthleteTargets();
+  const analysis = useWorkoutAnalysisFlow(workout, athlete, autoAnalyze);
+  const analyzable = workout.status === 'completed' && workout.sport !== 'rest';
   const [completing, setCompleting] = useState(false);
   const [moving, setMoving] = useState(false);
   const names = partnerNames(joint.data ?? undefined, myId);
@@ -91,6 +110,7 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
       <CompletedPanel workout={workout} compliance={compliance} thresholds={athlete.thresholds} raceDistance={athlete.raceDistance} />
       <CoachVerdict verdict={workoutVerdict(workout, athlete.thresholds, athlete.raceDistance)} />
       {workout.status === 'completed' ? <SimilarSessionsNote workout={workout} /> : null}
+      {analyzable ? <AnalysisCard flow={analysis} /> : null}
       <PlanSections
         workout={workout}
         athlete={athlete}
@@ -101,7 +121,14 @@ function WorkoutDetail({ workout, onRefresh, refreshing }: { workout: Workout; o
       {workout.jointSessionId ? <JointInfo sessionId={workout.jointSessionId} myId={myId} /> : null}
       {workout.sport !== 'rest' && workout.durationMin >= 45 ? <FuelingHint workout={workout} /> : null}
       {completing ? (
-        <CompleteSheet key={workout.id} workout={workout} raceDistance={athlete.raceDistance} visible onClose={() => setCompleting(false)} />
+        <CompleteSheet
+          key={workout.id}
+          workout={workout}
+          raceDistance={athlete.raceDistance}
+          visible
+          onClose={() => setCompleting(false)}
+          onAnalyze={(saved) => analysis.analyze(false, saved)}
+        />
       ) : null}
       <DetailMoveSheet workout={workout} today={today} actions={actions} visible={moving} onClose={() => setMoving(false)} />
     </Screen>

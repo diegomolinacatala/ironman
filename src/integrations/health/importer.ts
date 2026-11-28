@@ -70,6 +70,11 @@ function positive(value: number | null | undefined, max: number): number | null 
   return value != null && Number.isFinite(value) && value > 0 && value <= max ? Math.round(value) : null;
 }
 
+/** True for workouts the COROS app wrote to Apple Salud (skipped when COROS is connected directly). */
+export function isCorosSource(sourceName: string | null | undefined): boolean {
+  return /coros/i.test(sourceName ?? '');
+}
+
 /** Normalises an activity; null when it should not be imported (walks, transitions, too short). */
 export function toImportCandidate(activity: HealthActivity): ImportCandidate | null {
   const kind = mapHealthActivity(activity.activityType);

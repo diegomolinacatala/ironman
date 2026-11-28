@@ -9,6 +9,7 @@ crea el cliente de Supabase y conecta las piezas.
 | `coach` | `POST /coach` con un `CoachRequest` | JWT del usuario | `true` |
 | `briefing` (v2) | `POST /briefing` con `{ date, refresh? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `meal` (v2) | `POST /meal` con `{ date, time, imageBase64?, text? }` | JWT del usuario | `false` (el JWT se verifica en el código) |
+| `analysis` | `POST /analysis` con `{ workoutId, date, refresh? }` (análisis post-entreno, «Analizar sesión») | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `speech` | `POST /speech` con `{ text, voice? }` (voz natural del coach y del informe) | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `plan-import` | `POST /plan-import` con `{ kind: 'text', text }`, `{ kind: 'image', imageBase64 }` o `{ kind: 'pdf', pdfBase64 }` (leer el plan de un entrenador) | JWT del usuario | `false` (el JWT se verifica en el código) |
 | `mcp` | `POST /mcp/u/<secreto>` (conector "Conecta tu Claude") | secreto personal en la ruta (scope `mcp`) | `false` |
@@ -17,6 +18,7 @@ crea el cliente de Supabase y conecta las piezas.
 | `morning` | `POST /morning` con `{ action: 'sweep' }` (informe al despertar, `pg_cron` cada 5 min) | clave secreta del servidor en `apikey` | `false` |
 | `garmin` | `POST /garmin` con `{ action }` | JWT del usuario (`connect`, `disconnect`, `sync`) · clave secreta en `apikey` (`sync_all`) | `false` (el JWT se verifica en el código) |
 | `apple-revoke` | `POST /apple-revoke` con `{ authorizationCode }` | JWT del usuario | `false` (el JWT se verifica en el código) |
+| `coros` | `POST /coros` con `{ action }` · `GET /coros/callback` (vuelta de COROS tras autorizar) | JWT del usuario (`start`, `sync`, `disconnect`) · clave secreta en `apikey` (`sync_all`) · `state` cifrado (callback) | `false` (el JWT se verifica en el código) |
 
 En v2 (docs/V2.md) el coach con IA está encendido en la app (`EXPO_PUBLIC_AI_COACH=0` lo apaga) y
 **no cuesta nada**: `coach`, `briefing` y `meal` usan **Cloudflare Workers AI** (plan gratuito, 10.000
@@ -62,6 +64,9 @@ verify_jwt = false
 [functions.garmin]
 verify_jwt = false
 
+[functions.coros]
+verify_jwt = false
+
 [functions.apple-revoke]
 verify_jwt = false
 ```
@@ -80,6 +85,8 @@ Los inyecta Supabase automáticamente: `SUPABASE_URL`, `SUPABASE_SECRET_KEYS` (o
 | `APNS_HOST` | No (por defecto `api.push.apple.com`) | Pon `api.sandbox.push.apple.com` para probar con builds de desarrollo (Xcode/dev client): sus tokens son de sandbox. Los tokens del otro entorno reciben `400 BadDeviceToken` y se borran. |
 | `GARMIN_KEY_SECRET` | Sí para Garmin (≥ 16 caracteres; mejor 48 bytes aleatorios) | Cifrar con AES-GCM-256 (clave derivada con HKDF-SHA-256) la Personal API Key de cada usuario. **No lo cambies**: las claves guardadas dejarían de descifrarse y habría que reconectar Garmin. |
 | `GARMIN_PERSONAL_API_BASE_URL` | No | Sustituir `https://personal.connectapi.garmin.com` (pruebas). |
+| `COROS_TOKEN_SECRET` | Sí para la conexión directa con COROS (≥ 16 caracteres; mejor 48 bytes aleatorios: `openssl rand -base64 48`) | Cifrar con AES-GCM-256 (HKDF-SHA-256) los tokens OAuth de COROS de cada usuario y el `state` del flujo OAuth. Sin él, `coros` responde `503 server_misconfigured`. **No lo cambies**: habría que volver a conectar COROS. |
+| `COROS_MCP_URL` | No | Sustituir `https://mcp.coros.com/mcp` (por ejemplo, el regional `https://mcpeu.coros.com/mcp`). |
 | `APPLE_TEAM_ID` | Sí para revocar Apple al borrar la cuenta (sin los cuatro `APPLE_*`, `apple-revoke` responde `503 apple_not_configured` y la app borra la cuenta igualmente) | Team ID de Apple Developer (el mismo que `APNS_TEAM_ID`). |
 | `APPLE_KEY_ID` | Igual que arriba | Key ID de la clave con "Sign in with Apple" activado para el App ID. |
 | `APPLE_PRIVATE_KEY` | Igual que arriba | Contenido del `.p8` (mismo formato que `APNS_PRIVATE_KEY`). |
@@ -146,8 +153,12 @@ npx supabase db push                       # migraciones (RPC svc_* que usan est
 npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
 npx supabase functions deploy coach briefing meal garmin mcp --use-api    # v2 (tras db push de 20261027000100_v2.sql)
 npx supabase functions deploy speech --use-api                            # voz natural (junto con db push de 20261105000100_speech_budget.sql y 20261105000200_speech_budget_caps.sql)
-npx supabase functions deploy morning --use-api                           # informe al despertar (tras db push de 20261126000300/000301_wake_notification*)
-npx supabase functions deploy plan-import coach --use-api                 # importar un plan (tras db push de 20261127000500_plan_import.sql)
+npx supabase functions deploy morning --use-api                           # informe al despertar (tras db push de 20261128000400/000500_wake_notification*)
+npx supabase functions deploy weather --use-api                           # tiempo de las sesiones al aire libre (tras db push de 20261128000600_weather.sql; MET Norway + Nominatim, sin secretos)
+npx supabase functions deploy plan-import coach --use-api                 # importar un plan (tras db push de 20261128001000_plan_import.sql)
+npx supabase secrets set COROS_TOKEN_SECRET="$(openssl rand -base64 48)"   # conexión directa con COROS
+npx supabase functions deploy coros --use-api                             # tras db push de 20261127000100_coros_mcp.sql y 20261127000900_coros_platform.sql
+npx supabase functions deploy analysis coach briefing mcp --use-api         # diario + análisis post-entreno (tras db push de 20261127001000_journal_and_analysis.sql)
 ```
 
 **Importar un plan (2026-11-27).** Orden: `npx supabase db push` (crea `plan_imports`, `workouts.plan_import_id`,
@@ -265,6 +276,26 @@ Errores: siempre JSON `{ "error": "<código>", "message": "<texto en español>" 
     revocada; estado `expired`), `502 garmin_unavailable`.
   - `{ action: 'disconnect' }` → `{ provider, state: 'disconnected', …, ok: true }` (borra la clave).
   - `{ action: 'sync_all' }` (solo con `apikey` secreta, para `pg_cron`) → resumen `{ users, ok, expired, failed, skipped }`. Como mucho 200 usuarios por llamada, primero los que llevan más tiempo sin sincronizar.
+- **coros** — COROS a través de su MCP oficial (`https://mcp.coros.com/mcp`, OAuth 2.1 + PKCE con
+  registro dinámico de cliente: no hace falta pedir claves a COROS). Código en `_shared/coros/`.
+  - `{ action: 'start' }` → `{ url }`: registra un cliente para esta conexión (redirect
+    `${SUPABASE_URL}/functions/v1/coros/callback`) y devuelve la URL de autorización de COROS. El
+    verificador PKCE y el usuario viajan cifrados en `state` (caduca a los 15 min); no hay tabla de estados.
+  - `GET /coros/callback?code&state` (lo llama COROS) → canjea el código, guarda el paquete de tokens
+    cifrado en `integration_credentials` (`provider 'coros_mcp'`), sincroniza 28 días y redirige a
+    `roadtoironman://settings/integrations?coros=connected` (o `?coros=error&reason=…`).
+  - `{ action: 'sync' }` → `SyncResult` (14 días). `404 not_connected`, `409 coros_expired`
+    (COROS ya no acepta el token; estado `expired`), `502 coros_unavailable`.
+  - `{ action: 'disconnect' }` → borra los tokens. `{ action: 'sync_all' }` (solo `apikey` secreta,
+    `pg_cron` `rti-coros-sync` a las 05:35 y 08:35 UTC) → `{ users, ok, expired, failed, skipped }`.
+  - Herramientas que usa: `querySportRecords`, `getActivityDetail` (carga y foco de las nuevas, máx. 30),
+    `queryDailyHealthData`, `querySleepOverview`, `querySleepHrv`, `queryRestingHeartRate`,
+    `queryTrainingLoadAssessment`, `queryRecoveryStatus`, `queryFitnessAssessmentOverview`. Devuelven
+    informes en prosa: los lee `_shared/coros/parse.ts` de forma determinista (nunca pasan por un modelo).
+    Fechas en `yyyyMMdd`. Actividades → `workouts` (`source 'coros'`, `external_id 'coros:<labelId>'`, la
+    misma clave que escribe `log_completed_activity` desde Claude, así que nada se duplica; las copias de
+    Apple Salud se reconocen por día, deporte y hora de inicio). Bienestar → `daily_metrics (source 'coros')`.
+    Duración = tiempo en movimiento (Apple Salud recibe el total con paradas). Nunca registra tokens.
 - **ics** — `text/calendar` con `VTIMEZONE` Europe/Madrid, entrenos de −14 a +56 días (los saltados no
   salen) y quedadas confirmadas sin entreno enlazado. UID estable por entreno (`workout-<id>@roadtoironman.app`).
 - **push-dispatch** — reclama las notificaciones sin enviar de las últimas 24 h (`pushed_at`) y las
@@ -384,7 +415,7 @@ el origen y el id de la actividad, y conserva su RPE, sensaciones y notas (`doma
 ```bash
 npm run test:functions        # node --test "supabase/functions/**/*.test.ts" (Node 24, TS nativo)
 cd supabase/functions
-for fn in mcp ics push-dispatch garmin apple-revoke coach briefing meal morning plan-import; do
+for fn in mcp ics push-dispatch garmin apple-revoke coach briefing meal morning plan-import weather; do
   npx --yes deno@2.9.6 check --config "$fn/deno.json" "$fn/index.ts"
 done
 ```

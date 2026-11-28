@@ -5,6 +5,7 @@ import CheckinScreen from '@/app/checkin';
 import { addDays } from '@/domain/dates';
 import type { Readiness } from '@/domain/readiness';
 import type { CheckinDraft, DailyCheckin, DailyMetrics, Workout } from '@/domain/types';
+import { DEFAULT_HABITS } from '@/domain/habitCatalog';
 import { makeWorkout } from '@/features/coach/__tests__/fixtures';
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
@@ -64,7 +65,16 @@ function metricsToday(overrides: Partial<DailyMetrics>): DailyMetrics {
   };
 }
 
+/** Answers the five default journal questions: "Sí" for the ones in `yes`, "No" for the rest. */
+async function answerJournal(yes: readonly string[] = []) {
+  for (const id of DEFAULT_HABITS) {
+    await fireEvent.press(within(screen.getByTestId(`journal-${id}`)).getByLabelText(yes.includes(id) ? 'Sí' : 'No'));
+  }
+}
+
 async function answerAll(values: { sleep: number; fatigue: number; soreness: number; stress: number; motivation: number }) {
+  await answerJournal();
+  await fireEvent.press(screen.getByText('Sueño y sensaciones'));
   await fireEvent.press(screen.getByLabelText(`Calidad del sueño: ${values.sleep} de 5`));
   await fireEvent.press(screen.getByLabelText(`Fatiga: ${values.fatigue} de 5`));
   await fireEvent.press(screen.getByLabelText(`Agujetas / dolor muscular: ${values.soreness} de 5`));
@@ -73,12 +83,32 @@ async function answerAll(values: { sleep: number; fatigue: number; soreness: num
 }
 
 describe('check-in', () => {
-  test('asks for every score before saving, right above the button', async () => {
+  test('asks every yes/no question before saving, right above the button', async () => {
     await render(<CheckinScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
     // In the pinned footer, so it is visible even when the form is scrolled to the bottom.
-    expect(within(screen.getByTestId('form-footer')).getByText(/Responde las cinco preguntas/)).toBeTruthy();
+    expect(within(screen.getByTestId('form-footer')).getByText(/Responde sí o no a cada pregunta/)).toBeTruthy();
     expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  test('the five yes/no answers are enough: the 1–5 scales stay optional', async () => {
+    await render(<CheckinScreen />);
+    expect(screen.queryByLabelText('Fatiga: 3 de 5')).toBeNull();
+    await answerJournal(['alcohol']);
+    await fireEvent.press(screen.getByRole('button', { name: 'Guardar check-in' }));
+    await waitFor(() => expect(mockUpsert).toHaveBeenCalledTimes(1));
+    expect(mockUpsert.mock.calls[0]?.[0]).toMatchObject({
+      habits: { alcohol: true, late_meal: false, screens_in_bed: false, hydration: false, niggle: false },
+      fatigue: null,
+      sleepQuality: null,
+    });
+    expect(await screen.findByText('Disposición de hoy')).toBeTruthy();
+  });
+
+  test('"Cambiar preguntas" opens the journal settings', async () => {
+    await render(<CheckinScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Cambiar preguntas' }));
+    expect(mockRouter.push).toHaveBeenCalledWith('/settings/journal');
   });
 
   test('waits for the watch metrics before showing the form', async () => {

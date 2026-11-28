@@ -11,6 +11,8 @@ import { useTabBottomPadding } from '@/features/accessory/useTabBottomPadding';
 import { NutritionSummaryCard } from '@/features/nutrition/NutritionSummaryCard';
 import { ComplianceCard } from '@/features/progress/ComplianceCard';
 import { formFoldSummary, nutritionFoldSummary, recoveryFoldSummary, volumeFoldSummary } from '@/features/progress/foldSummaries';
+import { HabitImpactsCard } from '@/features/progress/HabitImpactsCard';
+import { useHabitImpacts } from '@/features/progress/useHabitImpacts';
 import { PmcCard } from '@/features/progress/PmcCard';
 import { RecoveryCard } from '@/features/progress/RecoveryCard';
 import { useProgressData } from '@/features/progress/useProgressData';
@@ -32,6 +34,7 @@ export default function ProgressScreen() {
   const bottomPadding = useTabBottomPadding();
   const zoneSnooze = useZoneReviewSnooze(today);
   const zoneTrend = zoneSnooze.loaded && !zoneSnooze.snoozed ? data.zoneTrend : null;
+  const habits = useHabitImpacts(today);
 
   return (
     <Screen
@@ -66,6 +69,12 @@ export default function ProgressScreen() {
       {data.recovery && <Disclosure variant="plain" title="Recuperación" icon="heartOutline" summary={recoveryFoldSummary(data.recovery)} storageKey="progress.recovery">
         <RecoveryCard series={data.recovery} />
       </Disclosure>}
+
+      {habits.impacts ? (
+        <Disclosure variant="plain" title="Qué te afecta" icon="lightbulb" summary="Tus hábitos frente a tu recuperación" storageKey="progress.habits">
+          <HabitImpactsCard impacts={habits.impacts} noWatchData={habits.noWatchData} />
+        </Disclosure>
+      ) : null}
 
       {data.nutrition && <Disclosure variant="plain" title="Nutrición" icon="food" summary={nutritionFoldSummary(data.nutrition)} storageKey="progress.nutrition">
         <NutritionSummaryCard totals={data.nutrition.totals} entries={data.nutrition.entries} />

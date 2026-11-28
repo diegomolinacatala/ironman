@@ -23,7 +23,7 @@ import type { ISODate, MetricsDraft } from '@/domain/types';
 import { logger } from '@/lib/logger';
 
 import { assertSessionUser, sessionUserId } from './deviceState';
-import { importActivities, toImportCandidate, type HealthActivity, type ImportCandidate, type ImportResult } from './health/importer';
+import { importActivities, isCorosSource, toImportCandidate, type HealthActivity, type ImportCandidate, type ImportResult } from './health/importer';
 import {
   buildMetricsDrafts,
   localDate,
@@ -302,6 +302,15 @@ function summarize({ drafts, candidates, imported, sources }: SyncFindings): Hea
   };
 }
 
+async function hasCorosDirect(repo: Repository): Promise<boolean> {
+  try {
+    return (await repo.listIntegrations()).some((i) => i.provider === 'coros_mcp' && i.state === 'connected');
+  } catch (error) {
+    logger.warn('health: integrations check failed', error);
+    return false;
+  }
+}
+
 async function runSync(repo: Repository, days: number): Promise<HealthSyncResult> {
   // Only the account that enabled Apple Salud on this device gets its data.
   const userId = await sessionUserId(repo);
@@ -317,7 +326,13 @@ async function runSync(repo: Repository, days: number): Promise<HealthSyncResult
   const drafts = buildMetricsDrafts(dates, daily.series);
   if (drafts.length > 0) await repo.upsertMetrics(drafts);
 
-  const candidates = activities.map(toImportCandidate).filter((c): c is ImportCandidate => c !== null);
+  // With COROS connected directly (server-side sync, moving time, HR, load), skip the COROS
+  // copies in Apple Salud: they carry the elapsed time and would duplicate swims and rides.
+  const corosDirect = await hasCorosDirect(repo);
+  const candidates = activities
+    .filter((a) => !(corosDirect && isCorosSource(a.sourceName)))
+    .map(toImportCandidate)
+    .filter((c): c is ImportCandidate => c !== null);
   const knownIds = await getImportedHealthIds(userId);
   const range = { from: dates[0] ?? localDate(now), to: localDate(now) };
   const imported = await importActivities(repo, candidates, { range, knownIds });

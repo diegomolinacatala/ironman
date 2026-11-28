@@ -6,7 +6,7 @@ import { ActionSheetIOS } from 'react-native';
 
 import WorkoutDetailScreen from '@/app/workout/[id]';
 import { addDays, todayISO } from '@/domain/dates';
-import type { Thresholds, Workout, WorkoutPatch, WorkoutStep } from '@/domain/types';
+import type { Thresholds, Workout, WorkoutAnalysis, WorkoutPatch, WorkoutStep } from '@/domain/types';
 import type { CoachVerdictModel } from '@/features/workouts/coachAdapters';
 import { HR_HINT_TEXT } from '@/features/workouts/detail/ThresholdsHint';
 import { MYWHOOSH_STORAGE_KEY, resetMyWhooshForTests, setMyWhooshEnabled } from '@/features/workouts/myWhooshSetting';
@@ -16,6 +16,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ME, makeWorkout } from './fixtures';
 
+let mockStoredAnalysis: WorkoutAnalysis | null = null;
+const mockAnalyze = jest.fn(async (_input: { workoutId: string; date: string; refresh?: boolean }): Promise<WorkoutAnalysis | null> => null);
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockRedirect = jest.fn((_href: string) => null);
 const mockActions = {
@@ -60,6 +62,9 @@ jest.mock('@/data/queries', () => ({
   useProfile: () => ({ data: { thresholds: mockThresholds } }),
   useRaces: () => ({ data: [] }),
   useCompleteWorkout: () => ({ mutateAsync: jest.fn(), isPending: false, error: null }),
+  useWorkoutAnalysis: () => ({ data: mockStoredAnalysis, isLoading: false }),
+  useAnalyzeWorkout: () => ({ mutateAsync: mockAnalyze, isPending: false }),
+  useCheckins: () => ({ data: [] }),
   useWorkouts: () => ({ data: mockHistory }),
 }));
 jest.mock('@/features/workouts/useWorkoutActions', () => ({ useWorkoutActions: () => mockActions }));
@@ -359,5 +364,63 @@ describe('workout detail · against similar sessions', () => {
     await render(<WorkoutDetailScreen />);
     expect(screen.getByText(/^Eficiencia un \d+ % mejor que la media de tus 3 carreras parecidas/)).toBeTruthy();
     mockHistory = [];
+  });
+});
+
+describe('workout detail · analysis', () => {
+  const done = (): Workout =>
+    makeWorkout({ id: 'w1', status: 'completed', intensity: 'endurance', completed: { durationMin: 50, rpe: 3, feel: 4, source: 'garmin' } });
+
+  beforeEach(() => {
+    mockStoredAnalysis = null;
+    mockAnalyze.mockClear();
+  });
+
+  test('a completed session offers "Analizar sesión"; the AI answer is shown', async () => {
+    mockWorkout = { data: done(), isLoading: false };
+    const ai: WorkoutAnalysis = {
+      workoutId: 'w1',
+      headline: 'Rodaje clavado',
+      wentWell: ['FC media 141 ppm'],
+      improve: [],
+      nextStep: 'Mañana, series.',
+      engine: 'ai',
+      createdAt: '2026-10-25T10:00:00.000Z',
+    };
+    mockAnalyze.mockResolvedValueOnce(ai);
+    await render(<WorkoutDetailScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Analizar sesión' }));
+    expect(mockAnalyze).toHaveBeenCalledWith({ workoutId: 'w1', date: done().date, refresh: false });
+  });
+
+  test('a stored analysis is shown with "Volver a analizar"', async () => {
+    mockWorkout = { data: done(), isLoading: false };
+    mockStoredAnalysis = {
+      workoutId: 'w1',
+      headline: 'Rodaje clavado',
+      wentWell: ['FC media 141 ppm'],
+      improve: ['Cadencia más alta'],
+      nextStep: 'Mañana, series.',
+      engine: 'ai',
+      createdAt: '2026-10-25T10:00:00.000Z',
+    };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.getByText('Rodaje clavado')).toBeTruthy();
+    expect(screen.getByText('Cadencia más alta')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Volver a analizar' }));
+    expect(mockAnalyze).toHaveBeenCalledWith(expect.objectContaining({ refresh: true }));
+  });
+
+  test('without AI the rules analysis is shown and labelled as such', async () => {
+    mockWorkout = { data: done(), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Analizar sesión' }));
+    expect(await screen.findByText('Análisis rápido (sin IA ahora mismo)')).toBeTruthy();
+  });
+
+  test('planned sessions have nothing to analyse', async () => {
+    mockWorkout = { data: makeWorkout({ id: 'w1' }), isLoading: false };
+    await render(<WorkoutDetailScreen />);
+    expect(screen.queryByRole('button', { name: 'Analizar sesión' })).toBeNull();
   });
 });

@@ -117,8 +117,8 @@ fija si es más tarde). El servidor lo envía con push, así que necesita las pu
 (`APNS_*`, sección 3) y, para mirar el sueño de Garmin durante la franja, `GARMIN_KEY_SECRET` (el mismo del
 paso 7). Para ponerlo en marcha:
 
-1. Base de datos: `npx supabase db push` (aplica `20261126000300_wake_notification.sql` y
-   `20261126000301_wake_notification_platform.sql`).
+1. Base de datos: `npx supabase db push` (aplica `20261128000400_wake_notification.sql` y
+   `20261128000500_wake_notification_platform.sql`).
 2. Función: `npx supabase functions deploy morning --use-api`.
 3. Tareas programadas, **una vez** en el SQL Editor (añade `rti-morning-wake`, cada 5 minutos, a las que ya
    había):
@@ -301,6 +301,15 @@ ejecución y lo arreglo.
 > Desde la v4 el onboarding pregunta **"Tu reloj: Garmin o COROS"** y guía cada paso; la guía completa
 > está en la app en **Tú → Conexiones → COROS → Guía paso a paso**. COROS no da una clave personal como
 > Garmin, así que usamos dos caminos gratuitos que se complementan.
+>
+> **Nuevo (nov-2026): conexión directa.** En **Tú → Conexiones → COROS «Conexión directa» → Conectar con
+> COROS** el atleta entra con su cuenta de COROS (página oficial) y el servidor sincroniza solo, dos veces
+> al día (≈06:35 y 09:35), actividades con distancia, pulso y carga, y sueño, VFC, pulso en reposo,
+> recuperación y VO2max, a través del MCP oficial de COROS. Con ella conectada, la app deja de importar las
+> copias de COROS que hay en Apple Salud (llevan el tiempo total con paradas y duplicaban natación y bici).
+> Puesta en marcha (Diego): `supabase db push` (migraciones `20261127000100_coros_mcp.sql` y
+> `20261127000900_coros_platform.sql`), secreto `COROS_TOKEN_SECRET` y `supabase functions deploy coros`
+> (ver `supabase/functions/README.md`). Los caminos de abajo siguen valiendo sin ella.
 
 1. **Apple Salud (automático).** En la app **COROS**: *Perfil → Ajustes → Apps de terceros →
    Sincronización de datos → Apple Health* → actívalo y, cuando Salud lo pida, *Activar todo* → *Permitir*.

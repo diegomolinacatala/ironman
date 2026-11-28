@@ -10,7 +10,16 @@ import { pause, requireMe, type DemoDeps } from './common';
 
 type IntegrationMethods = Pick<
   Repository,
-  'listIntegrations' | 'connectGarmin' | 'disconnectGarmin' | 'syncGarmin' | 'listTokens' | 'createToken' | 'revokeToken'
+  | 'listIntegrations'
+  | 'connectGarmin'
+  | 'disconnectGarmin'
+  | 'syncGarmin'
+  | 'startCorosConnect'
+  | 'disconnectCoros'
+  | 'syncCoros'
+  | 'listTokens'
+  | 'createToken'
+  | 'revokeToken'
 >;
 
 const MAX_ACTIVE_TOKENS = 5;
@@ -20,6 +29,9 @@ export const DEMO_FUNCTIONS_BASE_URL = 'https://TU-PROYECTO.supabase.co/function
 export const DEMO_TOKEN_NOTE =
   'Modo demo: este enlace es de ejemplo y no funcionará. Configura el backend (Supabase) para conectar tu Claude o tu calendario de verdad.';
 export const DEMO_SYNC_MESSAGE = 'Modo demo: datos de Garmin simulados. Conecta el backend para sincronizar tu reloj de verdad.';
+export const DEMO_COROS_SYNC_MESSAGE = 'Modo demo: datos de COROS simulados. Conecta el backend para sincronizar tu reloj de verdad.';
+
+const isMine = (i: DemoIntegration, me: UUID, provider: DemoIntegration['provider']): boolean => i.userId === me && i.provider === provider;
 
 function randomHex(length: number): string {
   return Array.from({ length }, () => Math.floor(Math.random() * 16).toString(16)).join('');
@@ -62,7 +74,7 @@ export function withSync(db: DemoDb, me: UUID, now: string, today: string): Demo
   return {
     ...db,
     metrics: [...db.metrics.filter((m) => !(m.userId === me && m.date === today && m.source === 'garmin')), metrics],
-    integrations: db.integrations.map((i) => (i.userId === me ? { ...i, lastSyncAt: now, lastError: null, state: 'connected' } : i)),
+    integrations: db.integrations.map((i) => (isMine(i, me, 'garmin_personal') ? { ...i, lastSyncAt: now, lastError: null, state: 'connected' } : i)),
   };
 }
 
@@ -79,25 +91,54 @@ function garminMethods({ store, delays }: DemoDeps): Pick<Repository, 'listInteg
       await pause(delays.garminMs);
       return store.update((db, clock) => {
         const integration: DemoIntegration = { userId: me, provider: 'garmin_personal', state: 'connected', expiresAt, lastSyncAt: null, lastError: null };
-        const next = withSync({ ...db, integrations: [...db.integrations.filter((i) => i.userId !== me), integration] }, me, clock.now, clock.today);
-        const stored = next.integrations.find((i) => i.userId === me) ?? integration;
+        const next = withSync({ ...db, integrations: [...db.integrations.filter((i) => !isMine(i, me, 'garmin_personal')), integration] }, me, clock.now, clock.today);
+        const stored = next.integrations.find((i) => isMine(i, me, 'garmin_personal')) ?? integration;
         return { db: next, result: strip(stored) };
       });
     },
     async disconnectGarmin() {
       const me = await requireMe(store);
-      await store.update((db) => ({ db: { ...db, integrations: db.integrations.filter((i) => i.userId !== me) }, result: undefined }));
+      await store.update((db) => ({ db: { ...db, integrations: db.integrations.filter((i) => !isMine(i, me, 'garmin_personal')) }, result: undefined }));
     },
     async syncGarmin(): Promise<SyncResult> {
       const me = await requireMe(store);
       return store.update((db, clock) => {
-        if (!db.integrations.some((i) => i.userId === me && i.state === 'connected')) {
+        if (!db.integrations.some((i) => isMine(i, me, 'garmin_personal') && i.state === 'connected')) {
           throw new RepositoryError('validation', 'Conecta Garmin antes de sincronizar.');
         }
         return {
           db: withSync(db, me, clock.now, clock.today),
           result: { metricsDays: 1, activitiesImported: 0, workoutsCompleted: 0, message: DEMO_SYNC_MESSAGE },
         };
+      });
+    },
+  };
+}
+
+/** COROS in demo mode: no OAuth, the connection is simulated at once (startCorosConnect returns no URL). */
+function corosMethods({ store, delays }: DemoDeps): Pick<Repository, 'startCorosConnect' | 'disconnectCoros' | 'syncCoros'> {
+  return {
+    async startCorosConnect() {
+      const me = await requireMe(store);
+      await pause(delays.garminMs);
+      await store.update((db, clock) => {
+        const integration: DemoIntegration = { userId: me, provider: 'coros_mcp', state: 'connected', expiresAt: null, lastSyncAt: clock.now, lastError: null };
+        return { db: { ...db, integrations: [...db.integrations.filter((i) => !isMine(i, me, 'coros_mcp')), integration] }, result: undefined };
+      });
+      return '';
+    },
+    async disconnectCoros() {
+      const me = await requireMe(store);
+      await store.update((db) => ({ db: { ...db, integrations: db.integrations.filter((i) => !isMine(i, me, 'coros_mcp')) }, result: undefined }));
+    },
+    async syncCoros(): Promise<SyncResult> {
+      const me = await requireMe(store);
+      return store.update((db, clock) => {
+        if (!db.integrations.some((i) => isMine(i, me, 'coros_mcp') && i.state === 'connected')) {
+          throw new RepositoryError('validation', 'Conecta COROS antes de sincronizar.');
+        }
+        const integrations = db.integrations.map((i) => (isMine(i, me, 'coros_mcp') ? { ...i, lastSyncAt: clock.now, lastError: null } : i));
+        return { db: { ...db, integrations }, result: { metricsDays: 0, activitiesImported: 0, workoutsCompleted: 0, message: DEMO_COROS_SYNC_MESSAGE } };
       });
     },
   };
@@ -158,5 +199,5 @@ function tokenMethods({ store, delays }: DemoDeps): Pick<Repository, 'listTokens
 }
 
 export function integrationsDemo(deps: DemoDeps): IntegrationMethods {
-  return { ...garminMethods(deps), ...tokenMethods(deps) };
+  return { ...garminMethods(deps), ...corosMethods(deps), ...tokenMethods(deps) };
 }

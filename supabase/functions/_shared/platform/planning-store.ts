@@ -32,7 +32,7 @@ const EVENT_COLS = 'id,kind,title,start_date,end_date,start_time,duration_min,se
 const METRIC_COLS =
   'date,source,hrv_ms,resting_hr,sleep_hours,sleep_score,body_battery,training_readiness,vo2max,steps,stress_avg,training_status,' +
   'sleep_deep_min,sleep_light_min,sleep_rem_min,sleep_awake_min,sleep_start,sleep_end,sleep_respiration,sleep_avg_hr';
-const CHECKIN_COLS = 'date,sleep_quality,sleep_hours,fatigue,soreness,stress,motivation,notes,illness_answer';
+const CHECKIN_COLS = 'date,sleep_quality,sleep_hours,fatigue,soreness,stress,motivation,habits,notes,illness_answer';
 
 const METRIC_FIELDS: Record<string, string> = {
   hrvMs: 'hrv_ms',

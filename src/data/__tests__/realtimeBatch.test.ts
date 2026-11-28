@@ -39,6 +39,6 @@ describe('realtime invalidation batching', () => {
   });
 
   test('rootsOf deduplicates across topics', () => {
-    expect(rootsOf(['workouts', 'busy_blocks'])).toEqual(['workouts', 'workout', 'friend_week', 'busy_blocks']);
+    expect(rootsOf(['workouts', 'busy_blocks'])).toEqual(['workouts', 'workout', 'workout_analysis', 'friend_week', 'busy_blocks']);
   });
 });

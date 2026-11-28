@@ -1,6 +1,6 @@
 /**
  * Wake-up sweep store over supabase-js (service role): the RPCs of
- * 20261126000300_wake_notification.sql (svc_wake_candidates, svc_send_morning_briefing,
+ * 20261128000400_wake_notification.sql (svc_wake_candidates, svc_send_morning_briefing,
  * svc_skip_morning_briefing, svc_record_wake_check).
  */
 import type { WakeCandidate } from '../morning/plan.ts';

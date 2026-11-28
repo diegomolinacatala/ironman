@@ -6,6 +6,7 @@
 import { normalizeTime } from '../dates.ts';
 import { parseTrainingPrefs } from '../planning/domain/trainingPrefs.ts';
 import { parseAthleteContext } from '../planning/domain/athleteContext.ts';
+import { cleanHabitAnswers } from '../planning/domain/habitCatalog.ts';
 import {
   BODY_AREAS,
   ILLNESS_ANSWERS,
@@ -43,6 +44,7 @@ import type {
   WatchBrand,
   WeekPlan,
   Workout,
+  WorkoutAnalysis,
   WorkoutCoaching,
   WorkoutStep,
 } from '../types.ts';
@@ -171,12 +173,13 @@ export function mapCheckin(raw: unknown): DailyCheckin {
   const r = asRow(raw);
   return {
     date: dateStr(r.date),
-    sleepQuality: num(r.sleep_quality, 3),
+    sleepQuality: numOrNull(r.sleep_quality),
     sleepHours: numOrNull(r.sleep_hours),
-    fatigue: num(r.fatigue, 3),
-    soreness: num(r.soreness, 1),
-    stress: num(r.stress, 3),
-    motivation: num(r.motivation, 3),
+    fatigue: numOrNull(r.fatigue),
+    soreness: numOrNull(r.soreness),
+    stress: numOrNull(r.stress),
+    motivation: numOrNull(r.motivation),
+    habits: cleanHabitAnswers(r.habits),
     notes: strOrNull(r.notes),
     ...(ILLNESS_ANSWERS.includes(r.illness_answer as IllnessAnswer) ? { illnessAnswer: r.illness_answer as IllnessAnswer } : {}),
   };
@@ -358,6 +361,21 @@ export interface BriefingRow {
   sleep: SleepSnapshot | null;
   model: string | null;
   createdAt: string;
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string' && s.length > 0) : []);
+
+export function mapWorkoutAnalysis(raw: unknown): WorkoutAnalysis {
+  const r = asRow(raw);
+  return {
+    workoutId: str(r.workout_id),
+    headline: str(r.headline),
+    wentWell: strings(r.went_well),
+    improve: strings(r.improve),
+    nextStep: str(r.next_step),
+    engine: 'ai',
+    createdAt: instantOrNull(r.created_at) ?? str(r.created_at),
+  };
 }
 
 export function mapBriefing(raw: unknown): BriefingRow {

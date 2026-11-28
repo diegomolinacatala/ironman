@@ -109,7 +109,7 @@ export interface CompletedWorkoutInsert {
   distanceM: number | null;
   intensity: Intensity;
   completed: CompletedData;
-  source: 'garmin' | 'claude';
+  source: 'garmin' | 'coros' | 'claude';
   externalId: string | null;
 }
 

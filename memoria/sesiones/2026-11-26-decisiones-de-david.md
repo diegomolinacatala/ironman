@@ -67,6 +67,6 @@ Pruebas en verde: 2.503 app, 189 base de datos, 317 funciones. Nada probado en i
 - Nuevo: plan de carrera y previsión, aviso del informe al despertar, el tiempo (MET Norway + OpenStreetMap), MyWhoosh opcional, guardado sin conexión, repetir quedada.
 - Seguridad/servidor: Claude de pago solo con `AI_ALLOW_PAID=1`; `sync_all` de Garmin por antigüedad.
 
-Desplegar (en orden): `supabase db push` (migraciones 20261125000100 y 20261126000100–000600), funciones (`coach briefing mcp garmin morning weather` y las de planificación), `select private.schedule_platform_jobs();`, y luego build de la app. En App Store Connect: etiqueta «Ubicación aproximada».
+Desplegar (en orden): `supabase db push` (migraciones `20261128000100`–`000700`; renombradas el 28-11 para ir después de las de Diego del 27-11), funciones (`coach briefing mcp garmin morning weather` y las de planificación), `select private.schedule_platform_jobs();`, y luego build de la app. En App Store Connect: etiqueta «Ubicación aproximada».
 
 Pendiente: revisión en iPhone, PR hacia main, proyecto aparte de métricas del FIT, check-in automático y unificar semáforos (más adelante).

@@ -25,7 +25,7 @@ const ME = 'me';
 const DAY = '2026-11-26';
 const RANGE = { from: DAY, to: DAY };
 const DONE: CompletedData = { durationMin: 50, rpe: 4, feel: 4, source: 'manual', completedAt: '2026-11-26T07:30:00.000Z' };
-const DRAFT: CheckinDraft = { date: DAY, sleepQuality: 4, sleepHours: 7, fatigue: 2, soreness: 2, stress: 2, motivation: 4, notes: null };
+const DRAFT: CheckinDraft = { date: DAY, sleepQuality: 4, sleepHours: 7, fatigue: 2, soreness: 2, stress: 2, motivation: 4, habits: {}, notes: null };
 /** Long enough that only the test decides when to retry, unless it says otherwise. */
 const SLOW_RETRY: readonly number[] = [60_000];
 const FAST_RETRY: readonly number[] = [20];

@@ -7,12 +7,13 @@
  * workout, the main-set targets, the coach's prescription and plan vs done.
  */
 import { addDays, DEFAULT_TZ, localParts, startOfWeek, todayIn, weekdayOf, WEEKDAYS_ES, zonedToUtc } from '../dates.ts';
-import type { BusyBlock, ISODate, JointSession, LifeEvent, Profile, Race, UUID, WeekPlan, Workout } from '../types.ts';
+import type { BusyBlock, DailyCheckin, ISODate, JointSession, LifeEvent, Profile, Race, UUID, WeekPlan, Workout } from '../types.ts';
 import { athleteView } from './athlete-view.ts';
 import { lifeEventLabel, raceDistanceLabel } from './labels.ts';
 import { fitnessWeeklyMinutesOf, weeklyLoadHistory, weekTotals } from './load.ts';
 import type { WeeklyLoad, WeekTotals } from './load.ts';
 import { recentRunMinutes, runWeekCapMinutes } from './domain/runVolume.ts';
+import { habitAnswerLines } from './domain/habitCatalog.ts';
 import { manualWeeklyHours, weeklyHoursFor } from './domain/season.ts';
 import { athleteLevel, phaseFor } from './phase.ts';
 import type { PhaseInfo } from './phase.ts';
@@ -212,6 +213,14 @@ function weekBlock(raw: RawContext, view: ViewContext, from: ISODate, to: ISODat
   return { totals: weekTotals(list), workouts: list.map((w) => workoutView(w, view)) };
 }
 
+/** A check-in for the model: unanswered scales dropped, journal answers in words ("Bebió alcohol ayer: sí"). */
+export function checkinView(c: DailyCheckin): Record<string, unknown> {
+  const { habits, ...rest } = c;
+  const scales = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== null));
+  const journal = habitAnswerLines(habits);
+  return journal.length > 0 ? { ...scales, journal } : scales;
+}
+
 function wellnessBlock(raw: RawContext, detail: Detail): PlanningContext['wellness'] {
   const days = detail === 'detailed' ? 14 : 7;
   const since = addDays(raw.today, -(days - 1));
@@ -223,7 +232,7 @@ function wellnessBlock(raw: RawContext, detail: Detail): PlanningContext['wellne
     readiness: wellnessSignals(recent, raw.checkins, raw.today, illness),
     illness,
     stressSleep: stressSleepView(raw.metrics, raw.checkins, raw.events, raw.today, raw.tz),
-    checkins: raw.checkins.filter((c) => c.date >= since).map((c) => ({ ...c })),
+    checkins: raw.checkins.filter((c) => c.date >= since).map(checkinView),
     metrics: metrics.map((m) => ({ ...m })),
   };
 }
