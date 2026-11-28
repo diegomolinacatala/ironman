@@ -153,8 +153,8 @@ npx supabase db push                       # migraciones (RPC svc_* que usan est
 npx supabase functions deploy mcp ics push-dispatch garmin apple-revoke --use-api
 npx supabase functions deploy coach briefing meal garmin mcp --use-api    # v2 (tras db push de 20261027000100_v2.sql)
 npx supabase functions deploy speech --use-api                            # voz natural (junto con db push de 20261105000100_speech_budget.sql y 20261105000200_speech_budget_caps.sql)
-npx supabase functions deploy morning --use-api                           # informe al despertar (tras db push de 20261126000300/000301_wake_notification*)
-npx supabase functions deploy plan-import coach --use-api                 # importar un plan (tras db push de 20261127000500_plan_import.sql)
+npx supabase functions deploy morning --use-api                           # informe al despertar (tras db push de 20261128000400/000301_wake_notification*)
+npx supabase functions deploy plan-import coach --use-api                 # importar un plan (tras db push de 20261128001000_plan_import.sql)
 npx supabase secrets set COROS_TOKEN_SECRET="$(openssl rand -base64 48)"   # conexión directa con COROS
 npx supabase functions deploy coros --use-api                             # tras db push de 20261127000100_coros_mcp.sql y 20261127000900_coros_platform.sql
 npx supabase functions deploy analysis coach briefing mcp --use-api         # diario + análisis post-entreno (tras db push de 20261127001000_journal_and_analysis.sql)

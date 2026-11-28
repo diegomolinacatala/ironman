@@ -79,7 +79,7 @@ Accesibilidad: el selector segmentado llega a 44 pt, las puntuaciones de 1 a 5 s
 Cosas que necesitan decisión del dueño o un despliegue:
 
 1. **Contraseña de la cuenta de revisión** (`revision@roadtoironman.app`). Es un prefijo público más 6 dígitos: 10⁶ combinaciones contra una cuenta real. Rotarla tras la aprobación o desactivarla fuera de revisión.
-2. **Desplegar** la migración `20261125000100_friendships_requester_idx.sql` y las funciones `coach`, `briefing` y `mcp`, porque los cambios de servidor no actúan hasta desplegarlos.
+2. **Desplegar** la migración `20261128000100_friendships_requester_idx.sql` y las funciones `coach`, `briefing` y `mcp`, porque los cambios de servidor no actúan hasta desplegarlos.
 3. **Ruta de pago silenciosa.** ~~Si falta el worker y existe `ANTHROPIC_API_KEY`, se usa Claude sin tope global de coste.~~ **Corregido el 26-11:** ahora exige además `AI_ALLOW_PAID=1`.
 4. **Notificaciones push.** **Corrección del 26-11:** sí se reintentan si Apple falla (429, 5xx, red); solo se perderían si la función se corta entre reservarlas y enviarlas. Se deja así.
 5. **`sync_all` de Garmin** procesaba como mucho 200 usuarios sin orden. **Corregido el 26-11:** primero quien lleva más tiempo sin sincronizar.

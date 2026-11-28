@@ -49,7 +49,7 @@ export function inboxApi(ctx: SupabaseCtx): InboxMethods {
     await runVoid('registerPushToken', client.rpc('register_push_token', { p_token: token, p_platform: platform }));
   }
 
-  /** claim_wake_briefing (20261126000300_wake_notification.sql): true when this device takes today's briefing. */
+  /** claim_wake_briefing (20261128000400_wake_notification.sql): true when this device takes today's briefing. */
   async function claimWakeBriefing(input: { date: string; sleepEnd: string; dueAt: string }): Promise<boolean> {
     const data = await run<unknown>(
       'claimWakeBriefing',

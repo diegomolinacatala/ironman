@@ -117,8 +117,8 @@ fija si es más tarde). El servidor lo envía con push, así que necesita las pu
 (`APNS_*`, sección 3) y, para mirar el sueño de Garmin durante la franja, `GARMIN_KEY_SECRET` (el mismo del
 paso 7). Para ponerlo en marcha:
 
-1. Base de datos: `npx supabase db push` (aplica `20261126000300_wake_notification.sql` y
-   `20261126000301_wake_notification_platform.sql`).
+1. Base de datos: `npx supabase db push` (aplica `20261128000400_wake_notification.sql` y
+   `20261128000500_wake_notification_platform.sql`).
 2. Función: `npx supabase functions deploy morning --use-api`.
 3. Tareas programadas, **una vez** en el SQL Editor (añade `rti-morning-wake`, cada 5 minutos, a las que ya
    había):

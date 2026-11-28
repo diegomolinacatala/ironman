@@ -1,5 +1,5 @@
 /**
- * «Tu forma de entrenar» (20261126000600_training_prefs.sql): profiles.training_prefs is null
+ * «Tu forma de entrenar» (20261128000700_training_prefs.sql): profiles.training_prefs is null
  * until chosen, the owner writes and clears it, the outline and size are checked, and nobody else
  * reads or changes it.
  */

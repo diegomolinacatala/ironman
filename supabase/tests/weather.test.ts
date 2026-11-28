@@ -1,5 +1,5 @@
 /**
- * Weather-aware training (20261126000500_weather.sql): the athlete's city on the profile (own row,
+ * Weather-aware training (20261128000600_weather.sql): the athlete's city on the profile (own row,
  * all three columns or none, valid coordinates), the forecast and city-search caches (service role
  * only, no client access), and svc_reserve_provider_call spacing calls to a provider for the whole
  * app (service role only).

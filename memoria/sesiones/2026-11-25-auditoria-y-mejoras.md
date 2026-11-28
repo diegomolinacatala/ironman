@@ -12,7 +12,7 @@
 - **Menos fricción.** Check-in con «Todo normal» y «Como ayer», y la calidad del sueño sale de la nota del reloj. En «Hecho», el chip «Tal como estaba previsto». Ejemplos del coach según hoy y mañana, que se envían con un toque. Carrera con nombre opcional, prioridad A si es la primera y detalles plegados. Panel de imprevisto sin jerga.
 - **Menos peso.** El informe hablado va por excepción: tope de 180 palabras sin relleno, y la VFC y la batería solo si se salen de lo normal (también en el prompt y el validador del servidor). Los pliegues de Progreso y el del informe en Hoy muestran su cifra.
 - **De camino-703.** Comparación con sesiones parecidas (`domain/similarSessions.ts`), equilibrio de carga aguda/crónica y monotonía (`loadBalance`), tomas con minuto (`fuelingSchedule`) y exportar a Zwift (`domain/zwo.ts`).
-- **Seguridad y fiabilidad.** Si la petición al coach lleva texto de amigos, no se escribe memoria ni imprevisto, y las instrucciones MCP lo marcan como datos. `useTimezoneSync` guarda la zona del teléfono en el perfil. Avisos de tiempo real agrupados durante 300 ms. Nuevo workflow `checks.yml` en los PR. Migración `20261125000100_friendships_requester_idx.sql`.
+- **Seguridad y fiabilidad.** Si la petición al coach lleva texto de amigos, no se escribe memoria ni imprevisto, y las instrucciones MCP lo marcan como datos. `useTimezoneSync` guarda la zona del teléfono en el perfil. Avisos de tiempo real agrupados durante 300 ms. Nuevo workflow `checks.yml` en los PR. Migración `20261128000100_friendships_requester_idx.sql`.
 - **Accesibilidad.** Segmented de 44 pt, ScorePicker como radiogroup y etiquetas del Stepper con su campo.
 
 ## Comprobaciones

@@ -45,7 +45,7 @@ create policy plan_imports_select_own on public.plan_imports
 -- ---------------------------------------------------------------------------
 alter table public.workouts drop constraint if exists workouts_source_check;
 alter table public.workouts add constraint workouts_source_check
-  check (source in ('manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'imported'));
+  check (source in ('manual', 'rules', 'ai_coach', 'claude', 'joint', 'healthkit', 'garmin', 'coros', 'imported'));
 
 alter table public.workouts
   add column if not exists plan_import_id uuid references public.plan_imports (id) on delete set null;

@@ -1,5 +1,5 @@
 /**
- * «Mis sitios» and the Sunday/Wednesday questions (20261127000300_week_questions_places.sql):
+ * «Mis sitios» and the Sunday/Wednesday questions (20261128000800_week_questions_places.sql):
  * profiles.places and profiles.week_questions are null until set, the owner writes and clears
  * them, the outline and size are checked, and nobody else reads or changes them.
  */

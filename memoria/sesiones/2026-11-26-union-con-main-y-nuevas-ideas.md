@@ -47,13 +47,13 @@ Se hizo con cinco agentes en paralelo, cada uno en su worktree, y luego se unió
   - Lluvia y viento juntos dan una sola línea y una sola propuesta. Los huecos que se sugieren tienen que estar secos y sin viento fuerte.
   - MET Norway casi nunca da rachas en España (el endpoint `compact` no las trae), así que en la práctica cuenta el viento medio.
 - **«Tu contexto»** (§23):
-  - `profiles.athlete_context` (migración `20261127000400`) y entrevista guiada de unas 15 preguntas, más «¿Algo más que deba saber?» con la IA.
+  - `profiles.athlete_context` (migración `20261128000900`) y entrevista guiada de unas 15 preguntas, más «¿Algo más que deba saber?» con la IA.
   - Plan: mantener un deporte con años de experiencia es una sesión menos y ×0,8; mejorar mucho, una sesión más y ×1,2.
   - La carga de estudios o trabajo baja las horas como mucho un 15 %.
   - Las épocas de exámenes se convierten en imprevistos `exam`.
   - Se respetan las horas de comida y sueño y la hora preferida.
 - **Mis sitios, preguntas de la semana y «¿Sales con alguien?»** (§24):
-  - `profiles.places` y `profiles.week_questions` (migración `20261127000300`).
+  - `profiles.places` y `profiles.week_questions` (migración `20261128000800`).
   - Domingo: «Muchas cosas» es ×0,8, «Más libre» ×1,1 y «con gente» lleva las sesiones a huecos comunes.
   - Miércoles: «¿Vuelves?» aplica el material de ese sitio, y si la bici está allí pregunta «¿salir en bici?» y luego «¿con quién?».
   - Para todos: en cada bici al aire libre de los próximos 3 días pregunta «¿Sales con alguien?».
@@ -66,7 +66,7 @@ Se hizo con cinco agentes en paralelo, cada uno en su worktree, y luego se unió
     - el informe lo nombra;
     - el plan semanal baja entre un 10 y un 15 %.
   - El aviso de dormir viene activado por defecto: solo salta los días con la señal.
-- **Importar un plan** (§26, migración `20261127000500`, función `plan-import`):
+- **Importar un plan** (§26, migración `20261128001000`, función `plan-import`):
   - Foto: visión. PDF: `unpdf` y luego texto. Texto pegado: IA, o parser local si no hay IA. Excel/CSV: en el teléfono y sin IA (`fflate`). TrainingPeaks: su iCal, que solo existe en Premium y cubre unos 14 días hacia delante.
   - **Garmin no es posible**: la API personal no tiene calendario y la Training API solo escribe y es para empresas aprobadas.
   - El plan se revisa antes de aplicarlo. Sus sesiones quedan como `imported` y el planificador no las pisa, pero los imprevistos, el tiempo, etc. siguen proponiendo cambios sobre ellas.
@@ -75,7 +75,7 @@ Se hizo con cinco agentes en paralelo, cada uno en su worktree, y luego se unió
 Comprobado tras unirlo todo: tipos OK, Jest 2.694, base de datos 201, funciones 336, worker 36, y ESLint sin errores.
 
 **Desplegar (Diego), en orden:**
-1. `supabase db push`, con las migraciones `20261125000100`, `20261126000100`–`000600` y `20261127000300`–`000500`. Las funciones leen las columnas nuevas, así que esto va antes.
+1. `supabase db push`, con las migraciones `20261128000100`–`001000` (todas las de esta rama, renombradas el 28-11 para ir después de las de Diego del 27-11). Las funciones leen las columnas nuevas, así que esto va antes.
 2. Funciones `coach briefing mcp garmin morning weather plan-import` y las de planificación.
 3. `select private.schedule_platform_jobs();`
 4. Build nativa de la app.

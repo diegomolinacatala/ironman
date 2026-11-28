@@ -749,10 +749,10 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
   apart when each has enough nights, trimmed with ≥ 7), the athlete's own window wins, default = the 2 h before
   the fixed time; `decideWake` → wait / check / send at wake-up + delay / fallback at
   max(window end, fixed time), held up to 3 h while a night is known to go on, never more than 3 h late.
-  - *Server path (real):* migration `20261126000300_wake_notification.sql` — `briefing_notices` (user, local
+  - *Server path (real):* migration `20261128000400_wake_notification.sql` — `briefing_notices` (user, local
     day; `watching → push | device | skipped`; select-own RLS), notification type `morning_briefing` (inserted
     already read), RPCs `svc_wake_candidates`, `svc_record_wake_check`, `svc_send_morning_briefing`,
-    `svc_skip_morning_briefing`, `claim_wake_briefing`. `20261126000301_wake_notification_platform.sql` adds the
+    `svc_skip_morning_briefing`, `claim_wake_briefing`. `20261128000500_wake_notification_platform.sql` adds the
     cron job `rti-morning-wake` (every 5 min, `private.morning_wake_tick()` calls the `morning` function only
     while someone in wake mode is in an unsettled morning). The sweep (`_shared/morning/*`) sends through the
     existing notifications → push-dispatch path; Garmin users get a light pull of today's sleep at most every
@@ -764,7 +764,7 @@ The product contract is `docs/V4.md`; this section lists what changed in the arc
     move the wake-up), claims the day and schedules a local `wake_briefing` notification at wake-up + delay
     (outside the rolling window, cancelled on sign-out). Wake mode with a backend drops the local fixed-time
     briefing (`ScheduleInput.serverWake`); demo keeps it. HealthKit drafts now carry `sleepStart`/`sleepEnd`.
-  - *Deploy order:* `supabase db push` (000300, then 000301) → `functions deploy morning` → once
+  - *Deploy order:* `supabase db push` (20261128000400, then 000500) → `functions deploy morning` → once
     `select private.schedule_platform_jobs();` → app build (new entitlement). Needs `APNS_*`; Garmin pulls need
     `GARMIN_KEY_SECRET`.
 
@@ -777,7 +777,7 @@ Four changes approved by David; the contract details live in §4 (`periodization
 - **Weekly run cap.** Mirrored `domain/runVolume.ts`; the rules planner caps the week's run minutes (bricks count
   their run leg) and the planning context shows the same number as `phase.runMaxMinutes`.
 - **Short-notice plans from real volume.** `PhaseOptions.recentWeeklyMinutes` (see §4 `periodization.ts`).
-- **How a B/C race is prepared — `races.prep`** (migration `20261126000100_race_prep.sql`): `text`, null or
+- **How a B/C race is prepared — `races.prep`** (migration `20261128000200_race_prep.sql`): `text`, null or
   `'training' | 'taper' | 'specific'` (check constraint; covered by the table grants and own-rows RLS).
   `Race.prep?` / `RaceDraft.prep?` (`RACE_PREPS`, `RacePrep`), zod `raceDraftSchema.prep`, app mappers (a null
   prep is left out of inserts), server `mapRace` / `RACE_COLS` / `RaceWrite`, demo repository and both seeds
@@ -795,7 +795,7 @@ Four changes approved by David; the contract details live in §4 (`periodization
     become key sessions and the Z1-Z2 guard eases them last. Then the mini-taper and recovery as `taper`.
   Plan → General's `why` and the week focus say which preparation applies; the form asks «¿Cómo la
   preparas?» for B/C races (`RaceForm`, `raceFormModel`).
-- **Deploy order:** `supabase db push` (`20261126000100_race_prep.sql`) before deploying the edge functions
+- **Deploy order:** `supabase db push` (`20261128000200_race_prep.sql`) before deploying the edge functions
   (`RACE_COLS` reads `prep`) or shipping the app.
 
 ## 19. Indoor trainer, offline saves, repeated quedadas and zone reviews (2026-11-26)
@@ -847,7 +847,7 @@ without the athlete reviewing a proposal.
   `safeForecast` that never throws for the AI paths), `prompt.ts` (compact Spanish context, no
   coordinates). Tables (service role only, no user id): `weather_forecasts` (PK coordinates rounded to
   2 decimals), `geocode_results` (30 days), `provider_calls` + `svc_reserve_provider_call` (global
-  spacing). Migration `20261126000500_weather.sql`. Logs never contain the city, the query or coordinates.
+  spacing). Migration `20261128000600_weather.sql`. Logs never contain the city, the query or coordinates.
 - **Pure rules** `src/domain/weather.ts` (mirrored to the server by `sync:mirror`): dry hour = chance
   < 30 %, < 0.1 mm and no wet symbol; rainy hour = ≥ 0.5 mm (≥ 0.3 mm/h in a 6-hour block) with chance
   ≥ 60 % or unknown (MET gives no probability outside the Nordic area); a session is rainy when ≥ half its
@@ -879,7 +879,7 @@ without the athlete reviewing a proposal.
   rain or in strong wind, both in the local script (`briefingScript.ts`) and in the server context/prompt. AI coach: seven
   days of outlook in its context (`weather` in `coach/messages.ts`). Demo mode: deterministic example
   forecast and a fixed list of cities, labelled «Tiempo de ejemplo».
-- **Deploy:** `supabase db push` (`20261126000500_weather.sql`), then deploy `weather`, `briefing` and
+- **Deploy:** `supabase db push` (`20261128000600_weather.sql`), then deploy `weather`, `briefing` and
   `coach`, then ship the app. No secrets needed (`GEOCODER_URL` / `MET_FORECAST_URL` optional overrides).
 
 ## 21. Planner for real athletes: habitual volume, long sessions, exams, beginners (2026-11-26)
@@ -915,7 +915,7 @@ tests in `src/domain/__tests__/plannerRealistic.test.ts`.
 
 Tú › Entrenamiento › **Tu forma de entrenar** (`settings/training`, `TrainingPrefsEditor`, `trainingPrefsModel.ts`;
 the row shows the summary or «Automático»). Stored in `profiles.training_prefs jsonb` (nullable = everything
-automático; `20261126000600_training_prefs.sql`: own row, client-writable, outline + 8 KB checked by the database,
+automático; `20261128000700_training_prefs.sql`: own row, client-writable, outline + 8 KB checked by the database,
 every field by `trainingPrefsSchema` in `validation.ts`). Mirrored `domain/trainingPrefs.ts`: `parseTrainingPrefs`
 (lenient reader used by the app mappers and `db/rows.ts` `mapProfile`), `trainingPrefsSummary` /
 `trainingPrefsSentence`, `fixedSessionsOn`, `lowIntensityShareFor`. Everything optional:
@@ -943,7 +943,7 @@ every field by `trainingPrefsSchema` in `validation.ts`). Mirrored `domain/train
 
 Tú › Entrenamiento › **Tu contexto** (`settings/context`, `features/context/*`) and a card on Hoy («Cuéntale al
 coach cómo eres: 3 min», also what a new athlete sees after onboarding; the cross sets `promptDismissed`). Stored in
-`profiles.athlete_context jsonb` (null = nothing told; `20261127000400_athlete_context.sql`: own row, outline + 8 KB
+`profiles.athlete_context jsonb` (null = nothing told; `20261128000900_athlete_context.sql`: own row, outline + 8 KB
 checked by the database, every field by `athleteContextSchema`). Mirrored `domain/athleteContext.ts`
 (`parseAthleteContext`, the planner hints and `athleteContextSummary`).
 
@@ -976,7 +976,7 @@ checked by the database, every field by `athleteContextSchema`). Mirrored `domai
 
 ## 24. «Mis sitios», the Sunday/Wednesday questions and «¿Sales con alguien?» (2026-11-27)
 
-Migration `20261127000300_week_questions_places.sql`: `profiles.places` and `profiles.week_questions` (jsonb, own row
+Migration `20261128000800_week_questions_places.sql`: `profiles.places` and `profiles.week_questions` (jsonb, own row
 only, outline + size checked; PGlite tests `supabase/tests/week-questions-places.test.ts`). App only for now: the edge
 functions do not read them.
 
@@ -1067,7 +1067,7 @@ of those weeks.
   (`isImportedWeek`, `IMPORTED_WEEK_SUMMARY`); the AI coach sees `imported: true` and its `plan_week` adds in
   imported weeks are dropped (`dropAddsInImportedWeeks`). The re-planner (events, readiness, missed sessions,
   weather, restrictions) still moves / eases imported sessions as proposals; `plan_update` keeps the source.
-- **Deploy order:** `supabase db push` (`20261127000500_plan_import.sql`), `functions deploy plan-import coach`, app.
+- **Deploy order:** `supabase db push` (`20261128001000_plan_import.sql`), `functions deploy plan-import coach`, app.
 
 ## 27. Morning journal and post-workout analysis (2026-11-27)
 

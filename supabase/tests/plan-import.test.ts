@@ -1,5 +1,5 @@
 /**
- * 20261127000500_plan_import.sql: apply_plan_import creates the import and its
+ * 20261128001000_plan_import.sql: apply_plan_import creates the import and its
  * planned workouts (source 'imported') atomically, replaces the sessions the
  * app planned itself in those weeks, validates like apply_plan_changes;
  * delete_plan_import removes the import and its planned sessions only; RLS.

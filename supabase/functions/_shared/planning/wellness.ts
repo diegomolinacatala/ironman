@@ -208,11 +208,11 @@ function baseSignals(metrics: readonly DailyMetrics[], checkins: readonly DailyC
     if (fatigue >= 4) signals.push(`Fatiga subjetiva ${fatigue}/5 (${lastCheckin.date})`);
     if (soreness >= 4) signals.push(`Agujetas/dolor muscular ${soreness}/5${yesterdayNote(lastCheckin.date)}`);
     if ((lastCheckin.stress ?? 0) >= 4) signals.push(`Estrés ${lastCheckin.stress}/5${yesterdayNote(lastCheckin.date)}`);
-    if (lastCheckin.habits.sick === true) {
+    if (lastCheckin.habits?.sick === true) {
       amber += 2;
       signals.push(`Se nota enfermo o incubando algo (${lastCheckin.date})`);
     }
-    if (lastCheckin.habits.niggle === true) signals.push(`Tiene alguna molestia o dolor (${lastCheckin.date})`);
+    if (lastCheckin.habits?.niggle === true) signals.push(`Tiene alguna molestia o dolor (${lastCheckin.date})`);
   }
   const level = !latest && !lastCheckin ? 'unknown' : red > 0 ? 'red' : amber >= 2 ? 'amber' : 'green';
   return { latestDate: latest?.date ?? lastCheckin?.date ?? null, signals, level };

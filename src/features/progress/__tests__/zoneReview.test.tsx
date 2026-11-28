@@ -42,6 +42,8 @@ let mockData: ProgressData;
 jest.mock('@/features/progress/useProgressData', () => ({ useProgressData: () => mockData }));
 // The threshold suggestion has its own tests (features/thresholds) and reads the repository.
 jest.mock('@/features/thresholds/ThresholdSuggestions', () => ({ ThresholdSuggestions: () => null }));
+// «Qué te afecta» reads the repository on its own (tested in features/progress).
+jest.mock('@/features/progress/useHabitImpacts', () => ({ useHabitImpacts: () => ({ impacts: null, noWatchData: false }) }));
 
 function progressData(zoneTrend: ReviewTrend | null): ProgressData {
   return {
